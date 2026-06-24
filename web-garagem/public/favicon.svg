@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <rect width="100" height="100" rx="20" fill="#09090b"/>
+
+    <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="monospace" font-size="45" font-weight="bold" letter-spacing="-11">
+        <tspan fill="#3b82f6">&gt;</tspan>
+        <tspan fill="#ffffff">p</tspan>
+        <tspan fill="#3b82f6">d</tspan>
+        <tspan fill="#3b82f6" opacity="0.8">_</tspan>
+    </text>
+</svg>
