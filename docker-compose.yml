@@ -29,6 +29,7 @@ services:
       DATABASE_URL: postgres://autohub:${POSTGRES_PASSWORD:-autohub_dev}@db:5432/autohub
       JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_prod_min32chars}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-60m}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       PORT: 8000
       NODE_ENV: development
     volumes:
