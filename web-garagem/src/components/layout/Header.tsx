@@ -43,9 +43,10 @@ export function Header() {
                         <Link
                             to="/eventos"
                             title="Eventos automotivos"
-                            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
                         >
                             <CalendarDays className="size-4" />
+                            <span className="hidden text-[12px] font-medium sm:block">Eventos</span>
                         </Link>
                         <Link
                             to="/configuracoes"

@@ -123,6 +123,19 @@ async function migrate() {
   `
   await sql`CREATE INDEX IF NOT EXISTS idx_despesas_item ON despesas(item_id)`
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS cotacoes (
+      id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      data        DATE NOT NULL DEFAULT CURRENT_DATE,
+      par         TEXT NOT NULL,
+      taxa_compra NUMERIC(18,6) NOT NULL,
+      taxa_venda  NUMERIC(18,6) NOT NULL,
+      fonte       TEXT NOT NULL DEFAULT 'awesomeapi',
+      criado_em   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(data, par)
+    )
+  `
+
   console.log("✔ Migrations concluídas.")
   await sql.end()
 }
