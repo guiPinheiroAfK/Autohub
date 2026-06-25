@@ -1,5 +1,5 @@
-import { Hono } from "hono"
 import type { AppEnv } from "../types"
+import { Hono } from "hono"
 import { z } from "zod"
 import { sql } from "../db/client"
 import { authMiddleware } from "../middleware/auth"
@@ -36,12 +36,12 @@ veiculosRoutes.get("/", async (c) => {
 
   const veiculos = await sql`
     SELECT v.*,
-      COUNT(DISTINCT f.id)::int AS total_fases,
+           COUNT(DISTINCT f.id)::int AS total_fases,
       COUNT(DISTINCT i.id)::int AS total_itens,
       COUNT(DISTINCT i.id) FILTER (WHERE i.status = 'concluido')::int AS itens_concluidos
     FROM veiculos v
-    LEFT JOIN fases f ON f.veiculo_id = v.id
-    LEFT JOIN itens i ON i.fase_id = f.id
+           LEFT JOIN fases f ON f.veiculo_id = v.id
+           LEFT JOIN itens i ON i.fase_id = f.id
     WHERE v.garagem_id = ${garagemId}
     GROUP BY v.id
     ORDER BY v.criado_em DESC
@@ -64,33 +64,35 @@ veiculosRoutes.get("/:id", async (c) => {
   `
   if (!veiculo) return c.json({ error: "Veículo não encontrado" }, 404)
 
-  const fasesResult = await sql`
+  const fases = await sql`
     SELECT f.*,
-      COUNT(i.id)::int AS total_itens,
+           COUNT(i.id)::int AS total_itens,
       COUNT(i.id) FILTER (WHERE i.status = 'concluido')::int AS itens_concluidos,
       COALESCE(SUM(i.preco_max) FILTER (WHERE i.status = 'concluido'), 0) AS gasto_realizado
     FROM fases f
-    LEFT JOIN itens i ON i.fase_id = f.id
+           LEFT JOIN itens i ON i.fase_id = f.id
     WHERE f.veiculo_id = ${id}
     GROUP BY f.id
     ORDER BY f.ordem
   `
-  const fases = fasesResult as unknown as Array<{ id: string; [coluna: string]: unknown }>
 
-  // Itens de todas as fases de uma vez
-  const faseIds = fases.map((f) => f.id)
-  const itensResult = faseIds.length
-    ? await sql`
+// Itens de todas as fases de uma vez
+  // Substituímos (f: { id: string }) por (f: any)
+  const faseIds = fases.map((f: any) => f.id)
+
+  const itens = faseIds.length
+      ? await sql`
         SELECT i.*, fo.nome AS fornecedor_nome, fo.pais AS fornecedor_pais
         FROM itens i
-        LEFT JOIN fornecedores fo ON fo.id = i.fornecedor_id
+               LEFT JOIN fornecedores fo ON fo.id = i.fornecedor_id
         WHERE i.fase_id = ANY(${faseIds})
+        ORDER BY i.id ASC -- Usa o ID ou a data para manter a ordem!
       `
-    : []
-  const itens = itensResult as unknown as Array<{ fase_id: string; [coluna: string]: unknown }>
+      : []
 
   // Agrupa itens por fase
-  const itensPorFase = itens.reduce<Record<string, typeof itens>>((acc, item) => {
+  // Tipamos o acc e o item para evitar o conflito do typeof itens
+  const itensPorFase = itens.reduce((acc: Record<string, any[]>, item: any) => {
     if (!acc[item.fase_id]) acc[item.fase_id] = []
     acc[item.fase_id].push(item)
     return acc
@@ -98,7 +100,8 @@ veiculosRoutes.get("/:id", async (c) => {
 
   return c.json({
     ...veiculo,
-    fases: fases.map((f) => ({
+    // Substituímos (f: { id: string }) por (f: any) novamente
+    fases: fases.map((f: any) => ({
       ...f,
       itens: itensPorFase[f.id] ?? [],
     })),
@@ -124,11 +127,11 @@ veiculosRoutes.post("/", async (c) => {
       ano_fabricacao, ano_modelo, perfil, status,
       visibilidade, capa_url, meta_potencia_whp
     ) VALUES (
-      ${garagemId}, ${d.apelido}, ${d.marca}, ${d.modelo},
-      ${d.anoFabricacao}, ${d.anoModelo}, ${d.perfil}, ${d.status},
-      ${d.visibilidade}, ${d.capaUrl ?? null}, ${d.metaPotenciaWhp ?? null}
-    )
-    RETURNING *
+               ${garagemId}, ${d.apelido}, ${d.marca}, ${d.modelo},
+               ${d.anoFabricacao}, ${d.anoModelo}, ${d.perfil}, ${d.status},
+               ${d.visibilidade}, ${d.capaUrl ?? null}, ${d.metaPotenciaWhp ?? null}
+             )
+      RETURNING *
   `
 
   return c.json(veiculo, 201)
@@ -188,7 +191,7 @@ veiculosRoutes.delete("/:id", async (c) => {
   const result = await sql`
     DELETE FROM veiculos
     WHERE id = ${id} AND garagem_id = ${garagemId}
-    RETURNING id
+      RETURNING id
   `
 
   if (result.length === 0) return c.json({ error: "Veículo não encontrado" }, 404)

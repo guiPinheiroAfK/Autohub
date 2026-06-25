@@ -1,9 +1,14 @@
-// Tipa as variáveis que o authMiddleware injeta no contexto Hono via c.set().
-// Sem isso, c.get("userId") falha o typecheck (mas não quebra o Bun em
-// runtime, já que ele roda TS sem checar tipos — ainda assim, vale corrigir).
-export type AppEnv = {
-  Variables: {
-    userId: string
-    userEmail: string
-  }
+import type { Context, Next } from "hono"
+
+/** Variáveis injetadas pelo authMiddleware no contexto do Hono. */
+export type AppVariables = {
+  userId: string
+  userEmail: string
 }
+
+/** Use este tipo em todos os `new Hono<AppEnv>()` e handlers. */
+export type AppEnv = { Variables: AppVariables }
+
+/** Alias tipado para handlers individuais. */
+export type AppContext = Context<AppEnv>
+export type AppNext = Next

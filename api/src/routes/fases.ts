@@ -1,5 +1,5 @@
-import { Hono } from "hono"
 import type { AppEnv } from "../types"
+import { Hono } from "hono"
 import { z } from "zod"
 import { sql } from "../db/client"
 import { authMiddleware } from "../middleware/auth"
@@ -21,7 +21,7 @@ const faseSchema = z.object({
 async function checkVeiculoOwner(veiculoId: string, userId: string) {
   const [row] = await sql`
     SELECT v.id FROM veiculos v
-    JOIN garagens g ON g.id = v.garagem_id
+                       JOIN garagens g ON g.id = v.garagem_id
     WHERE v.id = ${veiculoId} AND g.usuario_id = ${userId}
   `
   return !!row
@@ -37,10 +37,10 @@ fasesRoutes.get("/veiculos/:veiculoId/fases", async (c) => {
 
   const fases = await sql`
     SELECT f.*,
-      COUNT(i.id)::int AS total_itens,
+           COUNT(i.id)::int AS total_itens,
       COUNT(i.id) FILTER (WHERE i.status = 'concluido')::int AS itens_concluidos
     FROM fases f
-    LEFT JOIN itens i ON i.fase_id = f.id
+           LEFT JOIN itens i ON i.fase_id = f.id
     WHERE f.veiculo_id = ${veiculoId}
     GROUP BY f.id
     ORDER BY f.ordem
@@ -64,7 +64,7 @@ fasesRoutes.post("/veiculos/:veiculoId/fases", async (c) => {
   const [fase] = await sql`
     INSERT INTO fases (veiculo_id, titulo, ordem, status, orcamento_min, orcamento_max, moeda, nota)
     VALUES (${veiculoId}, ${d.titulo}, ${d.ordem}, ${d.status}, ${d.orcamentoMin}, ${d.orcamentoMax}, ${d.moeda}, ${d.nota ?? null})
-    RETURNING *
+      RETURNING *
   `
   return c.json(fase, 201)
 })
@@ -76,8 +76,8 @@ fasesRoutes.patch("/fases/:id", async (c) => {
 
   const [fase] = await sql`
     SELECT f.id, f.veiculo_id FROM fases f
-    JOIN veiculos v ON v.id = f.veiculo_id
-    JOIN garagens g ON g.id = v.garagem_id
+                                     JOIN veiculos v ON v.id = f.veiculo_id
+                                     JOIN garagens g ON g.id = v.garagem_id
     WHERE f.id = ${id} AND g.usuario_id = ${userId}
   `
   if (!fase) return c.json({ error: "Fase não encontrada" }, 404)
@@ -109,12 +109,12 @@ fasesRoutes.delete("/fases/:id", async (c) => {
 
   const result = await sql`
     DELETE FROM fases f
-    USING veiculos v, garagens g
+      USING veiculos v, garagens g
     WHERE f.id = ${id}
       AND f.veiculo_id = v.id
       AND v.garagem_id = g.id
       AND g.usuario_id = ${userId}
-    RETURNING f.id
+      RETURNING f.id
   `
   if (result.length === 0) return c.json({ error: "Fase não encontrada" }, 404)
   return c.json({ deleted: true })
