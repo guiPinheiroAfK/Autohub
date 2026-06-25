@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom"
 import { cn } from "@/lib/utils"
-import type { VeiculoResumo } from "@/lib/api/veiculos"
-import type { PerfilVeiculo, StatusVeiculo } from "@/types"
+import { Zap, Layers, CheckCircle2 } from "lucide-react"
+import type { PerfilVeiculo, StatusVeiculo, VeiculoComMetricas } from "@/types"
 
 const PERFIL_LABEL: Record<PerfilVeiculo, string> = {
   daily: "Daily",
@@ -11,63 +11,119 @@ const PERFIL_LABEL: Record<PerfilVeiculo, string> = {
   project: "Projeto",
 }
 
-const PERFIL_CLASS: Record<PerfilVeiculo, string> = {
-  daily: "bg-blue-bg text-blue",
-  street_build: "bg-coral-bg text-coral",
-  restomod: "bg-purple-bg text-purple",
-  track: "bg-red-bg text-red",
-  project: "bg-amber-bg text-amber",
+const PERFIL_DOT: Record<PerfilVeiculo, string> = {
+  daily:        "bg-blue",
+  street_build: "bg-coral",
+  restomod:     "bg-purple",
+  track:        "bg-red",
+  project:      "bg-amber",
+}
+
+const PERFIL_TEXT: Record<PerfilVeiculo, string> = {
+  daily:        "text-blue",
+  street_build: "text-coral",
+  restomod:     "text-purple",
+  track:        "text-red",
+  project:      "text-amber",
 }
 
 const STATUS_LABEL: Record<StatusVeiculo, string> = {
   planejamento: "Planejamento",
   em_andamento: "Em andamento",
-  concluido: "Concluído",
-  pausado: "Pausado",
+  concluido:    "Concluído",
+  pausado:      "Pausado",
 }
 
-export function VeiculoCard({ veiculo }: { veiculo: VeiculoResumo }) {
+const STATUS_COLOR: Record<StatusVeiculo, string> = {
+  planejamento: "text-faint-foreground",
+  em_andamento: "text-amber",
+  concluido:    "text-green",
+  pausado:      "text-faint-foreground",
+}
+
+const PROGRESS_BAR: Record<StatusVeiculo, string> = {
+  planejamento: "bg-faint-foreground/30",
+  em_andamento: "bg-amber",
+  concluido:    "bg-green",
+  pausado:      "bg-faint-foreground/20",
+}
+
+export function VeiculoCard({ veiculo }: { veiculo: VeiculoComMetricas }) {
+  const progresso =
+      veiculo.total_itens > 0
+          ? Math.round((veiculo.itens_concluidos / veiculo.total_itens) * 100)
+          : 0
+
+  const status = veiculo.status as StatusVeiculo
+  const perfil = veiculo.perfil as PerfilVeiculo
+
   return (
-    <Link
-      to={`/veiculo/${veiculo.id}`}
-      className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-5 transition-colors hover:border-border-strong"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <span
-            className={cn(
-              "inline-flex w-fit items-center rounded-full px-2.5 py-[3px] text-[11px] font-medium",
-              PERFIL_CLASS[veiculo.perfil]
-            )}
-          >
-            {PERFIL_LABEL[veiculo.perfil]}
-          </span>
-          <h3 className="mt-2 font-display text-lg font-semibold text-foreground">{veiculo.apelido}</h3>
-          <p className="text-xs text-muted-foreground">
-            {veiculo.marca} {veiculo.modelo} · {veiculo.anoModelo}
-          </p>
+      <Link
+          to={`/veiculo/${veiculo.id}`}
+          className="group flex flex-col rounded-xl border border-border bg-surface p-5 transition-all hover:border-border-strong hover:bg-surface/80"
+      >
+        {/* ── Topo ───────────────────────────────────────────────────────── */}
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1.5">
+            {/* perfil badge */}
+            <div className="flex items-center gap-1.5">
+              <span className={cn("size-1.5 rounded-full", PERFIL_DOT[perfil])} />
+              <span className={cn("text-[11px] font-medium", PERFIL_TEXT[perfil])}>
+              {PERFIL_LABEL[perfil]}
+            </span>
+            </div>
+            {/* nome */}
+            <h3 className="font-display text-[18px] font-semibold leading-tight text-foreground">
+              {veiculo.apelido}
+            </h3>
+            <p className="text-[12px] text-muted-foreground">
+              {veiculo.marca} {veiculo.modelo} · {veiculo.ano_modelo}
+            </p>
+          </div>
+
+          {/* meta whp */}
+          {veiculo.meta_potencia_whp && (
+              <div className="flex shrink-0 flex-col items-end gap-0.5">
+                <div className="flex items-center gap-1 text-amber">
+                  <Zap className="size-3" />
+                  <span className="font-data text-sm font-semibold">{veiculo.meta_potencia_whp}</span>
+                </div>
+                <span className="text-[10px] text-faint-foreground">whp meta</span>
+              </div>
+          )}
         </div>
-        {veiculo.metaPotenciaWhp && (
-          <span className="whitespace-nowrap font-data text-xs font-semibold text-amber">
-            meta {veiculo.metaPotenciaWhp} whp
-          </span>
-        )}
-      </div>
 
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{STATUS_LABEL[veiculo.status]}</span>
-        <span className="font-data">{veiculo.progresso}%</span>
-      </div>
-      <div className="h-1.5 w-full rounded-full bg-surface-2">
-        <div className="h-1.5 rounded-full bg-green transition-all" style={{ width: `${veiculo.progresso}%` }} />
-      </div>
-
-      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-3 text-[11px] text-faint-foreground">
-        <span>
-          {veiculo.totalFases} fase{veiculo.totalFases !== 1 && "s"} ·{" "}
-          {veiculo.itensConcluidos}/{veiculo.totalItens} itens concluídos
+        {/* ── Progresso ──────────────────────────────────────────────────── */}
+        <div className="mb-1.5 flex items-center justify-between">
+        <span className={cn("text-[11px] font-medium", STATUS_COLOR[status])}>
+          {STATUS_LABEL[status]}
         </span>
-      </div>
-    </Link>
+          <span className="font-data text-[11px] text-muted-foreground">{progresso}%</span>
+        </div>
+        <div className="h-1 w-full rounded-full bg-surface-2">
+          <div
+              className={cn("h-1 rounded-full transition-all duration-500", PROGRESS_BAR[status])}
+              style={{ width: `${progresso}%` }}
+          />
+        </div>
+
+        {/* ── Footer ─────────────────────────────────────────────────────── */}
+        <div className="mt-4 flex items-center justify-between border-t border-border pt-3.5">
+          <div className="flex items-center gap-3 text-[11px] text-faint-foreground">
+          <span className="flex items-center gap-1">
+            <Layers className="size-3" />
+            {veiculo.total_fases} fase{veiculo.total_fases !== 1 && "s"}
+          </span>
+            <span className="flex items-center gap-1">
+            <CheckCircle2 className="size-3" />
+              {veiculo.itens_concluidos}/{veiculo.total_itens} itens
+          </span>
+          </div>
+
+          <span className="text-[11px] text-faint-foreground opacity-0 transition-opacity group-hover:opacity-100">
+          Ver build →
+        </span>
+        </div>
+      </Link>
   )
 }

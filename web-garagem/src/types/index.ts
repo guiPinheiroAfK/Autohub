@@ -119,3 +119,63 @@ export interface Documento {
   tamanhoBytes: number
   criadoEm: string
 }
+
+// ─── Tipos de resposta da API (snake_case vindo do Postgres) ─────────────────
+
+/** Veículo com contadores agregados — resposta de GET /api/veiculos */
+export interface VeiculoComMetricas {
+  id: string
+  garagem_id: string
+  apelido: string
+  marca: string
+  modelo: string
+  ano_fabricacao: number
+  ano_modelo: number
+  perfil: PerfilVeiculo
+  status: StatusVeiculo
+  visibilidade: Visibilidade
+  capa_url: string | null
+  meta_potencia_whp: number | null
+  criado_em: string
+  // agregados do GROUP BY
+  total_fases: number
+  total_itens: number
+  itens_concluidos: number
+}
+
+/** Fase com itens embutidos — dentro de VeiculoDetalheAPI */
+export interface FaseAPI {
+  id: string
+  veiculo_id: string
+  titulo: string
+  ordem: number
+  status: StatusFase
+  orcamento_min: number
+  orcamento_max: number
+  moeda: Moeda
+  nota: string | null
+  total_itens: number
+  itens_concluidos: number
+  gasto_realizado: number
+  itens: ItemAPI[]
+}
+
+export interface ItemAPI {
+  id: string
+  fase_id: string
+  nome: string
+  detalhe: string | null
+  preco_min: number
+  preco_max: number
+  moeda: Moeda
+  status: StatusItem
+  fornecedor_id: string | null
+  link_compra: string | null
+  fornecedor_nome: string | null
+  fornecedor_pais: string | null
+}
+
+/** Resposta completa de GET /api/veiculos/:id */
+export interface VeiculoDetalheAPI extends VeiculoComMetricas {
+  fases: FaseAPI[]
+}

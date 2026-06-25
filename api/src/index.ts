@@ -5,29 +5,29 @@ import { authMiddleware } from "./middleware/auth"
 import { authRoutes } from "./routes/auth"
 import { veiculosRoutes } from "./routes/veiculos"
 import { fasesRoutes } from "./routes/fases"
-import type { AppEnv } from "./types"
+import { itensRoutes } from "./routes/itens"
 
 const app = new Hono()
 
 // ── Middlewares globais ─────────────────────────────────────────────────────
 app.use(logger())
 app.use(
-  cors({
-    origin: (process.env.CORS_ORIGINS ?? "http://localhost:5173").split(","),
-    allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    credentials: true,
-  })
+    cors({
+      origin: (process.env.CORS_ORIGINS ?? "http://localhost:5173").split(","),
+      allowHeaders: ["Content-Type", "Authorization"],
+      allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+      credentials: true,
+    })
 )
 
 // ── Healthcheck ─────────────────────────────────────────────────────────────
-app.get("/", (c) => c.json({ ok: true, service: "api" }))
+app.get("/", (c) => c.json({ ok: true, service: "autohub-api" }))
 
 // ── Rotas públicas ──────────────────────────────────────────────────────────
 app.route("/auth", authRoutes)
 
 // ── Rotas protegidas ────────────────────────────────────────────────────────
-const api = new Hono<AppEnv>()
+const api = new Hono()
 api.use("*", authMiddleware)
 
 // /auth/me fica no grupo protegido
@@ -39,9 +39,9 @@ api.get("/auth/me", async (c) => {
     SELECT u.id, u.nome, u.email, u.avatar_url, u.criado_em,
            g.id as garagem_id, g.slug as garagem_slug, g.nome as garagem_nome
     FROM usuarios u
-    LEFT JOIN garagens g ON g.usuario_id = u.id
+           LEFT JOIN garagens g ON g.usuario_id = u.id
     WHERE u.id = ${userId}
-    LIMIT 1
+      LIMIT 1
   `
   if (!usuario) return c.json({ error: "Não encontrado" }, 404)
   return c.json({
@@ -57,8 +57,9 @@ api.get("/auth/me", async (c) => {
   })
 })
 
-api.route("/veiculos", veiculosRoutes)
+api.route("/", veiculosRoutes)
 api.route("/", fasesRoutes)
+api.route("/", itensRoutes)
 
 app.route("/api", api)
 
