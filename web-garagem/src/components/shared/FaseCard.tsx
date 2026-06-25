@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react"
-import { ChevronDown, ExternalLink, MapPin, Check } from "lucide-react"
+import { ChevronDown, ExternalLink, MapPin, Check, Pencil, Trash2, Plus, RotateCcw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatFaixa } from "@/lib/format"
 import { api } from "@/lib/api/client"
-import type { Fase, Item, ItemAPI } from "@/types"
+import type { Fase, Item, ItemAPI, Moeda } from "@/types"
 
 // ── Status ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +32,8 @@ const PROGRESS_BAR: Record<AnyStatus, string> = {
   andamento: "bg-amber",
   concluido: "bg-green",
 }
+
+const MOEDAS: Moeda[] = ["BRL", "USD", "PYG"]
 
 // ── Helpers snake/camel ───────────────────────────────────────────────────────
 
@@ -130,38 +132,213 @@ function ItemCheckbox({
   )
 }
 
+// ── Formulário (criar/editar item) ───────────────────────────────────────────
+
+interface ItemFormValue {
+  nome: string
+  detalhe: string
+  precoMin: string
+  precoMax: string
+  moeda: Moeda
+  linkCompra: string
+}
+
+const ITEM_FORM_EMPTY: ItemFormValue = { nome: "", detalhe: "", precoMin: "", precoMax: "", moeda: "BRL", linkCompra: "" }
+
+function ItemForm({
+                    initial,
+                    saving,
+                    onSave,
+                    onCancel,
+                  }: {
+  initial: ItemFormValue
+  saving: boolean
+  onSave: (v: ItemFormValue) => void
+  onCancel: () => void
+}) {
+  const [v, setV] = useState<ItemFormValue>(initial)
+
+  return (
+      <div className="flex flex-col gap-2 px-4 py-3">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+              autoFocus
+              value={v.nome}
+              onChange={(e) => setV({ ...v, nome: e.target.value })}
+              placeholder='Nome — ex: "Supercharger ou turbo?"'
+              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
+          />
+          <input
+              value={v.detalhe}
+              onChange={(e) => setV({ ...v, detalhe: e.target.value })}
+              placeholder="Detalhe — opcional"
+              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={v.precoMin}
+              onChange={(e) => setV({ ...v, precoMin: e.target.value })}
+              placeholder="Preço mín."
+              className="w-24 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
+          />
+          <span className="text-faint-foreground">—</span>
+          <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={v.precoMax}
+              onChange={(e) => setV({ ...v, precoMax: e.target.value })}
+              placeholder="Preço máx."
+              className="w-24 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
+          />
+          <select
+              value={v.moeda}
+              onChange={(e) => setV({ ...v, moeda: e.target.value as Moeda })}
+              className="rounded-md border border-border bg-background px-2 py-1.5 text-[13px] text-foreground focus:border-purple focus:outline-none"
+          >
+            {MOEDAS.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <input
+              value={v.linkCompra}
+              onChange={(e) => setV({ ...v, linkCompra: e.target.value })}
+              placeholder="Link de compra — opcional"
+              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+              disabled={saving || v.nome.trim().length === 0}
+              onClick={() => onSave(v)}
+              className="rounded-md bg-purple px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Salvando..." : "Salvar"}
+          </button>
+          <button
+              onClick={onCancel}
+              className="rounded-md px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+  )
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface FaseCardProps {
   fase: Fase | FaseLocalAPI
   itens: AnyItem[]
   defaultOpen?: boolean
-  onItemStatusChange?: (itemId: string, newStatus: AnyStatus) => void
+  /** Chamado depois de qualquer mutação bem-sucedida (item ou fase), pro pai re-sincronizar os painéis de resumo. */
+  onChanged?: () => void
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
-export function FaseCard({ fase, itens: initialItens, defaultOpen = false, onItemStatusChange }: FaseCardProps) {
+export function FaseCard({ fase, itens: initialItens, defaultOpen = false, onChanged }: FaseCardProps) {
   const [open, setOpen] = useState(defaultOpen)
   const [itens, setItens] = useState<AnyItem[]>(initialItens)
+  const [faseStatus, setFaseStatus] = useState<AnyStatus>(fase.status as AnyStatus)
+  const [addingItem, setAddingItem] = useState(false)
+  const [savingNewItem, setSavingNewItem] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
-  // Sincroniza se o pai re-renderizar com novos itens
+  // Sincroniza se o pai re-renderizar com novos itens/status (ex: depois de um refetch)
   useEffect(() => { setItens(initialItens) }, [initialItens])
+  useEffect(() => { setFaseStatus(fase.status as AnyStatus) }, [fase.status])
 
-  const status = fase.status as AnyStatus
   const concluidos = itens.filter(i => i.status === "concluido").length
   const nota = faseNota(fase)
-  const progresso = status === "concluido" ? 100 : status === "planejado" ? 0 : progressoItens(itens)
+  const progresso = faseStatus === "concluido" ? 100 : faseStatus === "planejado" ? 0 : progressoItens(itens)
 
   async function handleToggle(itemId: string, next: AnyStatus) {
-    // Optimistic update
     setItens(prev => prev.map(i => i.id === itemId ? { ...i, status: next } : i))
     try {
-      await api.patch(`/api/itens/${itemId}`, { status: next })
-      onItemStatusChange?.(itemId, next)
+      const res = await api.patch<{ faseStatus: AnyStatus }>(`/api/itens/${itemId}`, { status: next })
+      setFaseStatus(res.faseStatus)
+      onChanged?.()
     } catch {
-      // Reverte se falhar
-      setItens(prev => prev.map(i => i.id === itemId ? { ...i, status: i.status } : i))
+      setItens(prev => prev.map(i => i.id === itemId ? { ...i, status: i.status === next ? (next === "concluido" ? "planejado" : "concluido") : i.status } : i))
+    }
+  }
+
+  async function handleCreateItem(v: ItemFormValue) {
+    setSavingNewItem(true)
+    try {
+      const res = await api.post<ItemAPI & { faseStatus: AnyStatus }>("/api/itens", {
+        faseId: fase.id,
+        nome: v.nome.trim(),
+        detalhe: v.detalhe.trim() || null,
+        precoMin: v.precoMin ? Number(v.precoMin) : 0,
+        precoMax: v.precoMax ? Number(v.precoMax) : (v.precoMin ? Number(v.precoMin) : 0),
+        moeda: v.moeda,
+        linkCompra: v.linkCompra.trim() || null,
+      })
+      setItens(prev => [...prev, res])
+      setFaseStatus(res.faseStatus)
+      setAddingItem(false)
+      onChanged?.()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao criar item")
+    } finally {
+      setSavingNewItem(false)
+    }
+  }
+
+  async function handleEditItem(itemId: string, v: ItemFormValue) {
+    setSavingEdit(true)
+    try {
+      const res = await api.patch<ItemAPI & { faseStatus: AnyStatus }>(`/api/itens/${itemId}`, {
+        nome: v.nome.trim(),
+        detalhe: v.detalhe.trim() || null,
+        preco_min: v.precoMin ? Number(v.precoMin) : 0,
+        preco_max: v.precoMax ? Number(v.precoMax) : (v.precoMin ? Number(v.precoMin) : 0),
+        moeda: v.moeda,
+        link_compra: v.linkCompra.trim() || null,
+      })
+      setItens(prev => prev.map(i => i.id === itemId ? { ...i, ...res } : i))
+      setFaseStatus(res.faseStatus)
+      setEditingId(null)
+      onChanged?.()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao salvar item")
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function handleDeleteItem(itemId: string) {
+    if (!confirm("Excluir esse item? Não tem como desfazer.")) return
+    try {
+      const res = await api.delete<{ faseStatus: AnyStatus }>(`/api/itens/${itemId}`)
+      setItens(prev => prev.filter(i => i.id !== itemId))
+      setFaseStatus(res.faseStatus)
+      onChanged?.()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao excluir item")
+    }
+  }
+
+  async function handleResetarFase(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirm(`Zerar "${fase.titulo}"? Volta a fase e todos os itens dela pra "planejado".`)) return
+    setResetting(true)
+    try {
+      await api.post(`/api/fases/${fase.id}/resetar`, {})
+      setItens(prev => prev.map(i => ({ ...i, status: "planejado" as AnyStatus })))
+      setFaseStatus("planejado")
+      onChanged?.()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao zerar fase")
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -173,39 +350,49 @@ export function FaseCard({ fase, itens: initialItens, defaultOpen = false, onIte
           )}
       >
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <button
-            onClick={() => setOpen(o => !o)}
-            className="group flex w-full items-center gap-3 px-5 py-4 text-left"
-        >
-        <span className={cn(
-            "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-colors",
-            STATUS_BADGE[status]
-        )}>
-          {STATUS_LABEL[status]}
-        </span>
+        <div className="flex w-full items-center gap-3 px-5 py-4 text-left">
+          <button onClick={() => setOpen(o => !o)} className="group flex flex-1 items-center gap-3 text-left">
+            <span className={cn(
+                "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-colors",
+                STATUS_BADGE[faseStatus]
+            )}>
+              {STATUS_LABEL[faseStatus]}
+            </span>
 
-          <span className="flex-1 text-[13px] font-semibold leading-tight text-foreground">
-          {fase.titulo}
-        </span>
+            <span className="flex-1 text-[13px] font-semibold leading-tight text-foreground">
+              {fase.titulo}
+            </span>
 
-          <span className="shrink-0 font-data text-[11px] text-faint-foreground">
-          {concluidos}/{itens.length}
-        </span>
+            <span className="shrink-0 font-data text-[11px] text-faint-foreground">
+              {concluidos}/{itens.length}
+            </span>
 
-          <span className="shrink-0 whitespace-nowrap font-data text-[12px] text-muted-foreground">
-          {formatFaixa(faseOrcMin(fase), faseOrcMax(fase), fase.moeda)}
-        </span>
+            <span className="shrink-0 whitespace-nowrap font-data text-[12px] text-muted-foreground">
+              {formatFaixa(faseOrcMin(fase), faseOrcMax(fase), fase.moeda)}
+            </span>
+          </button>
 
-          <ChevronDown className={cn(
-              "size-4 shrink-0 text-faint-foreground transition-transform duration-200",
-              open && "rotate-180"
-          )} />
-        </button>
+          <button
+              onClick={handleResetarFase}
+              disabled={resetting}
+              title="Zerar fase (volta pra planejado, item por item)"
+              className="flex size-7 shrink-0 items-center justify-center rounded-md text-faint-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-40"
+          >
+            <RotateCcw className={cn("size-3.5", resetting && "animate-spin")} />
+          </button>
+
+          <button onClick={() => setOpen(o => !o)}>
+            <ChevronDown className={cn(
+                "size-4 shrink-0 text-faint-foreground transition-transform duration-200",
+                open && "rotate-180"
+            )} />
+          </button>
+        </div>
 
         {/* ── Barra de progresso ─────────────────────────────────────────── */}
         <div className="h-[2px] bg-surface-2">
           <div
-              className={cn("h-full transition-all duration-500", PROGRESS_BAR[status])}
+              className={cn("h-full transition-all duration-500", PROGRESS_BAR[faseStatus])}
               style={{ width: `${progresso}%` }}
           />
         </div>
@@ -232,7 +419,7 @@ export function FaseCard({ fase, itens: initialItens, defaultOpen = false, onIte
                 <th className="px-5 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
                   Estimado
                 </th>
-                <th className="w-8 px-3 py-2.5" />
+                <th className="w-16 px-3 py-2.5" />
               </tr>
               </thead>
               <tbody>
@@ -242,6 +429,29 @@ export function FaseCard({ fase, itens: initialItens, defaultOpen = false, onIte
                 const link = itemLink(item)
                 const itemStatus = item.status as AnyStatus
                 const done = itemStatus === "concluido"
+                const isEditing = editingId === item.id
+
+                if (isEditing) {
+                  return (
+                      <tr key={item.id} className="border-t border-border bg-surface-2/30">
+                        <td colSpan={5}>
+                          <ItemForm
+                              initial={{
+                                nome: item.nome,
+                                detalhe: item.detalhe ?? "",
+                                precoMin: String(itemPrecoMin(item)),
+                                precoMax: String(itemPrecoMax(item)),
+                                moeda: item.moeda,
+                                linkCompra: link ?? "",
+                              }}
+                              saving={savingEdit}
+                              onSave={(v) => handleEditItem(item.id, v)}
+                              onCancel={() => setEditingId(null)}
+                          />
+                        </td>
+                      </tr>
+                  )
+                }
 
                 return (
                     <tr
@@ -305,33 +515,74 @@ export function FaseCard({ fase, itens: initialItens, defaultOpen = false, onIte
                       </span>
                       </td>
 
-                      {/* Link externo */}
+                      {/* Ações: link / editar / excluir */}
                       <td className="px-3 py-3 align-top">
-                        {link ? (
-                            <a
-                                href={link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={e => e.stopPropagation()}
-                                className="flex size-6 items-center justify-center rounded-md text-faint-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
-                            >
-                              <ExternalLink className="size-3" />
-                            </a>
-                        ) : <div className="size-6" />}
+                        <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                          {link && (
+                              <a
+                                  href={link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  title="Abrir link de compra"
+                                  className="flex size-6 items-center justify-center rounded-md text-faint-foreground hover:text-foreground"
+                              >
+                                <ExternalLink className="size-3" />
+                              </a>
+                          )}
+                          <button
+                              onClick={() => setEditingId(item.id)}
+                              title="Editar item"
+                              className="flex size-6 items-center justify-center rounded-md text-faint-foreground hover:text-foreground"
+                          >
+                            <Pencil className="size-3" />
+                          </button>
+                          <button
+                              onClick={() => handleDeleteItem(item.id)}
+                              title="Excluir item"
+                              className="flex size-6 items-center justify-center rounded-md text-faint-foreground hover:text-red"
+                          >
+                            <Trash2 className="size-3" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                 )
               })}
+
+              {addingItem && (
+                  <tr className="border-t border-border bg-surface-2/30">
+                    <td colSpan={5}>
+                      <ItemForm
+                          initial={ITEM_FORM_EMPTY}
+                          saving={savingNewItem}
+                          onSave={handleCreateItem}
+                          onCancel={() => setAddingItem(false)}
+                      />
+                    </td>
+                  </tr>
+              )}
               </tbody>
 
               <tfoot>
               <tr className="border-t border-border bg-surface-2/40">
-                <td />
-                <td colSpan={2} className="px-3 py-2.5 text-[10px] uppercase tracking-wide text-faint-foreground">
-                  {concluidos === itens.length && itens.length > 0
-                      ? "✓ Todos os itens concluídos"
-                      : `${itens.length - concluidos} restante${itens.length - concluidos !== 1 ? "s" : ""}`}
+                <td colSpan={2} className="px-3 py-2.5">
+                  {!addingItem ? (
+                      <button
+                          onClick={() => setAddingItem(true)}
+                          className="flex items-center gap-1 text-[11px] font-medium text-purple hover:underline"
+                      >
+                        <Plus className="size-3" /> Adicionar item
+                      </button>
+                  ) : (
+                      <span className="text-[10px] uppercase tracking-wide text-faint-foreground">
+                        {concluidos === itens.length && itens.length > 0
+                            ? "✓ Todos os itens concluídos"
+                            : `${itens.length - concluidos} restante${itens.length - concluidos !== 1 ? "s" : ""}`}
+                      </span>
+                  )}
                 </td>
+                <td className="hidden sm:table-cell" />
                 <td className="px-5 py-2.5 text-right">
                   <span className="font-data text-[12px] font-semibold text-foreground">
                     {formatFaixa(faseOrcMin(fase), faseOrcMax(fase), fase.moeda)}

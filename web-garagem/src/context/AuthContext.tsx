@@ -42,31 +42,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     api
-      .get<AuthUser>("/api/auth/me")
-      .then(setUser)
-      .catch(() => localStorage.removeItem("autohub_token"))
-      .finally(() => setLoading(false))
+        .get<AuthUser>("/api/auth/me")
+        .then(setUser)
+        .catch(() => localStorage.removeItem("autohub_token"))
+        .finally(() => setLoading(false))
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await api.post<{ token: string; usuario: AuthUser }>(
-      "/auth/login",
-      { email, password }
+        "/auth/login",
+        { email, password }
     )
     localStorage.setItem("autohub_token", res.token)
     setUser(res.usuario as unknown as AuthUser)
   }, [])
 
   const register = useCallback(
-    async (nome: string, email: string, password: string) => {
-      const res = await api.post<{ token: string; usuario: AuthUser }>(
-        "/auth/register",
-        { nome, email, password }
-      )
-      localStorage.setItem("autohub_token", res.token)
-      setUser(res.usuario as unknown as AuthUser)
-    },
-    []
+      async (nome: string, email: string, password: string) => {
+        const res = await api.post<{ token: string; usuario: AuthUser }>(
+            "/auth/register",
+            { nome, email, password }
+        )
+        localStorage.setItem("autohub_token", res.token)
+        setUser(res.usuario as unknown as AuthUser)
+      },
+      []
   )
 
   const logout = useCallback(() => {
@@ -75,9 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
-      {children}
-    </AuthContext.Provider>
+      <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+        {children}
+      </AuthContext.Provider>
   )
 }
 

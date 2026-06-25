@@ -102,6 +102,29 @@ fasesRoutes.patch("/fases/:id", async (c) => {
   return c.json(updated)
 })
 
+// POST /fases/:id/resetar — "zerar fase" pro caso de eterno stage 0:
+// volta a fase e todos os itens dela pra "planejado".
+fasesRoutes.post("/fases/:id/resetar", async (c) => {
+  const userId = c.get("userId") as string
+  const { id } = c.req.param()
+
+  const [fase] = await sql`
+    SELECT f.id FROM fases f
+                     JOIN veiculos v ON v.id = f.veiculo_id
+                     JOIN garagens g ON g.id = v.garagem_id
+    WHERE f.id = ${id} AND g.usuario_id = ${userId}
+  `
+  if (!fase) return c.json({ error: "Fase não encontrada" }, 404)
+
+  const [updated] = await sql.begin(async (tx) => {
+    await tx`UPDATE itens SET status = 'planejado' WHERE fase_id = ${id}`
+    const [f] = await tx`UPDATE fases SET status = 'planejado' WHERE id = ${id} RETURNING *`
+    return [f]
+  })
+
+  return c.json(updated)
+})
+
 // DELETE /fases/:id
 fasesRoutes.delete("/fases/:id", async (c) => {
   const userId = c.get("userId") as string

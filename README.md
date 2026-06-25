@@ -1,12 +1,13 @@
 # AutoHub Garagem — monorepo
 
 ```
-autohub-garagem/   React 19 + Vite + Tailwind v4
-autohub-api/       Bun + Hono + postgres.js
-docker-compose.yml PostgreSQL 16 + api + front
+web-garagem/        React 19 + Vite + Tailwind v4
+api/                 Bun + Hono + postgres.js (mesma app serve Bun local e Netlify Function)
+docker-compose.yml   PostgreSQL 16 + api + front (dev local)
+netlify.toml         build do front + Netlify Function da api (produção)
 ```
 
-## Setup rápido
+## Setup rápido (dev local, Postgres próprio)
 
 ```bash
 cp .env.example .env
@@ -17,31 +18,89 @@ docker compose up --build
 - API:   http://localhost:8000
 - DB:    localhost:5432 (autohub / autohub_dev)
 
-As migrations e o seed rodam automático antes da api subir
-(`bun run migrate && bun run seed`). O seed só popula no primeiro `up` —
-depois disso é idempotente.
+Migrations e seed rodam automático antes da api subir (`bun run migrate && bun run seed`).
+O seed só popula no primeiro `up` — depois disso é idempotente.
+
+Login pra ver a garagem do Gui já populada (RX-8 K24 + Civic):
+- **E-mail:** guilherme@pinedevs.com.br
+- **Senha:** autohub_dev_2026
+
+## Deploy em produção (Netlify + Neon)
+
+Netlify só hospeda site estático + **Functions** (Node.js — não dá pra rodar um
+servidor Bun de pé). Por isso a mesma `app` Hono que roda local também vira uma
+Netlify Function: `api/netlify/functions/api.mts` declara os próprios paths
+(`/api/*` e `/auth/*`) e serve `app.fetch` direto, sem adapter nenhum — Functions
+normais (não as "Edge") rodam em Node.js de verdade e suportam TCP, então o
+`postgres.js` que você já usa não muda nada pra falar com o Neon.
+
+### 1. Banco — Neon
+1. Cria um projeto em [neon.tech](https://neon.tech) (free tier serve numa boa
+   pra esse tamanho de app).
+2. Copia a **connection string com pooling** (tem `-pooler` no hostname — isso
+   importa: cada invocação de Function pode ser uma instância nova, e o pooler
+   deles evita esgotar conexão no Postgres). Algo como:
+   ```
+   postgres://usuario:senha@ep-xxx-pooler.sa-east-1.aws.neon.tech/autohub?sslmode=require
+   ```
+3. Roda as migrations e o seed **uma vez**, do seu computador, apontando pra essa
+   URL (não precisa Docker pra isso):
+   ```bash
+   cd api
+   npm install
+   DATABASE_URL="postgres://...-pooler...neon.tech/autohub?sslmode=require" npx bun run migrate
+   DATABASE_URL="postgres://...-pooler...neon.tech/autohub?sslmode=require" npx bun run seed
+   ```
+   (`db/client.ts` detecta o host `neon.tech` automaticamente e liga SSL + reduz
+   o pool de conexões — não precisa configurar nada além da `DATABASE_URL`.)
+
+### 2. Site — Netlify
+1. Conecta o repo no Netlify (Import an existing project). Ele já lê o
+   `netlify.toml` da raiz — não precisa configurar build command/publish dir
+   na UI, já vem tudo do arquivo.
+2. Em **Site settings → Environment variables**, adiciona:
+  - `DATABASE_URL` — a connection string pooled do Neon (a mesma do passo acima)
+  - `JWT_SECRET` — qualquer string aleatória longa (32+ chars)
+  - `JWT_EXPIRES_IN` — `60m` (ou o que preferir)
+  - `NODE_ENV` — `production`
+3. Deploy. Front e api ficam no mesmo domínio Netlify — não precisa configurar
+   `VITE_API_URL` nem CORS em produção, o `client.ts` do front já assume
+   same-origin quando essa variável não existe.
+
+Se o primeiro deploy não rotear `/api/*` pra Function (ficar caindo no SPA), o
+ponto a checar é a ordem entre o `config.path` da function e o redirect catch-all
+do `netlify.toml` — me chama com o log do deploy que eu sigo dali.
 
 ## API endpoints
 
-### Auth (público)
+### Auth (público, sem prefixo /api)
 | Método | Path | Body |
 |--------|------|------|
 | POST | /auth/register | `{ nome, email, password }` |
 | POST | /auth/login | `{ email, password }` |
 
-### Protegidos (Bearer token)
+### Protegidos (Bearer token, prefixo /api)
 | Método | Path | |
 |--------|------|-|
 | GET | /api/auth/me | perfil do usuário logado |
 | GET | /api/veiculos | lista da garagem |
 | POST | /api/veiculos | cria veículo |
 | GET | /api/veiculos/:id | detalhe + fases + itens |
-| PATCH | /api/veiculos/:id | atualiza campos |
+| PATCH | /api/veiculos/:id | atualiza campos (inclui `status`) |
 | DELETE | /api/veiculos/:id | remove |
-| GET | /api/veiculos/:id/fases | lista fases |
 | POST | /api/veiculos/:id/fases | cria fase |
 | PATCH | /api/fases/:id | atualiza fase |
+| POST | /api/fases/:id/resetar | zera a fase e todos os itens dela pra "planejado" |
 | DELETE | /api/fases/:id | remove fase |
+| POST | /api/itens | cria item (`{ faseId, nome, precoMin, precoMax, moeda, ... }`) |
+| PATCH | /api/itens/:id | atualiza item — resposta inclui `faseStatus` recalculado |
+| DELETE | /api/itens/:id | remove item — resposta inclui `faseStatus` recalculado |
+
+**Cascata automática de status:** toda mutação em `/api/itens/*` recalcula o
+status da fase-mãe (`planejado` → `andamento` → `concluido`, conforme os itens
+dela) e devolve em `faseStatus`. É o que faz a fase virar verde sozinha quando
+todo item é marcado concluído, e voltar pra amarelo/cinza se algum item for
+desmarcado.
 
 ## Schema do banco
 
@@ -70,54 +129,57 @@ npm install
 VITE_API_URL=http://localhost:8000 npm run dev
 ```
 
-## Changelog desta sessão (continuação)
+## Changelog desta sessão
 
-A sessão anterior tinha ficado pela metade — o zip entregue compilava, mas o front
-ainda lia 100% de `data/*.ts` (mock) e tinha bugs reais no backend que só apareceriam
-em runtime. O que foi corrigido/terminado:
+Você mandou o projeto já com bastante coisa sua (login, CRUD de veículo/fase,
+`itens.ts` novo, o `FaseCard.tsx` com checkbox otimista e bandeirinha de país —
+ficou ótimo). O que eu adicionei/corrigi em cima disso:
 
-**Bugs reais corrigidos (backend):**
-- `index.ts` montava `veiculosRoutes` na raiz (`/`) em vez de `/veiculos` — `GET /api/veiculos`
-  nunca resolvia, só `/api/` e `/api/:id`.
-- `routes/veiculos.ts` tinha `ORDER BY i.rowid` na query de detalhe — `rowid` não existe no
-  Postgres, ia quebrar a request com erro de coluna inexistente.
-- `routes/auth.ts` importava `@hono/zod-validator`, que não está instalado — ia crashar a
-  API inteira na primeira request (módulo não resolve em runtime).
-- `routes/auth.ts` tinha um `GET /me` morto e duplicado no router público (sem o
-  authMiddleware aplicado, nunca teria `userId` no contexto). Removido — a versão real
-  e protegida já existe em `/api/auth/me`.
-- Tipagem do contexto Hono (`c.get("userId")`) não tinha o `Variables` declarado —
-  não quebrava o Bun (que não type-checa), mas dava erro em qualquer `tsc --noEmit`.
-  Adicionado `src/types.ts` com `AppEnv` e aplicado nos routers.
+**Bug de rota (real, ia quebrar em runtime):**
+- `fasesRoutes` tinha os paths internos absolutos (`/veiculos/:id/fases`,
+  `/fases/:id`) mas tava montado em `/fases` — isso duplicava o prefixo
+  (`/api/fases/fases/:id`). Voltei a montar na raiz, como os paths já esperavam.
 
-**O que estava faltando de verdade (não só bug, ausência mesmo):**
-- `GaragemOverview`, `VeiculoDetalhe`, `VeiculoCard` e `FaseCard` ainda importavam de
-  `data/*.ts` — agora consomem a API real via `src/lib/api/veiculos.ts` (camada nova,
-  com adapters snake_case → camelCase e parsing de `NUMERIC` do Postgres, que volta
-  como string).
-- Página `/novo` (criação de veículo) não existia, só era mencionada na conversa.
-  Criada em `src/pages/NovoVeiculo.tsx` e plugada na rota.
-- `lib/metrics.ts` (operava sobre mock) foi removido — a lógica equivalente
-  (progresso, totais por moeda, contagem de itens) agora vive em `lib/api/veiculos.ts`,
-  operando sobre a resposta real da API.
+**Item 1 — Neon:**
+- `db/client.ts` detecta `neon.tech` na `DATABASE_URL` e ajusta sozinho: liga
+  SSL e reduz o pool pra 1 conexão (cada invocação de Function pode ser uma
+  instância nova — pool grande só desperdiça conexão do lado do Neon).
 
-`tsc -b` (front), `tsc --noEmit` (api) e `oxlint` passam limpos. `vite build` gera o
-bundle de produção sem erro. Não rodei o `docker compose up` de fato porque este
-ambiente não tem acesso ao Postgres/rede pra isso — então o fluxo completo (banco
-subindo, migrations rodando, registro → login → criar veículo → ver na listagem)
-precisa ser validado por você na sua máquina. Se algo travar no `docker compose up
---build`, me chama com o log de erro que eu sigo dali.
+**Item 2 — Netlify:**
+- `api/src/app.ts` — extraí a `app` Hono pra um módulo compartilhado; o
+  entrypoint Bun (`index.ts`) e a Netlify Function (`netlify/functions/api.mts`)
+  agora montam a mesma instância, sem rota duplicada.
+- A function usa Functions normais do Netlify (Node.js/Lambda), não Edge — por
+  isso não precisa do adapter `hono/netlify` (esse é pra Deno) nem de driver
+  HTTP especial pro Neon: TCP direto via `postgres.js` funciona igual ao local.
+- `netlify.toml` na raiz com o build do front + a pasta de functions da api.
+- `client.ts` do front: fallback de `BASE` mudou de `localhost:8000` pra vazio
+  (same-origin), porque em produção front e api ficam no mesmo domínio.
 
-Os arquivos `src/data/*.ts` (mock do RX-8 K24 e do Civic) foram removidos. Os dados
-não desapareceram — virou `autohub-api/src/db/seed.ts`, que insere esse build real
-(usuário, garagem, 2 veículos, 7 fases, 43 itens, 3 fornecedores) direto no Postgres
-depois das migrations. É idempotente: roda em todo `docker compose up` e só insere
-na primeira vez (verifica se o e-mail seed já existe).
+**Item 3 — criar peças na mão:**
+- `POST /api/itens` (criar) e `DELETE /api/itens/:id` (excluir) — só existia
+  o `PATCH`. `POST /api/veiculos/:id/fases` já existia mas não tinha UI; agora
+  tem o botão "+ Adicionar fase" na página do veículo.
+- `FaseCard.tsx`: form simples (nome, detalhe, preço mín/máx, moeda, link) pra
+  adicionar item dentro de uma fase, sem sugestão nem autocomplete — só os
+  campos. Cada item ganhou um ícone de editar (abre o mesmo form preenchido)
+  e de excluir.
 
-Login pra ver a garagem do Gui já populada:
-- **E-mail:** guilherme@pinedevs.com.br
-- **Senha:** autohub_dev_2026
+**Item 4 — editar, "destransformar" e feedback visual:**
+- `StatusVeiculoMenu` no topo da página do veículo: dropdown pra mudar o status
+  pra qualquer um dos 4 (`planejamento` / `em_andamento` / `concluido` /
+  `pausado`) a qualquer momento — é o "destransformar de concluído" que você
+  pediu. Junto com o "+ Adicionar fase", cobre o fluxo de reabrir um projeto.
+- `POST /api/fases/:id/resetar` + botão de reset (ícone de "voltar") no header
+  de cada fase — zera a fase e todos os itens dela pra "planejado" de uma vez,
+  pro caso do eterno stage 0.
+- A cascata de status (ver seção da API acima): isso é o que faz a barra da
+  fase ir de amarela pra verde e o badge virar "Concluído" sozinho quando você
+  marca o último item — antes disso só existia client-side, sem persistir, então
+  um reload perdia o estado visual.
 
-(Troca essa senha à vontade direto no `seed.ts` antes do primeiro `docker compose up`,
-ou cria sua própria conta normalmente — o seed não interfere em nada.)
-
+`tsc -b` (front), `tsc --noEmit` (api), `oxlint` e `vite build` passam limpos.
+Não dá pra testar o `docker compose up` nem um deploy de verdade no Netlify
+aqui no sandbox (sem rede pra isso) — então o fluxo ponta a ponta (criar item,
+ver a fase ficar verde, reabrir um veículo concluído, deploy no Netlify) precisa
+ser validado na sua máquina. Me chama com o log se algo travar.

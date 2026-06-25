@@ -1,12 +1,16 @@
-const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000"
+// Em prod no Netlify, front e api ficam no mesmo domínio (a api é uma
+// Netlify Function roteada em /api e /auth) — BASE fica vazio, então as
+// chamadas saem como caminho relativo (same-origin). No dev local, o
+// docker-compose já define VITE_API_URL=http://localhost:8000 explicitamente.
+const BASE = import.meta.env.VITE_API_URL ?? ""
 
 function getToken(): string | null {
   return localStorage.getItem("autohub_token")
 }
 
 async function request<T>(
-  path: string,
-  options: RequestInit = {}
+    path: string,
+    options: RequestInit = {}
 ): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = {
@@ -35,8 +39,8 @@ async function request<T>(
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
   post: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+      request<T>(path, { method: "POST", body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+      request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 }

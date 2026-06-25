@@ -1,0 +1,27 @@
+# Logs
+logs
+*.log
+
+# Dependencies
+node_modules/
+api/node_modules/
+web-garagem/node_modules/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+dist/
+.output/
+.vercel/
+.netlify/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/

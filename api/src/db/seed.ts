@@ -27,7 +27,7 @@ async function seed() {
   const [usuario] = await sql`
     INSERT INTO usuarios (nome, email, hashed_password)
     VALUES (${SEED_NOME}, ${SEED_EMAIL}, ${hashed})
-    RETURNING id
+      RETURNING id
   `
   const userId = usuario.id
   console.log(`  ✓ Usuário criado: ${SEED_EMAIL}`)
@@ -36,7 +36,7 @@ async function seed() {
   const [garagem] = await sql`
     INSERT INTO garagens (usuario_id, nome, slug)
     VALUES (${userId}, ${"Garagem do Gui"}, ${"garagem-do-gui"})
-    RETURNING id
+      RETURNING id
   `
   const garagemId = garagem.id
   console.log(`  ✓ Garagem criada: Garagem do Gui`)
@@ -45,17 +45,17 @@ async function seed() {
   const [fCDE] = await sql`
     INSERT INTO fornecedores (usuario_id, nome, pais, avaliacao, observacoes)
     VALUES (${userId}, ${"CDE Performance"}, ${"PY"}, ${4.7}, ${"Tornearia e montagem do bloco — Ciudad del Este"})
-    RETURNING id
+      RETURNING id
   `
   const [fRockAuto] = await sql`
     INSERT INTO fornecedores (usuario_id, nome, pais, avaliacao, link_rastreio)
     VALUES (${userId}, ${"RockAuto"}, ${"US"}, ${4.5}, ${"https://rockauto.com"})
-    RETURNING id
+      RETURNING id
   `
   const [fOficina] = await sql`
     INSERT INTO fornecedores (usuario_id, nome, pais, avaliacao)
     VALUES (${userId}, ${"Oficina Central Foz"}, ${"BR"}, ${4.8})
-    RETURNING id
+      RETURNING id
   `
   console.log(`  ✓ 3 fornecedores criados`)
 
@@ -69,7 +69,7 @@ async function seed() {
                           perfil, status, visibilidade, meta_potencia_whp)
     VALUES (${garagemId}, ${"RX-8 K24"}, ${"Mazda"}, ${"RX-8"},
             ${2006}, ${2006}, ${"street_build"}, ${"em_andamento"}, ${"publico"}, ${370})
-    RETURNING id
+      RETURNING id
   `
   const rx8Id = rx8.id
   console.log(`  ✓ Veículo: RX-8 K24`)
@@ -78,7 +78,7 @@ async function seed() {
   const [fa01] = await sql`
     INSERT INTO fases (veiculo_id, titulo, ordem, status, orcamento_min, orcamento_max, moeda)
     VALUES (${rx8Id}, ${"Fase 1 — Mecânica e swap"}, ${1}, ${"andamento"}, ${7200}, ${9800}, ${"USD"})
-    RETURNING id
+      RETURNING id
   `
   await sql`INSERT INTO itens (fase_id, nome, detalhe, preco_min, preco_max, moeda, status) VALUES
     (${fa01.id}, ${"Mazda RX-8 rolling shell"}, ${"Motor rotativo quebrado, preferencialmente manual"}, ${2500}, ${3500}, ${"USD"}, ${"andamento"})`
@@ -103,7 +103,7 @@ async function seed() {
   const [fa02] = await sql`
     INSERT INTO fases (veiculo_id, titulo, ordem, status, orcamento_min, orcamento_max, moeda)
     VALUES (${rx8Id}, ${"Fase 1b — Combustível e arrefecimento"}, ${2}, ${"planejado"}, ${1530}, ${2040}, ${"USD"})
-    RETURNING id
+      RETURNING id
   `
   await sql`INSERT INTO itens (fase_id, nome, detalhe, preco_min, preco_max, moeda, status, fornecedor_id) VALUES
     (${fa02.id}, ${"Bicos injetores 1000cc"}, ${"Bosch EV14 alta impedância — future-proof turbo"}, ${350}, ${450}, ${"USD"}, ${"planejado"}, ${F.rockauto})`
@@ -128,7 +128,7 @@ async function seed() {
   const [fa03] = await sql`
     INSERT INTO fases (veiculo_id, titulo, ordem, status, orcamento_min, orcamento_max, moeda)
     VALUES (${rx8Id}, ${"Fase 1c — Eletrônica e integração"}, ${3}, ${"planejado"}, ${1450}, ${2000}, ${"USD"})
-    RETURNING id
+      RETURNING id
   `
   await sql`INSERT INTO itens (fase_id, nome, detalhe, preco_min, preco_max, moeda, status) VALUES
     (${fa03.id}, ${"MaxxECU Race"}, ${"Logging completo via celular/tablet — sem display dedicado"}, ${800}, ${1200}, ${"USD"}, ${"planejado"})`
@@ -145,7 +145,7 @@ async function seed() {
   const [fa04] = await sql`
     INSERT INTO fases (veiculo_id, titulo, ordem, status, orcamento_min, orcamento_max, moeda)
     VALUES (${rx8Id}, ${"Fase 1d — Mão de obra (Ciudad del Este)"}, ${4}, ${"planejado"}, ${1500}, ${2450}, ${"USD"})
-    RETURNING id
+      RETURNING id
   `
   await sql`INSERT INTO itens (fase_id, nome, detalhe, preco_min, preco_max, moeda, status, fornecedor_id) VALUES
     (${fa04.id}, ${"Montagem do bloco"}, ${"Medição de folgas, ring gapping, torquímetro de precisão"}, ${300}, ${500}, ${"USD"}, ${"planejado"}, ${F.cde})`
@@ -163,7 +163,7 @@ async function seed() {
     INSERT INTO fases (veiculo_id, titulo, ordem, status, orcamento_min, orcamento_max, moeda, nota)
     VALUES (${rx8Id}, ${"Fase 2 — Estética"}, ${5}, ${"planejado"}, ${800}, ${1500}, ${"USD"},
             ${"Bodykit depois que o motor estiver 100% — não faz sentido colocar antes de abrir o cofre para ajustes."})
-    RETURNING id
+      RETURNING id
   `
   await sql`INSERT INTO itens (fase_id, nome, detalhe, preco_min, preco_max, moeda, status) VALUES
     (${fa05.id}, ${"Bodykit réplica RE Amemiya (FRP)"}, ${"Para-choque dianteiro + saias + traseiro"}, ${600}, ${1000}, ${"USD"}, ${"planejado"})`
@@ -177,7 +177,7 @@ async function seed() {
     INSERT INTO fases (veiculo_id, titulo, ordem, status, orcamento_min, orcamento_max, moeda, nota)
     VALUES (${rx8Id}, ${"Fase 3 — Turbo (meta 370 whp)"}, ${6}, ${"planejado"}, ${1990}, ${3070}, ${"USD"},
             ${"Só após 6–9 meses dominando o carro no aspirado. Sistema de combustível já dimensionado desde a fase 1."})
-    RETURNING id
+      RETURNING id
   `
   await sql`INSERT INTO itens (fase_id, nome, detalhe, preco_min, preco_max, moeda, status) VALUES
     (${fa06.id}, ${"Turbina Pulsar G30-770"}, ${"Médio porte — torque rápido sem lag absurdo"}, ${600}, ${900}, ${"USD"}, ${"planejado"})`
@@ -208,14 +208,14 @@ async function seed() {
                           perfil, status, visibilidade)
     VALUES (${garagemId}, ${"Civic do dia a dia"}, ${"Honda"}, ${"Civic LXS"},
             ${2019}, ${2019}, ${"daily"}, ${"concluido"}, ${"privado"})
-    RETURNING id
+      RETURNING id
   `
   const civicId = civic.id
 
   const [fa07] = await sql`
     INSERT INTO fases (veiculo_id, titulo, ordem, status, orcamento_min, orcamento_max, moeda)
     VALUES (${civicId}, ${"Revisão geral e itens de conforto"}, ${1}, ${"concluido"}, ${2200}, ${2200}, ${"BRL"})
-    RETURNING id
+      RETURNING id
   `
   await sql`INSERT INTO itens (fase_id, nome, detalhe, preco_min, preco_max, moeda, status, fornecedor_id) VALUES
     (${fa07.id}, ${"Kit revisão completa"}, ${"Filtros, óleo sintético, velas"}, ${850}, ${850}, ${"BRL"}, ${"concluido"}, ${F.oficina})`
