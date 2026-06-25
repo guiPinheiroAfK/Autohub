@@ -91,7 +91,8 @@ export default function GaragemOverview() {
 
         {/* ── Loading ────────────────────────────────────────────────────── */}
         {loading && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <SkeletonCard />
               <SkeletonCard />
               <SkeletonCard />
             </div>
@@ -128,7 +129,7 @@ export default function GaragemOverview() {
 
         {/* ── Grid de veículos ──────────────────────────────────────────── */}
         {!loading && veiculos.length > 0 && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {veiculos.map((v, index) => (
                   <div
                       key={v.id}

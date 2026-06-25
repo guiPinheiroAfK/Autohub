@@ -48,6 +48,14 @@ const PROGRESS_BAR: Record<StatusVeiculo, string> = {
   pausado:      "bg-faint-foreground/20",
 }
 
+const PERFIL_ACCENT: Record<PerfilVeiculo, string> = {
+  daily:        "bg-blue",
+  street_build: "bg-coral",
+  restomod:     "bg-purple",
+  track:        "bg-red",
+  project:      "bg-amber",
+}
+
 export function VeiculoCard({ veiculo }: { veiculo: VeiculoComMetricas }) {
   const progresso =
       veiculo.total_itens > 0
@@ -60,10 +68,13 @@ export function VeiculoCard({ veiculo }: { veiculo: VeiculoComMetricas }) {
   return (
       <Link
           to={`/veiculo/${veiculo.id}`}
-          className="group flex flex-col rounded-xl border border-border bg-surface p-5 transition-all hover:border-border-strong hover:bg-surface/80"
+          className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition-all hover:border-border-strong hover:bg-surface/80"
       >
+        {/* ── Barra de acento por perfil ──────────────────────────────────── */}
+        <div className={cn("h-[3px] w-full shrink-0", PERFIL_ACCENT[perfil])} />
+
         {/* ── Topo ───────────────────────────────────────────────────────── */}
-        <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="mb-4 mt-5 flex items-start justify-between gap-3 px-5">
           <div className="flex flex-col gap-1.5">
             {/* perfil badge */}
             <div className="flex items-center gap-1.5">
@@ -94,35 +105,34 @@ export function VeiculoCard({ veiculo }: { veiculo: VeiculoComMetricas }) {
         </div>
 
         {/* ── Progresso ──────────────────────────────────────────────────── */}
-        <div className="mb-1.5 flex items-center justify-between">
-        <span className={cn("text-[11px] font-medium", STATUS_COLOR[status])}>
-          {STATUS_LABEL[status]}
-        </span>
+        <div className="mb-1.5 flex items-center justify-between px-5">
+          <span className={cn("text-[11px] font-medium", STATUS_COLOR[status])}>
+            {STATUS_LABEL[status]}
+          </span>
           <span className="font-data text-[11px] text-muted-foreground">{progresso}%</span>
         </div>
-        <div className="h-1 w-full rounded-full bg-surface-2">
+        <div className="h-1 w-full bg-surface-2">
           <div
-              className={cn("h-1 rounded-full transition-all duration-500", PROGRESS_BAR[status])}
+              className={cn("h-1 transition-all duration-500", PROGRESS_BAR[status])}
               style={{ width: `${progresso}%` }}
           />
         </div>
 
         {/* ── Footer ─────────────────────────────────────────────────────── */}
-        <div className="mt-4 flex items-center justify-between border-t border-border pt-3.5">
+        <div className="mt-4 flex items-center justify-between border-t border-border px-5 pt-3.5 pb-5">
           <div className="flex items-center gap-3 text-[11px] text-faint-foreground">
-          <span className="flex items-center gap-1">
-            <Layers className="size-3" />
-            {veiculo.total_fases} fase{veiculo.total_fases !== 1 && "s"}
-          </span>
             <span className="flex items-center gap-1">
-            <CheckCircle2 className="size-3" />
+              <Layers className="size-3" />
+              {veiculo.total_fases} fase{veiculo.total_fases !== 1 && "s"}
+            </span>
+            <span className="flex items-center gap-1">
+              <CheckCircle2 className="size-3" />
               {veiculo.itens_concluidos}/{veiculo.total_itens} itens
-          </span>
+            </span>
           </div>
-
           <span className="text-[11px] text-faint-foreground opacity-0 transition-opacity group-hover:opacity-100">
-          Ver build →
-        </span>
+            Ver build →
+          </span>
         </div>
       </Link>
   )

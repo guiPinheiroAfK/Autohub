@@ -4,6 +4,7 @@ import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown } from
 import { api } from "@/lib/api/client"
 import { formatMoeda, formatFaixa } from "@/lib/format"
 import { FaseCard } from "@/components/shared/FaseCard"
+import { FotoGaleria } from "@/components/shared/FotoGaleria"
 import type { PerfilVeiculo, StatusVeiculo, VeiculoDetalheAPI, FaseAPI, Moeda } from "@/types"
 
 const PERFIL_LABEL: Record<PerfilVeiculo, string> = {
@@ -376,165 +377,195 @@ export default function VeiculoDetalhe() {
         planejadas: fases.filter(f => f.status === "planejado").length,
     }
 
+    // Bloco de stats reutilizado tanto no mobile quanto no sidebar desktop
+    const statsBlock = (
+        <>
+            <Stat
+                label="Progresso"
+                value={`${progresso}%`}
+                sub={`${concluidosItens} de ${totalItens} itens`}
+                accent="text-green"
+            />
+            <Stat
+                label="Investido"
+                value={principal ? formatMoeda(principal.gasto, principal.moeda as Moeda) : "R$ 0"}
+                sub={principal ? `de ${formatMoeda(principal.estimadoMax, principal.moeda as Moeda)}` : "sem itens"}
+                accent="text-purple"
+            />
+            <Stat
+                label="Fases"
+                value={`${fasesStatus.concluidas}/${fases.length}`}
+                sub={fasesStatus.andamento > 0 ? `${fasesStatus.andamento} em andamento` : "concluídas"}
+                accent="text-amber"
+            />
+            <Stat
+                label="Meta"
+                value={data.meta_potencia_whp ? `${data.meta_potencia_whp} whp` : "—"}
+                sub="potência alvo"
+            />
+        </>
+    )
+
     return (
-        <div className="flex flex-col gap-10">
+        <div className="lg:grid lg:grid-cols-[1fr_300px] lg:items-start lg:gap-8">
 
-            {/* ── Hero ─────────────────────────────────────────────────────────── */}
-            <div className="border-b border-border pb-8">
-                <div className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-faint-foreground">
-                    <span>{data.marca}</span>
-                    <span className="text-border-strong">·</span>
-                    <span>{data.modelo}</span>
-                    <span className="text-border-strong">·</span>
-                    <span>{data.ano_modelo}</span>
-                    <span className="text-border-strong">·</span>
-                    <span>{PERFIL_LABEL[data.perfil as PerfilVeiculo]}</span>
-                </div>
+            {/* ── Coluna principal ─────────────────────────────────────────────── */}
+            <div className="flex flex-col gap-8 min-w-0">
 
-                <h1 className="font-display text-[38px] font-semibold leading-[1.05] text-foreground">
-                    {data.apelido}
-                </h1>
-
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                    {/* status — agora editável, é o "destransformar de concluído" */}
-                    <StatusVeiculoMenu
-                        status={data.status as StatusVeiculo}
-                        saving={savingStatus}
-                        onChange={handleStatusChange}
-                    />
-
-                    {data.meta_potencia_whp && (
-                        <>
-                            <span className="text-faint-foreground">·</span>
-                            <div className="flex items-center gap-1.5">
-                                <Zap className="size-3.5 text-amber" />
-                                <span className="font-data text-sm text-amber">
-                  meta {data.meta_potencia_whp} whp
-                </span>
-                            </div>
-                        </>
-                    )}
-
-                    <span className="text-faint-foreground">·</span>
-                    <div className="flex items-center gap-1.5">
-                        <Layers className="size-3.5 text-faint-foreground" />
-                        <span className="text-sm text-muted-foreground">
-              {fases.length} fase{fases.length !== 1 && "s"}
-            </span>
+                {/* Hero */}
+                <div className="border-b border-border pb-8">
+                    <div className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-faint-foreground">
+                        <span>{data.marca}</span>
+                        <span className="text-border-strong">·</span>
+                        <span>{data.modelo}</span>
+                        <span className="text-border-strong">·</span>
+                        <span>{data.ano_modelo}</span>
+                        <span className="text-border-strong">·</span>
+                        <span>{PERFIL_LABEL[data.perfil as PerfilVeiculo]}</span>
                     </div>
 
-                    {fasesStatus.andamento > 0 && (
-                        <>
-                            <span className="text-faint-foreground">·</span>
-                            <span className="rounded-full border border-amber/30 bg-amber-bg px-2 py-0.5 text-[11px] font-medium text-amber">
-                {fasesStatus.andamento} em andamento
-              </span>
-                        </>
-                    )}
-                </div>
-            </div>
+                    <h1 className="font-display text-[38px] font-semibold leading-[1.05] text-foreground">
+                        {data.apelido}
+                    </h1>
 
-            {/* ── Stats ────────────────────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Stat
-                    label="Progresso"
-                    value={`${progresso}%`}
-                    sub={`${concluidosItens} de ${totalItens} itens`}
-                    accent="text-green"
-                />
-                <Stat
-                    label="Investido"
-                    value={principal ? formatMoeda(principal.gasto, principal.moeda as Moeda) : "R$ 0"}
-                    sub={principal ? `de ${formatMoeda(principal.estimadoMax, principal.moeda as Moeda)}` : "sem itens"}
-                    accent="text-purple"
-                />
-                <Stat
-                    label="Fases"
-                    value={`${fasesStatus.concluidas}/${fases.length}`}
-                    sub={fasesStatus.andamento > 0 ? `${fasesStatus.andamento} em andamento` : "concluídas"}
-                    accent="text-amber"
-                />
-                <Stat
-                    label="Metas"
-                    value={data.meta_potencia_whp ? `${data.meta_potencia_whp} whp` : "—"}
-                    sub="potência alvo"
-                />
-            </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <StatusVeiculoMenu
+                            status={data.status as StatusVeiculo}
+                            saving={savingStatus}
+                            onChange={handleStatusChange}
+                        />
 
-            {/* ── Painel lateral: progresso + financeiro ────────────────────────── */}
-            {fases.length > 0 && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <BuildProgress fases={fases} />
-                    <ResumoFinanceiro fases={fases} />
-                </div>
-            )}
+                        {data.meta_potencia_whp && (
+                            <>
+                                <span className="text-faint-foreground">·</span>
+                                <div className="flex items-center gap-1.5">
+                                    <Zap className="size-3.5 text-amber" />
+                                    <span className="font-data text-sm text-amber">
+                                        meta {data.meta_potencia_whp} whp
+                                    </span>
+                                </div>
+                            </>
+                        )}
 
-            {/* ── Fases ────────────────────────────────────────────────────────── */}
-            <div>
-                <div className="mb-4 flex items-center justify-between">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
-                        Fases do build
-                    </div>
-                    <div className="flex items-center gap-3 text-[11px] text-faint-foreground">
-            <span className="flex items-center gap-1">
-              <CheckCircle2 className="size-3 text-green" />
-                {fasesStatus.concluidas} concluída{fasesStatus.concluidas !== 1 && "s"}
-            </span>
-                        <span className="flex items-center gap-1">
-              <Target className="size-3 text-faint-foreground" />
-                            {fasesStatus.planejadas} planejada{fasesStatus.planejadas !== 1 && "s"}
-            </span>
-                    </div>
-                </div>
-
-                <div className="flex flex-col gap-2.5">
-                    {fases.map((fase, idx) => (
-                        <div
-                            key={fase.id}
-                            className="animate-page-in"
-                            // Trocado "index" por "idx" aqui
-                            style={{ animationDelay: `${idx * 150}ms` }}
-                        >
-                            <FaseCard
-                                fase={fase}
-                                itens={fase.itens ?? []}
-                                defaultOpen={idx === 0}
-                                onChanged={carregar}
-                            />
+                        <span className="text-faint-foreground">·</span>
+                        <div className="flex items-center gap-1.5">
+                            <Layers className="size-3.5 text-faint-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                                {fases.length} fase{fases.length !== 1 && "s"}
+                            </span>
                         </div>
-                    ))}
 
-                    {fases.length === 0 && !addingFase && (
-                        <div className="flex flex-col items-center gap-2 py-14 text-center">
-                            <p className="text-sm text-muted-foreground">Nenhuma fase ainda.</p>
+                        {fasesStatus.andamento > 0 && (
+                            <>
+                                <span className="text-faint-foreground">·</span>
+                                <span className="rounded-full border border-amber/30 bg-amber-bg px-2 py-0.5 text-[11px] font-medium text-amber">
+                                    {fasesStatus.andamento} em andamento
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* Stats — mobile/tablet apenas (some no lg) */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:hidden">
+                    {statsBlock}
+                </div>
+
+                {/* Painéis — mobile/tablet apenas */}
+                {fases.length > 0 && (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:hidden">
+                        <BuildProgress fases={fases} />
+                        <ResumoFinanceiro fases={fases} />
+                    </div>
+                )}
+
+                {/* ── Fases ────────────────────────────────────────────────────── */}
+                <div>
+                    <div className="mb-4 flex items-center justify-between">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
+                            Fases do build
+                        </div>
+                        <div className="flex items-center gap-3 text-[11px] text-faint-foreground">
+                            <span className="flex items-center gap-1">
+                                <CheckCircle2 className="size-3 text-green" />
+                                {fasesStatus.concluidas} concluída{fasesStatus.concluidas !== 1 && "s"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <Target className="size-3 text-faint-foreground" />
+                                {fasesStatus.planejadas} planejada{fasesStatus.planejadas !== 1 && "s"}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5">
+                        {fases.map((fase, idx) => (
+                            <div
+                                key={fase.id}
+                                className="animate-page-in"
+                                style={{ animationDelay: `${idx * 150}ms` }}
+                            >
+                                <FaseCard
+                                    fase={fase}
+                                    itens={fase.itens ?? []}
+                                    defaultOpen={idx === 0}
+                                    onChanged={carregar}
+                                />
+                            </div>
+                        ))}
+
+                        {fases.length === 0 && !addingFase && (
+                            <div className="flex flex-col items-center gap-2 py-14 text-center">
+                                <p className="text-sm text-muted-foreground">Nenhuma fase ainda.</p>
+                                <button
+                                    onClick={() => setAddingFase(true)}
+                                    className="flex items-center gap-1 text-sm text-purple hover:underline"
+                                >
+                                    Adicionar primeira fase <ArrowRight className="size-3" />
+                                </button>
+                            </div>
+                        )}
+
+                        {addingFase && (
+                            <NovaFaseForm
+                                proximaOrdem={fases.length + 1}
+                                saving={savingFase}
+                                onSave={handleCriarFase}
+                                onCancel={() => setAddingFase(false)}
+                            />
+                        )}
+
+                        {fases.length > 0 && !addingFase && (
                             <button
                                 onClick={() => setAddingFase(true)}
-                                className="flex items-center gap-1 text-sm text-purple hover:underline"
+                                className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-3 text-sm text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
                             >
-                                Adicionar primeira fase <ArrowRight className="size-3" />
+                                <Plus className="size-3.5" /> Adicionar fase
                             </button>
-                        </div>
-                    )}
+                        )}
+                    </div>
+                </div>
 
-                    {addingFase && (
-                        <NovaFaseForm
-                            proximaOrdem={fases.length + 1}
-                            saving={savingFase}
-                            onSave={handleCriarFase}
-                            onCancel={() => setAddingFase(false)}
-                        />
-                    )}
-
-                    {fases.length > 0 && !addingFase && (
-                        <button
-                            onClick={() => setAddingFase(true)}
-                            className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-3 text-sm text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
-                        >
-                            <Plus className="size-3.5" /> Adicionar fase
-                        </button>
-                    )}
+                {/* ── Fotos da build ───────────────────────────────────────────── */}
+                <div className="rounded-xl border border-border bg-surface p-5">
+                    <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
+                        Fotos da build
+                    </div>
+                    <FotoGaleria veiculoId={data.id} />
                 </div>
             </div>
+
+            {/* ── Sidebar desktop ──────────────────────────────────────────────── */}
+            <aside className="hidden lg:flex flex-col gap-4 sticky top-[80px]">
+                <div className="grid grid-cols-2 gap-2">
+                    {statsBlock}
+                </div>
+                {fases.length > 0 && (
+                    <>
+                        <BuildProgress fases={fases} />
+                        <ResumoFinanceiro fases={fases} />
+                    </>
+                )}
+            </aside>
         </div>
     )
 }

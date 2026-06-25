@@ -10,7 +10,7 @@ export function Header() {
 
     return (
         <header className="border-b border-border">
-            <div className="mx-auto flex max-w-[820px] items-center gap-3 px-6 py-4">
+            <div className="mx-auto flex max-w-[1100px] items-center gap-3 px-6 py-4">
                 {naHome || naConfig ? (
                     <div className="flex size-8 items-center justify-center rounded-lg bg-purple-bg text-purple">
                         <Wrench className="size-4" />

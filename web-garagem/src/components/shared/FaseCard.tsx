@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { ChevronDown, ExternalLink, MapPin, Check, Pencil, Trash2, Plus, RotateCcw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatFaixa } from "@/lib/format"
 import { api } from "@/lib/api/client"
 import { useSettings } from "@/context/SettingsContext"
 import { OrcamentoAlert } from "@/components/shared/OrcamentoAlert"
+import { SUGESTOES_PECAS } from "@/data/sugestoes-pecas"
 import type { Fase, Item, ItemAPI, Moeda } from "@/types"
 
 // ── Status ────────────────────────────────────────────────────────────────────
@@ -149,15 +150,61 @@ function ItemForm({ initial, saving, onSave, onCancel }: {
   onSave: (v: ItemFormValue) => void; onCancel: () => void
 }) {
   const [v, setV] = useState<ItemFormValue>(initial)
+  const [sugestoes, setSugestoes] = useState<typeof SUGESTOES_PECAS>([])
+  const [showSug, setShowSug] = useState(false)
+  const nomeRef = useRef<HTMLInputElement>(null)
+
+  function handleNomeChange(nome: string) {
+    setV(prev => ({ ...prev, nome }))
+    if (nome.length >= 2) {
+      const q = nome.toLowerCase()
+      const filtradas = SUGESTOES_PECAS
+        .filter(s => s.nome.toLowerCase().includes(q))
+        .slice(0, 7)
+      setSugestoes(filtradas)
+      setShowSug(filtradas.length > 0)
+    } else {
+      setShowSug(false)
+    }
+  }
+
+  function handleSelectSugestao(nome: string) {
+    setV(prev => ({ ...prev, nome }))
+    setShowSug(false)
+    nomeRef.current?.focus()
+  }
 
   return (
       <div className="flex flex-col gap-2 px-4 py-3">
         <div className="flex flex-col gap-2 sm:flex-row">
-          <input autoFocus value={v.nome}
-                 onChange={e => setV({ ...v, nome: e.target.value })}
-                 placeholder='Nome — ex: "Supercharger ou turbo?"'
-                 className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
-          />
+          {/* Campo nome com typeahead */}
+          <div className="relative min-w-0 flex-1">
+            <input
+              ref={nomeRef}
+              autoFocus
+              value={v.nome}
+              onChange={e => handleNomeChange(e.target.value)}
+              onFocus={() => v.nome.length >= 2 && sugestoes.length > 0 && setShowSug(true)}
+              onBlur={() => setTimeout(() => setShowSug(false), 120)}
+              placeholder='Nome — ex: "Pistões Wiseco", "Downpipe 3"'
+              className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
+            />
+            {showSug && (
+              <div className="absolute left-0 top-full z-50 mt-1 w-full min-w-[240px] overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+                {sugestoes.map((s) => (
+                  <button
+                    key={s.nome}
+                    type="button"
+                    onMouseDown={() => handleSelectSugestao(s.nome)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-surface-2"
+                  >
+                    <span className="text-[13px] text-foreground">{s.nome}</span>
+                    <span className="ml-3 shrink-0 text-[10px] text-faint-foreground">{s.categoria}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <input value={v.detalhe}
                  onChange={e => setV({ ...v, detalhe: e.target.value })}
                  placeholder="Detalhe — opcional"
