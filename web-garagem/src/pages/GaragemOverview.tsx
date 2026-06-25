@@ -72,10 +72,11 @@ export default function GaragemOverview() {
 
           <Link
               to="/novo"
-              className="flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+              className="animate-page-in flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              style={{ animationDelay: '200ms' }} // Opcional: um leve atraso para ele aparecer depois do texto
           >
             <Plus className="size-4" />
-            Novo
+            Criar primeiro veículo
           </Link>
         </div>
 
@@ -128,8 +129,15 @@ export default function GaragemOverview() {
         {/* ── Grid de veículos ──────────────────────────────────────────── */}
         {!loading && veiculos.length > 0 && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {veiculos.map((v) => (
-                  <VeiculoCard key={v.id} veiculo={v} />
+              {veiculos.map((v, index) => (
+                  <div
+                      key={v.id}
+                      className="animate-page-in"
+                      // Cada card vai demorar 100ms a mais que o anterior para subir
+                      style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    <VeiculoCard veiculo={v} />
+                  </div>
               ))}
             </div>
         )}

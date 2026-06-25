@@ -22,8 +22,8 @@ Migrations e seed rodam automático antes da api subir (`bun run migrate && bun 
 O seed só popula no primeiro `up` — depois disso é idempotente.
 
 Login pra ver a garagem do Gui já populada (RX-8 K24 + Civic):
-- **E-mail:** guilherme@pinedevs.com.br
-- **Senha:** autohub_dev_2026
+- **E-mail:** *********(netlify)
+- **Senha:** *********(netlify)
 
 ## Deploy em produção (Netlify + Neon)
 

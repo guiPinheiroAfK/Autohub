@@ -173,11 +173,16 @@ export default function NovoVeiculo() {
             <button
                 type="submit"
                 disabled={loading}
-                className="rounded-lg bg-purple px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="animate-page-in rounded-lg bg-purple px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ animationDelay: '300ms' }}
             >
               {loading ? "Salvando..." : "Criar veículo"}
             </button>
-            <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
+            <Link
+                to="/"
+                className="animate-page-in text-sm text-muted-foreground hover:text-foreground"
+                style={{ animationDelay: '400ms' }}
+            >
               Cancelar
             </Link>
           </div>

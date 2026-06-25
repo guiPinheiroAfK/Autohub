@@ -37,7 +37,7 @@ export default function LoginPage() {
 
   return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="w-full max-w-[380px]">
+        <div className="w-full max-w-[380px] animate-page-in">
           {/* Logo */}
           <div className="mb-8 flex flex-col items-center gap-3">
             <div className="flex size-12 items-center justify-center rounded-xl bg-purple-bg text-purple">

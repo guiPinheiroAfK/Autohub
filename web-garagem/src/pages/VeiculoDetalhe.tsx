@@ -489,13 +489,19 @@ export default function VeiculoDetalhe() {
 
                 <div className="flex flex-col gap-2.5">
                     {fases.map((fase, idx) => (
-                        <FaseCard
+                        <div
                             key={fase.id}
-                            fase={fase}
-                            itens={fase.itens ?? []}
-                            defaultOpen={idx === 0}
-                            onChanged={carregar}
-                        />
+                            className="animate-page-in"
+                            // Trocado "index" por "idx" aqui
+                            style={{ animationDelay: `${idx * 150}ms` }}
+                        >
+                            <FaseCard
+                                fase={fase}
+                                itens={fase.itens ?? []}
+                                defaultOpen={idx === 0}
+                                onChanged={carregar}
+                            />
+                        </div>
                     ))}
 
                     {fases.length === 0 && !addingFase && (
