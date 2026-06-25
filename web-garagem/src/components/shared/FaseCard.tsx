@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { ChevronDown, ExternalLink, MapPin, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatFaixa } from "@/lib/format"
@@ -73,31 +73,17 @@ const PAIS_FLAG: Record<string, string> = { BR: "🇧🇷", PY: "🇵🇾", US: 
 // ── Animate height ────────────────────────────────────────────────────────────
 
 function AnimatedExpand({ open, children }: { open: boolean; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [height, setHeight] = useState(0)
-  const [visible, setVisible] = useState(open)
-
-  useEffect(() => {
-    if (open) {
-      setVisible(true)
-      // próximo frame pra garantir que o DOM montou
-      requestAnimationFrame(() => {
-        setHeight(ref.current?.scrollHeight ?? 0)
-      })
-    } else {
-      setHeight(0)
-      const t = setTimeout(() => setVisible(false), 220)
-      return () => clearTimeout(t)
-    }
-  }, [open])
-
-  if (!visible) return null
-
   return (
       <div
-          style={{ height, overflow: "hidden", transition: "height 220ms cubic-bezier(0.4,0,0.2,1)" }}
+          style={{
+            display: "grid",
+            gridTemplateRows: open ? "1fr" : "0fr",
+            transition: "grid-template-rows 220ms cubic-bezier(0.4,0,0.2,1)"
+          }}
       >
-        <div ref={ref}>{children}</div>
+        <div style={{ overflow: "hidden" }}>
+          {children}
+        </div>
       </div>
   )
 }

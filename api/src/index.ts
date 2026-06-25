@@ -6,6 +6,7 @@ import { authRoutes } from "./routes/auth"
 import { veiculosRoutes } from "./routes/veiculos"
 import { fasesRoutes } from "./routes/fases"
 import type { AppEnv } from "./types"
+import {itensRoutes} from "@/routes/itens";
 
 const app = new Hono()
 
@@ -43,8 +44,8 @@ api.get("/auth/me", async (c) => {
     WHERE u.id = ${userId}
     LIMIT 1
   `
-  if (!usuario) return c.json({ error: "Não encontrado" }, 404)
-  return c.json({
+    if (!usuario) return c.json({ error: "Não encontrado" }, 401)
+    return c.json({
     id: usuario.id,
     nome: usuario.nome,
     email: usuario.email,
@@ -58,8 +59,8 @@ api.get("/auth/me", async (c) => {
 })
 
 api.route("/veiculos", veiculosRoutes)
-api.route("/", fasesRoutes)
-
+api.route("/fases", fasesRoutes)
+api.route("/itens", itensRoutes)
 app.route("/api", api)
 
 // ── Start ───────────────────────────────────────────────────────────────────

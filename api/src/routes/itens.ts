@@ -30,7 +30,7 @@ async function checkItemOwner(itemId: string, userId: string) {
 }
 
 // PATCH /itens/:id
-itensRoutes.patch("/itens/:id", async (c) => {
+itensRoutes.patch("/:id", async (c) => {
     const userId = c.get("userId") as string
     const { id } = c.req.param()
 
