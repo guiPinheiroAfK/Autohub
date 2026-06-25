@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { ArrowLeft, Wrench, Settings, LogOut, CalendarDays } from "lucide-react"
+import { ArrowLeft, Wrench, Settings, LogOut, CalendarDays, Navigation } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 
 export function Header() {
@@ -40,6 +40,13 @@ export function Header() {
             <span className="hidden text-[12px] text-muted-foreground sm:block mr-1">
               {user.nome.split(" ")[0]}
             </span>
+                        <Link
+                            to="/tracks"
+                            title="Autohub Tracks"
+                            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                        >
+                            <Navigation className="size-4" />
+                        </Link>
                         <Link
                             to="/eventos"
                             title="Eventos automotivos"

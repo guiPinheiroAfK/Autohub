@@ -6,6 +6,7 @@ import { authRoutes } from "./routes/auth"
 import { veiculosRoutes } from "./routes/veiculos"
 import { fasesRoutes } from "./routes/fases"
 import { itensRoutes } from "./routes/itens"
+import { tracksRoutes } from "./routes/tracks"
 import { sql } from "./db/client"
 import type { AppEnv } from "./types"
 
@@ -66,4 +67,5 @@ api.route("/veiculos", veiculosRoutes)
 // (montar em "/fases" duplicaria o prefixo: /api/fases/fases/:id).
 api.route("/", fasesRoutes)
 api.route("/itens", itensRoutes)
+api.route("/tracks", tracksRoutes)
 app.route("/api", api)
