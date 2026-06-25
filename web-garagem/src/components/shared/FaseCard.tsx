@@ -243,6 +243,17 @@ function ItemForm({ initial, saving, onSave, onCancel }: {
                  className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
           />
         </div>
+        {/* Catálogo de peças — botão prominente */}
+        <button
+          type="button"
+          onClick={() => setShowCatalogo(true)}
+          className="flex w-full items-center gap-2 rounded-lg border border-purple/30 bg-purple-bg px-3 py-2 text-[12px] font-medium text-purple transition-colors hover:border-purple/60 hover:bg-purple/10"
+        >
+          <BookOpenIcon className="size-3.5 shrink-0" />
+          Explorar catálogo de peças
+          <span className="ml-auto text-[10px] font-normal text-purple/60">370+ itens</span>
+        </button>
+
         <div className="flex items-center gap-2">
           <button disabled={saving || v.nome.trim().length === 0} onClick={() => onSave(v)}
                   className="rounded-md bg-purple px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
@@ -253,13 +264,6 @@ function ItemForm({ initial, saving, onSave, onCancel }: {
                   className="rounded-md px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground"
           >
             Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowCatalogo(true)}
-            className="ml-auto flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] text-faint-foreground hover:bg-surface hover:text-purple"
-          >
-            <BookOpenIcon className="size-3" /> Catálogo
           </button>
         </div>
       </div>
