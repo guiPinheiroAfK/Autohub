@@ -7,7 +7,8 @@ import LoginPage from "@/pages/LoginPage"
 import GaragemOverview from "@/pages/GaragemOverview"
 import VeiculoDetalhe from "@/pages/VeiculoDetalhe"
 import NovoVeiculo from "@/pages/NovoVeiculo"
-import ConfiguracaoPage from "@/pages/ConfiguracaoPage.tsx";
+import ConfiguracaoPage from "@/pages/ConfiguracaoPage.tsx"
+import EventosPage from "@/pages/EventosPage"
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
                   <Route path="/novo" element={<NovoVeiculo />} />
                   <Route path="/veiculo/:id" element={<VeiculoDetalhe />} />
                   <Route path="/configuracoes" element={<ConfiguracaoPage />} />
+                  <Route path="/eventos" element={<EventosPage />} />
                 </Route>
               </Route>
             </Routes>
