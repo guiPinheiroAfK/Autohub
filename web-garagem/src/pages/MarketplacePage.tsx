@@ -557,7 +557,7 @@ export default function MarketplacePage() {
       ...(cat && { categoria: cat }),
       ...(cond && { condicao: cond }),
     })
-    api.get<{ anuncios: Anuncio[]; total: number }>(`/marketplace?${params}`)
+    api.get<{ anuncios: Anuncio[]; total: number }>(`/api/marketplace?${params}`)
       .then(r => { setAnuncios(r.anuncios ?? []); setTotal(r.total ?? 0) })
       .catch(() => {})
       .finally(() => setLoading(false))
