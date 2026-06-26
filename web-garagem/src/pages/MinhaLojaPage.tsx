@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { Store, Upload, ExternalLink, Save } from "lucide-react"
+import { Store, Upload, ExternalLink, AtSign, MessageCircle, Globe, Save, Trash2 } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { useAuth } from "@/context/AuthContext"
 
 interface Loja {
   id: string
-  garagem_id: string
   nome: string
   descricao?: string | null
   logo_url?: string | null
@@ -14,7 +13,6 @@ interface Loja {
   instagram?: string | null
   whatsapp?: string | null
   website?: string | null
-  criada_em: string
 }
 
 export default function MinhaLojaPage() {
@@ -54,8 +52,8 @@ export default function MinhaLojaPage() {
   }, [])
 
   async function uploadImagem(file: File, tipo: "logo" | "banner") {
-    const setter = tipo === "logo" ? setUploadingLogo : setUploadingBanner
-    setter(true)
+    const setUploading = tipo === "logo" ? setUploadingLogo : setUploadingBanner
+    setUploading(true)
     try {
       const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
       const preset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
@@ -63,10 +61,7 @@ export default function MinhaLojaPage() {
       form.append("file", file)
       form.append("upload_preset", preset)
       form.append("folder", `autohub/lojas/${tipo}`)
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-        method: "POST",
-        body: form,
-      })
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: "POST", body: form })
       if (!res.ok) throw new Error("Falha no upload")
       const json = await res.json() as { secure_url: string }
       if (tipo === "logo") setLogoUrl(json.secure_url)
@@ -74,7 +69,7 @@ export default function MinhaLojaPage() {
     } catch {
       alert("Erro ao enviar imagem")
     } finally {
-      setter(false)
+      setUploading(false)
     }
   }
 
@@ -93,195 +88,290 @@ export default function MinhaLojaPage() {
         bannerUrl: bannerUrl || null,
       }
       if (loja) {
-        const updated = await api.patch<Loja>("/api/lojas", payload)
-        setLoja(updated)
+        await api.patch<Loja>("/api/lojas", payload)
+        setLoja({ ...loja, ...payload, logo_url: logoUrl || null, banner_url: bannerUrl || null })
       } else {
         const created = await api.post<Loja>("/api/lojas", payload)
         setLoja(created)
       }
-      setOk(loja ? "Loja atualizada com sucesso!" : "Loja criada com sucesso!")
+      setOk(loja ? "Salvo!" : "Loja criada!")
+      setTimeout(() => setOk(""), 2500)
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao salvar loja")
+      setErro(e instanceof Error ? e.message : "Erro ao salvar")
     } finally {
       setSaving(false)
     }
   }
 
+  async function handleDeletar() {
+    if (!confirm("Tem certeza? Esta ação não pode ser desfeita.")) return
+    await api.delete("/api/lojas")
+    setLoja(null)
+    setNome(""); setDescricao(""); setInstagram(""); setWhatsapp(""); setWebsite("")
+    setLogoUrl(""); setBannerUrl("")
+  }
+
   if (loading) return (
-    <div className="flex flex-col gap-6 animate-pulse">
-      <div className="h-8 w-48 rounded-lg bg-surface" />
-      <div className="h-48 rounded-2xl bg-surface" />
-      <div className="h-64 rounded-xl bg-surface" />
+    <div className="flex flex-col gap-4 animate-pulse">
+      <div className="h-8 w-40 rounded-lg bg-surface" />
+      <div className="h-[400px] rounded-xl bg-surface" />
     </div>
   )
 
-  const garagemSlug = user?.garagem?.slug
+  const slug = user?.garagem?.slug
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Header */}
-      <div className="flex items-end justify-between">
+    <div className="flex flex-col gap-5">
+      {/* Header compacto */}
+      <div className="flex items-center justify-between">
         <div>
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-faint-foreground">
-            Marketplace
-          </div>
-          <h1 className="font-display text-[28px] font-semibold leading-tight text-foreground">
+          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-faint-foreground">Marketplace</p>
+          <h1 className="font-display text-[22px] font-semibold text-foreground">
             {loja ? "Minha Loja" : "Criar Loja"}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {loja ? "Gerencie o perfil público da sua loja" : "Configure sua presença no marketplace"}
-          </p>
         </div>
-        {loja && garagemSlug && (
-          <Link
-            to={`/loja/${garagemSlug}`}
-            className="flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ExternalLink className="size-4" />
-            Ver loja pública
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {loja && slug && (
+            <Link
+              to={`/loja/${slug}`}
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ExternalLink className="size-3.5" />
+              Ver pública
+            </Link>
+          )}
+          {loja && (
+            <button
+              onClick={handleDeletar}
+              className="flex items-center gap-1.5 rounded-lg border border-red/30 px-3 py-1.5 text-[12px] text-red hover:bg-red-bg transition-colors"
+            >
+              <Trash2 className="size-3.5" />
+              Excluir
+            </button>
+          )}
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-        {/* Banner */}
-        <div className="relative">
-          {bannerUrl ? (
-            <div className="relative h-40 rounded-xl overflow-hidden border border-border">
-              <img src={bannerUrl} alt="banner" className="h-full w-full object-cover" />
-              <label className="absolute bottom-2 right-2 flex cursor-pointer items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-sm hover:bg-black/80">
-                <Upload className="size-3" /> Trocar banner
-                <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "banner") }} />
-              </label>
-              {uploadingBanner && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                  <span className="text-[12px] text-white">Enviando...</span>
-                </div>
+      {/* Layout: form + preview */}
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+
+        {/* ── Formulário compacto ─────────────────────────────────────────── */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 lg:w-[380px] lg:shrink-0">
+
+          {/* Banner + logo (logo fora do overflow-hidden para não ser clipado) */}
+          <div className="relative">
+            <div className="h-28 overflow-hidden rounded-xl border border-border">
+              {bannerUrl ? (
+                <>
+                  <img src={bannerUrl} alt="banner" className="h-full w-full object-cover" />
+                  <div className="absolute inset-0 flex items-end justify-end gap-2 p-2">
+                    <label className={`flex cursor-pointer items-center gap-1 rounded-lg bg-black/60 px-2 py-1 text-[11px] text-white backdrop-blur-sm hover:bg-black/80 ${uploadingBanner ? "opacity-50 pointer-events-none" : ""}`}>
+                      <Upload className="size-3" />
+                      {uploadingBanner ? "Enviando..." : "Trocar"}
+                      <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "banner") }} />
+                    </label>
+                    <button type="button" onClick={() => setBannerUrl("")} className="flex items-center gap-1 rounded-lg bg-black/60 px-2 py-1 text-[11px] text-white backdrop-blur-sm hover:bg-red/80">
+                      Remover
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <label className={`flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1.5 bg-surface text-faint-foreground hover:text-purple transition-colors ${uploadingBanner ? "opacity-50 pointer-events-none" : ""}`}>
+                  <Upload className="size-5" />
+                  <span className="text-[12px] font-medium">{uploadingBanner ? "Enviando..." : "Adicionar banner"}</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "banner") }} />
+                </label>
               )}
             </div>
-          ) : (
-            <label className={`flex h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-surface text-faint-foreground transition-colors hover:border-purple hover:text-purple ${uploadingBanner ? "pointer-events-none opacity-60" : ""}`}>
-              <Upload className="size-6" />
-              <span className="text-[13px] font-medium">{uploadingBanner ? "Enviando..." : "Clique para adicionar banner"}</span>
-              <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "banner") }} />
-            </label>
-          )}
 
-          {/* Logo */}
-          <div className="absolute -bottom-8 left-5">
-            {logoUrl ? (
-              <label className="relative flex size-16 cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-border bg-surface shadow-lg">
-                <img src={logoUrl} alt="logo" className="size-full object-cover" />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity">
-                  <Upload className="size-4 text-white" />
-                </div>
-                <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "logo") }} />
-              </label>
-            ) : (
-              <label className={`flex size-16 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-border bg-surface shadow-lg hover:border-purple transition-colors ${uploadingLogo ? "pointer-events-none opacity-60" : ""}`}>
-                <Store className="size-6 text-faint-foreground" />
-                <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "logo") }} />
-              </label>
-            )}
-          </div>
-        </div>
-
-        {/* Fields card */}
-        <div className="rounded-xl border border-border bg-surface p-6 mt-4 flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-foreground">Nome da loja *</label>
-            <input
-              value={nome}
-              onChange={e => setNome(e.target.value)}
-              placeholder="Ex: Turbo Parts BR"
-              maxLength={100}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
-              required
-            />
+            {/* Logo sobreposta — fora do overflow-hidden para não ser clipada */}
+            <div className="absolute -bottom-5 left-4">
+              {logoUrl ? (
+                <label className="relative flex size-10 cursor-pointer overflow-hidden rounded-lg border-2 border-background shadow-md">
+                  <img src={logoUrl} alt="logo" className="size-full object-cover" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 transition-opacity">
+                    <Upload className="size-3 text-white" />
+                  </div>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "logo") }} />
+                </label>
+              ) : (
+                <label className={`flex size-10 cursor-pointer items-center justify-center rounded-lg border-2 border-background bg-surface shadow-md hover:border-purple transition-colors ${uploadingLogo ? "opacity-50 pointer-events-none" : ""}`}>
+                  <Store className="size-4 text-faint-foreground" />
+                  <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "logo") }} />
+                </label>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-medium text-foreground">Descrição</label>
-            <textarea
-              value={descricao}
-              onChange={e => setDescricao(e.target.value)}
-              rows={3}
-              maxLength={500}
-              placeholder="Descreva sua loja, especialidades, o que você vende..."
-              className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] font-medium text-foreground">Instagram</label>
+          {/* Campos */}
+          <div className="flex flex-col gap-3 pt-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-foreground">Nome da loja *</label>
               <input
-                value={instagram}
-                onChange={e => setInstagram(e.target.value)}
-                placeholder="@minha_loja"
-                maxLength={50}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
+                value={nome}
+                onChange={e => setNome(e.target.value)}
+                placeholder="Ex: Turbo Parts BR"
+                maxLength={100}
+                required
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] font-medium text-foreground">WhatsApp</label>
-              <input
-                value={whatsapp}
-                onChange={e => setWhatsapp(e.target.value)}
-                placeholder="+55 11 99999-9999"
-                maxLength={20}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-foreground">Descrição</label>
+              <textarea
+                value={descricao}
+                onChange={e => setDescricao(e.target.value)}
+                rows={2}
+                maxLength={300}
+                placeholder="Especialidades, o que você vende..."
+                className="w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[12px] font-medium text-foreground">Website</label>
-              <input
-                type="url"
-                value={website}
-                onChange={e => setWebsite(e.target.value)}
-                placeholder="https://minha-loja.com"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
-              />
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-foreground">Instagram</label>
+                <input
+                  value={instagram}
+                  onChange={e => setInstagram(e.target.value)}
+                  placeholder="@loja"
+                  maxLength={50}
+                  className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-[12px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-foreground">WhatsApp</label>
+                <input
+                  value={whatsapp}
+                  onChange={e => setWhatsapp(e.target.value)}
+                  placeholder="+55 11..."
+                  maxLength={20}
+                  className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-[12px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-foreground">Site</label>
+                <input
+                  type="url"
+                  value={website}
+                  onChange={e => setWebsite(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-[12px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 
           {erro && <p className="rounded-lg bg-red-bg px-3 py-2 text-[12px] text-red">{erro}</p>}
-          {ok && <p className="rounded-lg bg-green-bg px-3 py-2 text-[12px] text-green">{ok}</p>}
 
-          <div className="flex gap-3 pt-1">
-            <Link
-              to="/marketplace"
-              className="rounded-lg border border-border px-4 py-2.5 text-[13px] text-muted-foreground hover:text-foreground"
-            >
-              Voltar ao marketplace
-            </Link>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-2 rounded-lg bg-purple px-6 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
-            >
-              <Save className="size-4" />
-              {saving ? "Salvando..." : loja ? "Atualizar loja" : "Criar loja"}
-            </button>
-          </div>
-        </div>
-      </form>
-
-      {/* Preview */}
-      {loja && garagemSlug && (
-        <div className="rounded-xl border border-border bg-surface p-5">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
-            Link público da loja
-          </p>
-          <Link
-            to={`/loja/${garagemSlug}`}
-            className="flex items-center gap-2 text-[13px] text-purple hover:underline"
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center justify-center gap-2 rounded-xl bg-purple py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
           >
-            <ExternalLink className="size-3.5" />
-            autohub.app/loja/{garagemSlug}
-          </Link>
+            {ok ? (
+              <span className="text-green-100">{ok}</span>
+            ) : (
+              <>
+                <Save className="size-4" />
+                {saving ? "Salvando..." : loja ? "Salvar alterações" : "Criar loja"}
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* ── Preview ao vivo ─────────────────────────────────────────────── */}
+        <div className="flex-1 flex flex-col gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
+            Preview — como sua loja aparece
+          </p>
+
+          <div className="overflow-hidden rounded-xl border border-border bg-surface">
+            {/* Banner preview */}
+            <div className="relative">
+              {bannerUrl ? (
+                <img src={bannerUrl} alt="banner" className="h-32 w-full object-cover" />
+              ) : (
+                <div className="flex h-32 items-center justify-center bg-surface-2">
+                  <Store className="size-8 text-faint-foreground/40" />
+                </div>
+              )}
+
+              {/* Logo preview */}
+              {logoUrl && (
+                <div className="absolute -bottom-5 left-4">
+                  <img src={logoUrl} alt="logo" className="size-12 rounded-xl border-2 border-surface object-cover shadow-lg" />
+                </div>
+              )}
+            </div>
+
+            {/* Info preview */}
+            <div className={`flex flex-col gap-3 px-4 pb-4 ${logoUrl ? "pt-8" : "pt-4"}`}>
+              <div>
+                <h2 className="font-display text-[18px] font-semibold text-foreground">
+                  {nome || <span className="text-faint-foreground">Nome da loja</span>}
+                </h2>
+                {slug && (
+                  <p className="text-[11px] text-purple">autohub.app/loja/{slug}</p>
+                )}
+              </div>
+
+              {descricao && (
+                <p className="text-[12px] leading-relaxed text-muted-foreground line-clamp-3">{descricao}</p>
+              )}
+
+              {(instagram || whatsapp || website) && (
+                <div className="flex flex-wrap gap-2">
+                  {instagram && (
+                    <span className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
+                      <AtSign className="size-3" />
+                      {instagram.replace("@", "")}
+                    </span>
+                  )}
+                  {whatsapp && (
+                    <span className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
+                      <MessageCircle className="size-3" />
+                      WhatsApp
+                    </span>
+                  )}
+                  {website && (
+                    <span className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
+                      <Globe className="size-3" />
+                      Site
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Placeholder de anúncios */}
+              <div className="mt-1 flex flex-col gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
+                  Anúncios ativos
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="h-16 rounded-lg border border-dashed border-border bg-surface-2 opacity-40" />
+                  ))}
+                </div>
+                <p className="text-[11px] text-faint-foreground">
+                  Seus anúncios ativos no marketplace aparecem aqui.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {loja && slug && (
+            <Link
+              to={`/loja/${slug}`}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-border py-2 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ExternalLink className="size-3.5" />
+              Ver loja pública completa
+            </Link>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

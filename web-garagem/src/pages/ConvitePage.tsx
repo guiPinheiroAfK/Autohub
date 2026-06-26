@@ -72,7 +72,7 @@ export default function ConvitePage() {
           <p className="mt-2 text-sm text-muted-foreground">Você agora é colaborador neste build.</p>
         </div>
         <button
-          onClick={() => navigate(veiculoId ? `/v/${veiculoId}` : "/")}
+          onClick={() => navigate(veiculoId ? `/veiculo/${veiculoId}` : "/")}
           className="rounded-xl bg-purple px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
         >
           Ver o build

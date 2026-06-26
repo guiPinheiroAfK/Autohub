@@ -100,6 +100,7 @@ publicoRoutes.get("/feed", async (c) => {
     LEFT JOIN itens i2 ON i2.fase_id = f.id AND i2.status = 'concluido'
     WHERE v.visibilidade = 'publico'
       AND g.publica = true
+      AND u.email NOT LIKE 'teste\_%@autohub.test'
     GROUP BY v.id, g.slug, g.nome, u.nome, u.avatar_url
     ORDER BY v.criado_em DESC
     LIMIT ${limit} OFFSET ${offset}
