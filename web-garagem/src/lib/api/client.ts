@@ -1,8 +1,6 @@
-// Em prod no Netlify, front e api ficam no mesmo domínio (a api é uma
-// Netlify Function roteada em /api e /auth) — BASE fica vazio, então as
-// chamadas saem como caminho relativo (same-origin). No dev local, o
-// docker-compose já define VITE_API_URL=http://localhost:8000 explicitamente.
-const BASE = import.meta.env.VITE_API_URL ?? ""
+// Sempre usa caminhos relativos — o proxy do Vite (vite.config.ts) encaminha
+// /api e /auth para o servidor correto (localhost:8000 local, api:8000 no Docker).
+const BASE = ""
 
 function getToken(): string | null {
   return localStorage.getItem("autohub_token")
