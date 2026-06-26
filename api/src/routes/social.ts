@@ -43,12 +43,18 @@ socialRoutes.delete("/follows/:garagemId", async (c) => {
   return c.json({ ok: true })
 })
 
-// GET /social/follows — garagens que o usuário segue
+// GET /social/follows — garagens que o usuário segue (com flag mutuo)
 socialRoutes.get("/follows", async (c) => {
   const userId = c.get("userId") as string
 
+  const [minhaGaragem] = await sql`SELECT id FROM garagens WHERE usuario_id = ${userId}`
+
   const follows = await sql`
-    SELECT g.id, g.nome, g.slug, u.nome as dono_nome, f.criado_em
+    SELECT g.id, g.nome, g.slug, u.nome as dono_nome, f.criado_em,
+           EXISTS(
+             SELECT 1 FROM follows f2
+             WHERE f2.seguidor_id = g.usuario_id AND f2.garagem_id = ${minhaGaragem?.id ?? ""}
+           ) as mutuo
     FROM follows f
     JOIN garagens g ON g.id = f.garagem_id
     JOIN usuarios u ON u.id = g.usuario_id
@@ -57,6 +63,29 @@ socialRoutes.get("/follows", async (c) => {
   `
 
   return c.json({ follows })
+})
+
+// GET /social/seguidores — quem segue a garagem do usuário autenticado
+socialRoutes.get("/seguidores", async (c) => {
+  const userId = c.get("userId") as string
+
+  const [minhaGaragem] = await sql`SELECT id FROM garagens WHERE usuario_id = ${userId}`
+  if (!minhaGaragem) return c.json({ seguidores: [] })
+
+  const seguidores = await sql`
+    SELECT u.id, u.nome, u.avatar_url, g.slug, g.nome as garagem_nome, f.criado_em,
+           EXISTS(
+             SELECT 1 FROM follows f2
+             WHERE f2.seguidor_id = ${userId} AND f2.garagem_id = g.id
+           ) as mutuo
+    FROM follows f
+    JOIN usuarios u ON u.id = f.seguidor_id
+    JOIN garagens g ON g.usuario_id = u.id
+    WHERE f.garagem_id = ${minhaGaragem.id}
+    ORDER BY f.criado_em DESC
+  `
+
+  return c.json({ seguidores })
 })
 
 // GET /social/notificacoes

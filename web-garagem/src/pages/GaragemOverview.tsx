@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { Plus, Gauge, Wrench, Clock, TrendingUp, CalendarDays, MapPin, ArrowRight } from "lucide-react"
+import { Plus, Gauge, Wrench, Clock, TrendingUp, CalendarDays, ArrowRight, Users, ArrowLeftRight } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { useAuth } from "@/context/AuthContext"
 import { VeiculoCard } from "@/components/shared/VeiculoCard"
@@ -118,6 +118,132 @@ function CotacoesWidget() {
           Atualizado {dataLabel}
         </span>
       )}
+    </div>
+  )
+}
+
+// ── Widget social (seguidores / seguindo) ─────────────────────────────────────
+
+interface Follow {
+  id: string
+  nome: string
+  slug: string
+  dono_nome: string
+  garagem_nome?: string
+  mutuo: boolean
+  criado_em: string
+}
+
+function SocialWidget() {
+  const [tab, setTab] = useState<"seguidores" | "seguindo">("seguidores")
+  const [seguidores, setSeguidores] = useState<Follow[]>([])
+  const [seguindo, setSeguindo] = useState<Follow[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      api.get<{ seguidores: Follow[] }>("/api/social/seguidores"),
+      api.get<{ follows: Follow[] }>("/api/social/follows"),
+    ])
+      .then(([s, f]) => {
+        setSeguidores(s.seguidores ?? [])
+        setSeguindo(f.follows ?? [])
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const lista = tab === "seguidores" ? seguidores : seguindo
+  const totalMutuos = seguidores.filter(s => s.mutuo).length
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Users className="size-4 text-faint-foreground" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
+            Comunidade
+          </span>
+        </div>
+        {totalMutuos > 0 && (
+          <span className="flex items-center gap-1 rounded-full bg-purple-bg px-2 py-0.5 text-[10px] font-medium text-purple">
+            <ArrowLeftRight className="size-3" />
+            {totalMutuos} mútuo{totalMutuos !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex rounded-lg border border-border bg-background p-0.5">
+        {([
+          { v: "seguidores", l: "Seguidores", n: seguidores.length },
+          { v: "seguindo",   l: "Seguindo",   n: seguindo.length   },
+        ] as const).map(t => (
+          <button
+            key={t.v}
+            onClick={() => setTab(t.v)}
+            className={[
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-[11px] font-medium transition-colors",
+              tab === t.v
+                ? "bg-surface text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            ].join(" ")}
+          >
+            {t.l}
+            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+              tab === t.v ? "bg-purple-bg text-purple" : "bg-surface-2 text-faint-foreground"
+            }`}>
+              {t.n}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Lista */}
+      <div className="flex flex-col gap-1.5 max-h-[260px] overflow-y-auto">
+        {loading ? (
+          [1, 2, 3].map(i => (
+            <div key={i} className="h-10 animate-pulse rounded-lg bg-surface-2" />
+          ))
+        ) : lista.length === 0 ? (
+          <p className="py-6 text-center text-[12px] text-faint-foreground">
+            {tab === "seguidores" ? "Ninguém seguindo ainda" : "Você não segue ninguém ainda"}
+          </p>
+        ) : (
+          lista.map(item => {
+            const nome = tab === "seguidores" ? item.dono_nome : (item.garagem_nome ?? item.dono_nome)
+            const slug = item.slug
+            return (
+              <Link
+                key={item.id + tab}
+                to={`/g/${slug}`}
+                className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-2"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-purple-bg text-[11px] font-bold text-purple">
+                    {nome[0]?.toUpperCase() ?? "?"}
+                  </div>
+                  <span className="truncate text-[12px] font-medium text-foreground">{nome}</span>
+                </div>
+                {item.mutuo && (
+                  <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-green-bg px-1.5 py-0.5 text-[9px] font-semibold text-green">
+                    <ArrowLeftRight className="size-2.5" />
+                    mútuo
+                  </span>
+                )}
+              </Link>
+            )
+          })
+        )}
+      </div>
+
+      <Link
+        to="/feed"
+        className="mt-1 flex items-center justify-center gap-1 text-[11px] text-purple hover:underline"
+      >
+        Explorar comunidade <ArrowRight className="size-3" />
+      </Link>
     </div>
   )
 }
@@ -261,39 +387,48 @@ export default function GaragemOverview() {
         </p>
       )}
 
-      {/* ── Empty state ──────────────────────────────────────────────────── */}
-      {!loading && !erro && veiculos.length === 0 && (
-        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border py-20 text-center">
-          <div className="flex size-12 items-center justify-center rounded-xl bg-surface text-faint-foreground">
-            <Wrench className="size-6" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-foreground">Garagem vazia</p>
-            <p className="mt-1 text-sm text-muted-foreground">Adicione seu primeiro projeto de build</p>
-          </div>
-          <Link
-            to="/novo"
-            className="flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            <Plus className="size-4" /> Criar primeiro veículo
-          </Link>
-        </div>
-      )}
+      {/* ── Grid + Sidebar ───────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
 
-      {/* ── Grid de veículos ─────────────────────────────────────────────── */}
-      {!loading && veiculos.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {veiculos.map((v, index) => (
-            <div
-              key={v.id}
-              className="animate-page-in"
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <VeiculoCard veiculo={v} />
+        {/* Grid de veículos */}
+        <div className="flex-1 min-w-0">
+          {!loading && veiculos.length > 0 && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {veiculos.map((v, index) => (
+                <div
+                  key={v.id}
+                  className="animate-page-in"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <VeiculoCard veiculo={v} />
+                </div>
+              ))}
             </div>
-          ))}
+          )}
+          {!loading && !erro && veiculos.length === 0 && (
+            <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border py-20 text-center">
+              <div className="flex size-12 items-center justify-center rounded-xl bg-surface text-faint-foreground">
+                <Wrench className="size-6" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Garagem vazia</p>
+                <p className="mt-1 text-sm text-muted-foreground">Adicione seu primeiro projeto de build</p>
+              </div>
+              <Link
+                to="/novo"
+                className="flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              >
+                <Plus className="size-4" /> Criar primeiro veículo
+              </Link>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Sidebar social */}
+        <div className="w-full lg:w-[280px] shrink-0">
+          <SocialWidget />
+        </div>
+      </div>
 
       {/* ── Próximos eventos ─────────────────────────────────────────────── */}
       {!loading && <ProximosEventos />}
