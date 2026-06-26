@@ -262,6 +262,21 @@ check "GET /api/marketplace?categoria=motor" "$(json_get '/api/marketplace?categ
 check "GET /api/marketplace?q=turbo" "$(json_get '/api/marketplace?q=turbo')" "200"
 check "GET /api/marketplace/meus (autenticado)" "$(json_get /api/marketplace/meus)" "200"
 
+MKTPLACE_RESP=$(json_get_body /api/marketplace)
+MKTPLACE_TOTAL=$(echo "$MKTPLACE_RESP" | grep -o '"total":[0-9]*' | grep -o '[0-9]*')
+if [[ -n "$MKTPLACE_TOTAL" && "$MKTPLACE_TOTAL" -gt 0 ]]; then
+  green "GET /api/marketplace — $MKTPLACE_TOTAL anúncio(s) de seed encontrado(s)"; ((PASS++))
+else
+  red "GET /api/marketplace — sem dados de seed (rode: cd api && bun run setup)"; ((FAIL++))
+fi
+
+SPONSORED=$(echo "$MKTPLACE_RESP" | grep -o '"patrocinado":true')
+if [[ -n "$SPONSORED" ]]; then
+  green "GET /api/marketplace — anúncio patrocinado presente (seed OK)"; ((PASS++))
+else
+  gray "GET /api/marketplace — sem patrocinado ainda (normal se seed não rodou)"
+fi
+
 ANUNCIO_RESP=$(curl -sf -X POST "$BASE/api/marketplace" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
