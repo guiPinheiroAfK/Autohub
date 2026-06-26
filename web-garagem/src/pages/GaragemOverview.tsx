@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { Plus, Gauge, Wrench, Clock, TrendingUp, CalendarDays, ArrowRight, Users, ArrowLeftRight } from "lucide-react"
+import { Plus, Gauge, Wrench, Clock, TrendingUp, CalendarDays, ArrowRight, Users, ArrowLeftRight, MapPin } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { useAuth } from "@/context/AuthContext"
 import { VeiculoCard } from "@/components/shared/VeiculoCard"
