@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { ArrowLeft, Settings, LogOut, CalendarDays, Navigation, Bell, Users, Check, CheckCheck } from "lucide-react"
+import { ArrowLeft, Settings, LogOut, CalendarDays, Navigation, Bell, Users, Check, CheckCheck, ShoppingBag } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { Logo } from "@/components/shared/Logo"
 import { useEffect, useRef, useState } from "react"
@@ -8,9 +8,11 @@ import { api } from "@/lib/api/client"
 interface Notif {
   id: string
   tipo: string
-  conteudo: string
+  titulo: string
+  corpo: string
   lida: boolean
-  created_at: string
+  link?: string
+  criado_em: string
 }
 
 function timeAgo(iso: string) {
@@ -129,10 +131,13 @@ function NotifDropdown() {
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className={`text-[12px] leading-relaxed ${n.lida ? "text-muted-foreground" : "text-foreground"}`}>
-                      {n.conteudo}
+                    <p className={`text-[12px] font-medium leading-snug ${n.lida ? "text-muted-foreground" : "text-foreground"}`}>
+                      {n.titulo}
                     </p>
-                    <p className="mt-0.5 text-[10px] text-faint-foreground">{timeAgo(n.created_at)}</p>
+                    {n.corpo && (
+                      <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{n.corpo}</p>
+                    )}
+                    <p className="mt-0.5 text-[10px] text-faint-foreground">{timeAgo(n.criado_em)}</p>
                   </div>
                   {!n.lida && (
                     <button
@@ -234,6 +239,18 @@ export function Header() {
               }`}
             >
               <Users className="size-4" />
+            </Link>
+
+            <Link
+              to="/marketplace"
+              title="Marketplace"
+              className={`flex size-8 items-center justify-center rounded-lg transition-colors ${
+                pathname === "/marketplace"
+                  ? "bg-purple-bg text-purple"
+                  : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              }`}
+            >
+              <ShoppingBag className="size-4" />
             </Link>
 
             <NotifDropdown />

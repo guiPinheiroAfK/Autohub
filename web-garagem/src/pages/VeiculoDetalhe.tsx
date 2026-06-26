@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, Crown } from "lucide-react"
+import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { formatMoeda, formatFaixa } from "@/lib/format"
 import { FaseCard } from "@/components/shared/FaseCard"
@@ -290,16 +290,20 @@ function NovaFaseForm({
 // ── Colaboradores ────────────────────────────────────────────────────────────
 
 const PAPEL_LABEL: Record<string, string> = {
-  dono: "Dono",
   mecanico: "Mecânico",
   editor: "Editor",
   visualizador: "Visualizador",
 }
 
+// Shape retornado por GET /api/colaboracoes/veiculo/:id
 interface Colaborador {
   id: string
+  convidado_email: string
   papel: string
-  usuario: { id: string; nome: string; email: string; avatarUrl?: string }
+  status: "pendente" | "ativo" | "recusado" | "removido"
+  nome: string | null        // preenchido quando aceito
+  avatar_url: string | null
+  criado_em: string
 }
 
 function ColaboradoresPanel({ veiculoId, isDono }: { veiculoId: string; isDono: boolean }) {
@@ -329,6 +333,7 @@ function ColaboradoresPanel({ veiculoId, isDono }: { veiculoId: string; isDono: 
       await api.post(`/api/colaboracoes/veiculo/${veiculoId}/convidar`, { email: email.trim(), papel })
       setOk(`Convite enviado para ${email.trim()}`)
       setEmail("")
+      carregar()
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao convidar")
     } finally {
@@ -358,28 +363,34 @@ function ColaboradoresPanel({ veiculoId, isDono }: { veiculoId: string; isDono: 
       ) : (
         <div className="flex flex-col gap-1.5">
           {lista.length === 0 ? (
-            <p className="text-[12px] text-faint-foreground">Apenas você neste build.</p>
+            <p className="text-[12px] text-faint-foreground">Nenhum colaborador ainda.</p>
           ) : (
-            lista.map(c => (
-              <div key={c.id} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-surface-2">
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-purple-bg text-[11px] font-bold text-purple">
-                  {c.usuario.nome[0].toUpperCase()}
+            lista.map(c => {
+              const label = c.nome ?? c.convidado_email
+              const initial = label[0].toUpperCase()
+              return (
+                <div key={c.id} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-surface-2">
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-purple-bg text-[11px] font-bold text-purple">
+                    {initial}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-medium text-foreground truncate">{label}</p>
+                    <p className="text-[10px] text-faint-foreground">
+                      {PAPEL_LABEL[c.papel] ?? c.papel}
+                      {c.status === "pendente" && " · pendente"}
+                    </p>
+                  </div>
+                  {isDono && (
+                    <button
+                      onClick={() => remover(c.id)}
+                      className="shrink-0 text-faint-foreground hover:text-red"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-medium text-foreground truncate">{c.usuario.nome}</p>
-                  <p className="text-[10px] text-faint-foreground">{PAPEL_LABEL[c.papel] ?? c.papel}</p>
-                </div>
-                {c.papel === "dono" && <Crown className="size-3 text-amber shrink-0" />}
-                {isDono && c.papel !== "dono" && (
-                  <button
-                    onClick={() => remover(c.id)}
-                    className="shrink-0 text-faint-foreground hover:text-red"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                )}
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       )}

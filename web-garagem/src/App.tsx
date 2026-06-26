@@ -17,6 +17,7 @@ import FeedPage from "@/pages/FeedPage"
 import ConvitePage from "@/pages/ConvitePage"
 import VerificarEmailPage from "@/pages/VerificarEmailPage"
 import ResetarSenhaPage from "@/pages/ResetarSenhaPage"
+import MarketplacePage from "@/pages/MarketplacePage"
 
 const RunPage = lazy(() => import("@/pages/RunPage"))
 
@@ -53,6 +54,7 @@ export default function App() {
                 <Route path="/configuracoes" element={<ConfiguracaoPage />} />
                 <Route path="/eventos" element={<EventosPage />} />
                 <Route path="/feed" element={<FeedPage />} />
+                <Route path="/marketplace" element={<MarketplacePage />} />
                 <Route path="/tracks" element={<TracksPage />} />
                 <Route path="/tracks/:rotaId" element={<RotaDetalhePage />} />
                 <Route path="/tracks/:rotaId/run" element={

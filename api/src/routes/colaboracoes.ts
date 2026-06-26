@@ -8,7 +8,7 @@ export const colaboracoesRoutes = new Hono<AppEnv>()
 
 const conviteSchema = z.object({
   email: z.string().email(),
-  papel: z.enum(["editor", "viewer", "mecanico"]).default("editor"),
+  papel: z.enum(["editor", "visualizador", "mecanico"]).default("editor"),
 })
 
 // GET /colaboracoes/veiculo/:veiculoId — listar colaboradores
