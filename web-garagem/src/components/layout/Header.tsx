@@ -232,13 +232,14 @@ export function Header() {
             <Link
               to="/feed"
               title="Feed da comunidade"
-              className={`flex size-8 items-center justify-center rounded-lg transition-colors ${
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
                 pathname === "/feed"
                   ? "bg-purple-bg text-purple"
                   : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
-              <Users className="size-4" />
+              <Users className="size-3.5" />
+              <span className="hidden sm:block">Feed</span>
             </Link>
 
             <Link

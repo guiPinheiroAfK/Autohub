@@ -158,31 +158,33 @@ export default function MinhaLojaPage() {
         {/* ── Formulário compacto ─────────────────────────────────────────── */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 lg:w-[380px] lg:shrink-0">
 
-          {/* Banner */}
-          <div className="relative h-28 overflow-hidden rounded-xl border border-border">
-            {bannerUrl ? (
-              <>
-                <img src={bannerUrl} alt="banner" className="h-full w-full object-cover" />
-                <div className="absolute inset-0 flex items-end justify-end gap-2 p-2">
-                  <label className={`flex cursor-pointer items-center gap-1 rounded-lg bg-black/60 px-2 py-1 text-[11px] text-white backdrop-blur-sm hover:bg-black/80 ${uploadingBanner ? "opacity-50 pointer-events-none" : ""}`}>
-                    <Upload className="size-3" />
-                    {uploadingBanner ? "Enviando..." : "Trocar"}
-                    <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "banner") }} />
-                  </label>
-                  <button type="button" onClick={() => setBannerUrl("")} className="flex items-center gap-1 rounded-lg bg-black/60 px-2 py-1 text-[11px] text-white backdrop-blur-sm hover:bg-red/80">
-                    Remover
-                  </button>
-                </div>
-              </>
-            ) : (
-              <label className={`flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1.5 bg-surface text-faint-foreground hover:text-purple transition-colors ${uploadingBanner ? "opacity-50 pointer-events-none" : ""}`}>
-                <Upload className="size-5" />
-                <span className="text-[12px] font-medium">{uploadingBanner ? "Enviando..." : "Adicionar banner"}</span>
-                <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "banner") }} />
-              </label>
-            )}
+          {/* Banner + logo (logo fora do overflow-hidden para não ser clipado) */}
+          <div className="relative">
+            <div className="h-28 overflow-hidden rounded-xl border border-border">
+              {bannerUrl ? (
+                <>
+                  <img src={bannerUrl} alt="banner" className="h-full w-full object-cover" />
+                  <div className="absolute inset-0 flex items-end justify-end gap-2 p-2">
+                    <label className={`flex cursor-pointer items-center gap-1 rounded-lg bg-black/60 px-2 py-1 text-[11px] text-white backdrop-blur-sm hover:bg-black/80 ${uploadingBanner ? "opacity-50 pointer-events-none" : ""}`}>
+                      <Upload className="size-3" />
+                      {uploadingBanner ? "Enviando..." : "Trocar"}
+                      <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "banner") }} />
+                    </label>
+                    <button type="button" onClick={() => setBannerUrl("")} className="flex items-center gap-1 rounded-lg bg-black/60 px-2 py-1 text-[11px] text-white backdrop-blur-sm hover:bg-red/80">
+                      Remover
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <label className={`flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1.5 bg-surface text-faint-foreground hover:text-purple transition-colors ${uploadingBanner ? "opacity-50 pointer-events-none" : ""}`}>
+                  <Upload className="size-5" />
+                  <span className="text-[12px] font-medium">{uploadingBanner ? "Enviando..." : "Adicionar banner"}</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "banner") }} />
+                </label>
+              )}
+            </div>
 
-            {/* Logo sobreposta ao banner */}
+            {/* Logo sobreposta — fora do overflow-hidden para não ser clipada */}
             <div className="absolute -bottom-5 left-4">
               {logoUrl ? (
                 <label className="relative flex size-10 cursor-pointer overflow-hidden rounded-lg border-2 border-background shadow-md">
