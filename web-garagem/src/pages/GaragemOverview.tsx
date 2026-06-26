@@ -157,93 +157,79 @@ function SocialWidget() {
   const totalMutuos = seguidores.filter(s => s.mutuo).length
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="rounded-xl border border-border bg-surface">
+      {/* Faixa de contadores */}
+      <div className="flex items-center gap-4 px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <Users className="size-4 text-faint-foreground" />
           <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
             Comunidade
           </span>
         </div>
-        {totalMutuos > 0 && (
-          <span className="flex items-center gap-1 rounded-full bg-purple-bg px-2 py-0.5 text-[10px] font-medium text-purple">
-            <ArrowLeftRight className="size-3" />
-            {totalMutuos} mútuo{totalMutuos !== 1 ? "s" : ""}
-          </span>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex rounded-lg border border-border bg-background p-0.5">
-        {([
-          { v: "seguidores", l: "Seguidores", n: seguidores.length },
-          { v: "seguindo",   l: "Seguindo",   n: seguindo.length   },
-        ] as const).map(t => (
-          <button
-            key={t.v}
-            onClick={() => setTab(t.v)}
-            className={[
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-[11px] font-medium transition-colors",
-              tab === t.v
-                ? "bg-surface text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            ].join(" ")}
-          >
-            {t.l}
-            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
-              tab === t.v ? "bg-purple-bg text-purple" : "bg-surface-2 text-faint-foreground"
-            }`}>
-              {t.n}
+        <div className="flex items-center gap-3 ml-1">
+          {([
+            { v: "seguidores", l: "Seguidores", n: seguidores.length },
+            { v: "seguindo",   l: "Seguindo",   n: seguindo.length   },
+          ] as const).map(t => (
+            <button
+              key={t.v}
+              onClick={() => setTab(t.v)}
+              className={[
+                "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors",
+                tab === t.v
+                  ? "bg-purple-bg text-purple"
+                  : "text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+            >
+              <span className="font-bold">{t.n}</span> {t.l}
+            </button>
+          ))}
+          {totalMutuos > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-green-bg px-2 py-0.5 text-[10px] font-medium text-green ml-1">
+              <ArrowLeftRight className="size-3" />
+              {totalMutuos} mútuo{totalMutuos !== 1 ? "s" : ""}
             </span>
-          </button>
-        ))}
+          )}
+        </div>
+        <Link
+          to="/feed"
+          className="ml-auto flex items-center gap-1 text-[11px] text-purple hover:underline shrink-0"
+        >
+          Explorar <ArrowRight className="size-3" />
+        </Link>
       </div>
 
-      {/* Lista */}
-      <div className="flex flex-col gap-1.5 max-h-[260px] overflow-y-auto">
+      {/* Lista horizontal com scroll */}
+      <div className="flex items-center gap-2 overflow-x-auto px-4 py-2.5 scrollbar-none">
         {loading ? (
           [1, 2, 3].map(i => (
-            <div key={i} className="h-10 animate-pulse rounded-lg bg-surface-2" />
+            <div key={i} className="h-8 w-24 shrink-0 animate-pulse rounded-lg bg-surface-2" />
           ))
         ) : lista.length === 0 ? (
-          <p className="py-6 text-center text-[12px] text-faint-foreground">
+          <p className="text-[12px] text-faint-foreground py-1">
             {tab === "seguidores" ? "Ninguém seguindo ainda" : "Você não segue ninguém ainda"}
           </p>
         ) : (
           lista.map(item => {
             const nome = tab === "seguidores" ? item.dono_nome : (item.garagem_nome ?? item.dono_nome)
-            const slug = item.slug
             return (
               <Link
                 key={item.id + tab}
-                to={`/g/${slug}`}
-                className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-2"
+                to={`/g/${item.slug}`}
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 transition-colors hover:border-purple/40 hover:bg-surface-2"
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-purple-bg text-[11px] font-bold text-purple">
-                    {nome[0]?.toUpperCase() ?? "?"}
-                  </div>
-                  <span className="truncate text-[12px] font-medium text-foreground">{nome}</span>
+                <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-purple-bg text-[10px] font-bold text-purple">
+                  {nome[0]?.toUpperCase() ?? "?"}
                 </div>
+                <span className="text-[12px] font-medium text-foreground">{nome}</span>
                 {item.mutuo && (
-                  <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-green-bg px-1.5 py-0.5 text-[9px] font-semibold text-green">
-                    <ArrowLeftRight className="size-2.5" />
-                    mútuo
-                  </span>
+                  <ArrowLeftRight className="size-3 text-green" />
                 )}
               </Link>
             )
           })
         )}
       </div>
-
-      <Link
-        to="/feed"
-        className="mt-1 flex items-center justify-center gap-1 text-[11px] text-purple hover:underline"
-      >
-        Explorar comunidade <ArrowRight className="size-3" />
-      </Link>
     </div>
   )
 }
@@ -387,48 +373,41 @@ export default function GaragemOverview() {
         </p>
       )}
 
-      {/* ── Grid + Sidebar ───────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      {/* ── Comunidade ───────────────────────────────────────────────────── */}
+      <SocialWidget />
 
-        {/* Grid de veículos */}
-        <div className="flex-1 min-w-0">
-          {!loading && veiculos.length > 0 && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {veiculos.map((v, index) => (
-                <div
-                  key={v.id}
-                  className="animate-page-in"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <VeiculoCard veiculo={v} />
-                </div>
-              ))}
+      {/* ── Grid de veículos ─────────────────────────────────────────────── */}
+      {!loading && veiculos.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {veiculos.map((v, index) => (
+            <div
+              key={v.id}
+              className="animate-page-in"
+              style={{ animationDelay: `${index * 100}ms` }}
+            >
+              <VeiculoCard veiculo={v} />
             </div>
-          )}
-          {!loading && !erro && veiculos.length === 0 && (
-            <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border py-20 text-center">
-              <div className="flex size-12 items-center justify-center rounded-xl bg-surface text-faint-foreground">
-                <Wrench className="size-6" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">Garagem vazia</p>
-                <p className="mt-1 text-sm text-muted-foreground">Adicione seu primeiro projeto de build</p>
-              </div>
-              <Link
-                to="/novo"
-                className="flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-              >
-                <Plus className="size-4" /> Criar primeiro veículo
-              </Link>
-            </div>
-          )}
+          ))}
         </div>
+      )}
 
-        {/* Sidebar social */}
-        <div className="w-full lg:w-[280px] shrink-0">
-          <SocialWidget />
+      {!loading && !erro && veiculos.length === 0 && (
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border py-20 text-center">
+          <div className="flex size-12 items-center justify-center rounded-xl bg-surface text-faint-foreground">
+            <Wrench className="size-6" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">Garagem vazia</p>
+            <p className="mt-1 text-sm text-muted-foreground">Adicione seu primeiro projeto de build</p>
+          </div>
+          <Link
+            to="/novo"
+            className="flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            <Plus className="size-4" /> Criar primeiro veículo
+          </Link>
         </div>
-      </div>
+      )}
 
       {/* ── Próximos eventos ─────────────────────────────────────────────── */}
       {!loading && <ProximosEventos />}
