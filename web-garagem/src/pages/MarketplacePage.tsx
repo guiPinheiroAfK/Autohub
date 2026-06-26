@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { Link } from "react-router-dom"
-import { Search, Plus, X, Tag, MapPin, Clock, ShoppingBag, Check, ChevronDown } from "lucide-react"
+import { Search, Plus, X, Tag, MapPin, Clock, ShoppingBag, Check, ChevronDown, Heart, Users2, MessageSquare } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { useAuth } from "@/context/AuthContext"
 import { cn } from "@/lib/utils"
@@ -22,6 +22,17 @@ interface Anuncio {
   garagem_nome: string
   garagem_slug: string
   vendedor_nome: string
+  total_interesses: number
+}
+
+interface Interessado {
+  id: string
+  mensagem?: string
+  criado_em: string
+  nome: string
+  email: string
+  garagem_slug?: string
+  garagem_nome?: string
 }
 
 type Moeda = "BRL" | "USD" | "PYG"
@@ -70,10 +81,170 @@ function timeAgo(iso: string) {
   return `${Math.floor(d / 30)} meses atrás`
 }
 
+// ── Modal de interessados (visão do vendedor) ─────────────────────────────────
+
+function ModalInteressados({ anuncioId, titulo, onClose }: { anuncioId: string; titulo: string; onClose: () => void }) {
+  const [interesses, setInteresses] = useState<Interessado[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get<{ interesses: Interessado[] }>(`/api/marketplace/${anuncioId}/interesses`)
+      .then(r => setInteresses(r.interesses))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [anuncioId])
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-surface shadow-xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div>
+            <h2 className="font-display text-base font-semibold text-foreground">Interessados</h2>
+            <p className="text-[11px] text-faint-foreground truncate max-w-[240px]">{titulo}</p>
+          </div>
+          <button onClick={onClose} className="text-faint-foreground hover:text-foreground">
+            <X className="size-5" />
+          </button>
+        </div>
+
+        <div className="max-h-[420px] overflow-y-auto p-4">
+          {loading ? (
+            <div className="flex flex-col gap-3">
+              {[1, 2, 3].map(i => <div key={i} className="h-14 animate-pulse rounded-xl bg-surface-2" />)}
+            </div>
+          ) : interesses.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <Users2 className="size-8 text-faint-foreground" />
+              <p className="text-[12px] text-muted-foreground">Nenhum interessado ainda.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {interesses.map(i => (
+                <div key={i.id} className="rounded-xl border border-border bg-surface-2 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-purple-bg text-[12px] font-bold text-purple">
+                        {i.nome[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-[13px] font-medium text-foreground">{i.nome}</p>
+                        <p className="text-[11px] text-faint-foreground">{i.email}</p>
+                      </div>
+                    </div>
+                    {i.garagem_slug && (
+                      <Link
+                        to={`/g/${i.garagem_slug}`}
+                        onClick={onClose}
+                        className="shrink-0 text-[11px] text-purple hover:underline"
+                      >
+                        ver garagem
+                      </Link>
+                    )}
+                  </div>
+                  {i.mensagem && (
+                    <div className="mt-2.5 flex gap-1.5 rounded-lg bg-surface px-3 py-2">
+                      <MessageSquare className="mt-0.5 size-3 shrink-0 text-faint-foreground" />
+                      <p className="text-[12px] text-muted-foreground italic">{i.mensagem}</p>
+                    </div>
+                  )}
+                  <p className="mt-1.5 text-[10px] text-faint-foreground">{timeAgo(i.criado_em)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ── Modal de interesse (visão do comprador) ────────────────────────────────────
+
+function ModalInteresse({ anuncioId, titulo, onClose, onSuccess }: {
+  anuncioId: string; titulo: string; onClose: () => void; onSuccess: () => void
+}) {
+  const [mensagem, setMensagem] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState("")
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true); setErro("")
+    try {
+      await api.post(`/api/marketplace/${anuncioId}/interesse`, { mensagem: mensagem.trim() || undefined })
+      onSuccess()
+      onClose()
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao enviar interesse")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-surface shadow-xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div>
+            <h2 className="font-display text-base font-semibold text-foreground">Demonstrar interesse</h2>
+            <p className="text-[11px] text-faint-foreground truncate max-w-[220px]">{titulo}</p>
+          </div>
+          <button onClick={onClose} className="text-faint-foreground hover:text-foreground">
+            <X className="size-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5">
+          <p className="text-[12px] text-muted-foreground">
+            O vendedor receberá uma notificação com seu nome e e-mail de contato. Você pode deixar uma mensagem opcional.
+          </p>
+          <textarea
+            value={mensagem}
+            onChange={e => setMensagem(e.target.value)}
+            rows={3}
+            maxLength={500}
+            placeholder="Ex: Ainda disponível? Posso retirar em SP."
+            className="w-full resize-none rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
+          />
+          {erro && <p className="text-[12px] text-red">{erro}</p>}
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-border py-2.5 text-[13px] text-muted-foreground hover:text-foreground">
+              Cancelar
+            </button>
+            <button type="submit" disabled={loading} className="flex-1 rounded-lg bg-purple py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
+              {loading ? "Enviando..." : "Confirmar interesse"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
+  )
+}
+
 // ── Card de anúncio ──────────────────────────────────────────────────────────
 
-function AnuncioCard({ a, onStatusChange }: { a: Anuncio; onStatusChange?: (id: string, status: string) => void }) {
+function AnuncioCard({
+  a, user,
+  onStatusChange, onInteresse,
+}: {
+  a: Anuncio
+  user: { garagem: { id: string } } | null
+  onStatusChange?: (id: string, status: string) => void
+  onInteresse?: (anuncio: Anuncio) => void
+}) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [interessadosOpen, setInteressadosOpen] = useState(false)
+  const [jaInteressado, setJaInteressado] = useState(false)
+  const isDono = user?.garagem?.id === a.garagem_id
+
+  // Verifica se já demonstrou interesse (só para não-donos logados)
+  useEffect(() => {
+    if (!user || isDono) return
+    api.get<{ interesse: boolean }>(`/api/marketplace/${a.id}/meu-interesse`)
+      .then(r => setJaInteressado(r.interesse))
+      .catch(() => {})
+  }, [a.id, user, isDono])
 
   return (
     <div className="group relative flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-border-strong">
@@ -84,7 +255,7 @@ function AnuncioCard({ a, onStatusChange }: { a: Anuncio; onStatusChange?: (id: 
             <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">{a.descricao}</p>
           )}
         </div>
-        {onStatusChange && (
+        {onStatusChange && isDono && (
           <div className="relative">
             <button
               onClick={() => setMenuOpen(v => !v)}
@@ -152,11 +323,46 @@ function AnuncioCard({ a, onStatusChange }: { a: Anuncio; onStatusChange?: (id: 
         >
           {a.garagem_nome}
         </Link>
-        <span className="flex items-center gap-1 text-[10px] text-faint-foreground shrink-0">
-          <Clock className="size-3" />
-          {timeAgo(a.criado_em)}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {a.total_interesses > 0 && (
+            <button
+              onClick={() => isDono && setInteressadosOpen(true)}
+              className={cn(
+                "flex items-center gap-1 text-[10px]",
+                isDono ? "cursor-pointer text-purple hover:underline" : "text-faint-foreground cursor-default"
+              )}
+            >
+              <Heart className="size-3" />
+              {a.total_interesses}
+            </button>
+          )}
+          <span className="flex items-center gap-1 text-[10px] text-faint-foreground">
+            <Clock className="size-3" />
+            {timeAgo(a.criado_em)}
+          </span>
+        </div>
       </div>
+
+      {/* Botão de interesse (só para não-donos logados, anúncio ativo) */}
+      {user && !isDono && a.status === "ativo" && (
+        <button
+          disabled={jaInteressado}
+          onClick={() => !jaInteressado && onInteresse?.(a)}
+          className={cn(
+            "mt-0.5 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-medium transition-colors",
+            jaInteressado
+              ? "bg-green-bg text-green cursor-default"
+              : "border border-purple/30 text-purple hover:bg-purple-bg"
+          )}
+        >
+          <Heart className={cn("size-3.5", jaInteressado && "fill-green")} />
+          {jaInteressado ? "Interesse demonstrado" : "Tenho interesse"}
+        </button>
+      )}
+
+      {interessadosOpen && (
+        <ModalInteressados anuncioId={a.id} titulo={a.titulo} onClose={() => setInteressadosOpen(false)} />
+      )}
     </div>
   )
 }
@@ -340,6 +546,7 @@ export default function MarketplacePage() {
   const [tab, setTab] = useState<"todos" | "meus">("todos")
 
   const [criandoAnuncio, setCriandoAnuncio] = useState(false)
+  const [anuncioInteresse, setAnuncioInteresse] = useState<Anuncio | null>(null)
 
   const carregar = useCallback((pg = 0, q = busca, cat = categFiltro, cond = condicaoFiltro) => {
     setLoading(true)
@@ -498,7 +705,14 @@ export default function MarketplacePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {anuncios.map(a => <AnuncioCard key={a.id} a={a} />)}
+              {anuncios.map(a => (
+                <AnuncioCard
+                  key={a.id}
+                  a={a}
+                  user={user}
+                  onInteresse={setAnuncioInteresse}
+                />
+              ))}
             </div>
           )}
 
@@ -549,7 +763,7 @@ export default function MarketplacePage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {meusAnuncios.map(a => (
-                <AnuncioCard key={a.id} a={a} onStatusChange={handleStatusChange} />
+                <AnuncioCard key={a.id} a={a} user={user} onStatusChange={handleStatusChange} />
               ))}
             </div>
           )}
@@ -563,6 +777,23 @@ export default function MarketplacePage() {
           onCreated={() => {
             carregarMeus()
             if (tab === "todos") carregar(0)
+          }}
+        />
+      )}
+
+      {/* Modal de interesse */}
+      {anuncioInteresse && (
+        <ModalInteresse
+          anuncioId={anuncioInteresse.id}
+          titulo={anuncioInteresse.titulo}
+          onClose={() => setAnuncioInteresse(null)}
+          onSuccess={() => {
+            // Atualiza contador localmente
+            setAnuncios(prev => prev.map(a =>
+              a.id === anuncioInteresse!.id
+                ? { ...a, total_interesses: a.total_interesses + 1 }
+                : a
+            ))
           }}
         />
       )}

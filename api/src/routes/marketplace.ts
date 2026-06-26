@@ -30,7 +30,8 @@ marketplacePublicoRoutes.get("/marketplace", async (c) => {
     SELECT a.id, a.titulo, a.descricao, a.preco, a.moeda, a.categoria, a.condicao,
            a.localizacao, a.status, a.criado_em,
            g.id as garagem_id, g.nome as garagem_nome, g.slug as garagem_slug,
-           u.nome as vendedor_nome
+           u.nome as vendedor_nome,
+           (SELECT COUNT(*)::int FROM marketplace_interesses WHERE anuncio_id = a.id) as total_interesses
     FROM marketplace_anuncios a
     JOIN garagens g ON g.id = a.garagem_id
     JOIN usuarios u ON u.id = g.usuario_id
@@ -160,6 +161,88 @@ marketplaceRoutes.patch("/:id/status", async (c) => {
   `
   if (!updated) return c.json({ error: "Não encontrado" }, 404)
   return c.json(updated)
+})
+
+// POST /api/marketplace/:id/interesse — demonstrar interesse
+marketplaceRoutes.post("/:id/interesse", async (c) => {
+  const userId = c.get("userId") as string
+  const { id } = c.req.param()
+
+  const [anuncio] = await sql`
+    SELECT a.id, a.titulo, g.usuario_id as dono_id, u.nome as dono_nome,
+           ud.nome as interessado_nome
+    FROM marketplace_anuncios a
+    JOIN garagens g ON g.id = a.garagem_id
+    JOIN usuarios u ON u.id = g.usuario_id
+    JOIN usuarios ud ON ud.id = ${userId}
+    WHERE a.id = ${id} AND a.status = 'ativo'
+  `
+  if (!anuncio) return c.json({ error: "Anúncio não encontrado ou inativo" }, 404)
+  if (anuncio.dono_id === userId) return c.json({ error: "Você é o vendedor deste anúncio" }, 400)
+
+  const body = await c.req.json().catch(() => ({}))
+  const mensagem = typeof body?.mensagem === "string" ? body.mensagem.trim().slice(0, 500) : null
+
+  const [existente] = await sql`SELECT id FROM marketplace_interesses WHERE anuncio_id = ${id} AND usuario_id = ${userId}`
+  if (existente) return c.json({ error: "Você já demonstrou interesse neste anúncio" }, 409)
+
+  await sql`
+    INSERT INTO marketplace_interesses (anuncio_id, usuario_id, mensagem)
+    VALUES (${id}, ${userId}, ${mensagem})
+  `
+
+  // Notifica o dono do anúncio
+  const texto = mensagem
+    ? `${anuncio.interessado_nome} demonstrou interesse em "${anuncio.titulo}": "${mensagem.slice(0, 80)}${mensagem.length > 80 ? "…" : ""}"`
+    : `${anuncio.interessado_nome} demonstrou interesse em "${anuncio.titulo}"`
+
+  await sql`
+    INSERT INTO notificacoes (usuario_id, tipo, titulo, corpo, link)
+    VALUES (${anuncio.dono_id}, 'update_build',
+            'Novo interesse no marketplace',
+            ${texto},
+            ${`/marketplace`})
+  `
+
+  return c.json({ ok: true }, 201)
+})
+
+// DELETE /api/marketplace/:id/interesse — cancelar interesse
+marketplaceRoutes.delete("/:id/interesse", async (c) => {
+  const userId = c.get("userId") as string
+  const { id } = c.req.param()
+
+  await sql`DELETE FROM marketplace_interesses WHERE anuncio_id = ${id} AND usuario_id = ${userId}`
+  return c.json({ ok: true })
+})
+
+// GET /api/marketplace/:id/interesses — lista de interessados (somente dono)
+marketplaceRoutes.get("/:id/interesses", async (c) => {
+  const userId = c.get("userId") as string
+  const { id } = c.req.param()
+
+  const [garagem] = await sql`SELECT id FROM garagens WHERE usuario_id = ${userId}`
+  const [anuncio] = await sql`SELECT id FROM marketplace_anuncios WHERE id = ${id} AND garagem_id = ${garagem?.id}`
+  if (!anuncio) return c.json({ error: "Sem acesso" }, 403)
+
+  const interesses = await sql`
+    SELECT i.id, i.mensagem, i.criado_em,
+           u.nome, u.email, g.slug as garagem_slug, g.nome as garagem_nome
+    FROM marketplace_interesses i
+    JOIN usuarios u ON u.id = i.usuario_id
+    LEFT JOIN garagens g ON g.usuario_id = i.usuario_id
+    WHERE i.anuncio_id = ${id}
+    ORDER BY i.criado_em DESC
+  `
+  return c.json({ interesses })
+})
+
+// GET /api/marketplace/:id/meu-interesse — verifica se o usuário já demonstrou interesse
+marketplaceRoutes.get("/:id/meu-interesse", async (c) => {
+  const userId = c.get("userId") as string
+  const { id } = c.req.param()
+  const [i] = await sql`SELECT id FROM marketplace_interesses WHERE anuncio_id = ${id} AND usuario_id = ${userId}`
+  return c.json({ interesse: !!i })
 })
 
 // DELETE /api/marketplace/:id — remover anúncio

@@ -12,6 +12,7 @@ import { socialRoutes } from "./routes/social"
 import { colaboracoesRoutes } from "./routes/colaboracoes"
 import { authV2Routes } from "./routes/auth-v2"
 import { marketplacePublicoRoutes, marketplaceRoutes } from "./routes/marketplace"
+import { googleAuthRoutes } from "./routes/auth-google"
 import { sql } from "./db/client"
 import type { AppEnv } from "./types"
 
@@ -37,6 +38,7 @@ app.get("/", (c) => c.json({ ok: true, service: "api" }))
 // ── Rotas públicas ───────────────────────────────────────────────────────────
 app.route("/auth", authRoutes)
 app.route("/auth", authV2Routes)
+app.route("/auth", googleAuthRoutes)
 app.route("/", publicoRoutes)
 app.route("/", marketplacePublicoRoutes)
 

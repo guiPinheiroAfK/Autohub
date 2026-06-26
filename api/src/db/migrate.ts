@@ -237,6 +237,20 @@ async function migrate() {
   await sql`CREATE INDEX IF NOT EXISTS idx_marketplace_garagem ON marketplace_anuncios(garagem_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_marketplace_status ON marketplace_anuncios(status, criado_em DESC)`
 
+  // ── v2: interesses em anúncios do marketplace ─────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS marketplace_interesses (
+      id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      anuncio_id TEXT NOT NULL REFERENCES marketplace_anuncios(id) ON DELETE CASCADE,
+      usuario_id TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      mensagem   TEXT,
+      criado_em  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(anuncio_id, usuario_id)
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_interesses_anuncio ON marketplace_interesses(anuncio_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_interesses_usuario ON marketplace_interesses(usuario_id)`
+
   console.log("✔ Migrations concluídas.")
   await sql.end()
 }

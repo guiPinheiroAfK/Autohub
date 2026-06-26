@@ -18,6 +18,7 @@ import ConvitePage from "@/pages/ConvitePage"
 import VerificarEmailPage from "@/pages/VerificarEmailPage"
 import ResetarSenhaPage from "@/pages/ResetarSenhaPage"
 import MarketplacePage from "@/pages/MarketplacePage"
+import AuthCallbackPage from "@/pages/AuthCallbackPage"
 
 const RunPage = lazy(() => import("@/pages/RunPage"))
 
@@ -41,6 +42,7 @@ export default function App() {
             </Route>
             <Route path="/verificar-email" element={<VerificarEmailPage />} />
             <Route path="/resetar-senha" element={<ResetarSenhaPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/convite" element={<Layout />}>
               <Route index element={<ConvitePage />} />
             </Route>
