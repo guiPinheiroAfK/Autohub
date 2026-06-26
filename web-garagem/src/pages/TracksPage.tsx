@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { MapPin, Flag, Clock, Users, ChevronRight, Route, Zap, Gauge } from "lucide-react"
-import { api } from "@/lib/api/client"
-import type { Rota } from "@/types/tracks"
+import { MapPin, Flag, Clock, ChevronRight, Route, Zap, Gauge, Users } from "lucide-react"
+import { ROTAS } from "@/data/rotas"
+import type { RotaStatic } from "@/data/rotas"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -14,9 +13,9 @@ function formatTempo(s: number) {
 
 type Dificuldade = "tranquila" | "moderada" | "desafiadora"
 
-function getDificuldade(rota: Rota): Dificuldade {
-  const km = Number(rota.distancia_km ?? 0)
-  const ideal = rota.tempo_ideal_s ?? 0
+function getDificuldade(rota: RotaStatic): Dificuldade {
+  const km = rota.distancia_km
+  const ideal = rota.tempo_ideal_s
   if (km > 60 || ideal > 4500) return "desafiadora"
   if (km > 25 || ideal > 1800) return "moderada"
   return "tranquila"
@@ -29,54 +28,49 @@ const DIFI_CONFIG: Record<Dificuldade, { label: string; color: string; dots: num
 }
 
 const REGIAO_ACCENT: Record<string, string> = {
-  Sul:      "from-blue/10",
-  Sudeste:  "from-purple/10",
+  Sul:            "from-blue/10",
+  Sudeste:        "from-purple/10",
   "Centro-Oeste": "from-amber/10",
-  Nordeste: "from-green/10",
-  Norte:    "from-green/10",
+  Nordeste:       "from-green/10",
+  Norte:          "from-green/10",
 }
 
 const REGIAO_DOT: Record<string, string> = {
-  Sul:      "bg-blue",
-  Sudeste:  "bg-purple",
+  Sul:            "bg-blue",
+  Sudeste:        "bg-purple",
   "Centro-Oeste": "bg-amber",
-  Nordeste: "bg-green",
-  Norte:    "bg-green",
+  Nordeste:       "bg-green",
+  Norte:          "bg-green",
 }
 
 // ── Card de rota ──────────────────────────────────────────────────────────────
 
-function RotaCard({ rota }: { rota: Rota }) {
+function RotaCard({ rota }: { rota: RotaStatic }) {
   const difi = getDificuldade(rota)
   const difiCfg = DIFI_CONFIG[difi]
-  const gradFrom = rota.regiao ? (REGIAO_ACCENT[rota.regiao] ?? "from-surface") : "from-surface"
-  const dotColor = rota.regiao ? (REGIAO_DOT[rota.regiao] ?? "bg-faint-foreground") : "bg-faint-foreground"
+  const gradFrom = REGIAO_ACCENT[rota.regiao] ?? "from-surface"
+  const dotColor = REGIAO_DOT[rota.regiao] ?? "bg-faint-foreground"
 
   return (
     <Link
       to={`/tracks/${rota.id}`}
       className="group relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-border bg-surface p-5 transition-all hover:border-border-strong hover:shadow-md"
     >
-      {/* Gradiente sutil de região */}
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${gradFrom} to-transparent opacity-60`} />
 
       <div className="relative flex flex-col gap-3">
-        {/* Header: nome + região */}
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-display text-[15px] font-bold leading-snug text-foreground transition-colors group-hover:text-purple">
             {rota.nome}
           </h3>
-          {rota.regiao && (
-            <div className="flex shrink-0 items-center gap-1.5">
-              <span className={`size-1.5 rounded-full ${dotColor}`} />
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-faint-foreground">
-                {rota.regiao}
-              </span>
-            </div>
-          )}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span className={`size-1.5 rounded-full ${dotColor}`} />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-faint-foreground">
+              {rota.regiao}
+            </span>
+          </div>
         </div>
 
-        {/* Rota A → B */}
         <div className="flex items-stretch gap-2">
           <div className="flex flex-col items-center pt-0.5">
             <div className="size-2 rounded-full bg-green" />
@@ -95,34 +89,24 @@ function RotaCard({ rota }: { rota: Rota }) {
           </div>
         </div>
 
-        {/* Footer: stats + dificuldade */}
         <div className="flex items-center justify-between border-t border-border pt-3">
           <div className="flex flex-wrap items-center gap-3">
-            {rota.distancia_km && (
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                <Route className="size-3" />
-                {Number(rota.distancia_km).toFixed(0)} km
-              </span>
-            )}
-            {rota.tempo_ideal_s && (
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                <Clock className="size-3" />
-                {formatTempo(rota.tempo_ideal_s)}
-              </span>
-            )}
             <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Users className="size-3" />
-              {Number(rota.total_runs)} run{Number(rota.total_runs) !== 1 ? "s" : ""}
+              <Route className="size-3" />
+              {rota.distancia_km} km
+            </span>
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Clock className="size-3" />
+              {formatTempo(rota.tempo_ideal_s)}
             </span>
           </div>
 
-          {/* Dificuldade */}
           <div className={`flex items-center gap-1 text-[10px] font-semibold ${difiCfg.color}`}>
             {Array.from({ length: 3 }).map((_, i) => (
               <span
                 key={i}
-                className={`inline-block size-1.5 rounded-full ${i < difiCfg.dots ? dotColor.replace(/bg-\w+/, `bg-current`) : "bg-border"}`}
-                style={i < difiCfg.dots ? {} : { opacity: 0.3 }}
+                className={`inline-block size-1.5 rounded-full`}
+                style={{ opacity: i < difiCfg.dots ? 1 : 0.25, background: "currentColor" }}
               />
             ))}
             <span className="ml-0.5">{difiCfg.label}</span>
@@ -138,18 +122,7 @@ function RotaCard({ rota }: { rota: Rota }) {
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function TracksPage() {
-  const [rotas, setRotas] = useState<Rota[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    api.get<{ rotas: Rota[] }>("/api/tracks/rotas")
-      .then(r => setRotas(r.rotas))
-      .catch(console.error)
-      .finally(() => setLoading(false))
-  }, [])
-
-  const regioes = [...new Set(rotas.map(r => r.regiao ?? "Outras"))].sort()
-  const totalRuns = rotas.reduce((s, r) => s + Number(r.total_runs ?? 0), 0)
+  const regioes = [...new Set(ROTAS.map(r => r.regiao))].sort()
 
   return (
     <div className="flex flex-col gap-8">
@@ -174,25 +147,22 @@ export default function TracksPage() {
             sua viagem com telemetria completa e modo fantasma.
           </p>
 
-          {/* Stats rápidos */}
-          {!loading && (
-            <div className="mt-5 flex flex-wrap gap-5">
-              <div className="flex items-center gap-2">
-                <Route className="size-4 text-purple" />
-                <span className="text-[13px]">
-                  <span className="font-data font-bold text-foreground">{rotas.length}</span>
-                  <span className="ml-1 text-muted-foreground">rotas disponíveis</span>
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="size-4 text-blue" />
-                <span className="text-[13px]">
-                  <span className="font-data font-bold text-foreground">{totalRuns}</span>
-                  <span className="ml-1 text-muted-foreground">runs registradas</span>
-                </span>
-              </div>
+          <div className="mt-5 flex flex-wrap gap-5">
+            <div className="flex items-center gap-2">
+              <Route className="size-4 text-purple" />
+              <span className="text-[13px]">
+                <span className="font-data font-bold text-foreground">{ROTAS.length}</span>
+                <span className="ml-1 text-muted-foreground">rotas disponíveis</span>
+              </span>
             </div>
-          )}
+            <div className="flex items-center gap-2">
+              <Users className="size-4 text-blue" />
+              <span className="text-[13px]">
+                <span className="font-data font-bold text-foreground">0</span>
+                <span className="ml-1 text-muted-foreground">runs registradas</span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -212,18 +182,9 @@ export default function TracksPage() {
         </div>
       </div>
 
-      {/* ── Skeleton ──────────────────────────────────────────────────── */}
-      {loading && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {[1,2,3,4].map(i => (
-            <div key={i} className="h-[190px] animate-pulse rounded-2xl border border-border bg-surface" />
-          ))}
-        </div>
-      )}
-
       {/* ── Rotas por região ──────────────────────────────────────────── */}
-      {!loading && regioes.map(regiao => {
-        const grupo = rotas.filter(r => (r.regiao ?? "Outras") === regiao)
+      {regioes.map(regiao => {
+        const grupo = ROTAS.filter(r => r.regiao === regiao)
         return (
           <div key={regiao} className="flex flex-col gap-3">
             <div className="flex items-center gap-2">

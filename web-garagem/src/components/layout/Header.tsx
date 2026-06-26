@@ -15,13 +15,10 @@ export function Header() {
 
                 {/* Logo / back */}
                 {naHome ? (
-                    <Link to="/" className="flex items-center gap-2.5 group">
+                    <Link to="/" className="flex items-center justify-center group">
                         <div className="flex size-8 items-center justify-center rounded-lg bg-purple-bg text-purple transition-transform group-hover:scale-105">
                             <Logo className="size-[18px]" />
                         </div>
-                        <span className="hidden font-display text-[13px] font-bold tracking-tight text-foreground sm:block">
-                            AutoHub
-                        </span>
                     </Link>
                 ) : (
                     <Link

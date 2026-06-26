@@ -79,21 +79,25 @@ export function CatalogoPecas({ onSelect, onClose }: Props) {
         </div>
 
         {/* ── Categorias ──────────────────────────────────────────────────── */}
-        <div className="flex gap-1.5 overflow-x-auto border-b border-border px-4 py-2.5 scrollbar-none">
-          {(["Todos", ...CATEGORIAS_PECAS] as const).map(cat => (
-            <button
-              key={cat}
-              onClick={() => setCategoria(cat)}
-              className={cn(
-                "shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
-                categoria === cat
-                  ? "border-purple/40 bg-purple-bg text-purple"
-                  : "border-border text-faint-foreground hover:border-border-strong hover:text-muted-foreground"
-              )}
-            >
-              {cat}
-            </button>
-          ))}
+        <div className="relative border-b border-border">
+          <div className="flex gap-1.5 overflow-x-auto px-4 py-2.5 scrollbar-none">
+            {(["Todos", ...CATEGORIAS_PECAS] as const).map(cat => (
+              <button
+                key={cat}
+                onClick={() => setCategoria(cat)}
+                className={cn(
+                  "shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                  categoria === cat
+                    ? "border-purple/40 bg-purple-bg text-purple"
+                    : "border-border text-faint-foreground hover:border-border-strong hover:text-muted-foreground"
+                )}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+          {/* fade direita indicando scroll */}
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent" />
         </div>
 
         {/* ── Resultados ──────────────────────────────────────────────────── */}
