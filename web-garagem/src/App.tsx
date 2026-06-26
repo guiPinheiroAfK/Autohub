@@ -24,6 +24,7 @@ const AuthCallbackPage  = lazy(() => import("@/pages/AuthCallbackPage"))
 const RunPage           = lazy(() => import("@/pages/RunPage"))
 const MinhaLojaPage     = lazy(() => import("@/pages/MinhaLojaPage"))
 const LojaPage          = lazy(() => import("@/pages/LojaPage"))
+const PitchPage         = lazy(() => import("@/pages/PitchPage"))
 
 const Spinner = () => (
   <div className="flex min-h-[60vh] items-center justify-center">
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="/verificar-email" element={<S><VerificarEmailPage /></S>} />
             <Route path="/resetar-senha" element={<S><ResetarSenhaPage /></S>} />
             <Route path="/oauth/callback" element={<S><AuthCallbackPage /></S>} />
+            <Route path="/landingpage-pitch" element={<S><PitchPage /></S>} />
             <Route path="/convite" element={<Layout />}>
               <Route index element={<S><ConvitePage /></S>} />
             </Route>
