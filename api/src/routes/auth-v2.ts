@@ -21,10 +21,10 @@ authV2Routes.get("/verificar-email", async (c) => {
   if (verificacao.usado) return c.json({ error: "Token já utilizado" }, 400)
   if (new Date(verificacao.expira_em) < new Date()) return c.json({ error: "Token expirado" }, 400)
 
-  await sql.begin(async (tx) => {
-    await tx`UPDATE email_verificacoes SET usado = true WHERE id = ${verificacao.id}`
-    await tx`UPDATE usuarios SET email_verificado = true WHERE id = ${verificacao.usuario_id}`
-  })
+  await sql.transaction((tx) => [
+    tx`UPDATE email_verificacoes SET usado = true WHERE id = ${verificacao.id}`,
+    tx`UPDATE usuarios SET email_verificado = true WHERE id = ${verificacao.usuario_id}`,
+  ])
 
   return c.json({ ok: true })
 })
@@ -86,10 +86,10 @@ authV2Routes.post("/resetar-senha", async (c) => {
   if (new Date(reset.expira_em) < new Date()) return c.json({ error: "Token expirado" }, 400)
 
   const hashed = await bcrypt.hash(nova_senha, 12)
-  await sql.begin(async (tx) => {
-    await tx`UPDATE senha_resets SET usado = true WHERE id = ${reset.id}`
-    await tx`UPDATE usuarios SET hashed_password = ${hashed} WHERE id = ${reset.usuario_id}`
-  })
+  await sql.transaction((tx) => [
+    tx`UPDATE senha_resets SET usado = true WHERE id = ${reset.id}`,
+    tx`UPDATE usuarios SET hashed_password = ${hashed} WHERE id = ${reset.usuario_id}`,
+  ])
 
   return c.json({ ok: true })
 })

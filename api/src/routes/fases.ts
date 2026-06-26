@@ -87,18 +87,22 @@ fasesRoutes.patch("/fases/:id", async (c) => {
   if (!parsed.success) return c.json({ error: "Dados inválidos", details: parsed.error.flatten() }, 400)
 
   const d = parsed.data
-  const fields: Record<string, unknown> = {}
-  if (d.titulo !== undefined) fields.titulo = d.titulo
-  if (d.ordem !== undefined) fields.ordem = d.ordem
-  if (d.status !== undefined) fields.status = d.status
-  if (d.orcamentoMin !== undefined) fields.orcamento_min = d.orcamentoMin
-  if (d.orcamentoMax !== undefined) fields.orcamento_max = d.orcamentoMax
-  if (d.moeda !== undefined) fields.moeda = d.moeda
-  if (d.nota !== undefined) fields.nota = d.nota
 
-  if (Object.keys(fields).length === 0) return c.json({ error: "Nada para atualizar" }, 400)
+  if (Object.keys(d).length === 0) return c.json({ error: "Nada para atualizar" }, 400)
 
-  const [updated] = await sql`UPDATE fases SET ${sql(fields)} WHERE id = ${id} RETURNING *`
+  const [current] = await sql`SELECT * FROM fases WHERE id = ${id}`
+  const [updated] = await sql`
+    UPDATE fases SET
+      titulo        = ${d.titulo       !== undefined ? d.titulo       : current.titulo},
+      ordem         = ${d.ordem        !== undefined ? d.ordem        : current.ordem},
+      status        = ${d.status       !== undefined ? d.status       : current.status},
+      orcamento_min = ${d.orcamentoMin !== undefined ? d.orcamentoMin : current.orcamento_min},
+      orcamento_max = ${d.orcamentoMax !== undefined ? d.orcamentoMax : current.orcamento_max},
+      moeda         = ${d.moeda        !== undefined ? d.moeda        : current.moeda},
+      nota          = ${d.nota         !== undefined ? d.nota         : current.nota}
+    WHERE id = ${id}
+    RETURNING *
+  `
   return c.json(updated)
 })
 
@@ -116,11 +120,10 @@ fasesRoutes.post("/fases/:id/resetar", async (c) => {
   `
   if (!fase) return c.json({ error: "Fase não encontrada" }, 404)
 
-  const [updated] = await sql.begin(async (tx) => {
-    await tx`UPDATE itens SET status = 'planejado' WHERE fase_id = ${id}`
-    const [f] = await tx`UPDATE fases SET status = 'planejado' WHERE id = ${id} RETURNING *`
-    return [f]
-  })
+  const [, [updated]] = await sql.transaction((tx) => [
+    tx`UPDATE itens SET status = 'planejado' WHERE fase_id = ${id}`,
+    tx`UPDATE fases SET status = 'planejado' WHERE id = ${id} RETURNING *`,
+  ])
 
   return c.json(updated)
 })

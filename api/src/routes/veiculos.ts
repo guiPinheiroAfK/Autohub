@@ -151,30 +151,31 @@ veiculosRoutes.patch("/:id", async (c) => {
   }
 
   const d = parsed.data
-  const fields: Record<string, unknown> = {}
-  if (d.apelido !== undefined) fields.apelido = d.apelido
-  if (d.marca !== undefined) fields.marca = d.marca
-  if (d.modelo !== undefined) fields.modelo = d.modelo
-  if (d.anoFabricacao !== undefined) fields.ano_fabricacao = d.anoFabricacao
-  if (d.anoModelo !== undefined) fields.ano_modelo = d.anoModelo
-  if (d.perfil !== undefined) fields.perfil = d.perfil
-  if (d.status !== undefined) fields.status = d.status
-  if (d.visibilidade !== undefined) fields.visibilidade = d.visibilidade
-  if (d.capaUrl !== undefined) fields.capa_url = d.capaUrl
-  if (d.metaPotenciaWhp !== undefined) fields.meta_potencia_whp = d.metaPotenciaWhp
 
-  if (Object.keys(fields).length === 0) {
+  if (Object.keys(d).length === 0) {
     return c.json({ error: "Nenhum campo para atualizar" }, 400)
   }
 
   // Verifica ownership antes de atualizar
   const [existing] = await sql`
-    SELECT id FROM veiculos WHERE id = ${id} AND garagem_id = ${garagemId}
+    SELECT * FROM veiculos WHERE id = ${id} AND garagem_id = ${garagemId}
   `
   if (!existing) return c.json({ error: "Veículo não encontrado" }, 404)
 
   const [updated] = await sql`
-    UPDATE veiculos SET ${sql(fields)} WHERE id = ${id} RETURNING *
+    UPDATE veiculos SET
+      apelido           = ${d.apelido           !== undefined ? d.apelido           : existing.apelido},
+      marca             = ${d.marca             !== undefined ? d.marca             : existing.marca},
+      modelo            = ${d.modelo            !== undefined ? d.modelo            : existing.modelo},
+      ano_fabricacao    = ${d.anoFabricacao     !== undefined ? d.anoFabricacao     : existing.ano_fabricacao},
+      ano_modelo        = ${d.anoModelo         !== undefined ? d.anoModelo         : existing.ano_modelo},
+      perfil            = ${d.perfil            !== undefined ? d.perfil            : existing.perfil},
+      status            = ${d.status            !== undefined ? d.status            : existing.status},
+      visibilidade      = ${d.visibilidade      !== undefined ? d.visibilidade      : existing.visibilidade},
+      capa_url          = ${d.capaUrl           !== undefined ? d.capaUrl           : existing.capa_url},
+      meta_potencia_whp = ${d.metaPotenciaWhp   !== undefined ? d.metaPotenciaWhp   : existing.meta_potencia_whp}
+    WHERE id = ${id}
+    RETURNING *
   `
 
   return c.json(updated)

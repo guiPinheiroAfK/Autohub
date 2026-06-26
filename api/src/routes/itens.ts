@@ -55,29 +55,21 @@ async function checkFaseOwner(faseId: string, userId: string) {
 }
 
 /**
- * Recalcula o status da fase a partir dos itens dela e persiste, dentro
- * da mesma transação do caller. É o "feedback" pedido: quando todo item
- * vira concluído, a fase vira concluído (e a linha fica verde no front);
- * se algum item volta atrás, a fase volta pra andamento/planejado.
+ * Recalcula o status da fase a partir dos itens dela e persiste.
+ * Quando todo item vira concluído, a fase vira concluído (e a linha fica
+ * verde no front); se algum item volta atrás, a fase volta pra andamento/planejado.
  */
-import type { TransactionSql } from "postgres"
-
-async function recalcularStatusFase(
-    tx: TransactionSql,
-    faseId: string
-): Promise<"planejado" | "andamento" | "concluido"> {
-    const [agregado] = await tx`
+async function recalcularStatusFase(faseId: string): Promise<"planejado" | "andamento" | "concluido"> {
+    const [agregado] = await sql`
     SELECT COUNT(*)::int AS total,
            COUNT(*) FILTER (WHERE status = 'concluido')::int AS concluidos
     FROM itens WHERE fase_id = ${faseId}
   `
-    const total = agregado?.total ?? 0
-    const concluidos = agregado?.concluidos ?? 0
-
-    const novoStatus = total > 0 && concluidos === total ? "concluido" : concluidos > 0 ? "andamento" : "planejado"
-
-    await tx`UPDATE fases SET status = ${novoStatus} WHERE id = ${faseId}`
-    return novoStatus
+    const { total, concluidos } = agregado as { total: number; concluidos: number }
+    const novoStatus = total > 0 && concluidos === total ? "concluido"
+        : concluidos > 0 ? "andamento" : "planejado"
+    await sql`UPDATE fases SET status = ${novoStatus} WHERE id = ${faseId}`
+    return novoStatus as "planejado" | "andamento" | "concluido"
 }
 
 // POST /itens — cria item dentro de uma fase
@@ -94,8 +86,7 @@ itensRoutes.post("/", async (c) => {
         return c.json({ error: "Fase não encontrada" }, 404)
     }
 
-    const [item, faseStatus] = await sql.begin(async (tx) => {
-        const [i] = await tx`
+    const [item] = await sql`
       INSERT INTO itens (fase_id, nome, detalhe, preco_min, preco_max, moeda, status, fornecedor_id, link_compra)
       VALUES (
         ${d.faseId}, ${d.nome}, ${d.detalhe ?? null}, ${d.precoMin}, ${d.precoMax},
@@ -103,10 +94,7 @@ itensRoutes.post("/", async (c) => {
       )
       RETURNING *
     `
-        const status = await recalcularStatusFase(tx, d.faseId)
-        return [i, status]
-    })
-
+    const faseStatus = await recalcularStatusFase(d.faseId)
     return c.json({ ...item, faseStatus }, 201)
 })
 
@@ -127,25 +115,25 @@ itensRoutes.patch("/:id", async (c) => {
     }
 
     const d = parsed.data
-    const fields: Record<string, unknown> = {}
-    if (d.status !== undefined) fields.status = d.status
-    if (d.nome !== undefined) fields.nome = d.nome
-    if (d.detalhe !== undefined) fields.detalhe = d.detalhe
-    if (d.preco_min !== undefined) fields.preco_min = d.preco_min
-    if (d.preco_max !== undefined) fields.preco_max = d.preco_max
-    if (d.moeda !== undefined) fields.moeda = d.moeda
-    if (d.link_compra !== undefined) fields.link_compra = d.link_compra
 
-    if (Object.keys(fields).length === 0) {
+    if (Object.keys(d).length === 0) {
         return c.json({ error: "Nada para atualizar" }, 400)
     }
 
-    const [updated, faseStatus] = await sql.begin(async (tx) => {
-        const [i] = await tx`UPDATE itens SET ${tx(fields)} WHERE id = ${id} RETURNING *`
-        const status = await recalcularStatusFase(tx, owned.fase_id)
-        return [i, status]
-    })
-
+    const [current] = await sql`SELECT * FROM itens WHERE id = ${id}`
+    const [updated] = await sql`
+      UPDATE itens SET
+        nome        = ${d.nome        !== undefined ? d.nome        : current.nome},
+        detalhe     = ${d.detalhe     !== undefined ? d.detalhe     : current.detalhe},
+        preco_min   = ${d.preco_min   !== undefined ? d.preco_min   : current.preco_min},
+        preco_max   = ${d.preco_max   !== undefined ? d.preco_max   : current.preco_max},
+        moeda       = ${d.moeda       !== undefined ? d.moeda       : current.moeda},
+        status      = ${d.status      !== undefined ? d.status      : current.status},
+        link_compra = ${d.link_compra !== undefined ? d.link_compra : current.link_compra}
+      WHERE id = ${id}
+      RETURNING *
+    `
+    const faseStatus = await recalcularStatusFase(owned.fase_id)
     return c.json({ ...updated, faseStatus })
 })
 
@@ -159,11 +147,7 @@ itensRoutes.delete("/:id", async (c) => {
         return c.json({ error: "Item não encontrado" }, 404)
     }
 
-    const [, faseStatus] = await sql.begin(async (tx) => {
-        await tx`DELETE FROM itens WHERE id = ${id}`
-        const status = await recalcularStatusFase(tx, owned.fase_id)
-        return [null, status]
-    })
-
+    await sql`DELETE FROM itens WHERE id = ${id}`
+    const faseStatus = await recalcularStatusFase(owned.fase_id)
     return c.json({ deleted: true, faseStatus })
 })
