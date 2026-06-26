@@ -7,6 +7,10 @@ import { veiculosRoutes } from "./routes/veiculos"
 import { fasesRoutes } from "./routes/fases"
 import { itensRoutes } from "./routes/itens"
 import { cotacoesRoutes } from "./routes/cotacoes"
+import { publicoRoutes } from "./routes/publico"
+import { socialRoutes } from "./routes/social"
+import { colaboracoesRoutes } from "./routes/colaboracoes"
+import { authV2Routes } from "./routes/auth-v2"
 import { sql } from "./db/client"
 import type { AppEnv } from "./types"
 
@@ -31,6 +35,8 @@ app.get("/", (c) => c.json({ ok: true, service: "api" }))
 
 // ── Rotas públicas ───────────────────────────────────────────────────────────
 app.route("/auth", authRoutes)
+app.route("/auth", authV2Routes)
+app.route("/", publicoRoutes)
 
 // ── Rotas protegidas ─────────────────────────────────────────────────────────
 const api = new Hono<AppEnv>()
@@ -65,4 +71,7 @@ api.route("/veiculos", veiculosRoutes)
 api.route("/", fasesRoutes)
 api.route("/itens", itensRoutes)
 api.route("/cotacoes", cotacoesRoutes)
+api.route("/social", socialRoutes)
+api.route("/colaboracoes", colaboracoesRoutes)
+api.route("/auth", authV2Routes)
 app.route("/api", api)

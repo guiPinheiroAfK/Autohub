@@ -12,38 +12,57 @@ import ConfiguracaoPage from "@/pages/ConfiguracaoPage.tsx"
 import EventosPage from "@/pages/EventosPage"
 import TracksPage from "@/pages/TracksPage"
 import RotaDetalhePage from "@/pages/RotaDetalhePage"
+import GaragemPublicaPage from "@/pages/GaragemPublicaPage"
+import FeedPage from "@/pages/FeedPage"
+import ConvitePage from "@/pages/ConvitePage"
+import VerificarEmailPage from "@/pages/VerificarEmailPage"
 
-// RunPage carrega Leaflet (~145kb) — lazy para não inflar o bundle principal
 const RunPage = lazy(() => import("@/pages/RunPage"))
+
+const Spinner = () => (
+  <div className="flex min-h-[60vh] items-center justify-center">
+    <div className="size-8 animate-spin rounded-full border-2 border-border border-t-purple" />
+  </div>
+)
 
 export default function App() {
   return (
-      <SettingsProvider>
-        <BrowserRouter>
-          <AuthProvider>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
+    <SettingsProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
 
-              {/* Rotas protegidas */}
-              <Route element={<ProtectedRoute />}>
-                <Route element={<Layout />}>
-                  <Route path="/" element={<GaragemOverview />} />
-                  <Route path="/novo" element={<NovoVeiculo />} />
-                  <Route path="/veiculo/:id" element={<VeiculoDetalhe />} />
-                  <Route path="/configuracoes" element={<ConfiguracaoPage />} />
-                  <Route path="/eventos" element={<EventosPage />} />
-                  <Route path="/tracks" element={<TracksPage />} />
-                  <Route path="/tracks/:rotaId" element={<RotaDetalhePage />} />
-                  <Route path="/tracks/:rotaId/run" element={
-                    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><div className="size-8 animate-spin rounded-full border-2 border-border border-t-purple" /></div>}>
-                      <RunPage />
-                    </Suspense>
-                  } />
-                </Route>
+            {/* Rotas públicas sem auth */}
+            <Route path="/g/:slug" element={<Layout />}>
+              <Route index element={<GaragemPublicaPage />} />
+            </Route>
+            <Route path="/verificar-email" element={<VerificarEmailPage />} />
+            <Route path="/convite" element={<Layout />}>
+              <Route index element={<ConvitePage />} />
+            </Route>
+
+            {/* Rotas protegidas */}
+            <Route element={<ProtectedRoute />}>
+              <Route element={<Layout />}>
+                <Route path="/" element={<GaragemOverview />} />
+                <Route path="/novo" element={<NovoVeiculo />} />
+                <Route path="/veiculo/:id" element={<VeiculoDetalhe />} />
+                <Route path="/configuracoes" element={<ConfiguracaoPage />} />
+                <Route path="/eventos" element={<EventosPage />} />
+                <Route path="/feed" element={<FeedPage />} />
+                <Route path="/tracks" element={<TracksPage />} />
+                <Route path="/tracks/:rotaId" element={<RotaDetalhePage />} />
+                <Route path="/tracks/:rotaId/run" element={
+                  <Suspense fallback={<Spinner />}>
+                    <RunPage />
+                  </Suspense>
+                } />
               </Route>
-            </Routes>
-          </AuthProvider>
-        </BrowserRouter>
-      </SettingsProvider>
+            </Route>
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </SettingsProvider>
   )
 }
