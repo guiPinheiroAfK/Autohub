@@ -3,6 +3,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// Local: http://localhost:8000 | Docker: http://api:8000 (via VITE_API_URL)
+const apiTarget = process.env.VITE_API_URL ?? "http://localhost:8000"
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -12,8 +15,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://localhost:8000",
-      "/auth": "http://localhost:8000",
+      "/api": apiTarget,
+      "/auth": apiTarget,
     },
   },
 })

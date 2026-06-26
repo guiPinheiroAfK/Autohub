@@ -1,32 +1,11 @@
 services:
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: autohub
-      POSTGRES_USER: autohub
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-autohub_dev}
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U autohub"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   api:
     image: oven/bun:1.2
     working_dir: /app
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
+    env_file:
+      - ./api/.env          # DATABASE_URL, JWT_SECRET etc. do Neon cloud
     environment:
-      DATABASE_URL: postgres://autohub:${POSTGRES_PASSWORD:-autohub_dev}@db:5432/autohub
-      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_prod_min32chars}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-60m}
       PORT: 8000
       NODE_ENV: development
     volumes:
@@ -40,12 +19,9 @@ services:
     working_dir: /app
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://localhost:8000
+      VITE_API_URL: http://api:8000   # dentro do Docker, service name = hostname
     volumes:
       - ./web-garagem:/app
     ports:
       - "5173:5173"
     command: sh -c "npm install && npm run dev -- --host"
-
-volumes:
-  pg_data:
