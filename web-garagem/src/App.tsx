@@ -22,6 +22,8 @@ const ResetarSenhaPage  = lazy(() => import("@/pages/ResetarSenhaPage"))
 const MarketplacePage   = lazy(() => import("@/pages/MarketplacePage"))
 const AuthCallbackPage  = lazy(() => import("@/pages/AuthCallbackPage"))
 const RunPage           = lazy(() => import("@/pages/RunPage"))
+const MinhaLojaPage     = lazy(() => import("@/pages/MinhaLojaPage"))
+const LojaPage          = lazy(() => import("@/pages/LojaPage"))
 
 const Spinner = () => (
   <div className="flex min-h-[60vh] items-center justify-center">
@@ -52,6 +54,9 @@ export default function App() {
             <Route path="/convite" element={<Layout />}>
               <Route index element={<S><ConvitePage /></S>} />
             </Route>
+            <Route path="/loja/:garagemSlug" element={<Layout />}>
+              <Route index element={<S><LojaPage /></S>} />
+            </Route>
 
             {/* Rotas protegidas */}
             <Route element={<ProtectedRoute />}>
@@ -66,6 +71,7 @@ export default function App() {
                 <Route path="/tracks" element={<S><TracksPage /></S>} />
                 <Route path="/tracks/:rotaId" element={<S><RotaDetalhePage /></S>} />
                 <Route path="/tracks/:rotaId/run" element={<S><RunPage /></S>} />
+                <Route path="/minha-loja" element={<S><MinhaLojaPage /></S>} />
               </Route>
             </Route>
           </Routes>
