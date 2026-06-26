@@ -16,6 +16,7 @@ import GaragemPublicaPage from "@/pages/GaragemPublicaPage"
 import FeedPage from "@/pages/FeedPage"
 import ConvitePage from "@/pages/ConvitePage"
 import VerificarEmailPage from "@/pages/VerificarEmailPage"
+import ResetarSenhaPage from "@/pages/ResetarSenhaPage"
 
 const RunPage = lazy(() => import("@/pages/RunPage"))
 
@@ -38,6 +39,7 @@ export default function App() {
               <Route index element={<GaragemPublicaPage />} />
             </Route>
             <Route path="/verificar-email" element={<VerificarEmailPage />} />
+            <Route path="/resetar-senha" element={<ResetarSenhaPage />} />
             <Route path="/convite" element={<Layout />}>
               <Route index element={<ConvitePage />} />
             </Route>
