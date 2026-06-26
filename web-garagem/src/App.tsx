@@ -13,6 +13,7 @@ import EventosPage from "@/pages/EventosPage"
 import TracksPage from "@/pages/TracksPage"
 import RotaDetalhePage from "@/pages/RotaDetalhePage"
 import GaragemPublicaPage from "@/pages/GaragemPublicaPage"
+import VeiculoPublicoPage from "@/pages/VeiculoPublicoPage"
 import FeedPage from "@/pages/FeedPage"
 import ConvitePage from "@/pages/ConvitePage"
 import VerificarEmailPage from "@/pages/VerificarEmailPage"
@@ -39,6 +40,7 @@ export default function App() {
             {/* Rotas públicas sem auth */}
             <Route path="/g/:slug" element={<Layout />}>
               <Route index element={<GaragemPublicaPage />} />
+              <Route path=":veiculoId" element={<VeiculoPublicoPage />} />
             </Route>
             <Route path="/verificar-email" element={<VerificarEmailPage />} />
             <Route path="/resetar-senha" element={<ResetarSenhaPage />} />

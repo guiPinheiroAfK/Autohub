@@ -38,6 +38,47 @@ publicoRoutes.get("/g/:slug", async (c) => {
   return c.json({ garagem, veiculos })
 })
 
+// GET /g/:slug/:veiculoId — build público detalhado
+publicoRoutes.get("/g/:slug/:veiculoId", async (c) => {
+  const { slug, veiculoId } = c.req.param()
+
+  const [garagem] = await sql`
+    SELECT g.id, g.nome, g.slug, g.publica, u.nome as dono_nome, u.avatar_url as dono_avatar
+    FROM garagens g JOIN usuarios u ON u.id = g.usuario_id
+    WHERE g.slug = ${slug}
+  `
+  if (!garagem) return c.json({ error: "Garagem não encontrada" }, 404)
+  if (!garagem.publica) return c.json({ error: "Garagem privada" }, 403)
+
+  const [veiculo] = await sql`
+    SELECT v.id, v.apelido, v.marca, v.modelo, v.ano_fabricacao, v.ano_modelo,
+           v.perfil, v.status, v.capa_url, v.meta_potencia_whp, v.criado_em
+    FROM veiculos v
+    WHERE v.id = ${veiculoId}
+      AND v.garagem_id = ${garagem.id}
+      AND v.visibilidade = 'publico'
+  `
+  if (!veiculo) return c.json({ error: "Veículo não encontrado" }, 404)
+
+  const fases = await sql`
+    SELECT f.id, f.titulo, f.ordem, f.status,
+           COALESCE(
+             json_agg(
+               json_build_object('id', i.id, 'nome', i.nome, 'status', i.status)
+               ORDER BY i.id
+             ) FILTER (WHERE i.id IS NOT NULL),
+             '[]'
+           ) as itens
+    FROM fases f
+    LEFT JOIN itens i ON i.fase_id = f.id
+    WHERE f.veiculo_id = ${veiculoId}
+    GROUP BY f.id
+    ORDER BY f.ordem
+  `
+
+  return c.json({ garagem, veiculo, fases })
+})
+
 // GET /feed — builds públicos recentes
 publicoRoutes.get("/feed", async (c) => {
   const limit = Math.min(Number(c.req.query("limit") ?? 20), 50)
