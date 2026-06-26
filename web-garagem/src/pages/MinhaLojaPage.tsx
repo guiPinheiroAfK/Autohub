@@ -178,7 +178,7 @@ export default function MinhaLojaPage() {
                 <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "logo") }} />
               </label>
             ) : (
-              <label className="flex size-16 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-border bg-surface shadow-lg hover:border-purple transition-colors">
+              <label className={`flex size-16 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-border bg-surface shadow-lg hover:border-purple transition-colors ${uploadingLogo ? "pointer-events-none opacity-60" : ""}`}>
                 <Store className="size-6 text-faint-foreground" />
                 <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f, "logo") }} />
               </label>

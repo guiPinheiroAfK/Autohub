@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import { ExternalLink, Instagram, MessageCircle, Globe, Store, Tag, Clock } from "lucide-react"
+import { ExternalLink, AtSign, MessageCircle, Globe, Store, Tag, Clock } from "lucide-react"
 import { api } from "@/lib/api/client"
 
 interface Loja {
@@ -146,7 +146,7 @@ export default function LojaPage() {
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
               >
-                <Instagram className="size-3.5" />
+                <AtSign className="size-3.5" />
                 {loja.instagram}
               </a>
             )}

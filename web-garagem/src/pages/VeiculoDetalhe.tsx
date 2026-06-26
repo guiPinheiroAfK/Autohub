@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, ImageIcon, Upload, Youtube } from "lucide-react"
+import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, ImageIcon, Upload, Play } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { formatMoeda, formatFaixa } from "@/lib/format"
 import { FaseCard } from "@/components/shared/FaseCard"
@@ -787,7 +787,7 @@ export default function VeiculoDetalhe() {
                 {isDono && (
                   <div className="rounded-xl border border-border bg-surface p-5">
                     <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
-                      <Youtube className="size-3.5 text-red" />
+                      <Play className="size-3.5 text-red" />
                       Vídeo do YouTube
                     </div>
                     <div className="flex gap-2">
