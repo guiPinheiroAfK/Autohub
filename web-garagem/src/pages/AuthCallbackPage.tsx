@@ -2,7 +2,6 @@ import { useEffect, useState } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { Loader2, AlertCircle } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
-import { api } from "@/lib/api/client"
 
 export default function AuthCallbackPage() {
   const [params] = useSearchParams()
