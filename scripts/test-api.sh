@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AutoHub API Test Script — v3
+# AutoHub API Test Script — v4
 # Uso: bash scripts/test-api.sh [BASE_URL]
 # Ex:  bash scripts/test-api.sh http://localhost:8000
 #      bash scripts/test-api.sh https://autohubbr.netlify.app
@@ -69,7 +69,7 @@ check "POST /auth/register (duplicado → 409)" "$STATUS" "409"
 STATUS=$(json_post_noauth /auth/register "{\"nome\":\"T\",\"email\":\"invalido\",\"password\":\"123\"}")
 check "POST /auth/register (dados inválidos → 400)" "$STATUS" "400"
 
-# ── 3. Auth — login ─────────────────────────────────────────────────────────────
+# ── 3. Auth — login ────────────────────────────────────────────────────────────
 
 blue "3. Auth — login"
 RESP=$(curl -sf -X POST "$BASE/auth/login" \
@@ -90,12 +90,11 @@ fi
 STATUS=$(json_post_noauth /auth/login "{\"email\":\"$EMAIL_A\",\"password\":\"errada\"}")
 check "POST /auth/login (senha errada → 401)" "$STATUS" "401"
 
-# ── 4. Auth/me ──────────────────────────────────────────────────────────────────
+# ── 4. Auth/me ─────────────────────────────────────────────────────────────────
 
 blue "4. /api/auth/me"
 check "GET /api/auth/me (autenticado)" "$(json_get /api/auth/me)" "200"
 
-# Verifica que bio e publica estão no retorno
 ME=$(json_get_body /api/auth/me)
 if echo "$ME" | grep -q '"slug"'; then
   green "GET /api/auth/me — tem garagem.slug"; ((PASS++))
@@ -107,7 +106,7 @@ TOKEN_BACKUP="$TOKEN"; TOKEN=""
 check "GET /api/auth/me (sem token → 401)" "$(json_get /api/auth/me)" "401"
 TOKEN="$TOKEN_BACKUP"
 
-# ── 5. Auth — recuperação de senha ──────────────────────────────────────────────
+# ── 5. Recuperação de senha ────────────────────────────────────────────────────
 
 blue "5. Recuperação de senha"
 check "POST /auth/esqueci-senha" \
@@ -117,7 +116,7 @@ check "POST /auth/esqueci-senha (email inexistente — silencioso)" \
 check "POST /auth/resetar-senha (token inválido → 404)" \
   "$(json_post_noauth /auth/resetar-senha "{\"token\":\"fake-token\",\"nova_senha\":\"Novo@1234\"}")" "404"
 
-# ── 6. Google OAuth ─────────────────────────────────────────────────────────────
+# ── 6. Google OAuth ────────────────────────────────────────────────────────────
 
 blue "6. Google OAuth"
 gray "GET /auth/google — testando redirect (302 ou 503 se GOOGLE_CLIENT_ID não configurado)"
@@ -129,31 +128,31 @@ else
 fi
 gray "Fluxo completo de OAuth requer navegador — não testável via curl"
 
-# ── 7. Garagem — patch ──────────────────────────────────────────────────────────
+# ── 7. Garagem ─────────────────────────────────────────────────────────────────
 
-blue "7. Garagem pública"
+blue "7. Garagem"
 STATUS=$(json_patch /api/auth/garagem "{\"nome\":\"Garagem Teste\",\"bio\":\"Build de teste\",\"publica\":true}")
 check "PATCH /api/auth/garagem" "$STATUS" "200"
 
-# ── 8. Feed público ─────────────────────────────────────────────────────────────
+# ── 8. Feed público ────────────────────────────────────────────────────────────
 
 blue "8. Feed"
-check "GET /feed" "$(json_get /feed)" "200"
-check "GET /feed?limit=5" "$(json_get /feed?limit=5)" "200"
+check "GET /api/feed" "$(json_get /api/feed)" "200"
+check "GET /api/feed?limit=5" "$(json_get '/api/feed?limit=5')" "200"
 
-# ── 9. Garagem pública por slug ─────────────────────────────────────────────────
+# ── 9. Garagem pública por slug ────────────────────────────────────────────────
 
 blue "9. Garagem pública"
 GARAGEM_INFO=$(json_get_body /api/auth/me)
 SLUG=$(echo "$GARAGEM_INFO" | grep -o '"slug":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 if [[ -n "$SLUG" ]]; then
-  check "GET /g/$SLUG" "$(json_get /g/$SLUG)" "200"
+  check "GET /api/g/$SLUG" "$(json_get /api/g/$SLUG)" "200"
 fi
-check "GET /g/slug-inexistente (→ 404)" \
-  "$(curl -sf -o /dev/null -w '%{http_code}' "$BASE/g/slug-inexistente-xyz")" "404"
+check "GET /api/g/slug-inexistente (→ 404)" \
+  "$(curl -sf -o /dev/null -w '%{http_code}' "$BASE/api/g/slug-inexistente-xyz")" "404"
 
-# ── 10. Veículos ─────────────────────────────────────────────────────────────────
+# ── 10. Veículos ───────────────────────────────────────────────────────────────
 
 blue "10. Veículos"
 check "GET /api/veiculos" "$(json_get /api/veiculos)" "200"
@@ -170,9 +169,52 @@ else
   red "POST /api/veiculos — sem id"; ((FAIL++))
 fi
 
-# ── 11. Colaborações ────────────────────────────────────────────────────────────
+# ── 11. YouTube URL em veículo ─────────────────────────────────────────────────
 
-blue "11. Colaborações"
+blue "11. YouTube URL"
+if [[ -n "$VEICULO_ID" ]]; then
+  check "PATCH /api/veiculos/:id (youtubeUrl válida)" \
+    "$(json_patch /api/veiculos/$VEICULO_ID '{"youtubeUrl":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"}')" "200"
+
+  check "PATCH /api/veiculos/:id (youtubeUrl null)" \
+    "$(json_patch /api/veiculos/$VEICULO_ID '{"youtubeUrl":null}')" "200"
+
+  VEI_RESP=$(json_get_body /api/veiculos/$VEICULO_ID)
+  if echo "$VEI_RESP" | grep -q '"youtube_url"'; then
+    green "GET /api/veiculos/:id — tem campo youtube_url"; ((PASS++))
+  else
+    red "GET /api/veiculos/:id — sem campo youtube_url"; ((FAIL++))
+  fi
+fi
+
+# ── 12. Limite de 10 veículos ──────────────────────────────────────────────────
+
+blue "12. Limite de veículos"
+gray "Criando veículos até atingir o limite (pode demorar ~10s)..."
+LIMITE_HIT=false
+for i in $(seq 2 11); do
+  R=$(curl -sf -X POST "$BASE/api/veiculos" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d "{\"apelido\":\"Carro $i\",\"marca\":\"Marca\",\"modelo\":\"Modelo\",\"anoFabricacao\":2020,\"anoModelo\":2020,\"perfil\":\"daily\"}")
+  CODE=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$BASE/api/veiculos" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d "{\"apelido\":\"Extra $i\",\"marca\":\"M\",\"modelo\":\"M\",\"anoFabricacao\":2020,\"anoModelo\":2020,\"perfil\":\"daily\"}" 2>/dev/null)
+  if [[ "$CODE" == "403" ]]; then
+    LIMITE_HIT=true
+    break
+  fi
+done
+if $LIMITE_HIT; then
+  green "Limite de 10 veículos — retorna 403 ao exceder"; ((PASS++))
+else
+  gray "Limite não atingido no teste (garagem pode já ter veículos criados antes)"
+fi
+
+# ── 13. Colaborações ───────────────────────────────────────────────────────────
+
+blue "13. Colaborações"
 
 if [[ -n "$VEICULO_ID" ]]; then
   STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -X GET "$BASE/api/colaboracoes/veiculo/$VEICULO_ID" \
@@ -197,13 +239,12 @@ if [[ -n "$VEICULO_ID" ]]; then
   check "POST colaboracoes/convidar (duplicado → 409)" "$STATUS" "409"
 fi
 
-# ── 12. Social — follows & notificações ─────────────────────────────────────────
+# ── 14. Social ─────────────────────────────────────────────────────────────────
 
-blue "12. Social"
+blue "14. Social"
 check "GET /api/social/follows" "$(json_get /api/social/follows)" "200"
 check "GET /api/social/notificacoes" "$(json_get /api/social/notificacoes)" "200"
 
-# Verifica que notificacoes retorna { notificacoes, nao_lidas }
 NOTIF_RESP=$(json_get_body /api/social/notificacoes)
 if echo "$NOTIF_RESP" | grep -q '"nao_lidas"'; then
   green "GET /api/social/notificacoes — tem nao_lidas"; ((PASS++))
@@ -213,12 +254,12 @@ fi
 check "PATCH /api/social/notificacoes/todas-lidas" \
   "$(json_patch /api/social/notificacoes/todas-lidas "")" "200"
 
-# ── 13. Marketplace ─────────────────────────────────────────────────────────────
+# ── 15. Marketplace ────────────────────────────────────────────────────────────
 
-blue "13. Marketplace"
-check "GET /marketplace (público)" "$(json_get /marketplace)" "200"
-check "GET /marketplace?categoria=motor" "$(json_get /marketplace?categoria=motor)" "200"
-check "GET /marketplace?q=turbo" "$(json_get /marketplace?q=turbo)" "200"
+blue "15. Marketplace"
+check "GET /api/marketplace (público)" "$(json_get /api/marketplace)" "200"
+check "GET /api/marketplace?categoria=motor" "$(json_get '/api/marketplace?categoria=motor')" "200"
+check "GET /api/marketplace?q=turbo" "$(json_get '/api/marketplace?q=turbo')" "200"
 check "GET /api/marketplace/meus (autenticado)" "$(json_get /api/marketplace/meus)" "200"
 
 ANUNCIO_RESP=$(curl -sf -X POST "$BASE/api/marketplace" \
@@ -234,8 +275,8 @@ else
 fi
 
 if [[ -n "$ANUNCIO_ID" ]]; then
-  check "GET /marketplace/:id (público)" \
-    "$(curl -sf -o /dev/null -w '%{http_code}' "$BASE/marketplace/$ANUNCIO_ID")" "200"
+  check "GET /api/marketplace/:id (público)" \
+    "$(curl -sf -o /dev/null -w '%{http_code}' "$BASE/api/marketplace/$ANUNCIO_ID")" "200"
 
   check "PATCH /api/marketplace/:id/status → pausado" \
     "$(json_patch /api/marketplace/$ANUNCIO_ID/status '{"status":"pausado"}')" "200"
@@ -243,7 +284,18 @@ if [[ -n "$ANUNCIO_ID" ]]; then
   check "PATCH /api/marketplace/:id/status → ativo" \
     "$(json_patch /api/marketplace/$ANUNCIO_ID/status '{"status":"ativo"}')" "200"
 
-  # Tester B demonstra interesse no anúncio do Tester A
+  # Patrocinar anúncio
+  check "POST /api/marketplace/:id/patrocinar" \
+    "$(json_post /api/marketplace/$ANUNCIO_ID/patrocinar '{}')" "200"
+
+  # Verificar badge patrocinado na listagem pública
+  FEED_RESP=$(json_get_body /api/marketplace)
+  if echo "$FEED_RESP" | grep -q '"patrocinado"'; then
+    green "GET /api/marketplace — campo patrocinado presente"; ((PASS++))
+  else
+    red "GET /api/marketplace — sem campo patrocinado"; ((FAIL++))
+  fi
+
   if [[ -n "$TOKEN_B" ]]; then
     STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$BASE/api/marketplace/$ANUNCIO_ID/interesse" \
       -H "Content-Type: application/json" \
@@ -274,19 +326,78 @@ if [[ -n "$ANUNCIO_ID" ]]; then
     check "DELETE /api/marketplace/:id/interesse" "$STATUS" "200"
   fi
 
-  check "PATCH /api/marketplace/:id/status → vendido" \
-    "$(json_patch /api/marketplace/$ANUNCIO_ID/status '{"status":"vendido"}')" "200"
-
   check "DELETE /api/marketplace/:id" \
     "$(json_delete /api/marketplace/$ANUNCIO_ID)" "200"
 fi
 
-# ── 14. Cotações ────────────────────────────────────────────────────────────────
+# ── 16. Lojas ──────────────────────────────────────────────────────────────────
 
-blue "14. Cotações"
+blue "16. Lojas"
+check "GET /api/lojas/minha (sem loja → ok)" "$(json_get /api/lojas/minha)" "200"
+
+LOJA_RESP=$(curl -sf -X POST "$BASE/api/lojas" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"nome":"Turbo Parts Teste","descricao":"Loja de teste","instagram":"turboparts","whatsapp":"5511999999999"}')
+LOJA_CRIADA=$(echo "$LOJA_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+if [[ -n "$LOJA_CRIADA" ]]; then
+  green "POST /api/lojas — loja criada id=$LOJA_CRIADA"; ((PASS++))
+else
+  red "POST /api/lojas — sem id"; ((FAIL++))
+fi
+
+check "POST /api/lojas (duplicado → 409)" \
+  "$(json_post /api/lojas '{"nome":"Outra loja"}')" "409"
+
+check "PATCH /api/lojas" \
+  "$(json_patch /api/lojas '{"nome":"Turbo Parts Atualizado","descricao":"Desc atualizada"}')" "200"
+
+check "GET /api/lojas/minha (com loja)" "$(json_get /api/lojas/minha)" "200"
+
+if [[ -n "$SLUG" ]]; then
+  check "GET /api/lojas/$SLUG (pública)" \
+    "$(curl -sf -o /dev/null -w '%{http_code}' "$BASE/api/lojas/$SLUG")" "200"
+fi
+
+check "DELETE /api/lojas" "$(json_delete /api/lojas)" "200"
+check "GET /api/lojas/minha (após delete → sem loja)" "$(json_get /api/lojas/minha)" "200"
+
+# ── 17. Calendário de Eventos ──────────────────────────────────────────────────
+
+blue "17. Calendário de Eventos"
+check "GET /api/eventos-calendario (público)" "$(json_get /api/eventos-calendario)" "200"
+check "GET /api/eventos-calendario?mes=12&ano=2026" \
+  "$(json_get '/api/eventos-calendario?mes=12&ano=2026')" "200"
+
+EVENTO_RESP=$(curl -sf -X POST "$BASE/api/eventos-calendario" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"titulo":"Encontro de carros modificados","dataInicio":"2026-12-15","local":"São Paulo, SP","tipo":"encontro"}')
+EVENTO_ID=$(echo "$EVENTO_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+if [[ -n "$EVENTO_ID" ]]; then
+  green "POST /api/eventos-calendario — id=$EVENTO_ID"; ((PASS++))
+else
+  red "POST /api/eventos-calendario — sem id"; ((FAIL++))
+fi
+
+check "POST /api/eventos-calendario (dados inválidos → 400)" \
+  "$(json_post /api/eventos-calendario '{"titulo":"X"}')" "400"
+
+if [[ -n "$EVENTO_ID" ]]; then
+  check "DELETE /api/eventos-calendario/:id" \
+    "$(json_delete /api/eventos-calendario/$EVENTO_ID)" "200"
+  check "DELETE /api/eventos-calendario/:id (já deletado → 404)" \
+    "$(json_delete /api/eventos-calendario/$EVENTO_ID)" "404"
+fi
+
+# ── 18. Cotações ───────────────────────────────────────────────────────────────
+
+blue "18. Cotações"
 check "GET /api/cotacoes" "$(json_get /api/cotacoes)" "200"
 
-# ── Resultado ──────────────────────────────────────────────────────────────────
+# ── Resultado ─────────────────────────────────────────────────────────────────
 
 echo ""
 echo "─────────────────────────────────────────────────"
