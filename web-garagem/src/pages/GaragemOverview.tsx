@@ -337,14 +337,30 @@ export default function GaragemOverview() {
           )}
         </div>
 
-        <Link
-          to="/novo"
-          className="animate-page-in flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          style={{ animationDelay: "200ms" }}
-        >
-          <Plus className="size-4" />
-          {veiculos.length === 0 ? "Criar primeiro veículo" : "Novo veículo"}
-        </Link>
+        {veiculos.length >= 10 ? (
+          <div className="relative group">
+            <button
+              disabled
+              className="animate-page-in flex items-center gap-1.5 rounded-lg bg-purple/40 px-4 py-2 text-sm font-medium text-white/60 cursor-not-allowed"
+              style={{ animationDelay: "200ms" }}
+            >
+              <Plus className="size-4" />
+              Novo veículo
+            </button>
+            <div className="pointer-events-none absolute right-0 top-full mt-1.5 z-10 hidden w-56 rounded-lg border border-border bg-surface px-3 py-2 text-[11px] text-muted-foreground shadow-lg group-hover:block">
+              Limite de 10 builds atingido (plano gratuito)
+            </div>
+          </div>
+        ) : (
+          <Link
+            to="/novo"
+            className="animate-page-in flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            style={{ animationDelay: "200ms" }}
+          >
+            <Plus className="size-4" />
+            {veiculos.length === 0 ? "Criar primeiro veículo" : "Novo veículo"}
+          </Link>
+        )}
       </div>
 
       {/* ── Stats + cotações ─────────────────────────────────────────────── */}

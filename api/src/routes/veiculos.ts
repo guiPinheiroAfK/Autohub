@@ -20,6 +20,7 @@ const veiculoSchema = z.object({
   visibilidade: z.enum(["publico", "privado"]).default("privado"),
   capaUrl: z.string().url().optional().nullable(),
   metaPotenciaWhp: z.number().int().positive().optional().nullable(),
+  youtubeUrl: z.string().url().optional().nullable(),
 })
 
 // Busca a garagem do usuário autenticado
@@ -114,6 +115,9 @@ veiculosRoutes.post("/", async (c) => {
   const garagemId = await getGaragemId(userId)
   if (!garagemId) return c.json({ error: "Garagem não encontrada" }, 404)
 
+  const [{ total }] = await sql`SELECT COUNT(*)::int as total FROM veiculos WHERE garagem_id = ${garagemId}`
+  if (total >= 10) return c.json({ error: "Limite de 10 builds por garagem atingido." }, 403)
+
   const body = await c.req.json().catch(() => null)
   const parsed = veiculoSchema.safeParse(body)
   if (!parsed.success) {
@@ -173,7 +177,8 @@ veiculosRoutes.patch("/:id", async (c) => {
       status            = ${d.status            !== undefined ? d.status            : existing.status},
       visibilidade      = ${d.visibilidade      !== undefined ? d.visibilidade      : existing.visibilidade},
       capa_url          = ${d.capaUrl           !== undefined ? d.capaUrl           : existing.capa_url},
-      meta_potencia_whp = ${d.metaPotenciaWhp   !== undefined ? d.metaPotenciaWhp   : existing.meta_potencia_whp}
+      meta_potencia_whp = ${d.metaPotenciaWhp   !== undefined ? d.metaPotenciaWhp   : existing.meta_potencia_whp},
+      youtube_url       = ${d.youtubeUrl        !== undefined ? d.youtubeUrl        : existing.youtube_url}
     WHERE id = ${id}
     RETURNING *
   `
