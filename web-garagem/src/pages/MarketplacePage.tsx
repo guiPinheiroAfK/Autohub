@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { Link } from "react-router-dom"
-import { Search, Plus, X, Tag, MapPin, Clock, ShoppingBag, Check, ChevronDown, Heart, Users2, MessageSquare } from "lucide-react"
+import { Search, Plus, X, Tag, MapPin, Clock, ShoppingBag, Check, ChevronDown, Heart, Users2, MessageSquare, AlertTriangle } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { useAuth } from "@/context/AuthContext"
 import { cn } from "@/lib/utils"
@@ -594,6 +594,17 @@ export default function MarketplacePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Banner de ambiente de testes */}
+      <div className="flex items-start gap-3 rounded-xl border border-amber/30 bg-amber-bg px-4 py-3">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber" />
+        <div>
+          <p className="text-[13px] font-semibold text-foreground">Ambiente de testes</p>
+          <p className="text-[12px] text-muted-foreground">
+            Este marketplace é exclusivamente para fins de demonstração. Nenhuma transação real deve acontecer — não envie dinheiro, não transfira peças nem realize pagamentos de nenhum tipo.
+          </p>
+        </div>
+      </div>
+
       {/* Cabeçalho */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
