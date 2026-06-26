@@ -38,39 +38,31 @@ authRoutes.post("/register", async (c) => {
 
   const hashed = await bcrypt.hash(password, 12)
 
-  // Cria usuário + garagem padrão numa transação
-  const [usuario] = await sql.begin(async (tx) => {
-    const [u] = await tx`
-      INSERT INTO usuarios (nome, email, hashed_password)
-      VALUES (${nome}, ${email}, ${hashed})
-      RETURNING id, nome, email, criado_em
-    `
+  const userId = crypto.randomUUID()
+  const slug = nome
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 60)
 
-    // slug gerado a partir do nome (simplificado)
-    const slug = nome
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "")
-      .slice(0, 60)
+  const [[u], [g]] = await sql.transaction((tx) => [
+    tx`INSERT INTO usuarios (id, nome, email, hashed_password)
+       VALUES (${userId}, ${nome}, ${email}, ${hashed})
+       RETURNING id, nome, email`,
+    tx`INSERT INTO garagens (usuario_id, nome, slug)
+       VALUES (${userId}, ${"Garagem de " + nome}, ${slug + "-" + userId.slice(0, 6)})
+       RETURNING id, slug`,
+  ])
 
-    const [g] = await tx`
-      INSERT INTO garagens (usuario_id, nome, slug)
-      VALUES (${u.id}, ${`Garagem de ${nome}`}, ${slug + "-" + u.id.slice(0, 6)})
-      RETURNING id, slug
-    `
-
-    return [
-      {
-        id: u.id as string,
-        nome: u.nome as string,
-        email: u.email as string,
-        garagemId: g.id as string,
-        garagemSlug: g.slug as string,
-      },
-    ]
-  })
+  const usuario = {
+    id: u.id as string,
+    nome: u.nome as string,
+    email: u.email as string,
+    garagemId: g.id as string,
+    garagemSlug: g.slug as string,
+  }
 
   const token = await signToken({ sub: usuario.id, email: usuario.email })
 
@@ -132,4 +124,3 @@ authRoutes.post("/login", async (c) => {
     },
   })
 })
-

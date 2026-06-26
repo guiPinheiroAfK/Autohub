@@ -2,12 +2,11 @@
 base = "."
 publish = "web-garagem/dist"
 command = "npm install --prefix web-garagem && npm run build --prefix web-garagem && npm install --prefix api"
-functions = "api/netlify/functions"
+edge_functions = "api/netlify/edge-functions"
 
-# A function declara os próprios paths (/api/*, /auth/*) via `config.path`
-# dentro de api/netlify/functions/api.mts — não precisa de redirect pra
-# rotear pra ela. Esse redirect aqui é só o catch-all de SPA (rotas do
-# React Router como /veiculo/:id precisam cair sempre no index.html).
+# Edge functions declaram os próprios paths (/api/*, /auth/*) via `config.path`.
+# Este redirect é só o catch-all de SPA — rotas do React Router precisam
+# cair sempre no index.html.
 [[redirects]]
 from = "/*"
 to = "/index.html"

@@ -136,21 +136,17 @@ googleAuthRoutes.get("/google/callback", async (c) => {
         usuario = porEmail as { id: string; email: string }
       } else {
         // c) Cria nova conta (sem senha — só Google)
-        const [novo] = await sql.begin(async (tx) => {
-          const [u] = await tx`
-            INSERT INTO usuarios (nome, email, hashed_password, google_id, email_verificado, avatar_url)
-            VALUES (${gUser.name}, ${gUser.email}, ${"google_oauth_no_password"},
-                    ${gUser.id}, true, ${gUser.picture ?? null})
-            RETURNING id, email
-          `
-          const slug = buildSlug(gUser.name, u.id.slice(0, 6))
-          await tx`
-            INSERT INTO garagens (usuario_id, nome, slug)
-            VALUES (${u.id}, ${`Garagem de ${gUser.name}`}, ${slug})
-          `
-          return [u]
-        })
-        usuario = novo as { id: string; email: string }
+        const newUserId = crypto.randomUUID()
+        const newSlug = buildSlug(gUser.name, newUserId.slice(0, 6))
+        const [[newU]] = await sql.transaction((tx) => [
+          tx`INSERT INTO usuarios (id, nome, email, hashed_password, google_id, email_verificado, avatar_url)
+             VALUES (${newUserId}, ${gUser.name}, ${gUser.email}, ${"google_oauth_no_password"},
+                     ${gUser.id}, true, ${gUser.picture ?? null})
+             RETURNING id, email`,
+          tx`INSERT INTO garagens (usuario_id, nome, slug)
+             VALUES (${newUserId}, ${"Garagem de " + gUser.name}, ${newSlug})`,
+        ])
+        usuario = { id: newU.id as string, email: newU.email as string }
       }
     }
 
