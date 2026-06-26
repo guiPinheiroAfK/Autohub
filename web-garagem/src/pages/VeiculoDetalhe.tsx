@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail } from "lucide-react"
+import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, ImageIcon, Check } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { formatMoeda, formatFaixa } from "@/lib/format"
 import { FaseCard } from "@/components/shared/FaseCard"
@@ -442,12 +442,15 @@ export default function VeiculoDetalhe() {
     const [savingStatus, setSavingStatus] = useState(false)
     const [addingFase, setAddingFase] = useState(false)
     const [savingFase, setSavingFase] = useState(false)
+    const [capaUrl, setCapaUrl] = useState("")
+    const [savingCapa, setSavingCapa] = useState(false)
 
     async function carregar() {
         if (!id) return
         try {
             const res = await api.get<VeiculoDetalheAPI>(`/api/veiculos/${id}`)
             setData(res)
+            setCapaUrl(res.capa_url ?? "")
             setErro(null)
         } catch (e) {
             setErro(e instanceof Error ? e.message : "Erro ao carregar veículo")
@@ -461,6 +464,19 @@ export default function VeiculoDetalhe() {
         carregar()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id])
+
+    async function handleSaveCapa() {
+        if (!id || !data) return
+        setSavingCapa(true)
+        try {
+            await api.patch(`/api/veiculos/${id}`, { capaUrl: capaUrl || null })
+            setData({ ...data, capa_url: capaUrl || null })
+        } catch {
+            alert("Erro ao salvar imagem de capa")
+        } finally {
+            setSavingCapa(false)
+        }
+    }
 
     async function handleStatusChange(status: StatusVeiculo) {
         if (!id || !data) return
@@ -693,6 +709,39 @@ export default function VeiculoDetalhe() {
                         )}
                     </div>
                 </div>
+
+                {/* ── Imagem de capa ───────────────────────────────────────────── */}
+                {isDono && (
+                  <div className="rounded-xl border border-border bg-surface p-5">
+                    <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
+                      <ImageIcon className="size-3.5" />
+                      Imagem de capa (feed público)
+                    </div>
+                    {capaUrl && (
+                      <img src={capaUrl} alt="capa" className="mb-3 h-32 w-full rounded-lg object-cover border border-border" />
+                    )}
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={capaUrl}
+                        onChange={e => setCapaUrl(e.target.value)}
+                        placeholder="https://... (URL pública da imagem)"
+                        className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
+                      />
+                      <button
+                        onClick={handleSaveCapa}
+                        disabled={savingCapa || capaUrl === (data.capa_url ?? "")}
+                        className="flex items-center gap-1.5 rounded-lg bg-purple px-3 py-2 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                      >
+                        <Check className="size-3.5" />
+                        {savingCapa ? "Salvando..." : "Salvar"}
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-faint-foreground">
+                      Cole a URL de uma imagem externa. Aparece no feed e na garagem pública.
+                    </p>
+                  </div>
+                )}
 
                 {/* ── Fotos da build ───────────────────────────────────────────── */}
                 <div className="rounded-xl border border-border bg-surface p-5">
