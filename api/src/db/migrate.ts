@@ -213,6 +213,44 @@ async function migrate() {
   await sql`CREATE INDEX IF NOT EXISTS idx_colaboracoes_convidado ON colaboracoes(convidado_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_colaboracoes_email ON colaboracoes(convidado_email)`
 
+  // ── v2: corrige constraint de papel (viewer → visualizador) ─────────────────
+  await sql`ALTER TABLE colaboracoes DROP CONSTRAINT IF EXISTS colaboracoes_papel_check`
+  await sql`ALTER TABLE colaboracoes ADD CONSTRAINT colaboracoes_papel_check CHECK (papel IN ('editor','visualizador','mecanico'))`
+
+  // ── v2: marketplace ───────────────────────────────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS marketplace_anuncios (
+      id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      garagem_id    TEXT NOT NULL REFERENCES garagens(id) ON DELETE CASCADE,
+      titulo        TEXT NOT NULL,
+      descricao     TEXT,
+      preco         NUMERIC(12,2),
+      moeda         TEXT NOT NULL DEFAULT 'BRL' CHECK (moeda IN ('BRL','USD','PYG')),
+      categoria     TEXT NOT NULL CHECK (categoria IN ('motor','suspensao','freios','eletrica','carroceria','rodas','interior','acessorios','veiculo_completo','outro')),
+      condicao      TEXT NOT NULL CHECK (condicao IN ('novo','usado','recondicionado')),
+      localizacao   TEXT,
+      status        TEXT NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo','pausado','vendido')),
+      criado_em     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_marketplace_garagem ON marketplace_anuncios(garagem_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_marketplace_status ON marketplace_anuncios(status, criado_em DESC)`
+
+  // ── v2: interesses em anúncios do marketplace ─────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS marketplace_interesses (
+      id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      anuncio_id TEXT NOT NULL REFERENCES marketplace_anuncios(id) ON DELETE CASCADE,
+      usuario_id TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      mensagem   TEXT,
+      criado_em  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(anuncio_id, usuario_id)
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_interesses_anuncio ON marketplace_interesses(anuncio_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_interesses_usuario ON marketplace_interesses(usuario_id)`
+
   console.log("✔ Migrations concluídas.")
   await sql.end()
 }

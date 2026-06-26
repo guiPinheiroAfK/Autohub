@@ -17,6 +17,8 @@ interface AuthUser {
     id: string
     slug: string
     nome: string
+    bio?: string
+    publica?: boolean
   }
 }
 
@@ -26,6 +28,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>
   register: (nome: string, email: string, password: string) => Promise<void>
   logout: () => void
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -34,50 +37,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const fetchMe = useCallback(async () => {
+    const data = await api.get<AuthUser>("/api/auth/me")
+    setUser(data)
+  }, [])
+
   // Restaura sessão ao montar
   useEffect(() => {
     const token = localStorage.getItem("autohub_token")
-    if (!token) {
-      setLoading(false)
-      return
-    }
-    api
-        .get<AuthUser>("/api/auth/me")
-        .then(setUser)
-        .catch(() => localStorage.removeItem("autohub_token"))
-        .finally(() => setLoading(false))
+    if (!token) { setLoading(false); return }
+    fetchMe()
+      .catch(() => localStorage.removeItem("autohub_token"))
+      .finally(() => setLoading(false))
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await api.post<{ token: string; usuario: AuthUser }>(
-        "/auth/login",
-        { email, password }
-    )
+    const res = await api.post<{ token: string; usuario: AuthUser }>("/auth/login", { email, password })
     localStorage.setItem("autohub_token", res.token)
     setUser(res.usuario as unknown as AuthUser)
   }, [])
 
-  const register = useCallback(
-      async (nome: string, email: string, password: string) => {
-        const res = await api.post<{ token: string; usuario: AuthUser }>(
-            "/auth/register",
-            { nome, email, password }
-        )
-        localStorage.setItem("autohub_token", res.token)
-        setUser(res.usuario as unknown as AuthUser)
-      },
-      []
-  )
+  const register = useCallback(async (nome: string, email: string, password: string) => {
+    const res = await api.post<{ token: string; usuario: AuthUser }>("/auth/register", { nome, email, password })
+    localStorage.setItem("autohub_token", res.token)
+    setUser(res.usuario as unknown as AuthUser)
+  }, [])
 
   const logout = useCallback(() => {
     localStorage.removeItem("autohub_token")
     setUser(null)
   }, [])
 
+  // Chamado pelo AuthCallbackPage após Google OAuth
+  const refreshUser = useCallback(async () => {
+    await fetchMe()
+  }, [fetchMe])
+
   return (
-      <AuthContext.Provider value={{ user, loading, login, register, logout }}>
-        {children}
-      </AuthContext.Provider>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+      {children}
+    </AuthContext.Provider>
   )
 }
 

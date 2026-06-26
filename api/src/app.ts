@@ -11,6 +11,8 @@ import { publicoRoutes } from "./routes/publico"
 import { socialRoutes } from "./routes/social"
 import { colaboracoesRoutes } from "./routes/colaboracoes"
 import { authV2Routes } from "./routes/auth-v2"
+import { marketplacePublicoRoutes, marketplaceRoutes } from "./routes/marketplace"
+import { googleAuthRoutes } from "./routes/auth-google"
 import { sql } from "./db/client"
 import type { AppEnv } from "./types"
 
@@ -36,7 +38,9 @@ app.get("/", (c) => c.json({ ok: true, service: "api" }))
 // ── Rotas públicas ───────────────────────────────────────────────────────────
 app.route("/auth", authRoutes)
 app.route("/auth", authV2Routes)
+app.route("/auth", googleAuthRoutes)
 app.route("/", publicoRoutes)
+app.route("/", marketplacePublicoRoutes)
 
 // ── Rotas protegidas ─────────────────────────────────────────────────────────
 const api = new Hono<AppEnv>()
@@ -46,8 +50,9 @@ api.use("*", authMiddleware)
 api.get("/auth/me", async (c) => {
     const userId = c.get("userId") as string
     const [usuario] = await sql`
-    SELECT u.id, u.nome, u.email, u.avatar_url, u.criado_em,
-           g.id as garagem_id, g.slug as garagem_slug, g.nome as garagem_nome
+    SELECT u.id, u.nome, u.email, u.avatar_url, u.email_verificado, u.criado_em,
+           g.id as garagem_id, g.slug as garagem_slug, g.nome as garagem_nome,
+           g.bio as garagem_bio, g.publica as garagem_publica
     FROM usuarios u
     LEFT JOIN garagens g ON g.usuario_id = u.id
     WHERE u.id = ${userId}
@@ -59,10 +64,13 @@ api.get("/auth/me", async (c) => {
         nome: usuario.nome,
         email: usuario.email,
         avatarUrl: usuario.avatar_url,
+        emailVerificado: usuario.email_verificado,
         garagem: {
             id: usuario.garagem_id,
             slug: usuario.garagem_slug,
             nome: usuario.garagem_nome,
+            bio: usuario.garagem_bio,
+            publica: usuario.garagem_publica,
         },
     })
 })
@@ -74,4 +82,5 @@ api.route("/cotacoes", cotacoesRoutes)
 api.route("/social", socialRoutes)
 api.route("/colaboracoes", colaboracoesRoutes)
 api.route("/auth", authV2Routes)
+api.route("/marketplace", marketplaceRoutes)
 app.route("/api", api)

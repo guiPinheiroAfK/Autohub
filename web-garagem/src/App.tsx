@@ -16,6 +16,9 @@ import GaragemPublicaPage from "@/pages/GaragemPublicaPage"
 import FeedPage from "@/pages/FeedPage"
 import ConvitePage from "@/pages/ConvitePage"
 import VerificarEmailPage from "@/pages/VerificarEmailPage"
+import ResetarSenhaPage from "@/pages/ResetarSenhaPage"
+import MarketplacePage from "@/pages/MarketplacePage"
+import AuthCallbackPage from "@/pages/AuthCallbackPage"
 
 const RunPage = lazy(() => import("@/pages/RunPage"))
 
@@ -38,6 +41,8 @@ export default function App() {
               <Route index element={<GaragemPublicaPage />} />
             </Route>
             <Route path="/verificar-email" element={<VerificarEmailPage />} />
+            <Route path="/resetar-senha" element={<ResetarSenhaPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/convite" element={<Layout />}>
               <Route index element={<ConvitePage />} />
             </Route>
@@ -51,6 +56,7 @@ export default function App() {
                 <Route path="/configuracoes" element={<ConfiguracaoPage />} />
                 <Route path="/eventos" element={<EventosPage />} />
                 <Route path="/feed" element={<FeedPage />} />
+                <Route path="/marketplace" element={<MarketplacePage />} />
                 <Route path="/tracks" element={<TracksPage />} />
                 <Route path="/tracks/:rotaId" element={<RotaDetalhePage />} />
                 <Route path="/tracks/:rotaId/run" element={
