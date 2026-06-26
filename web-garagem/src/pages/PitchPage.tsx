@@ -1,8 +1,8 @@
 import { Logo } from "@/components/shared/Logo"
 import {
   Wrench, TrendingUp, Users, ShoppingBag, Navigation, CalendarDays,
-  Bell, Shield, Zap, Globe, Code2, Database, Server, Layers,
-  CheckCircle, ArrowRight, Mail, Github, Target, Sparkles
+  Shield, Zap, Globe, Code2, Database, Server, Layers,
+  CheckCircle, ArrowRight, Mail, ExternalLink, Target, Sparkles
 } from "lucide-react"
 
 const FEATURES = [
@@ -198,7 +198,7 @@ export default function PitchPage() {
           ))}
         </div>
         <div className="mt-6 flex items-start gap-3 rounded-xl border border-border bg-surface p-4">
-          <Github className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+          <ExternalLink className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
           <div>
             <p className="text-[13px] font-semibold text-foreground">Código aberto e auditável</p>
             <p className="text-[12px] text-muted-foreground">
@@ -260,7 +260,7 @@ export default function PitchPage() {
             rel="noopener noreferrer"
             className="flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-[13px] text-foreground hover:bg-surface transition-colors"
           >
-            <Github className="size-4" />
+            <ExternalLink className="size-4" />
             github.com/guiPinheiroAfK
           </a>
         </div>
