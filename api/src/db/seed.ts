@@ -224,6 +224,64 @@ async function seed() {
     (${fa07.id}, ${"Película e insulfilm"}, ${"Vidros + para-brisa"}, ${450}, ${450}, ${"BRL"}, ${"concluido"})`
 
   console.log(`  ✓ Civic do dia a dia: 1 fase, 3 itens`)
+
+  // ── Anúncios marketplace do Guilherme ─────────────────────────────────────
+  await sql`
+    INSERT INTO marketplace_anuncios (garagem_id, titulo, descricao, preco, moeda, categoria, condicao, localizacao, status)
+    VALUES
+      (${garagemId}, ${"Wastegate TiAL 44mm V-Band"}, ${"Usada apenas 3 meses, excelente estado. Mola original + peças de reposição. Retirou do projeto pois mudou para sistema de wastegate interna."}, ${850}, ${"BRL"}, ${"motor"}, ${"usado"}, ${"Foz do Iguaçu, PR"}, ${"ativo"}),
+      (${garagemId}, ${"Câmbio BMW ZF6 E36 6 marchas"}, ${"Câmbio em ótimas condições, funcionando 100%. Ideal para swap K-Series. Acompanha alavanca e tapa-caixa originais."}, ${2200}, ${"BRL"}, ${"outro"}, ${"usado"}, ${"Foz do Iguaçu, PR"}, ${"ativo"})
+  `
+  console.log(`  ✓ 2 anúncios do Guilherme`)
+
+  // ── Usuário extra 1 — Lucas (SP) ──────────────────────────────────────────
+  const [lucasExiste] = await sql`SELECT id FROM usuarios WHERE email = 'lucas.mendes@autohub.dev'`
+  if (!lucasExiste) {
+    const hashedLucas = await bcrypt.hash("Lucas@seed123", 10)
+    const [lucas] = await sql`
+      INSERT INTO usuarios (nome, email, hashed_password, email_verificado)
+      VALUES (${"Lucas Mendes"}, ${"lucas.mendes@autohub.dev"}, ${hashedLucas}, ${true})
+      RETURNING id
+    `
+    const [gLucas] = await sql`
+      INSERT INTO garagens (usuario_id, nome, slug, publica, bio)
+      VALUES (${lucas.id}, ${"LM Tuning SP"}, ${"lm-tuning-sp"}, ${true}, ${"Civic K-Swap e turbo builds. São Paulo capital."})
+      RETURNING id
+    `
+    await sql`
+      INSERT INTO marketplace_anuncios (garagem_id, titulo, descricao, preco, moeda, categoria, condicao, localizacao, status, patrocinado, patrocinado_ate)
+      VALUES
+        (${gLucas.id}, ${"Kit turbo GT2860RS completo + piping alumínio"}, ${"Kit completo: turbina Garrett GT2860RS, coletor turbo inox, wastegate Turbosmart 40mm, downpipe 3\", piping alumínio 2.5\", silicones azuis. Nunca acertado em dyno, vendendo pois mudei para turbo maior."}, ${4500}, ${"BRL"}, ${"motor"}, ${"usado"}, ${"São Paulo, SP"}, ${"ativo"}, ${true}, ${new Date(Date.now() + 30 * 86400000).toISOString()}),
+        (${gLucas.id}, ${"Radiador alumínio 3 fileiras Civic 96-00"}, ${"Radiador alumínio de alta performance, 3 fileiras, com tampão e conexões originais. Sem vazamentos, testado."}, ${380}, ${"BRL"}, ${"motor"}, ${"usado"}, ${"São Paulo, SP"}, ${"ativo"}),
+        (${gLucas.id}, ${"Bicos injetores Bosch 1000cc EV14 (jogo 4)"}, ${"Alta impedância, plug-and-play em K-Series com adaptadores. Limpados e testados em bancada. Flow match garantido."}, ${650}, ${"BRL"}, ${"motor"}, ${"usado"}, ${"São Paulo, SP"}, ${"ativo"})
+    `
+    console.log(`  ✓ Lucas Mendes + 3 anúncios (1 patrocinado)`)
+  }
+
+  // ── Usuário extra 2 — Rafaela (RJ) ───────────────────────────────────────
+  const [rafaExiste] = await sql`SELECT id FROM usuarios WHERE email = 'rafaela.costa@autohub.dev'`
+  if (!rafaExiste) {
+    const hashedRafa = await bcrypt.hash("Rafa@seed123", 10)
+    const [rafa] = await sql`
+      INSERT INTO usuarios (nome, email, hashed_password, email_verificado)
+      VALUES (${"Rafaela Costa"}, ${"rafaela.costa@autohub.dev"}, ${hashedRafa}, ${true})
+      RETURNING id
+    `
+    const [gRafa] = await sql`
+      INSERT INTO garagens (usuario_id, nome, slug, publica, bio)
+      VALUES (${rafa.id}, ${"Rafa Builds"}, ${"rafa-builds"}, ${true}, ${"EK Civic time attack. Rio de Janeiro."})
+      RETURNING id
+    `
+    await sql`
+      INSERT INTO marketplace_anuncios (garagem_id, titulo, descricao, preco, moeda, categoria, condicao, localizacao, status)
+      VALUES
+        (${gRafa.id}, ${"Rodas ENKEI TS9 17x7 5x114 gunmetal (jogo 4)"}, ${"Conjunto completo em excelente estado. Usadas por 1 temporada de track day. Sem amassados ou trincas. Pneus com 60% de vida (Hankook RS4)."}, ${3200}, ${"BRL"}, ${"rodas"}, ${"usado"}, ${"Rio de Janeiro, RJ"}, ${"ativo"}),
+        (${gRafa.id}, ${"Coilover Tein Flex Z Honda Civic EK/EJ"}, ${"Suspensão coilover completa, altura e amortecimento ajustáveis. Revisada com kits de retoque da Tein. Ride ótimo pra uso misto rua/pista."}, ${2800}, ${"BRL"}, ${"suspensao"}, ${"recondicionado"}, ${"Rio de Janeiro, RJ"}, ${"ativo"}),
+        (${gRafa.id}, ${"Kit freio esportivo traseiro Civic EK (novo)"}, ${"Kit completo: discos perfurados+ranhados + pastilhas cerâmicas. Nunca instalado, comprado errado (comprei para EK, tenho EG). NF disponível."}, ${950}, ${"BRL"}, ${"freios"}, ${"novo"}, ${"Rio de Janeiro, RJ"}, ${"ativo"})
+    `
+    console.log(`  ✓ Rafaela Costa + 3 anúncios`)
+  }
+
   console.log("✔ Seed concluído.")
 }
 
