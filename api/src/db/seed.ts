@@ -18,7 +18,6 @@ async function seed() {
   const [existe] = await sql`SELECT id FROM usuarios WHERE email = ${SEED_EMAIL}`
   if (existe) {
     console.log("✔ Seed já aplicado — nada a fazer.")
-    await sql.end()
     return
   }
 
@@ -226,7 +225,6 @@ async function seed() {
 
   console.log(`  ✓ Civic do dia a dia: 1 fase, 3 itens`)
   console.log("✔ Seed concluído.")
-  await sql.end()
 }
 
 seed().catch((err) => {
