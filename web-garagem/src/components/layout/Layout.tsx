@@ -1,13 +1,18 @@
 import { Outlet } from "react-router-dom"
 import { Header } from "./Header"
+import { BottomNav } from "./BottomNav"
+import { useAuth } from "@/context/AuthContext"
 
 export function Layout() {
+  const { user } = useAuth()
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <Header />
-        <main className="mx-auto max-w-[1100px] px-6 py-10 pb-20 animate-page-in">
+      <main className="mx-auto max-w-[1100px] px-4 py-8 pb-24 sm:px-6 sm:py-10 sm:pb-20 animate-page-in">
         <Outlet />
       </main>
+      {user && <BottomNav />}
     </div>
   )
 }

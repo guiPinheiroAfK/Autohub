@@ -165,12 +165,12 @@ export function Header() {
   const naTracksSection = pathname.startsWith("/tracks")
 
   return (
-    <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-40">
-      <div className="mx-auto flex max-w-[1100px] items-center gap-3 px-6 py-3.5">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-[1100px] items-center gap-3 px-4 py-3 sm:px-6 sm:py-3.5">
 
         {/* Logo / back */}
         {naHome ? (
-          <Link to="/" className="flex items-center justify-center group">
+          <Link to="/" className="flex shrink-0 items-center justify-center group">
             <div className="flex size-8 items-center justify-center rounded-lg bg-purple-bg text-purple transition-transform group-hover:scale-105">
               <Logo className="size-[18px]" />
             </div>
@@ -178,105 +178,95 @@ export function Header() {
         ) : (
           <Link
             to="/"
-            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface hover:text-foreground"
+            className="flex shrink-0 size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
           </Link>
         )}
 
         {/* Garagem info */}
-        <div className="flex-1">
-          <Link to="/" className="font-display text-sm font-semibold text-foreground hover:text-purple transition-colors">
+        <div className="min-w-0 flex-1">
+          <Link to="/" className="block truncate font-display text-sm font-semibold text-foreground hover:text-purple transition-colors">
             {user?.garagem?.nome ?? "AutoHub Garagem"}
           </Link>
           {user?.garagem?.slug && (
-            <p className="text-[11px] text-faint-foreground">
+            <p className="hidden truncate text-[11px] text-faint-foreground sm:block">
               autohub.app/g/{user.garagem.slug}
             </p>
           )}
         </div>
 
-        {/* Nav + ações */}
+        {/* Nav — desktop only (mobile usa BottomNav) */}
         {user && (
-          <nav className="flex items-center gap-0.5">
+          <nav className="flex shrink-0 items-center gap-0.5">
             <span className="hidden text-[12px] text-muted-foreground sm:block mr-2">
               {user.nome.split(" ")[0]}
             </span>
 
+            {/* Links de navegação: escondidos no mobile (BottomNav assume) */}
             <Link
               to="/tracks"
               title="AutoHub Tracks"
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-                naTracksSection
-                  ? "bg-purple-bg text-purple"
-                  : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              className={`hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                naTracksSection ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <Navigation className="size-3.5" />
-              <span className="hidden sm:block">Tracks</span>
+              <span>Tracks</span>
             </Link>
 
             <Link
               to="/eventos"
               title="Eventos automotivos"
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-                pathname === "/eventos"
-                  ? "bg-purple-bg text-purple"
-                  : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              className={`hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                pathname === "/eventos" ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <CalendarDays className="size-3.5" />
-              <span className="hidden sm:block">Eventos</span>
+              <span>Eventos</span>
             </Link>
 
             <Link
               to="/feed"
               title="Feed da comunidade"
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-                pathname === "/feed"
-                  ? "bg-purple-bg text-purple"
-                  : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              className={`hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                pathname === "/feed" ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <Users className="size-3.5" />
-              <span className="hidden sm:block">Feed</span>
+              <span>Feed</span>
             </Link>
 
             <Link
               to="/marketplace"
               title="Marketplace"
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-                pathname === "/marketplace"
-                  ? "bg-purple-bg text-purple"
-                  : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              className={`hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                pathname === "/marketplace" ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <ShoppingBag className="size-3.5" />
-              <span className="hidden sm:block">Marketplace</span>
+              <span>Marketplace</span>
             </Link>
 
             <Link
               to="/minha-loja"
               title="Minha Loja"
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-                pathname === "/minha-loja"
-                  ? "bg-purple-bg text-purple"
-                  : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              className={`hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                pathname === "/minha-loja" ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <Store className="size-3.5" />
-              <span className="hidden sm:block">Minha Loja</span>
+              <span>Minha Loja</span>
             </Link>
 
+            {/* Sempre visíveis */}
             <NotifDropdown />
 
             <Link
               to="/configuracoes"
               title="Configurações"
               className={`flex size-8 items-center justify-center rounded-lg transition-colors ${
-                pathname === "/configuracoes"
-                  ? "bg-purple-bg text-purple"
-                  : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                pathname === "/configuracoes" ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <Settings className="size-4" />
