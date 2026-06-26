@@ -56,8 +56,10 @@ marketplacePublicoRoutes.get("/marketplace", async (c) => {
 })
 
 // GET /marketplace/:id — detalhes públicos
-marketplacePublicoRoutes.get("/marketplace/:id", async (c) => {
+marketplacePublicoRoutes.get("/marketplace/:id", async (c, next) => {
   const { id } = c.req.param()
+  // "meus" é rota protegida — deixa passar para o próximo handler
+  if (id === "meus") return next()
 
   const [anuncio] = await sql`
     SELECT a.id, a.titulo, a.descricao, a.preco, a.moeda, a.categoria, a.condicao,

@@ -22,8 +22,10 @@ async function getGaragemId(userId: string): Promise<string | null> {
 }
 
 // GET /lojas/:garagemSlug — perfil público da loja
-lojasPublicoRoutes.get("/lojas/:garagemSlug", async (c) => {
+lojasPublicoRoutes.get("/lojas/:garagemSlug", async (c, next) => {
   const { garagemSlug } = c.req.param()
+  // "minha" é rota protegida — deixa passar para o próximo handler
+  if (garagemSlug === "minha") return next()
   const [loja] = await sql`
     SELECT l.*, g.nome as garagem_nome, g.slug as garagem_slug, g.publica as garagem_publica,
            u.nome as dono_nome, u.avatar_url as dono_avatar
