@@ -28,7 +28,7 @@ marketplacePublicoRoutes.get("/marketplace", async (c) => {
 
   const anuncios = await sql`
     SELECT a.id, a.titulo, a.descricao, a.preco, a.moeda, a.categoria, a.condicao,
-           a.localizacao, a.status, a.criado_em,
+           a.localizacao, a.status, a.criado_em, a.patrocinado, a.patrocinado_ate,
            g.id as garagem_id, g.nome as garagem_nome, g.slug as garagem_slug,
            u.nome as vendedor_nome,
            (SELECT COUNT(*)::int FROM marketplace_interesses WHERE anuncio_id = a.id) as total_interesses
@@ -36,10 +36,11 @@ marketplacePublicoRoutes.get("/marketplace", async (c) => {
     JOIN garagens g ON g.id = a.garagem_id
     JOIN usuarios u ON u.id = g.usuario_id
     WHERE a.status = 'ativo'
+      AND (NOT a.patrocinado OR a.patrocinado_ate IS NULL OR a.patrocinado_ate > now())
       ${categoria ? sql`AND a.categoria = ${categoria}` : sql``}
       ${condicao  ? sql`AND a.condicao  = ${condicao}`  : sql``}
       ${q ? sql`AND (a.titulo ILIKE ${'%' + q + '%'} OR a.descricao ILIKE ${'%' + q + '%'})` : sql``}
-    ORDER BY a.criado_em DESC
+    ORDER BY a.patrocinado DESC, a.criado_em DESC
     LIMIT ${lim} OFFSET ${off}
   `
 
@@ -243,6 +244,25 @@ marketplaceRoutes.get("/:id/meu-interesse", async (c) => {
   const { id } = c.req.param()
   const [i] = await sql`SELECT id FROM marketplace_interesses WHERE anuncio_id = ${id} AND usuario_id = ${userId}`
   return c.json({ interesse: !!i })
+})
+
+// POST /api/marketplace/:id/patrocinar — patrocinar anúncio por 30 dias
+marketplaceRoutes.post("/:id/patrocinar", async (c) => {
+  const userId = c.get("userId") as string
+  const { id } = c.req.param()
+
+  const [garagem] = await sql`SELECT id FROM garagens WHERE usuario_id = ${userId}`
+  if (!garagem) return c.json({ error: "Garagem não encontrada" }, 404)
+
+  const [anuncio] = await sql`SELECT id FROM marketplace_anuncios WHERE id = ${id} AND garagem_id = ${garagem.id}`
+  if (!anuncio) return c.json({ error: "Anúncio não encontrado" }, 404)
+
+  const [updated] = await sql`
+    UPDATE marketplace_anuncios
+    SET patrocinado = true, patrocinado_ate = now() + interval '30 days'
+    WHERE id = ${id} RETURNING id, patrocinado, patrocinado_ate
+  `
+  return c.json(updated)
 })
 
 // DELETE /api/marketplace/:id — remover anúncio

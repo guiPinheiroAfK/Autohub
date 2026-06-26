@@ -23,6 +23,8 @@ interface Anuncio {
   garagem_slug: string
   vendedor_nome: string
   total_interesses: number
+  patrocinado?: boolean
+  patrocinado_ate?: string
 }
 
 interface Interessado {
@@ -247,9 +249,14 @@ function AnuncioCard({
   }, [a.id, user, isDono])
 
   return (
-    <div className="group relative flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-border-strong">
+    <div className={cn("group relative flex flex-col gap-3 rounded-xl border bg-surface p-4 transition-colors hover:border-border-strong", a.patrocinado ? "border-amber/30" : "border-border")}>
+      {a.patrocinado && (
+        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full border border-amber/30 bg-amber-bg px-2 py-0.5 text-[10px] font-semibold text-amber">
+          ⭐ Patrocinado
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
+        <div className={cn("flex-1 min-w-0", a.patrocinado && "pr-20")}>
           <h3 className="truncate text-[14px] font-semibold text-foreground">{a.titulo}</h3>
           {a.descricao && (
             <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">{a.descricao}</p>
@@ -317,12 +324,20 @@ function AnuncioCard({
       </div>
 
       <div className="flex items-center justify-between border-t border-border/50 pt-2.5">
-        <Link
-          to={`/g/${a.garagem_slug}`}
-          className="text-[11px] text-purple hover:underline truncate"
-        >
-          {a.garagem_nome}
-        </Link>
+        <div className="flex items-center gap-2 min-w-0">
+          <Link
+            to={`/g/${a.garagem_slug}`}
+            className="text-[11px] text-purple hover:underline truncate"
+          >
+            {a.garagem_nome}
+          </Link>
+          <Link
+            to={`/loja/${a.garagem_slug}`}
+            className="shrink-0 text-[11px] text-purple hover:underline"
+          >
+            · Ver loja
+          </Link>
+        </div>
         <div className="flex items-center gap-2 shrink-0">
           {a.total_interesses > 0 && (
             <button
@@ -590,6 +605,15 @@ export default function MarketplacePage() {
     setMeusAnuncios(prev => prev.map(a => a.id === id ? { ...a, status: status as Anuncio["status"] } : a))
   }
 
+  async function handlePatrocinar(id: string) {
+    try {
+      await api.post(`/api/marketplace/${id}/patrocinar`, {})
+      setMeusAnuncios(prev => prev.map(a => a.id === id ? { ...a, patrocinado: true } : a))
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao patrocinar")
+    }
+  }
+
   const totalPaginas = Math.ceil(total / POR_PAGINA)
 
   return (
@@ -715,15 +739,38 @@ export default function MarketplacePage() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {anuncios.map(a => (
-                <AnuncioCard
-                  key={a.id}
-                  a={a}
-                  user={user}
-                  onInteresse={setAnuncioInteresse}
-                />
-              ))}
+            <div className="flex flex-col gap-4">
+              {(() => {
+                const patrocinados = anuncios.filter(a => a.patrocinado)
+                const normais = anuncios.filter(a => !a.patrocinado)
+                return (
+                  <>
+                    {patrocinados.length > 0 && (
+                      <>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {patrocinados.map(a => (
+                            <AnuncioCard key={a.id} a={a} user={user} onInteresse={setAnuncioInteresse} />
+                          ))}
+                        </div>
+                        {normais.length > 0 && (
+                          <div className="flex items-center gap-3">
+                            <div className="h-px flex-1 bg-border" />
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">Anúncios</span>
+                            <div className="h-px flex-1 bg-border" />
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {normais.length > 0 && (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {normais.map(a => (
+                          <AnuncioCard key={a.id} a={a} user={user} onInteresse={setAnuncioInteresse} />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )}
 
@@ -774,7 +821,17 @@ export default function MarketplacePage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {meusAnuncios.map(a => (
-                <AnuncioCard key={a.id} a={a} user={user} onStatusChange={handleStatusChange} />
+                <div key={a.id} className="flex flex-col gap-2">
+                  <AnuncioCard a={a} user={user} onStatusChange={handleStatusChange} />
+                  {!a.patrocinado && a.status === "ativo" && (
+                    <button
+                      onClick={() => handlePatrocinar(a.id)}
+                      className="flex items-center justify-center gap-1.5 rounded-lg border border-amber/30 py-1.5 text-[11px] font-medium text-amber hover:bg-amber-bg transition-colors"
+                    >
+                      ⭐ Patrocinar por 30 dias
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           )}
