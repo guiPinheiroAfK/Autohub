@@ -161,7 +161,7 @@ check "GET /api/veiculos" "$(json_get /api/veiculos)" "200"
 VEICULO_RESP=$(curl -sf -X POST "$BASE/api/veiculos" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"apelido":"Testador","marca":"Honda","modelo":"Civic","ano_fabricacao":2010,"ano_modelo":2010,"perfil":"daily","visibilidade":"publico"}')
+  -d '{"apelido":"Testador","marca":"Honda","modelo":"Civic","anoFabricacao":2010,"anoModelo":2010,"perfil":"daily","visibilidade":"publico"}')
 VEICULO_ID=$(echo "$VEICULO_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 if [[ -n "$VEICULO_ID" ]]; then
