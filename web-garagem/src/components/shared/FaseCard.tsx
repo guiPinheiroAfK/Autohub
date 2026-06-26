@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react"
-import { ChevronDown, ExternalLink, MapPin, Check, Pencil, Trash2, Plus, RotateCcw } from "lucide-react"
+import { ChevronDown, ExternalLink, MapPin, Check, Pencil, Trash2, Plus, RotateCcw, BookOpen as BookOpenIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatFaixa } from "@/lib/format"
 import { api } from "@/lib/api/client"
 import { useSettings } from "@/context/SettingsContext"
 import { OrcamentoAlert } from "@/components/shared/OrcamentoAlert"
 import { SUGESTOES_PECAS } from "@/data/sugestoes-pecas"
+import { CatalogoPecas } from "@/components/shared/CatalogoPecas"
 import type { Fase, Item, ItemAPI, Moeda } from "@/types"
 
 // ── Status ────────────────────────────────────────────────────────────────────
@@ -152,6 +153,7 @@ function ItemForm({ initial, saving, onSave, onCancel }: {
   const [v, setV] = useState<ItemFormValue>(initial)
   const [sugestoes, setSugestoes] = useState<typeof SUGESTOES_PECAS>([])
   const [showSug, setShowSug] = useState(false)
+  const [showCatalogo, setShowCatalogo] = useState(false)
   const nomeRef = useRef<HTMLInputElement>(null)
 
   function handleNomeChange(nome: string) {
@@ -175,6 +177,13 @@ function ItemForm({ initial, saving, onSave, onCancel }: {
   }
 
   return (
+      <>
+        {showCatalogo && (
+          <CatalogoPecas
+            onSelect={nome => { setV(prev => ({ ...prev, nome })); nomeRef.current?.focus() }}
+            onClose={() => setShowCatalogo(false)}
+          />
+        )}
       <div className="flex flex-col gap-2 px-4 py-3">
         <div className="flex flex-col gap-2 sm:flex-row">
           {/* Campo nome com typeahead */}
@@ -245,8 +254,16 @@ function ItemForm({ initial, saving, onSave, onCancel }: {
           >
             Cancelar
           </button>
+          <button
+            type="button"
+            onClick={() => setShowCatalogo(true)}
+            className="ml-auto flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-purple/40 hover:bg-purple-bg hover:text-purple"
+          >
+            <BookOpenIcon className="size-3.5" /> Catálogo de peças
+          </button>
         </div>
       </div>
+      </>
   )
 }
 

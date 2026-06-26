@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { ArrowLeft, Wrench, Settings, LogOut } from "lucide-react"
+import { ArrowLeft, Wrench, Settings, LogOut, CalendarDays } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 
 export function Header() {
@@ -40,6 +40,14 @@ export function Header() {
             <span className="hidden text-[12px] text-muted-foreground sm:block mr-1">
               {user.nome.split(" ")[0]}
             </span>
+                        <Link
+                            to="/eventos"
+                            title="Eventos automotivos"
+                            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                        >
+                            <CalendarDays className="size-4" />
+                            <span className="hidden text-[12px] font-medium sm:block">Eventos</span>
+                        </Link>
                         <Link
                             to="/configuracoes"
                             title="Configurações"
