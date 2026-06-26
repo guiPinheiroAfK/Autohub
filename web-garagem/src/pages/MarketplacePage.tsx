@@ -89,7 +89,7 @@ function ModalInteressados({ anuncioId, titulo, onClose }: { anuncioId: string; 
 
   useEffect(() => {
     api.get<{ interesses: Interessado[] }>(`/api/marketplace/${anuncioId}/interesses`)
-      .then(r => setInteresses(r.interesses))
+      .then(r => setInteresses(r.interesses ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [anuncioId])
@@ -558,14 +558,14 @@ export default function MarketplacePage() {
       ...(cond && { condicao: cond }),
     })
     api.get<{ anuncios: Anuncio[]; total: number }>(`/marketplace?${params}`)
-      .then(r => { setAnuncios(r.anuncios); setTotal(r.total) })
+      .then(r => { setAnuncios(r.anuncios ?? []); setTotal(r.total ?? 0) })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [busca, categFiltro, condicaoFiltro])
 
   function carregarMeus() {
     api.get<{ anuncios: Anuncio[] }>("/api/marketplace/meus")
-      .then(r => setMeusAnuncios(r.anuncios))
+      .then(r => setMeusAnuncios(r.anuncios ?? []))
       .catch(() => {})
   }
 

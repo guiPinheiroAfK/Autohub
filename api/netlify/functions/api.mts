@@ -9,7 +9,7 @@
 import { app } from "../../src/app"
 
 export const config = {
-  path: ["/api/*", "/auth/*"],
+  path: ["/api/*", "/auth/*", "/marketplace*", "/feed*", "/g/*"],
 }
 
 export default async (req: Request) => app.fetch(req)

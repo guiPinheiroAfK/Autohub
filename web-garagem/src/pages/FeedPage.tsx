@@ -114,9 +114,10 @@ export default function FeedPage() {
     setter(true)
     try {
       const r = await api.get<{ veiculos: VeiculoFeed[] }>(`/feed?limit=12&offset=${off}`)
-      setVeiculos(prev => off === 0 ? r.veiculos : [...prev, ...r.veiculos])
-      setHasMore(r.veiculos.length === 12)
-      setOffset(off + r.veiculos.length)
+      const lista = r.veiculos ?? []
+      setVeiculos(prev => off === 0 ? lista : [...prev, ...lista])
+      setHasMore(lista.length === 12)
+      setOffset(off + lista.length)
     } catch {
       // silencioso
     } finally {
