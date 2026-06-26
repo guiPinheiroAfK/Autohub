@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { Link } from "react-router-dom"
-import { Search, Plus, X, Tag, MapPin, Clock, ShoppingBag, Check, ChevronDown, Heart, Users2, MessageSquare, AlertTriangle } from "lucide-react"
+import { Search, Plus, X, Tag, MapPin, Clock, ShoppingBag, Check, ChevronDown, Heart, Users2, MessageSquare, AlertTriangle, Sparkles } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { useAuth } from "@/context/AuthContext"
 import { cn } from "@/lib/utils"
@@ -252,7 +252,8 @@ function AnuncioCard({
     <div className={cn("group relative flex flex-col gap-3 rounded-xl border bg-surface p-4 transition-colors hover:border-border-strong", a.patrocinado ? "border-amber/30" : "border-border")}>
       {a.patrocinado && (
         <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full border border-amber/30 bg-amber-bg px-2 py-0.5 text-[10px] font-semibold text-amber">
-          ⭐ Patrocinado
+          <Sparkles className="size-3" />
+          Patrocinado
         </div>
       )}
       <div className="flex items-start justify-between gap-2">
@@ -828,7 +829,8 @@ export default function MarketplacePage() {
                       onClick={() => handlePatrocinar(a.id)}
                       className="flex items-center justify-center gap-1.5 rounded-lg border border-amber/30 py-1.5 text-[11px] font-medium text-amber hover:bg-amber-bg transition-colors"
                     >
-                      ⭐ Patrocinar por 30 dias
+                      <Sparkles className="size-3" />
+                    Patrocinar por 30 dias
                     </button>
                   )}
                 </div>

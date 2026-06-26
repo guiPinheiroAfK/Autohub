@@ -1,12 +1,12 @@
 import { Link, useLocation } from "react-router-dom"
-import { Home, Users, ShoppingBag, Navigation, CalendarDays } from "lucide-react"
+import { Home, Users, ShoppingBag, Store, Navigation } from "lucide-react"
 
 const ITEMS = [
-  { to: "/",           icon: Home,        label: "Garagem"     },
-  { to: "/feed",       icon: Users,       label: "Feed"        },
-  { to: "/marketplace",icon: ShoppingBag, label: "Mercado"     },
-  { to: "/tracks",     icon: Navigation,  label: "Tracks"      },
-  { to: "/eventos",    icon: CalendarDays,label: "Eventos"     },
+  { to: "/",            icon: Home,        label: "Garagem"    },
+  { to: "/feed",        icon: Users,       label: "Feed"       },
+  { to: "/marketplace", icon: ShoppingBag, label: "Marketplace"},
+  { to: "/minha-loja",  icon: Store,       label: "Minha Loja" },
+  { to: "/tracks",      icon: Navigation,  label: "Tracks"     },
 ]
 
 export function BottomNav() {
