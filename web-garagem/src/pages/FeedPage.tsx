@@ -52,7 +52,7 @@ function BuildCard({ v }: { v: VeiculoFeed }) {
   return (
     <div className="flex flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-surface transition-all hover:border-border-strong hover:shadow-sm">
       {v.capa_url ? (
-        <img src={v.capa_url} alt={v.apelido} className="h-44 w-full object-cover" />
+        <img src={v.capa_url} alt={v.apelido} className="h-44 w-full object-cover" loading="lazy" />
       ) : (
         <div className="flex h-44 items-center justify-center bg-surface-2 text-5xl">🚗</div>
       )}
