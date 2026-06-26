@@ -1,5 +1,5 @@
-import { Hono } from "hono"
-import { sql } from "../db/client"
+﻿import { Hono } from "hono"
+import { sql } from "../db/client.ts"
 
 export const publicoRoutes = new Hono()
 

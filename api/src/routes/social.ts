@@ -1,6 +1,6 @@
-import { Hono } from "hono"
-import { sql } from "../db/client"
-import type { AppEnv } from "../types"
+﻿import { Hono } from "hono"
+import { sql } from "../db/client.ts"
+import type { AppEnv } from "../types.ts"
 
 export const socialRoutes = new Hono<AppEnv>()
 

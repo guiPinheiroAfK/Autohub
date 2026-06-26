@@ -1,11 +1,11 @@
-/**
+﻿/**
  * migrate.ts — cria todas as tabelas do schema se não existirem.
  * Roda antes do servidor subir (via `bun run migrate`).
  * Sem lib de migration por enquanto; para mudanças futuras, adicionar
  * uma tabela _migrations e numerar os scripts.
  */
 
-import { sql } from "./client"
+import { sql } from "./client.ts"
 
 async function migrate() {
   console.log("▶ Rodando migrations...")

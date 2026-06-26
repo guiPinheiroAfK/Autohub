@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Google OAuth 2.0 — Authorization Code Flow
  *
  * Variáveis de ambiente necessárias:
@@ -15,8 +15,8 @@
  */
 
 import { Hono } from "hono"
-import { sql } from "../db/client"
-import { signToken } from "../middleware/jwt"
+import { sql } from "../db/client.ts"
+import { signToken } from "../middleware/jwt.ts"
 
 export const googleAuthRoutes = new Hono()
 

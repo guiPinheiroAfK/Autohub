@@ -1,6 +1,6 @@
-import type { Next } from "hono"
-import type { AppContext } from "../types"
-import { verifyToken } from "./jwt"
+﻿import type { Next } from "hono"
+import type { AppContext } from "../types.ts"
+import { verifyToken } from "./jwt.ts"
 
 export async function authMiddleware(c: AppContext, next: Next) {
   const header = c.req.header("Authorization")

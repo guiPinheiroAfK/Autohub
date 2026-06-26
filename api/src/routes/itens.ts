@@ -1,8 +1,8 @@
-import type { AppEnv } from "../types"
+﻿import type { AppEnv } from "../types.ts"
 import { Hono } from "hono"
 import { z } from "zod"
-import { sql } from "../db/client"
-import { authMiddleware } from "../middleware/auth"
+import { sql } from "../db/client.ts"
+import { authMiddleware } from "../middleware/auth.ts"
 
 export const itensRoutes = new Hono<AppEnv>()
 itensRoutes.use("*", authMiddleware)
