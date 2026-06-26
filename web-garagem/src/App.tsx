@@ -48,7 +48,7 @@ export default function App() {
             </Route>
             <Route path="/verificar-email" element={<S><VerificarEmailPage /></S>} />
             <Route path="/resetar-senha" element={<S><ResetarSenhaPage /></S>} />
-            <Route path="/auth/callback" element={<S><AuthCallbackPage /></S>} />
+            <Route path="/oauth/callback" element={<S><AuthCallbackPage /></S>} />
             <Route path="/convite" element={<Layout />}>
               <Route index element={<S><ConvitePage /></S>} />
             </Route>

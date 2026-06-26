@@ -154,7 +154,7 @@ googleAuthRoutes.get("/google/callback", async (c) => {
     const jwt = await signToken({ sub: usuario.id, email: usuario.email })
 
     // Limpa o cookie de state e redireciona
-    const res = c.redirect(`${frontendUrl}/auth/callback?token=${encodeURIComponent(jwt)}`, 302)
+    const res = c.redirect(`${frontendUrl}/oauth/callback?token=${encodeURIComponent(jwt)}`, 302)
     res.headers.append("Set-Cookie", "oauth_state=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/")
     return res
 
