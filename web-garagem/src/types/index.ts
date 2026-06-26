@@ -178,4 +178,5 @@ export interface ItemAPI {
 /** Resposta completa de GET /api/veiculos/:id */
 export interface VeiculoDetalheAPI extends VeiculoComMetricas {
   fases: FaseAPI[]
+  youtube_url?: string | null
 }

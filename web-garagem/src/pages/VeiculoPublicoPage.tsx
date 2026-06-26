@@ -23,6 +23,12 @@ interface VeiculoPublico {
   capa_url: string | null
   meta_potencia_whp: number | null
   criado_em: string
+  youtube_url?: string | null
+}
+
+function getYoutubeId(url: string): string | null {
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/)
+  return m?.[1] ?? null
 }
 
 interface ItemPublico {
@@ -117,6 +123,7 @@ export default function VeiculoPublicoPage() {
   const progresso = calcProgresso(fases)
   const totalItens = fases.flatMap(f => f.itens).length
   const concluidosCount = fases.flatMap(f => f.itens).filter(i => i.status === "concluido").length
+  const youtubeVideoId = veiculo.youtube_url ? getYoutubeId(veiculo.youtube_url) : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -196,6 +203,19 @@ export default function VeiculoPublicoPage() {
             <div className="h-full rounded-full bg-purple transition-all" style={{ width: `${progresso}%` }} />
           </div>
           <p className="text-[11px] text-faint-foreground">{fases.length} fase{fases.length !== 1 ? "s" : ""}</p>
+        </div>
+      )}
+
+      {/* ── YouTube embed ──────────────────────────────────────────────── */}
+      {youtubeVideoId && (
+        <div className="rounded-xl overflow-hidden border border-border">
+          <iframe
+            src={`https://www.youtube.com/embed/${youtubeVideoId}`}
+            title="Vídeo do build"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="aspect-video w-full"
+          />
         </div>
       )}
 
