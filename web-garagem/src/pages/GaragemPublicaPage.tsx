@@ -54,7 +54,7 @@ export default function GaragemPublicaPage() {
 
   useEffect(() => {
     if (!slug) return
-    api.get<{ garagem: GaragemPublica; veiculos: VeiculoPublico[] }>(`/g/${slug}`)
+    api.get<{ garagem: GaragemPublica; veiculos: VeiculoPublico[] }>(`/api/g/${slug}`)
       .then(r => { setGaragem(r.garagem); setVeiculos(r.veiculos) })
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))

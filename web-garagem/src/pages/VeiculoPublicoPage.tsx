@@ -75,7 +75,7 @@ export default function VeiculoPublicoPage() {
   useEffect(() => {
     if (!slug || !veiculoId) return
     api.get<{ garagem: GaragemInfo; veiculo: VeiculoPublico; fases: FasePublica[] }>(
-      `/g/${slug}/${veiculoId}`
+      `/api/g/${slug}/${veiculoId}`
     ).then(r => {
       setGaragem(r.garagem)
       setVeiculo(r.veiculo)

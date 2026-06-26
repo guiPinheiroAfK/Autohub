@@ -113,7 +113,7 @@ export default function FeedPage() {
     const setter = off === 0 ? setLoading : setLoadingMore
     setter(true)
     try {
-      const r = await api.get<{ veiculos: VeiculoFeed[] }>(`/feed?limit=12&offset=${off}`)
+      const r = await api.get<{ veiculos: VeiculoFeed[] }>(`/api/feed?limit=12&offset=${off}`)
       const lista = r.veiculos ?? []
       setVeiculos(prev => off === 0 ? lista : [...prev, ...lista])
       setHasMore(lista.length === 12)

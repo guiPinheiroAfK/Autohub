@@ -39,8 +39,8 @@ app.get("/", (c) => c.json({ ok: true, service: "api" }))
 app.route("/auth", authRoutes)
 app.route("/auth", authV2Routes)
 app.route("/auth", googleAuthRoutes)
-app.route("/", publicoRoutes)
-app.route("/", marketplacePublicoRoutes)
+app.route("/api", publicoRoutes)
+app.route("/api", marketplacePublicoRoutes)
 
 // ── Rotas protegidas ─────────────────────────────────────────────────────────
 const api = new Hono<AppEnv>()
