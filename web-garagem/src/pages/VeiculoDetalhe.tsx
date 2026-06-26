@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, ImageIcon, Check, Upload } from "lucide-react"
+import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, ImageIcon, Upload } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { formatMoeda, formatFaixa } from "@/lib/format"
 import { FaseCard } from "@/components/shared/FaseCard"
@@ -443,7 +443,6 @@ export default function VeiculoDetalhe() {
     const [addingFase, setAddingFase] = useState(false)
     const [savingFase, setSavingFase] = useState(false)
     const [capaUrl, setCapaUrl] = useState("")
-    const [savingCapa, setSavingCapa] = useState(false)
     const [uploadingCapa, setUploadingCapa] = useState(false)
 
     async function carregar() {
@@ -465,19 +464,6 @@ export default function VeiculoDetalhe() {
         carregar()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id])
-
-    async function handleSaveCapa() {
-        if (!id || !data) return
-        setSavingCapa(true)
-        try {
-            await api.patch(`/api/veiculos/${id}`, { capaUrl: capaUrl || null })
-            setData({ ...data, capa_url: capaUrl || null })
-        } catch {
-            alert("Erro ao salvar imagem de capa")
-        } finally {
-            setSavingCapa(false)
-        }
-    }
 
     async function handleUploadCapa(file: File) {
         if (!id || !data) return
