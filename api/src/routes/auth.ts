@@ -3,6 +3,7 @@ import { z } from "zod"
 import bcrypt from "bcryptjs"
 import { sql } from "../db/client"
 import { signToken } from "../middleware/jwt"
+import { enviarVerificacaoEmail } from "../lib/email"
 
 // Validação manual com zod (sem @hono/zod-validator, que não está
 // instalado — evita dependência extra só pra isso).
@@ -73,6 +74,11 @@ authRoutes.post("/register", async (c) => {
 
   const token = await signToken({ sub: usuario.id, email: usuario.email })
 
+  // Enviar verificação de email (não bloqueia o registro)
+  const verificacaoToken = crypto.randomUUID()
+  await sql`INSERT INTO email_verificacoes (usuario_id, token) VALUES (${usuario.id}, ${verificacaoToken})`
+  enviarVerificacaoEmail(usuario.email, usuario.nome, verificacaoToken).catch(console.error)
+
   return c.json({
     token,
     usuario: {
@@ -80,6 +86,7 @@ authRoutes.post("/register", async (c) => {
       nome: usuario.nome,
       email: usuario.email,
       garagemId: usuario.garagemId,
+      emailVerificado: false,
     },
   }, 201)
 })

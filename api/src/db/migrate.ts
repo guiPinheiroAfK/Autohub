@@ -136,6 +136,83 @@ async function migrate() {
     )
   `
 
+  // ── v2: colunas novas em tabelas existentes ──────────────────────────────
+  await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN NOT NULL DEFAULT false`
+  await sql`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE`
+  await sql`ALTER TABLE garagens ADD COLUMN IF NOT EXISTS publica BOOLEAN NOT NULL DEFAULT false`
+  await sql`ALTER TABLE garagens ADD COLUMN IF NOT EXISTS bio TEXT`
+  await sql`ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS capa_url TEXT`
+
+  // ── v2: verificação de e-mail ─────────────────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS email_verificacoes (
+      id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      usuario_id TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      token      TEXT NOT NULL UNIQUE,
+      usado      BOOLEAN NOT NULL DEFAULT false,
+      expira_em  TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '24 hours'),
+      criado_em  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `
+
+  // ── v2: reset de senha ────────────────────────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS senha_resets (
+      id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      usuario_id TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      token      TEXT NOT NULL UNIQUE,
+      usado      BOOLEAN NOT NULL DEFAULT false,
+      expira_em  TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '1 hour'),
+      criado_em  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `
+
+  // ── v2: follows (usuário segue garagem) ───────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS follows (
+      id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      seguidor_id TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      garagem_id  TEXT NOT NULL REFERENCES garagens(id) ON DELETE CASCADE,
+      criado_em   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(seguidor_id, garagem_id)
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_follows_garagem ON follows(garagem_id)`
+
+  // ── v2: notificações ──────────────────────────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS notificacoes (
+      id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      usuario_id  TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      tipo        TEXT NOT NULL CHECK (tipo IN ('novo_follow','convite_collab','collab_aceito','update_build')),
+      titulo      TEXT NOT NULL,
+      corpo       TEXT,
+      lida        BOOLEAN NOT NULL DEFAULT false,
+      link        TEXT,
+      criado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_notificacoes_usuario ON notificacoes(usuario_id, lida)`
+
+  // ── v2: colaborações em veículos ──────────────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS colaboracoes (
+      id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      veiculo_id      TEXT NOT NULL REFERENCES veiculos(id) ON DELETE CASCADE,
+      convidado_email TEXT NOT NULL,
+      convidado_id    TEXT REFERENCES usuarios(id) ON DELETE SET NULL,
+      papel           TEXT NOT NULL DEFAULT 'editor' CHECK (papel IN ('editor','viewer','mecanico')),
+      status          TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente','ativo','recusado','removido')),
+      token_convite   TEXT UNIQUE,
+      convidado_por   TEXT NOT NULL REFERENCES usuarios(id),
+      criado_em       TIMESTAMPTZ NOT NULL DEFAULT now(),
+      aceito_em       TIMESTAMPTZ
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_colaboracoes_veiculo ON colaboracoes(veiculo_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_colaboracoes_convidado ON colaboracoes(convidado_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_colaboracoes_email ON colaboracoes(convidado_email)`
+
   console.log("✔ Migrations concluídas.")
   await sql.end()
 }

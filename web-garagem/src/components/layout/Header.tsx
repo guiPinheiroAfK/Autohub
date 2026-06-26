@@ -1,7 +1,36 @@
 import { Link, useLocation } from "react-router-dom"
-import { ArrowLeft, Settings, LogOut, CalendarDays, Navigation } from "lucide-react"
+import { ArrowLeft, Settings, LogOut, CalendarDays, Navigation, Bell, Users } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { Logo } from "@/components/shared/Logo"
+import { useEffect, useState } from "react"
+import { api } from "@/lib/api/client"
+
+function NotifBell() {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    api.get<{ nao_lidas: number }>("/api/social/notificacoes")
+      .then(r => setCount(r.nao_lidas))
+      .catch(() => {})
+    const id = setInterval(() => {
+      api.get<{ nao_lidas: number }>("/api/social/notificacoes")
+        .then(r => setCount(r.nao_lidas))
+        .catch(() => {})
+    }, 60000)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <div className="relative">
+      <Bell className="size-4" />
+      {count > 0 && (
+        <span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-red text-[8px] font-bold text-white">
+          {count > 9 ? "9+" : count}
+        </span>
+      )}
+    </div>
+  )
+}
 
 export function Header() {
     const { pathname } = useLocation()
@@ -72,6 +101,22 @@ export function Header() {
                         >
                             <CalendarDays className="size-3.5" />
                             <span className="hidden sm:block">Eventos</span>
+                        </Link>
+
+                        <Link
+                            to="/feed"
+                            title="Feed da comunidade"
+                            className={`flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground ${pathname === "/feed" ? "bg-purple-bg text-purple" : ""}`}
+                        >
+                            <Users className="size-4" />
+                        </Link>
+
+                        <Link
+                            to="/configuracoes"
+                            title="Notificações"
+                            className="relative flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                        >
+                            <NotifBell />
                         </Link>
 
                         <Link
