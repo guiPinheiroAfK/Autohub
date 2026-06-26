@@ -265,6 +265,13 @@ function ItemForm({ initial, saving, onSave, onCancel }: {
           >
             Cancelar
           </button>
+          <button
+            type="button"
+            onClick={() => setShowCatalogo(true)}
+            className="ml-auto flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-purple/40 hover:bg-purple-bg hover:text-purple"
+          >
+            <BookOpenIcon className="size-3.5" /> Catálogo de peças
+          </button>
         </div>
       </div>
       </>

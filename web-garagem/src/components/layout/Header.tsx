@@ -68,14 +68,10 @@ export function Header() {
                         <Link
                             to="/eventos"
                             title="Eventos automotivos"
-                            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-                                naEventos
-                                    ? "bg-purple-bg text-purple"
-                                    : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-                            }`}
+                            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
                         >
-                            <CalendarDays className="size-3.5" />
-                            <span className="hidden sm:block">Eventos</span>
+                            <CalendarDays className="size-4" />
+                            <span className="hidden text-[12px] font-medium sm:block">Eventos</span>
                         </Link>
 
                         <Link

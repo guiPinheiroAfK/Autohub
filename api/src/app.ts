@@ -6,7 +6,7 @@ import { authRoutes } from "./routes/auth"
 import { veiculosRoutes } from "./routes/veiculos"
 import { fasesRoutes } from "./routes/fases"
 import { itensRoutes } from "./routes/itens"
-import { tracksRoutes } from "./routes/tracks"
+import { cotacoesRoutes } from "./routes/cotacoes"
 import { sql } from "./db/client"
 import type { AppEnv } from "./types"
 
@@ -62,10 +62,7 @@ api.get("/auth/me", async (c) => {
 })
 
 api.route("/veiculos", veiculosRoutes)
-// fasesRoutes já define os paths completos ("/veiculos/:veiculoId/fases",
-// "/fases/:id", "/fases/:id/resetar") — por isso monta na raiz, não em "/fases"
-// (montar em "/fases" duplicaria o prefixo: /api/fases/fases/:id).
 api.route("/", fasesRoutes)
 api.route("/itens", itensRoutes)
-api.route("/tracks", tracksRoutes)
+api.route("/cotacoes", cotacoesRoutes)
 app.route("/api", api)
