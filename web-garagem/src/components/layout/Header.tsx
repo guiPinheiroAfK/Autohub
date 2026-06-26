@@ -8,7 +8,6 @@ export function Header() {
     const { user, logout } = useAuth()
     const naHome = pathname === "/" || pathname === "/configuracoes"
     const naTracksSection = pathname.startsWith("/tracks")
-    const naEventos = pathname === "/eventos"
 
     return (
         <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-40">
@@ -68,10 +67,14 @@ export function Header() {
                         <Link
                             to="/eventos"
                             title="Eventos automotivos"
-                            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                                pathname === "/eventos"
+                                    ? "bg-purple-bg text-purple"
+                                    : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                            }`}
                         >
-                            <CalendarDays className="size-4" />
-                            <span className="hidden text-[12px] font-medium sm:block">Eventos</span>
+                            <CalendarDays className="size-3.5" />
+                            <span className="hidden sm:block">Eventos</span>
                         </Link>
 
                         <Link
