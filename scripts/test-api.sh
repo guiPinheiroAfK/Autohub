@@ -121,7 +121,7 @@ check "POST /auth/resetar-senha (token inválido → 404)" \
 
 blue "6. Google OAuth"
 gray "GET /auth/google — testando redirect (302 ou 503 se GOOGLE_CLIENT_ID não configurado)"
-GOOGLE_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -L --max-redirs 0 "$BASE/auth/google" 2>/dev/null || echo "302")
+GOOGLE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-redirs 0 "$BASE/auth/google" 2>/dev/null)
 if [[ "$GOOGLE_STATUS" == "302" ]] || [[ "$GOOGLE_STATUS" == "503" ]] || [[ "$GOOGLE_STATUS" == "000" ]]; then
   green "GET /auth/google — responde (HTTP $GOOGLE_STATUS)"; ((PASS++))
 else
