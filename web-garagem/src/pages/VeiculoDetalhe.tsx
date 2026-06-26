@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, ImageIcon, Check } from "lucide-react"
+import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, ImageIcon, Check, Upload } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { formatMoeda, formatFaixa } from "@/lib/format"
 import { FaseCard } from "@/components/shared/FaseCard"
@@ -444,6 +444,7 @@ export default function VeiculoDetalhe() {
     const [savingFase, setSavingFase] = useState(false)
     const [capaUrl, setCapaUrl] = useState("")
     const [savingCapa, setSavingCapa] = useState(false)
+    const [uploadingCapa, setUploadingCapa] = useState(false)
 
     async function carregar() {
         if (!id) return
@@ -475,6 +476,33 @@ export default function VeiculoDetalhe() {
             alert("Erro ao salvar imagem de capa")
         } finally {
             setSavingCapa(false)
+        }
+    }
+
+    async function handleUploadCapa(file: File) {
+        if (!id || !data) return
+        setUploadingCapa(true)
+        try {
+            const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
+            const preset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
+            const form = new FormData()
+            form.append("file", file)
+            form.append("upload_preset", preset)
+            form.append("folder", "autohub/capas")
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+                method: "POST",
+                body: form,
+            })
+            if (!res.ok) throw new Error("Falha no upload")
+            const json = await res.json() as { secure_url: string }
+            const url = json.secure_url
+            await api.patch(`/api/veiculos/${id}`, { capaUrl: url })
+            setCapaUrl(url)
+            setData({ ...data, capa_url: url })
+        } catch {
+            alert("Erro ao enviar imagem")
+        } finally {
+            setUploadingCapa(false)
         }
     }
 
@@ -717,28 +745,39 @@ export default function VeiculoDetalhe() {
                       <ImageIcon className="size-3.5" />
                       Imagem de capa (feed público)
                     </div>
-                    {capaUrl && (
-                      <img src={capaUrl} alt="capa" className="mb-3 h-32 w-full rounded-lg object-cover border border-border" />
+                    {capaUrl ? (
+                      <div className="relative mb-3">
+                        <img src={capaUrl} alt="capa" className="h-40 w-full rounded-lg object-cover border border-border" />
+                        <label className="absolute bottom-2 right-2 flex cursor-pointer items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-sm hover:bg-black/80">
+                          <Upload className="size-3" />
+                          Trocar
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadCapa(f) }}
+                          />
+                        </label>
+                        {uploadingCapa && (
+                          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40">
+                            <span className="text-[12px] text-white">Enviando...</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <label className={`mb-3 flex h-32 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-background text-faint-foreground transition-colors hover:border-purple hover:text-purple ${uploadingCapa ? "pointer-events-none opacity-60" : ""}`}>
+                        <Upload className="size-5" />
+                        <span className="text-[12px] font-medium">{uploadingCapa ? "Enviando..." : "Clique para enviar imagem"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadCapa(f) }}
+                        />
+                      </label>
                     )}
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        value={capaUrl}
-                        onChange={e => setCapaUrl(e.target.value)}
-                        placeholder="https://... (URL pública da imagem)"
-                        className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
-                      />
-                      <button
-                        onClick={handleSaveCapa}
-                        disabled={savingCapa || capaUrl === (data.capa_url ?? "")}
-                        className="flex items-center gap-1.5 rounded-lg bg-purple px-3 py-2 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                      >
-                        <Check className="size-3.5" />
-                        {savingCapa ? "Salvando..." : "Salvar"}
-                      </button>
-                    </div>
-                    <p className="mt-1.5 text-[11px] text-faint-foreground">
-                      Cole a URL de uma imagem externa. Aparece no feed e na garagem pública.
+                    <p className="text-[11px] text-faint-foreground">
+                      Aparece no feed e na garagem pública. Formatos: JPG, PNG, WebP.
                     </p>
                   </div>
                 )}
