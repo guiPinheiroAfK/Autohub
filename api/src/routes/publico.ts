@@ -52,7 +52,7 @@ publicoRoutes.get("/g/:slug/:veiculoId", async (c) => {
 
   const [veiculo] = await sql`
     SELECT v.id, v.apelido, v.marca, v.modelo, v.ano_fabricacao, v.ano_modelo,
-           v.perfil, v.status, v.capa_url, v.meta_potencia_whp, v.criado_em
+           v.perfil, v.status, v.capa_url, v.meta_potencia_whp, v.criado_em, v.youtube_url
     FROM veiculos v
     WHERE v.id = ${veiculoId}
       AND v.garagem_id = ${garagem.id}

@@ -251,8 +251,50 @@ async function migrate() {
   await sql`CREATE INDEX IF NOT EXISTS idx_interesses_anuncio ON marketplace_interesses(anuncio_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_interesses_usuario ON marketplace_interesses(usuario_id)`
 
+  // ── feat/marketplace-monetizacao ─────────────────────────────────────────────
+  await sql`ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS youtube_url TEXT`
+
+  await sql`ALTER TABLE marketplace_anuncios ADD COLUMN IF NOT EXISTS patrocinado BOOLEAN NOT NULL DEFAULT false`
+  await sql`ALTER TABLE marketplace_anuncios ADD COLUMN IF NOT EXISTS patrocinado_ate TIMESTAMPTZ`
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS marketplace_lojas (
+      id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      garagem_id  TEXT NOT NULL REFERENCES garagens(id) ON DELETE CASCADE,
+      nome        TEXT NOT NULL,
+      descricao   TEXT,
+      logo_url    TEXT,
+      banner_url  TEXT,
+      instagram   TEXT,
+      whatsapp    TEXT,
+      website     TEXT,
+      criada_em   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(garagem_id)
+    )
+  `
+  await sql`ALTER TABLE marketplace_anuncios ADD COLUMN IF NOT EXISTS loja_id TEXT REFERENCES marketplace_lojas(id) ON DELETE SET NULL`
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS eventos_calendario (
+      id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      titulo      TEXT NOT NULL,
+      descricao   TEXT,
+      data_inicio DATE NOT NULL,
+      data_fim    DATE,
+      local       TEXT,
+      url         TEXT,
+      imagem_url  TEXT,
+      tipo        TEXT NOT NULL DEFAULT 'encontro' CHECK (tipo IN ('encontro','corrida','rally','drift','exposicao','show','patrocinado')),
+      patrocinado BOOLEAN NOT NULL DEFAULT false,
+      patrocinado_ate TIMESTAMPTZ,
+      garagem_id  TEXT REFERENCES garagens(id) ON DELETE SET NULL,
+      criado_por  TEXT REFERENCES usuarios(id) ON DELETE SET NULL,
+      criado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_eventos_data ON eventos_calendario(data_inicio)`
+
   console.log("✔ Migrations concluídas.")
-  await sql.end()
 }
 
 migrate().catch((err) => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, ImageIcon, Upload } from "lucide-react"
+import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, ImageIcon, Upload, Youtube } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { formatMoeda, formatFaixa } from "@/lib/format"
 import { FaseCard } from "@/components/shared/FaseCard"
@@ -444,6 +444,8 @@ export default function VeiculoDetalhe() {
     const [savingFase, setSavingFase] = useState(false)
     const [capaUrl, setCapaUrl] = useState("")
     const [uploadingCapa, setUploadingCapa] = useState(false)
+    const [youtubeUrl, setYoutubeUrl] = useState("")
+    const [savingYoutube, setSavingYoutube] = useState(false)
 
     async function carregar() {
         if (!id) return
@@ -451,6 +453,7 @@ export default function VeiculoDetalhe() {
             const res = await api.get<VeiculoDetalheAPI>(`/api/veiculos/${id}`)
             setData(res)
             setCapaUrl(res.capa_url ?? "")
+            setYoutubeUrl(res.youtube_url ?? "")
             setErro(null)
         } catch (e) {
             setErro(e instanceof Error ? e.message : "Erro ao carregar veículo")
@@ -489,6 +492,18 @@ export default function VeiculoDetalhe() {
             alert("Erro ao enviar imagem")
         } finally {
             setUploadingCapa(false)
+        }
+    }
+
+    async function handleSaveYoutube() {
+        if (!id) return
+        setSavingYoutube(true)
+        try {
+            await api.patch(`/api/veiculos/${id}`, { youtubeUrl: youtubeUrl.trim() || null })
+        } catch (e) {
+            alert(e instanceof Error ? e.message : "Erro ao salvar URL do YouTube")
+        } finally {
+            setSavingYoutube(false)
         }
     }
 
@@ -764,6 +779,35 @@ export default function VeiculoDetalhe() {
                     )}
                     <p className="text-[11px] text-faint-foreground">
                       Aparece no feed e na garagem pública. Formatos: JPG, PNG, WebP.
+                    </p>
+                  </div>
+                )}
+
+                {/* ── YouTube URL ──────────────────────────────────────────────── */}
+                {isDono && (
+                  <div className="rounded-xl border border-border bg-surface p-5">
+                    <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
+                      <Youtube className="size-3.5 text-red" />
+                      Vídeo do YouTube
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={youtubeUrl}
+                        onChange={e => setYoutubeUrl(e.target.value)}
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
+                      />
+                      <button
+                        onClick={handleSaveYoutube}
+                        disabled={savingYoutube}
+                        className="shrink-0 rounded-lg bg-purple px-3 py-2 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+                      >
+                        {savingYoutube ? "Salvando..." : "Salvar"}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-faint-foreground">
+                      Cole o link do YouTube para exibir o vídeo na página pública do build.
                     </p>
                   </div>
                 )}
