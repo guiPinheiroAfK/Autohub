@@ -1,8 +1,8 @@
-import { Hono } from "hono"
+﻿import { Hono } from "hono"
 import { z } from "zod"
-import { sql } from "../db/client"
-import { enviarConviteColaboracao } from "../lib/email"
-import type { AppEnv } from "../types"
+import { sql } from "../db/client.ts"
+import { enviarConviteColaboracao } from "../lib/email.ts"
+import type { AppEnv } from "../types.ts"
 
 export const colaboracoesRoutes = new Hono<AppEnv>()
 

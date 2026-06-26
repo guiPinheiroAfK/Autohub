@@ -6,7 +6,7 @@
 //
 // `app.fetch` já tem a assinatura (Request) => Promise<Response> que as
 // Functions modernas do Netlify esperam — não precisa de adapter nenhum.
-import { app } from "../../src/app"
+import { app } from "../../src/app.ts"
 
 export const config = {
   path: ["/api/*", "/auth/*"],

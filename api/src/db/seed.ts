@@ -1,10 +1,10 @@
-/**
+﻿/**
  * seed.ts — popula o banco com usuário, garagem, veículos, fases e itens reais.
  * Idempotente: verifica pelo e-mail antes de inserir qualquer coisa.
  * Roda via `bun run seed` (após migrate).
  */
 
-import { sql } from "./client"
+import { sql } from "./client.ts"
 import bcrypt from "bcryptjs"
 
 const SEED_EMAIL = "guilherme@pinedevs.com.br"

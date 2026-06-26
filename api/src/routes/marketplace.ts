@@ -1,7 +1,7 @@
-import { Hono } from "hono"
+﻿import { Hono } from "hono"
 import { z } from "zod"
-import { sql } from "../db/client"
-import type { AppEnv } from "../types"
+import { sql } from "../db/client.ts"
+import type { AppEnv } from "../types.ts"
 
 export const marketplacePublicoRoutes = new Hono<AppEnv>()
 export const marketplaceRoutes = new Hono<AppEnv>()
