@@ -2,12 +2,10 @@
 import { Hono } from "hono"
 import { z } from "zod"
 import { sql } from "../db/client.ts"
-import { authMiddleware } from "../middleware/auth.ts"
 
 export const veiculosRoutes = new Hono<AppEnv>()
 
-// Todas as rotas exigem auth
-veiculosRoutes.use("*", authMiddleware)
+// Auth já é garantido pelo grupo pai (api.use("*", authMiddleware) em app.ts)
 
 const veiculoSchema = z.object({
   apelido: z.string().min(1).max(120),
@@ -50,6 +48,70 @@ veiculosRoutes.get("/", async (c) => {
 
   return c.json(veiculos)
 })
+
+// ── Fotos (Cloudinary URLs) — vêm ANTES de /:id para evitar shadowing no Hono ──
+
+// GET /veiculos/:id/fotos
+veiculosRoutes.get("/:id/fotos", async (c) => {
+  const userId = c.get("userId") as string
+  const garagemId = await getGaragemId(userId)
+  if (!garagemId) return c.json({ error: "Garagem não encontrada" }, 404)
+
+  const { id } = c.req.param()
+  const [v] = await sql`SELECT id FROM veiculos WHERE id = ${id} AND garagem_id = ${garagemId}`
+  if (!v) return c.json({ error: "Veículo não encontrado" }, 404)
+
+  const fotos = await sql`
+    SELECT id, url, legenda, ordem, criada_em
+    FROM fotos_veiculos
+    WHERE veiculo_id = ${id}
+    ORDER BY ordem ASC, criada_em ASC
+  `
+  return c.json(fotos)
+})
+
+// POST /veiculos/:id/fotos — salva URL do Cloudinary
+veiculosRoutes.post("/:id/fotos", async (c) => {
+  const userId = c.get("userId") as string
+  const garagemId = await getGaragemId(userId)
+  if (!garagemId) return c.json({ error: "Garagem não encontrada" }, 404)
+
+  const { id } = c.req.param()
+  const [v] = await sql`SELECT id FROM veiculos WHERE id = ${id} AND garagem_id = ${garagemId}`
+  if (!v) return c.json({ error: "Veículo não encontrado" }, 404)
+
+  const body = await c.req.json().catch(() => null)
+  if (!body?.url || typeof body.url !== "string") {
+    return c.json({ error: "url é obrigatória" }, 400)
+  }
+
+  const [{ total }] = await sql`SELECT COUNT(*)::int as total FROM fotos_veiculos WHERE veiculo_id = ${id}`
+  if (total >= 30) return c.json({ error: "Limite de 30 fotos por veículo atingido." }, 403)
+
+  const [foto] = await sql`
+    INSERT INTO fotos_veiculos (veiculo_id, url, legenda, ordem)
+    VALUES (${id}, ${body.url}, ${body.legenda ?? null}, ${total})
+    RETURNING id, url, legenda, ordem, criada_em
+  `
+  return c.json(foto, 201)
+})
+
+// DELETE /veiculos/:id/fotos/:fotoId
+veiculosRoutes.delete("/:id/fotos/:fotoId", async (c) => {
+  const userId = c.get("userId") as string
+  const garagemId = await getGaragemId(userId)
+  if (!garagemId) return c.json({ error: "Garagem não encontrada" }, 404)
+
+  const { id, fotoId } = c.req.param()
+  const [v] = await sql`SELECT id FROM veiculos WHERE id = ${id} AND garagem_id = ${garagemId}`
+  if (!v) return c.json({ error: "Veículo não encontrado" }, 404)
+
+  const result = await sql`DELETE FROM fotos_veiculos WHERE id = ${fotoId} AND veiculo_id = ${id} RETURNING id`
+  if (result.length === 0) return c.json({ error: "Foto não encontrada" }, 404)
+  return c.json({ deleted: true })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // GET /veiculos/:id — detalhe com fases e itens
 veiculosRoutes.get("/:id", async (c) => {
@@ -203,3 +265,4 @@ veiculosRoutes.delete("/:id", async (c) => {
   if (result.length === 0) return c.json({ error: "Veículo não encontrado" }, 404)
   return c.json({ deleted: true })
 })
+

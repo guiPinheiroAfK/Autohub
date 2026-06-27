@@ -2,10 +2,8 @@
 import { Hono } from "hono"
 import { z } from "zod"
 import { sql } from "../db/client.ts"
-import { authMiddleware } from "../middleware/auth.ts"
-
 export const fasesRoutes = new Hono<AppEnv>()
-fasesRoutes.use("*", authMiddleware)
+// Auth garantido pelo grupo pai (api.use("*", authMiddleware) em app.ts)
 
 const faseSchema = z.object({
   titulo: z.string().min(1).max(200),

@@ -15,6 +15,7 @@ import { marketplacePublicoRoutes, marketplaceRoutes } from "./routes/marketplac
 import { lojasPublicoRoutes, lojasRoutes } from "./routes/lojas.ts"
 import { eventosPublicoRoutes, eventosRoutes } from "./routes/eventos-calendario.ts"
 import { googleAuthRoutes } from "./routes/auth-google.ts"
+import { comentariosPublicoRoutes, comentariosAuthRoutes } from "./routes/comentarios.ts"
 import { sql } from "./db/client.ts"
 import type { AppEnv } from "./types.ts"
 
@@ -24,9 +25,6 @@ export const app = new Hono()
 app.use(logger())
 app.use(
     cors({
-        // Em produção no Netlify, front e api ficam no mesmo domínio (mesmo site,
-        // /api/* e /auth/* roteados pra Function) — CORS nem entra em ação. Isso
-        // aqui só importa pro dev local (front em :5173, api em :8000).
         origin: (process.env.CORS_ORIGINS ?? "http://localhost:5173").split(","),
         allowHeaders: ["Content-Type", "Authorization"],
         allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
@@ -46,22 +44,37 @@ app.route("/api", marketplacePublicoRoutes)
 app.route("/api", lojasPublicoRoutes)
 app.route("/api", eventosPublicoRoutes)
 
+// Comentários: GET público montado antes do grupo protegido para evitar
+// que o authMiddleware em * capture e retorne 401 no GET sem token
+app.get("/api/comentarios/:veiculoId", async (c) => {
+    const veiculoId = c.req.param("veiculoId")
+    const req = new Request(`http://localhost/${veiculoId}`, {
+        method: "GET",
+        headers: c.req.raw.headers,
+    })
+    return comentariosPublicoRoutes.fetch(req)
+})
 // ── Rotas protegidas ─────────────────────────────────────────────────────────
 const api = new Hono<AppEnv>()
-api.use("*", authMiddleware)
+api.use("*", async (c, next) => {
+    if (c.req.method === "GET" && c.req.path.startsWith("/api/comentarios/")) {
+        return next()
+    }
+    return authMiddleware(c, next)
+})
 
 // /auth/me fica no grupo protegido
 api.get("/auth/me", async (c) => {
     const userId = c.get("userId") as string
     const [usuario] = await sql`
-    SELECT u.id, u.nome, u.email, u.avatar_url, u.email_verificado, u.criado_em,
-           g.id as garagem_id, g.slug as garagem_slug, g.nome as garagem_nome,
-           g.bio as garagem_bio, g.publica as garagem_publica
-    FROM usuarios u
-    LEFT JOIN garagens g ON g.usuario_id = u.id
-    WHERE u.id = ${userId}
-    LIMIT 1
-  `
+        SELECT u.id, u.nome, u.email, u.avatar_url, u.email_verificado, u.criado_em,
+               g.id as garagem_id, g.slug as garagem_slug, g.nome as garagem_nome,
+               g.bio as garagem_bio, g.publica as garagem_publica
+        FROM usuarios u
+                 LEFT JOIN garagens g ON g.usuario_id = u.id
+        WHERE u.id = ${userId}
+            LIMIT 1
+    `
     if (!usuario) return c.json({ error: "Não encontrado" }, 401)
     return c.json({
         id: usuario.id,
@@ -89,4 +102,5 @@ api.route("/auth", authV2Routes)
 api.route("/marketplace", marketplaceRoutes)
 api.route("/lojas", lojasRoutes)
 api.route("/eventos-calendario", eventosRoutes)
+api.route("/comentarios", comentariosAuthRoutes)
 app.route("/api", api)

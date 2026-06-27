@@ -1,0 +1,20 @@
+{
+  "name": "AutoHub",
+  "short_name": "AutoHub",
+  "description": "Gerencie seu build automotivo, acompanhe fases e encontre peças.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "productivity"],
+  "lang": "pt-BR"
+}

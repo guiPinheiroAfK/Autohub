@@ -26,11 +26,14 @@ async function seed() {
   let [garagem] = await sql`SELECT id FROM garagens WHERE usuario_id = ${userId}`
   if (!garagem) {
     ;[garagem] = await sql`
-      INSERT INTO garagens (usuario_id, nome, slug)
-      VALUES (${userId}, ${"Garagem do Gui"}, ${"garagem-do-gui"})
+      INSERT INTO garagens (usuario_id, nome, slug, publica)
+      VALUES (${userId}, ${"Garagem do Gui"}, ${"garagem-do-gui"}, ${true})
       RETURNING id
     `
     console.log(`  ✓ Garagem criada`)
+  } else {
+    // Garante que a garagem apareça no feed público
+    await sql`UPDATE garagens SET publica = true WHERE id = ${garagem.id} AND publica = false`
   }
   const garagemId = garagem.id
 
@@ -150,7 +153,12 @@ async function seed() {
         (${gLucas.id}, ${"Radiador alumínio 3 fileiras Civic 96-00"}, ${"Alta performance, sem vazamentos, testado."}, ${380}, ${"BRL"}, ${"motor"}, ${"usado"}, ${"São Paulo, SP"}, ${"ativo"}, ${false}, ${null}),
         (${gLucas.id}, ${"Bicos injetores Bosch 1000cc EV14 (jogo 4)"}, ${"Alta impedância, plug-and-play K-Series. Limpados e testados, flow match garantido."}, ${650}, ${"BRL"}, ${"motor"}, ${"usado"}, ${"São Paulo, SP"}, ${"ativo"}, ${false}, ${null})
     `
-    console.log(`  ✓ Lucas Mendes + garagem + 3 anúncios (1 patrocinado)`)
+    // Veículo público para aparecer no feed
+    await sql`
+      INSERT INTO veiculos (garagem_id, apelido, marca, modelo, ano_fabricacao, ano_modelo, perfil, status, visibilidade)
+      VALUES (${gLucas.id}, ${"Civic K-Swap"}, ${"Honda"}, ${"Civic"}, ${1999}, ${1999}, ${"street_build"}, ${"em_andamento"}, ${"publico"})
+    `
+    console.log(`  ✓ Lucas Mendes + garagem + 3 anúncios (1 patrocinado) + 1 veículo`)
   } else {
     console.log(`  · Lucas já existe`)
   }
@@ -176,7 +184,12 @@ async function seed() {
         (${gRafa.id}, ${"Coilover Tein Flex Z Honda Civic EK/EJ"}, ${"Revisada com kits da Tein. Altura e amortecimento ajustáveis."}, ${2800}, ${"BRL"}, ${"suspensao"}, ${"recondicionado"}, ${"Rio de Janeiro, RJ"}, ${"ativo"}),
         (${gRafa.id}, ${"Kit freio esportivo traseiro Civic EK (novo)"}, ${"Discos perfurados+ranhados + pastilhas cerâmicas. Nunca instalado. NF disponível."}, ${950}, ${"BRL"}, ${"freios"}, ${"novo"}, ${"Rio de Janeiro, RJ"}, ${"ativo"})
     `
-    console.log(`  ✓ Rafaela Costa + garagem + 3 anúncios`)
+    // Veículo público para aparecer no feed
+    await sql`
+      INSERT INTO veiculos (garagem_id, apelido, marca, modelo, ano_fabricacao, ano_modelo, perfil, status, visibilidade)
+      VALUES (${gRafa.id}, ${"EK Time Attack"}, ${"Honda"}, ${"Civic EK"}, ${1998}, ${1998}, ${"track"}, ${"em_andamento"}, ${"publico"})
+    `
+    console.log(`  ✓ Rafaela Costa + garagem + 3 anúncios + 1 veículo`)
   } else {
     console.log(`  · Rafaela já existe`)
   }
