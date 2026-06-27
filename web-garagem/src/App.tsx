@@ -4,6 +4,7 @@ import { AuthProvider } from "@/context/AuthContext"
 import { SettingsProvider } from "@/context/SettingsContext"
 import { ProtectedRoute } from "@/components/shared/ProtectedRoute"
 import { Layout } from "@/components/layout/Layout"
+import { InstallPWA } from "@/components/layout/InstallPWA"
 
 const LoginPage         = lazy(() => import("@/pages/LoginPage"))
 const GaragemOverview   = lazy(() => import("@/pages/GaragemOverview"))
@@ -27,58 +28,62 @@ const LojaPage          = lazy(() => import("@/pages/LojaPage"))
 const PitchPage         = lazy(() => import("@/pages/PitchPage"))
 
 const Spinner = () => (
-  <div className="flex min-h-[60vh] items-center justify-center">
-    <div className="size-8 animate-spin rounded-full border-2 border-border border-t-purple" />
-  </div>
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="size-8 animate-spin rounded-full border-2 border-border border-t-purple" />
+    </div>
 )
 
 const S = ({ children }: { children: React.ReactNode }) => (
-  <Suspense fallback={<Spinner />}>{children}</Suspense>
+    <Suspense fallback={<Spinner />}>{children}</Suspense>
 )
 
 export default function App() {
   return (
-    <SettingsProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<S><LoginPage /></S>} />
+      <SettingsProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            {/* Banner de instalação do PWA — global, fora do Layout protegido,
+              assim aparece também na tela de login */}
+            <InstallPWA />
 
-            {/* Rotas públicas sem auth */}
-            <Route path="/g/:slug" element={<Layout />}>
-              <Route index element={<S><GaragemPublicaPage /></S>} />
-              <Route path=":veiculoId" element={<S><VeiculoPublicoPage /></S>} />
-            </Route>
-            <Route path="/verificar-email" element={<S><VerificarEmailPage /></S>} />
-            <Route path="/resetar-senha" element={<S><ResetarSenhaPage /></S>} />
-            <Route path="/oauth/callback" element={<S><AuthCallbackPage /></S>} />
-            <Route path="/landingpage-pitch" element={<S><PitchPage /></S>} />
-            <Route path="/convite" element={<Layout />}>
-              <Route index element={<S><ConvitePage /></S>} />
-            </Route>
-            <Route path="/loja/:garagemSlug" element={<Layout />}>
-              <Route index element={<S><LojaPage /></S>} />
-            </Route>
+            <Routes>
+              <Route path="/login" element={<S><LoginPage /></S>} />
 
-            {/* Rotas protegidas */}
-            <Route element={<ProtectedRoute />}>
-              <Route element={<Layout />}>
-                <Route path="/" element={<S><GaragemOverview /></S>} />
-                <Route path="/novo" element={<S><NovoVeiculo /></S>} />
-                <Route path="/veiculo/:id" element={<S><VeiculoDetalhe /></S>} />
-                <Route path="/configuracoes" element={<S><ConfiguracaoPage /></S>} />
-                <Route path="/eventos" element={<S><EventosPage /></S>} />
-                <Route path="/feed" element={<S><FeedPage /></S>} />
-                <Route path="/marketplace" element={<S><MarketplacePage /></S>} />
-                <Route path="/tracks" element={<S><TracksPage /></S>} />
-                <Route path="/tracks/:rotaId" element={<S><RotaDetalhePage /></S>} />
-                <Route path="/tracks/:rotaId/run" element={<S><RunPage /></S>} />
-                <Route path="/minha-loja" element={<S><MinhaLojaPage /></S>} />
+              {/* Rotas públicas sem auth */}
+              <Route path="/g/:slug" element={<Layout />}>
+                <Route index element={<S><GaragemPublicaPage /></S>} />
+                <Route path=":veiculoId" element={<S><VeiculoPublicoPage /></S>} />
               </Route>
-            </Route>
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </SettingsProvider>
+              <Route path="/verificar-email" element={<S><VerificarEmailPage /></S>} />
+              <Route path="/resetar-senha" element={<S><ResetarSenhaPage /></S>} />
+              <Route path="/oauth/callback" element={<S><AuthCallbackPage /></S>} />
+              <Route path="/landingpage-pitch" element={<S><PitchPage /></S>} />
+              <Route path="/convite" element={<Layout />}>
+                <Route index element={<S><ConvitePage /></S>} />
+              </Route>
+              <Route path="/loja/:garagemSlug" element={<Layout />}>
+                <Route index element={<S><LojaPage /></S>} />
+              </Route>
+
+              {/* Rotas protegidas */}
+              <Route element={<ProtectedRoute />}>
+                <Route element={<Layout />}>
+                  <Route path="/" element={<S><GaragemOverview /></S>} />
+                  <Route path="/novo" element={<S><NovoVeiculo /></S>} />
+                  <Route path="/veiculo/:id" element={<S><VeiculoDetalhe /></S>} />
+                  <Route path="/configuracoes" element={<S><ConfiguracaoPage /></S>} />
+                  <Route path="/eventos" element={<S><EventosPage /></S>} />
+                  <Route path="/feed" element={<S><FeedPage /></S>} />
+                  <Route path="/marketplace" element={<S><MarketplacePage /></S>} />
+                  <Route path="/tracks" element={<S><TracksPage /></S>} />
+                  <Route path="/tracks/:rotaId" element={<S><RotaDetalhePage /></S>} />
+                  <Route path="/tracks/:rotaId/run" element={<S><RunPage /></S>} />
+                  <Route path="/minha-loja" element={<S><MinhaLojaPage /></S>} />
+                </Route>
+              </Route>
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </SettingsProvider>
   )
 }

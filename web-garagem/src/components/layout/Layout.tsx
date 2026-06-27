@@ -4,15 +4,15 @@ import { BottomNav } from "./BottomNav"
 import { useAuth } from "@/context/AuthContext"
 
 export function Layout() {
-  const { user } = useAuth()
+    const { user } = useAuth()
 
-  return (
-    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
-      <Header />
-      <main className="mx-auto max-w-[1100px] px-4 py-8 pb-24 sm:px-6 sm:py-10 sm:pb-20 animate-page-in">
-        <Outlet />
-      </main>
-      {user && <BottomNav />}
-    </div>
-  )
+    return (
+        <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
+            <Header />
+            <main className="mx-auto max-w-[1100px] px-4 py-8 pb-24 sm:px-6 sm:py-10 sm:pb-20 animate-page-in">
+                <Outlet />
+            </main>
+            {user && <BottomNav />}
+        </div>
+    )
 }
