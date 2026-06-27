@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AutoHub API Test Script — v4
+# AutoHub API Test Script — v5
 # Uso: bash scripts/test-api.sh [BASE_URL]
 # Ex:  bash scripts/test-api.sh http://localhost:8000
 #      bash scripts/test-api.sh https://autohubbr.netlify.app
@@ -411,6 +411,174 @@ fi
 
 blue "18. Cotações"
 check "GET /api/cotacoes" "$(json_get /api/cotacoes)" "200"
+
+# ── 19. Fotos de veículos (Cloudinary URLs) ────────────────────────────────────
+
+blue "19. Fotos de veículos"
+if [[ -n "$VEICULO_ID" ]]; then
+  # POST com URL válida
+  FOTO_RESP=$(curl -sf -X POST "$BASE/api/veiculos/$VEICULO_ID/fotos" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d '{"url":"https://res.cloudinary.com/autohub/image/upload/v1/test/foto-teste.jpg","legenda":"Foto de teste"}')
+  FOTO_ID=$(echo "$FOTO_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+  if [[ -n "$FOTO_ID" ]]; then
+    green "POST /api/veiculos/:id/fotos — id=$FOTO_ID"; ((PASS++))
+  else
+    red "POST /api/veiculos/:id/fotos — sem id na resposta"; ((FAIL++))
+  fi
+
+  # GET lista fotos
+  check "GET /api/veiculos/:id/fotos" "$(json_get /api/veiculos/$VEICULO_ID/fotos)" "200"
+
+  FOTOS_RESP=$(json_get_body /api/veiculos/$VEICULO_ID/fotos)
+  if echo "$FOTOS_RESP" | grep -q '"url"'; then
+    green "GET /api/veiculos/:id/fotos — campo url presente"; ((PASS++))
+  else
+    red "GET /api/veiculos/:id/fotos — sem campo url"; ((FAIL++))
+  fi
+
+  # POST sem url → 400
+  check "POST /api/veiculos/:id/fotos (sem url → 400)" \
+    "$(json_post /api/veiculos/$VEICULO_ID/fotos '{}')" "400"
+
+  # DELETE a foto
+  if [[ -n "$FOTO_ID" ]]; then
+    check "DELETE /api/veiculos/:id/fotos/:fotoId" \
+      "$(json_delete /api/veiculos/$VEICULO_ID/fotos/$FOTO_ID)" "200"
+
+    check "DELETE /api/veiculos/:id/fotos/:fotoId (já deletada → 404)" \
+      "$(json_delete /api/veiculos/$VEICULO_ID/fotos/$FOTO_ID)" "404"
+  fi
+
+  # Sem token → 401
+  STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -X GET "$BASE/api/veiculos/$VEICULO_ID/fotos")
+  check "GET /api/veiculos/:id/fotos (sem token → 401)" "$STATUS" "401"
+else
+  gray "Fotos — pulado: sem VEICULO_ID"
+fi
+
+# ── 20. Comentários ────────────────────────────────────────────────────────────
+
+blue "20. Comentários"
+if [[ -n "$VEICULO_ID" ]]; then
+  # GET público (veículo foi criado como publico)
+  check "GET /api/comentarios/:veiculoId (público, sem token)" \
+    "$(curl -sf -o /dev/null -w '%{http_code}' "$BASE/api/comentarios/$VEICULO_ID")" "200"
+
+  # POST com auth
+  COM_RESP=$(curl -sf -X POST "$BASE/api/comentarios/$VEICULO_ID" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d '{"texto":"Build muito maneiro! Qual suspensão vai usar?"}')
+  COM_ID=$(echo "$COM_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+  if [[ -n "$COM_ID" ]]; then
+    green "POST /api/comentarios/:veiculoId — id=$COM_ID"; ((PASS++))
+  else
+    red "POST /api/comentarios/:veiculoId — sem id"; ((FAIL++))
+  fi
+
+  # GET lista: deve ter o comentário recém-criado
+  COM_LIST=$(json_get_body /api/comentarios/$VEICULO_ID)
+  if echo "$COM_LIST" | grep -q '"autor_nome"'; then
+    green "GET /api/comentarios/:veiculoId — campo autor_nome presente"; ((PASS++))
+  else
+    red "GET /api/comentarios/:veiculoId — sem campo autor_nome"; ((FAIL++))
+  fi
+  if echo "$COM_LIST" | grep -q '"texto"'; then
+    green "GET /api/comentarios/:veiculoId — campo texto presente"; ((PASS++))
+  else
+    red "GET /api/comentarios/:veiculoId — sem campo texto"; ((FAIL++))
+  fi
+
+  # Feed deve refletir contagem de comentários
+  FEED_COM=$(json_get_body /api/feed)
+  if echo "$FEED_COM" | grep -q '"total_comentarios"'; then
+    green "GET /api/feed — campo total_comentarios presente"; ((PASS++))
+  else
+    red "GET /api/feed — sem campo total_comentarios"; ((FAIL++))
+  fi
+
+  # POST texto vazio → 400
+  check "POST /api/comentarios/:veiculoId (texto vazio → 400)" \
+    "$(json_post /api/comentarios/$VEICULO_ID '{"texto":""}')" "400"
+
+  # POST sem token → 401
+  STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$BASE/api/comentarios/$VEICULO_ID" \
+    -H "Content-Type: application/json" \
+    -d '{"texto":"Sem auth"}')
+  check "POST /api/comentarios/:veiculoId (sem token → 401)" "$STATUS" "401"
+
+  # DELETE o próprio comentário
+  if [[ -n "$COM_ID" ]]; then
+    check "DELETE /api/comentarios/:comentarioId" \
+      "$(json_delete /api/comentarios/$COM_ID)" "200"
+
+    check "DELETE /api/comentarios/:comentarioId (já deletado → 404)" \
+      "$(json_delete /api/comentarios/$COM_ID)" "404"
+  fi
+
+  # GET veículo privado → 404
+  VEI_PRIV_RESP=$(curl -sf -X POST "$BASE/api/veiculos" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d '{"apelido":"Privado","marca":"Ford","modelo":"Ka","anoFabricacao":2015,"anoModelo":2015,"perfil":"daily","visibilidade":"privado"}')
+  VEI_PRIV_ID=$(echo "$VEI_PRIV_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+  if [[ -n "$VEI_PRIV_ID" ]]; then
+    STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "$BASE/api/comentarios/$VEI_PRIV_ID")
+    check "GET /api/comentarios/:veiculoId (veículo privado → 404)" "$STATUS" "404"
+  fi
+else
+  gray "Comentários — pulado: sem VEICULO_ID"
+fi
+
+# ── 21. PWA — manifest.json ────────────────────────────────────────────────────
+
+blue "21. PWA — manifest.json"
+# Quando rodando na API local (porta 8000), tenta o front em 5173
+MANIFEST_URL="$BASE"
+if [[ "$MANIFEST_URL" =~ ":8000" ]]; then
+  MANIFEST_URL="${MANIFEST_URL/8000/5173}"
+  gray "Ajustando manifest URL para o front: $MANIFEST_URL/manifest.json"
+fi
+
+MANIFEST_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "$MANIFEST_URL/manifest.json" 2>/dev/null)
+if [[ "$MANIFEST_STATUS" == "200" ]]; then
+  green "GET /manifest.json — HTTP 200"; ((PASS++))
+  MANIFEST=$(curl -sf "$MANIFEST_URL/manifest.json" 2>/dev/null)
+  if echo "$MANIFEST" | grep -q '"name"'; then
+    green "manifest.json — campo name presente"; ((PASS++))
+  else
+    red "manifest.json — sem campo name"; ((FAIL++))
+  fi
+  if echo "$MANIFEST" | grep -q '"theme_color"'; then
+    green "manifest.json — campo theme_color presente"; ((PASS++))
+  else
+    red "manifest.json — sem theme_color"; ((FAIL++))
+  fi
+  if echo "$MANIFEST" | grep -q '"display".*standalone'; then
+    green "manifest.json — display: standalone (PWA nativo)"; ((PASS++))
+  else
+    red "manifest.json — display não é standalone"; ((FAIL++))
+  fi
+  if echo "$MANIFEST" | grep -q '"start_url"'; then
+    green "manifest.json — campo start_url presente"; ((PASS++))
+  else
+    red "manifest.json — sem start_url"; ((FAIL++))
+  fi
+else
+  gray "manifest.json inacessível em $MANIFEST_URL (HTTP $MANIFEST_STATUS) — suba o front para testar PWA"
+fi
+
+# Verifica service worker (só via Netlify/front rodando)
+SW_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "$MANIFEST_URL/sw.js" 2>/dev/null)
+if [[ "$SW_STATUS" == "200" ]]; then
+  green "GET /sw.js — HTTP 200 (service worker acessível)"; ((PASS++))
+else
+  gray "GET /sw.js — HTTP $SW_STATUS (normal se front não estiver rodando)"
+fi
 
 # ── Resultado ─────────────────────────────────────────────────────────────────
 
