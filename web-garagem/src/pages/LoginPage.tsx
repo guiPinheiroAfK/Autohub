@@ -102,17 +102,28 @@ export default function LoginPage() {
     <div className="flex min-h-screen bg-background text-foreground animate-page-in">
 
       {/* ── Painel visual (desktop only) ─────────────────────────────────────── */}
-      <div
-        className="hidden lg:flex lg:flex-1 lg:flex-col relative overflow-hidden"
-        style={{
-          backgroundImage: "url('/login-bg.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundColor: "#0a0a0f",
-        }}
-      >
-        {/* Overlay escuro */}
-        <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/60 to-purple/10" />
+      <div className="hidden lg:flex lg:flex-1 lg:flex-col relative overflow-hidden" style={{ backgroundColor: "#0a0a0f" }}>
+        {/* Camada 1 — gradiente de base (aparece quando não há foto) */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a0f] via-[#13101c] to-[#1c1430]" />
+
+        {/* Camada 2 — brilho roxo suave no canto */}
+        <div
+          className="absolute inset-0"
+          style={{ background: "radial-gradient(120% 80% at 85% 15%, rgba(127,119,221,0.18), transparent 60%)" }}
+        />
+
+        {/* Camada 3 — foto de fundo (opcional: public/login-bg.jpg) */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: "url('/login-bg.jpg')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        />
+
+        {/* Camada 4 — overlay escuro para legibilidade do texto */}
+        <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/55 to-purple/10" />
 
         {/* Roda decorativa grande — fundo */}
         <div className={`absolute -bottom-24 -right-24 opacity-[0.06] pointer-events-none ${wheelSpinning ? "animate-wheel-spin" : ""}`}>

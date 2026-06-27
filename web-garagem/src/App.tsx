@@ -5,6 +5,7 @@ import { SettingsProvider } from "@/context/SettingsContext"
 import { ProtectedRoute } from "@/components/shared/ProtectedRoute"
 import { Layout } from "@/components/layout/Layout"
 import { InstallPWA } from "@/components/layout/InstallPWA"
+import { RouteTitle } from "@/components/shared/RouteTitle"
 
 const LoginPage         = lazy(() => import("@/pages/LoginPage"))
 const GaragemOverview   = lazy(() => import("@/pages/GaragemOverview"))
@@ -43,6 +44,9 @@ export default function App() {
       <SettingsProvider>
         <BrowserRouter>
           <AuthProvider>
+            {/* Sincroniza document.title com a rota atual */}
+            <RouteTitle />
+
             {/* Banner de instalação do PWA — global, fora do Layout protegido,
               assim aparece também na tela de login */}
             <InstallPWA />
