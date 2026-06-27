@@ -27,8 +27,8 @@ export const comentariosRoutes = new Hono<AppEnv>()
 
 // Auth já é garantido pelo grupo pai (api.use("*", authMiddleware) em app.ts)
 
-// POST /comentarios/:veiculoId — requer auth
-comentariosRoutes.post("/comentarios/:veiculoId", async (c) => {
+// POST /:veiculoId — requer auth (montado em /comentarios via app.ts)
+comentariosRoutes.post("/:veiculoId", async (c) => {
   const userId = c.get("userId") as string
   const { veiculoId } = c.req.param()
 
@@ -78,8 +78,8 @@ comentariosRoutes.post("/comentarios/:veiculoId", async (c) => {
   }, 201)
 })
 
-// DELETE /comentarios/:comentarioId — dono do comentário
-comentariosRoutes.delete("/comentarios/:comentarioId", async (c) => {
+// DELETE /:comentarioId — dono do comentário (montado em /comentarios via app.ts)
+comentariosRoutes.delete("/:comentarioId", async (c) => {
   const userId = c.get("userId") as string
   const { comentarioId } = c.req.param()
 

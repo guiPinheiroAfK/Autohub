@@ -534,43 +534,43 @@ else
   gray "Comentários — pulado: sem VEICULO_ID"
 fi
 
-# ── 21. PWA — manifest.json ────────────────────────────────────────────────────
+# ── 21. PWA — manifest.webmanifest ──────────────────────────────────────────────
 
-blue "21. PWA — manifest.json"
+blue "21. PWA — manifest.webmanifest"
 # Quando rodando na API local (porta 8000), tenta o front em 5173
 MANIFEST_URL="$BASE"
 if [[ "$MANIFEST_URL" =~ ":8000" ]]; then
   MANIFEST_URL="${MANIFEST_URL/8000/5173}"
-  gray "Ajustando manifest URL para o front: $MANIFEST_URL/manifest.json"
+  gray "Ajustando manifest URL para o front: $MANIFEST_URL/manifest.webmanifest"
 fi
 
-MANIFEST_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "$MANIFEST_URL/manifest.json" 2>/dev/null)
+MANIFEST_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "$MANIFEST_URL/manifest.webmanifest" 2>/dev/null)
 if [[ "$MANIFEST_STATUS" == "200" ]]; then
-  green "GET /manifest.json — HTTP 200"; ((PASS++))
-  # tr -d '\r' remove CRLF do Windows antes de greping
-  MANIFEST=$(curl -sf "$MANIFEST_URL/manifest.json" 2>/dev/null | tr -d '\r')
+  green "GET /manifest.webmanifest — HTTP 200"; ((PASS++))
+  # tr -d '\r' remove CRLF do Windows antes do grep
+  MANIFEST=$(curl -sf "$MANIFEST_URL/manifest.webmanifest" 2>/dev/null | tr -d '\r')
   if echo "$MANIFEST" | grep -qF '"name"'; then
-    green "manifest.json — campo name presente"; ((PASS++))
+    green "manifest.webmanifest — campo name presente"; ((PASS++))
   else
-    red "manifest.json — sem campo name"; ((FAIL++))
+    red "manifest.webmanifest — sem campo name"; ((FAIL++))
   fi
   if echo "$MANIFEST" | grep -qF '"theme_color"'; then
-    green "manifest.json — campo theme_color presente"; ((PASS++))
+    green "manifest.webmanifest — campo theme_color presente"; ((PASS++))
   else
-    red "manifest.json — sem theme_color"; ((FAIL++))
+    red "manifest.webmanifest — sem theme_color"; ((FAIL++))
   fi
   if echo "$MANIFEST" | grep -qF '"display"'; then
-    green "manifest.json — display: standalone (PWA nativo)"; ((PASS++))
+    green "manifest.webmanifest — display: standalone (PWA nativo)"; ((PASS++))
   else
-    red "manifest.json — display não é standalone"; ((FAIL++))
+    red "manifest.webmanifest — display não é standalone"; ((FAIL++))
   fi
   if echo "$MANIFEST" | grep -qF '"start_url"'; then
-    green "manifest.json — campo start_url presente"; ((PASS++))
+    green "manifest.webmanifest — campo start_url presente"; ((PASS++))
   else
-    red "manifest.json — sem start_url"; ((FAIL++))
+    red "manifest.webmanifest — sem start_url"; ((FAIL++))
   fi
 else
-  gray "manifest.json inacessível em $MANIFEST_URL (HTTP $MANIFEST_STATUS) — suba o front para testar PWA"
+  gray "manifest.webmanifest inacessível em $MANIFEST_URL (HTTP $MANIFEST_STATUS) — suba o front para testar PWA"
 fi
 
 # Verifica service worker (só via Netlify/front rodando)
