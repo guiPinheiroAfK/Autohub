@@ -163,6 +163,16 @@ export function Header() {
   const { user, logout } = useAuth()
   const naHome = pathname === "/" || pathname === "/configuracoes"
   const naTracksSection = pathname.startsWith("/tracks")
+  const [spinning, setSpinning] = useState(false)
+  const spinDone = useRef(false)
+
+  useEffect(() => {
+    if (spinDone.current) return
+    spinDone.current = true
+    setSpinning(true)
+    const t = setTimeout(() => setSpinning(false), 800)
+    return () => clearTimeout(t)
+  }, [])
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-sm">
@@ -170,9 +180,9 @@ export function Header() {
 
         {/* Logo / back */}
         {naHome ? (
-          <Link to="/" className="flex shrink-0 items-center justify-center group">
+          <Link to="/info" className="flex shrink-0 items-center justify-center group">
             <div className="flex size-8 items-center justify-center rounded-lg bg-purple-bg text-purple transition-transform group-hover:scale-105">
-              <Logo className="size-[18px]" />
+              <Logo className={`size-[22px] ${spinning ? "animate-wheel-spin" : ""}`} />
             </div>
           </Link>
         ) : (

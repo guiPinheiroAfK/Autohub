@@ -124,3 +124,12 @@ body {
 .animate-page-in {
   animation: slide-up-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+@keyframes wheel-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-wheel-spin {
+  animation: wheel-spin 0.75s cubic-bezier(0.4, 0, 0.2, 1) both;
+}

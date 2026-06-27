@@ -1,8 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#09090b"/>
-  <circle cx="16" cy="16" r="12" stroke="#a855f7" stroke-width="2" fill="none"/>
-  <circle cx="16" cy="16" r="3.5" fill="#a855f7"/>
-  <line x1="16" y1="12.5" x2="16" y2="4" stroke="#a855f7" stroke-width="2.2" stroke-linecap="round"/>
-  <line x1="19.03" y1="17.75" x2="26.39" y2="22" stroke="#a855f7" stroke-width="2.2" stroke-linecap="round"/>
-  <line x1="12.97" y1="17.75" x2="5.61" y2="22" stroke="#a855f7" stroke-width="2.2" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="g" x1="15%" y1="5%" x2="85%" y2="95%" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#e879f9"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22" fill="#09090b"/>
+  <circle cx="50" cy="50" r="43.5" stroke="url(#g)" stroke-width="2.5" fill="none"/>
+  <!-- 5 hollow swept spokes, ~25° diagonal sweep, thinner border, tight to hub -->
+  <g fill="url(#g)" fill-rule="evenodd" transform="rotate(-90,50,50)">
+    <path d="M 63 50 Q 70 27 77.96 20.01 A 41 41 0 0 1 90.94 47.85 Q 82 57 63 50 Z M 66 50 Q 72 35 77.07 24.77 A 37 37 0 0 1 86.86 46.78 Q 80 55 66 50 Z"/>
+    <path d="M 63 50 Q 70 27 77.96 20.01 A 41 41 0 0 1 90.94 47.85 Q 82 57 63 50 Z M 66 50 Q 72 35 77.07 24.77 A 37 37 0 0 1 86.86 46.78 Q 80 55 66 50 Z" transform="rotate(72,50,50)"/>
+    <path d="M 63 50 Q 70 27 77.96 20.01 A 41 41 0 0 1 90.94 47.85 Q 82 57 63 50 Z M 66 50 Q 72 35 77.07 24.77 A 37 37 0 0 1 86.86 46.78 Q 80 55 66 50 Z" transform="rotate(144,50,50)"/>
+    <path d="M 63 50 Q 70 27 77.96 20.01 A 41 41 0 0 1 90.94 47.85 Q 82 57 63 50 Z M 66 50 Q 72 35 77.07 24.77 A 37 37 0 0 1 86.86 46.78 Q 80 55 66 50 Z" transform="rotate(216,50,50)"/>
+    <path d="M 63 50 Q 70 27 77.96 20.01 A 41 41 0 0 1 90.94 47.85 Q 82 57 63 50 Z M 66 50 Q 72 35 77.07 24.77 A 37 37 0 0 1 86.86 46.78 Q 80 55 66 50 Z" transform="rotate(288,50,50)"/>
+  </g>
+  <!-- hub: r=17 cover overlaps spoke bases, ring, center dot -->
+  <circle cx="50" cy="50" r="17" fill="#09090b"/>
+  <circle cx="50" cy="50" r="13.5" stroke="url(#g)" stroke-width="4.5" fill="#09090b"/>
+  <circle cx="50" cy="50" r="3.5" fill="url(#g)"/>
 </svg>

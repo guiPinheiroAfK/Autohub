@@ -26,6 +26,7 @@ const RunPage           = lazy(() => import("@/pages/RunPage"))
 const MinhaLojaPage     = lazy(() => import("@/pages/MinhaLojaPage"))
 const LojaPage          = lazy(() => import("@/pages/LojaPage"))
 const PitchPage         = lazy(() => import("@/pages/PitchPage"))
+const InfoPage          = lazy(() => import("@/pages/InfoPage"))
 
 const Spinner = () => (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -58,6 +59,7 @@ export default function App() {
               <Route path="/resetar-senha" element={<S><ResetarSenhaPage /></S>} />
               <Route path="/oauth/callback" element={<S><AuthCallbackPage /></S>} />
               <Route path="/landingpage-pitch" element={<S><PitchPage /></S>} />
+              <Route path="/info" element={<S><InfoPage /></S>} />
               <Route path="/convite" element={<Layout />}>
                 <Route index element={<S><ConvitePage /></S>} />
               </Route>
