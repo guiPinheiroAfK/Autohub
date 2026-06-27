@@ -91,13 +91,15 @@ publicoRoutes.get("/feed", async (c) => {
            u.nome as dono_nome, u.avatar_url as dono_avatar,
            COUNT(DISTINCT f.id)::int as total_fases,
            COUNT(DISTINCT i.id)::int as total_itens,
-           COUNT(DISTINCT i2.id)::int as itens_concluidos
+           COUNT(DISTINCT i2.id)::int as itens_concluidos,
+           COUNT(DISTINCT c.id)::int as total_comentarios
     FROM veiculos v
     JOIN garagens g ON g.id = v.garagem_id
     JOIN usuarios u ON u.id = g.usuario_id
     LEFT JOIN fases f ON f.veiculo_id = v.id
     LEFT JOIN itens i ON i.fase_id = f.id
     LEFT JOIN itens i2 ON i2.fase_id = f.id AND i2.status = 'concluido'
+    LEFT JOIN comentarios c ON c.veiculo_id = v.id
     WHERE v.visibilidade = 'publico'
       AND g.publica = true
       AND u.email NOT LIKE 'teste\_%@autohub.test'

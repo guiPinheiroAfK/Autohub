@@ -15,6 +15,7 @@ import { marketplacePublicoRoutes, marketplaceRoutes } from "./routes/marketplac
 import { lojasPublicoRoutes, lojasRoutes } from "./routes/lojas.ts"
 import { eventosPublicoRoutes, eventosRoutes } from "./routes/eventos-calendario.ts"
 import { googleAuthRoutes } from "./routes/auth-google.ts"
+import { comentariosPublicoRoutes, comentariosRoutes } from "./routes/comentarios.ts"
 import { sql } from "./db/client.ts"
 import type { AppEnv } from "./types.ts"
 
@@ -45,6 +46,7 @@ app.route("/api", publicoRoutes)
 app.route("/api", marketplacePublicoRoutes)
 app.route("/api", lojasPublicoRoutes)
 app.route("/api", eventosPublicoRoutes)
+app.route("/api", comentariosPublicoRoutes)
 
 // ── Rotas protegidas ─────────────────────────────────────────────────────────
 const api = new Hono<AppEnv>()
@@ -89,4 +91,5 @@ api.route("/auth", authV2Routes)
 api.route("/marketplace", marketplaceRoutes)
 api.route("/lojas", lojasRoutes)
 api.route("/eventos-calendario", eventosRoutes)
+api.route("/", comentariosRoutes)
 app.route("/api", api)

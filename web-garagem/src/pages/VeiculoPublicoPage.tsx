@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import { ArrowLeft, CheckCircle2, Circle, Clock3, Zap, ChevronDown, ChevronUp } from "lucide-react"
 import { api } from "@/lib/api/client"
+import { ComentariosSection } from "@/components/shared/ComentariosSection"
 
 interface GaragemInfo {
   id: string
@@ -218,6 +219,9 @@ export default function VeiculoPublicoPage() {
           />
         </div>
       )}
+
+      {/* ── Comentários ────────────────────────────────────────────────── */}
+      <ComentariosSection veiculoId={veiculo.id} />
 
       {/* ── Fases ──────────────────────────────────────────────────────── */}
       {fases.length > 0 && (

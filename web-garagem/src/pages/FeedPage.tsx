@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react"
 import { Link } from "react-router-dom"
-import { Wrench, TrendingUp, Users, Clock } from "lucide-react"
+import { Wrench, TrendingUp, Users, Clock, MessageCircle } from "lucide-react"
 import { api } from "@/lib/api/client"
 
 interface VeiculoFeed {
@@ -20,6 +20,7 @@ interface VeiculoFeed {
   total_fases: number
   total_itens: number
   itens_concluidos: number
+  total_comentarios: number
 }
 
 const PERFIL_LABEL: Record<string, string> = {
@@ -92,10 +93,21 @@ function BuildCard({ v }: { v: VeiculoFeed }) {
             </div>
             {v.dono_nome}
           </Link>
-          <span className="text-[10px] text-faint-foreground flex items-center gap-1">
-            <Clock className="size-3" />
-            {timeAgo(v.criado_em)}
-          </span>
+          <div className="flex items-center gap-2.5 text-[10px] text-faint-foreground">
+            {v.total_comentarios > 0 && (
+              <Link
+                to={`/g/${v.garagem_slug}/${v.id}`}
+                className="flex items-center gap-1 hover:text-purple transition-colors"
+              >
+                <MessageCircle className="size-3" />
+                {v.total_comentarios}
+              </Link>
+            )}
+            <span className="flex items-center gap-1">
+              <Clock className="size-3" />
+              {timeAgo(v.criado_em)}
+            </span>
+          </div>
         </div>
       </div>
     </div>
