@@ -558,6 +558,7 @@ export default function VeiculoDetalhe() {
     const isDono = data.garagem_id === user?.garagem?.id
 
     function exportarPDF() {
+      if(!data) return
       const STATUS_PT: Record<string, string> = {
         planejamento: "Planejamento", em_andamento: "Em andamento",
         concluido: "Concluído", pausado: "Pausado",
