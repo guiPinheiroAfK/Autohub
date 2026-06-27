@@ -90,4 +90,14 @@ export const ROTAS: RotaStatic[] = [
     tempo_ideal_s: 14400,
     regiao: "Centro-Oeste",
   },
+  {
+    id: "foz-morumbi-belvedere",
+    nome: "Morumbi → Belvedere II",
+    descricao: "Travessia urbana de Foz do Iguaçu — do bairro Morumbi até a Rua Toledo no Belvedere II.",
+    ponto_a_nome: "Bairro Morumbi, Foz do Iguaçu",
+    ponto_b_nome: "Rua Toledo 441, Belvedere II",
+    distancia_km: 9,
+    tempo_ideal_s: 900,
+    regiao: "Sul",
+  },
 ]
