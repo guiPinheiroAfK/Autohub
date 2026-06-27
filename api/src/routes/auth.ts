@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs"
 import { sql } from "../db/client.ts"
 import { signToken } from "../middleware/jwt.ts"
 import { enviarVerificacaoEmail } from "../lib/email.ts"
+import { notificarNovoUsuario } from "../lib/discord.ts"
 
 // Validação manual com zod (sem @hono/zod-validator, que não está
 // instalado — evita dependência extra só pra isso).
@@ -70,6 +71,9 @@ authRoutes.post("/register", async (c) => {
   const verificacaoToken = crypto.randomUUID()
   await sql`INSERT INTO email_verificacoes (usuario_id, token) VALUES (${usuario.id}, ${verificacaoToken})`
   enviarVerificacaoEmail(usuario.email, usuario.nome, verificacaoToken).catch(console.error)
+
+  // Notifica no Discord (não bloqueia o registro)
+  notificarNovoUsuario({ nome: usuario.nome, email: usuario.email, via: "email" })
 
   return c.json({
     token,

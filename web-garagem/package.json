@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "icons": "bun scripts/gen-icons.ts",
+    "og": "bun scripts/gen-og.ts",
+    "assets": "bun scripts/gen-icons.ts && bun scripts/gen-og.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.1",

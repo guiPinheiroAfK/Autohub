@@ -186,7 +186,7 @@ export default function VeiculoPublicoPage() {
           <div className="flex size-5 items-center justify-center rounded-full bg-purple-bg text-[9px] font-bold text-purple">
             {garagem.dono_avatar
               ? <img src={garagem.dono_avatar} className="size-full rounded-full object-cover" alt="" />
-              : garagem.dono_nome[0].toUpperCase()
+              : (garagem.dono_nome?.[0] ?? "?").toUpperCase()
             }
           </div>
           {garagem.dono_nome}

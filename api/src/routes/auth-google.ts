@@ -17,6 +17,7 @@
 import { Hono } from "hono"
 import { sql } from "../db/client.ts"
 import { signToken } from "@/middleware/jwt.ts"
+import { notificarNovoUsuario } from "../lib/discord.ts"
 
 export const googleAuthRoutes = new Hono()
 
@@ -147,6 +148,9 @@ googleAuthRoutes.get("/google/callback", async (c) => {
              VALUES (${newUserId}, ${"Garagem de " + gUser.name}, ${newSlug})`,
         ])
         usuario = { id: newU.id as string, email: newU.email as string }
+
+        // Conta nova via Google → notifica no Discord (não bloqueia o login)
+        notificarNovoUsuario({ nome: gUser.name, email: gUser.email, via: "google" })
       }
     }
 

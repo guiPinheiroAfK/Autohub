@@ -89,7 +89,7 @@ export function ComentariosSection({ veiculoId }: { veiculoId: string }) {
               <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-purple-bg text-[10px] font-bold text-purple">
                 {c.autor_avatar
                   ? <img src={c.autor_avatar} className="size-full rounded-full object-cover" alt="" />
-                  : c.autor_nome[0].toUpperCase()
+                  : (c.autor_nome?.[0] ?? "?").toUpperCase()
                 }
               </div>
               <div className="flex-1 min-w-0">
