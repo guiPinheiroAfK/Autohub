@@ -41,26 +41,29 @@ async function seed() {
   let fCDE: { id: string }, fRockAuto: { id: string }, fOficina: { id: string }
   const fornExist = await sql`SELECT id, nome FROM fornecedores WHERE usuario_id = ${userId}`
   if (fornExist.length === 0) {
-    ;[fCDE] = await sql`
+    ; // @ts-ignore
+    [fCDE] = await sql`
       INSERT INTO fornecedores (usuario_id, nome, pais, avaliacao, observacoes)
       VALUES (${userId}, ${"CDE Performance"}, ${"PY"}, ${4.7}, ${"Tornearia e montagem do bloco — Ciudad del Este"})
       RETURNING id
     `
-    ;[fRockAuto] = await sql`
+    ; // @ts-ignore
+    [fRockAuto] = await sql`
       INSERT INTO fornecedores (usuario_id, nome, pais, avaliacao, link_rastreio)
       VALUES (${userId}, ${"RockAuto"}, ${"US"}, ${4.5}, ${"https://rockauto.com"})
       RETURNING id
     `
-    ;[fOficina] = await sql`
+    ; // @ts-ignore
+    [fOficina] = await sql`
       INSERT INTO fornecedores (usuario_id, nome, pais, avaliacao)
       VALUES (${userId}, ${"Oficina Central Foz"}, ${"BR"}, ${4.8})
       RETURNING id
     `
     console.log(`  ✓ 3 fornecedores criados`)
   } else {
-    fCDE      = fornExist.find((f: {nome: string; id: string}) => f.nome === "CDE Performance")     ?? fornExist[0]
-    fRockAuto = fornExist.find((f: {nome: string; id: string}) => f.nome === "RockAuto")             ?? fornExist[0]
-    fOficina  = fornExist.find((f: {nome: string; id: string}) => f.nome === "Oficina Central Foz") ?? fornExist[0]
+    fCDE      = (fornExist.find(f => f.nome === "CDE Performance")     ?? fornExist[0]) as { id: string }
+    fRockAuto = (fornExist.find(f => f.nome === "RockAuto")             ?? fornExist[0]) as { id: string }
+    fOficina  = (fornExist.find(f => f.nome === "Oficina Central Foz") ?? fornExist[0]) as { id: string }
   }
   const F = { cde: fCDE!.id, rockauto: fRockAuto!.id, oficina: fOficina!.id }
 

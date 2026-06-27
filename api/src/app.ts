@@ -18,6 +18,7 @@ import { googleAuthRoutes } from "./routes/auth-google.ts"
 import { comentariosPublicoRoutes, comentariosAuthRoutes } from "./routes/comentarios.ts"
 import { sql } from "./db/client.ts"
 import type { AppEnv } from "./types.ts"
+import {tracksRoutes} from "@/routes/tracks.ts";
 
 export const app = new Hono()
 
@@ -103,4 +104,5 @@ api.route("/marketplace", marketplaceRoutes)
 api.route("/lojas", lojasRoutes)
 api.route("/eventos-calendario", eventosRoutes)
 api.route("/comentarios", comentariosAuthRoutes)
+api.route("/tracks", tracksRoutes)
 app.route("/api", api)
