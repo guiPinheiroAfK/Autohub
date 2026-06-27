@@ -17,6 +17,7 @@ import { eventosPublicoRoutes, eventosRoutes } from "./routes/eventos-calendario
 import { googleAuthRoutes } from "./routes/auth-google.ts"
 import { comentariosPublicoRoutes, comentariosAuthRoutes } from "./routes/comentarios.ts"
 import { sql } from "./db/client.ts"
+import { isAdmin } from "./lib/admin.ts"
 import type { AppEnv } from "./types.ts"
 import {tracksRoutes} from "@/routes/tracks.ts";
 
@@ -83,6 +84,7 @@ api.get("/auth/me", async (c) => {
         email: usuario.email,
         avatarUrl: usuario.avatar_url,
         emailVerificado: usuario.email_verificado,
+        admin: isAdmin(usuario.email),
         garagem: {
             id: usuario.garagem_id,
             slug: usuario.garagem_slug,
