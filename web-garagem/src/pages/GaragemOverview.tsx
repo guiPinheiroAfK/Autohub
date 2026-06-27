@@ -162,7 +162,7 @@ function SocialWidget() {
       <div className="flex items-center gap-4 px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <Users className="size-4 text-faint-foreground" />
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
+          <span className="hidden sm:inline text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
             Comunidade
           </span>
         </div>
