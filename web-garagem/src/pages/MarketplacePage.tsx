@@ -127,7 +127,7 @@ function ModalInteressados({ anuncioId, titulo, onClose }: { anuncioId: string; 
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5">
                       <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-purple-bg text-[12px] font-bold text-purple">
-                        {i.nome[0].toUpperCase()}
+                        {(i.nome?.[0] ?? "?").toUpperCase()}
                       </div>
                       <div>
                         <p className="text-[13px] font-medium text-foreground">{i.nome}</p>

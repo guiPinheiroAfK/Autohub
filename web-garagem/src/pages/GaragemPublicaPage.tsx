@@ -124,7 +124,7 @@ export default function GaragemPublicaPage() {
             <div className="flex size-14 items-center justify-center rounded-xl bg-purple-bg text-purple text-2xl font-bold">
               {garagem.dono_avatar
                 ? <img src={garagem.dono_avatar} className="size-full rounded-xl object-cover" alt="" />
-                : garagem.dono_nome[0].toUpperCase()
+                : (garagem.dono_nome?.[0] ?? "?").toUpperCase()
               }
             </div>
             <div>

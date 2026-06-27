@@ -211,7 +211,7 @@ function SocialWidget() {
           </p>
         ) : (
           lista.map(item => {
-            const nome = tab === "seguidores" ? item.dono_nome : (item.garagem_nome ?? item.dono_nome)
+            const nome = (tab === "seguidores" ? item.dono_nome : (item.garagem_nome ?? item.dono_nome)) ?? "?"
             return (
               <Link
                 key={item.id + tab}

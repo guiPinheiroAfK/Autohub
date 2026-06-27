@@ -88,7 +88,7 @@ function BuildCard({ v }: { v: VeiculoFeed }) {
             <div className="flex size-5 items-center justify-center rounded-full bg-purple-bg text-[9px] font-bold text-purple">
               {v.dono_avatar
                 ? <img src={v.dono_avatar} className="size-full rounded-full object-cover" alt="" />
-                : v.dono_nome[0].toUpperCase()
+                : (v.dono_nome?.[0] ?? "?").toUpperCase()
               }
             </div>
             {v.dono_nome}
