@@ -2,10 +2,8 @@
 import { Hono } from "hono"
 import { z } from "zod"
 import { sql } from "../db/client.ts"
-import { authMiddleware } from "../middleware/auth.ts"
-
 export const itensRoutes = new Hono<AppEnv>()
-itensRoutes.use("*", authMiddleware)
+// Auth garantido pelo grupo pai (api.use("*", authMiddleware) em app.ts)
 
 const statusEnum = z.enum(["planejado", "andamento", "concluido"])
 

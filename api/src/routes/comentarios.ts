@@ -2,10 +2,11 @@ import { Hono } from "hono"
 import { sql } from "../db/client.ts"
 import type { AppEnv } from "../types.ts"
 
+// ── Público: GET /:veiculoId (sem auth) ─────────────────────────────────────
+// Montado em /api/comentarios no app.ts — resolve /api/comentarios/:veiculoId
 export const comentariosPublicoRoutes = new Hono()
 
-// GET /comentarios/:veiculoId — público, só retorna se veículo for público
-comentariosPublicoRoutes.get("/comentarios/:veiculoId", async (c) => {
+comentariosPublicoRoutes.get("/:veiculoId", async (c) => {
   const { veiculoId } = c.req.param()
 
   const [v] = await sql`SELECT visibilidade FROM veiculos WHERE id = ${veiculoId}`
@@ -23,12 +24,32 @@ comentariosPublicoRoutes.get("/comentarios/:veiculoId", async (c) => {
   return c.json(comentarios)
 })
 
-export const comentariosRoutes = new Hono<AppEnv>()
+// ── Protegido: POST e DELETE (com auth via grupo pai) ───────────────────────
+// Montado em /api/comentarios no grupo protegido do app.ts
+// Separado do público para não colidir no GET
+export const comentariosAuthRoutes = new Hono<AppEnv>()
 
-// Auth já é garantido pelo grupo pai (api.use("*", authMiddleware) em app.ts)
+// GET é público — não usa auth do grupo pai
+comentariosAuthRoutes.get("/:veiculoId", async (c) => {
+  const { veiculoId } = c.req.param()
 
-// POST /:veiculoId — requer auth (montado em /comentarios via app.ts)
-comentariosRoutes.post("/:veiculoId", async (c) => {
+  const [v] = await sql`SELECT visibilidade FROM veiculos WHERE id = ${veiculoId}`
+  if (!v || v.visibilidade !== "publico") return c.json({ error: "Não encontrado" }, 404)
+
+  const comentarios = await sql`
+    SELECT c.id, c.texto, c.criado_em,
+           u.nome as autor_nome, u.avatar_url as autor_avatar
+    FROM comentarios c
+    JOIN usuarios u ON u.id = c.usuario_id
+    WHERE c.veiculo_id = ${veiculoId}
+    ORDER BY c.criado_em ASC
+    LIMIT 100
+  `
+  return c.json(comentarios)
+})
+
+// POST /:veiculoId
+comentariosAuthRoutes.post("/:veiculoId", async (c) => {
   const userId = c.get("userId") as string
   const { veiculoId } = c.req.param()
 
@@ -46,7 +67,7 @@ comentariosRoutes.post("/:veiculoId", async (c) => {
   const [comentario] = await sql`
     INSERT INTO comentarios (veiculo_id, usuario_id, texto)
     VALUES (${veiculoId}, ${userId}, ${texto})
-    RETURNING id, texto, criado_em
+      RETURNING id, texto, criado_em
   `
 
   const [user] = await sql`SELECT nome, avatar_url FROM usuarios WHERE id = ${userId}`
@@ -54,20 +75,19 @@ comentariosRoutes.post("/:veiculoId", async (c) => {
   // Notifica o dono do build se for outro usuário
   const [garagem] = await sql`
     SELECT g.usuario_id FROM garagens g
-    JOIN veiculos v ON v.garagem_id = g.id
+                               JOIN veiculos v ON v.garagem_id = g.id
     WHERE v.id = ${veiculoId}
   `
   if (garagem && garagem.usuario_id !== userId) {
-    const [veiculo] = await sql`SELECT apelido FROM veiculos WHERE id = ${veiculoId}`
     await sql`
       INSERT INTO notificacoes (usuario_id, tipo, titulo, corpo, link)
       VALUES (
-        ${garagem.usuario_id},
-        'update_build',
-        ${`${user.nome} comentou no seu build`},
-        ${texto.slice(0, 120)},
-        ${`/g/.../${veiculoId}`}
-      )
+               ${garagem.usuario_id},
+               'update_build',
+               ${`${user.nome} comentou no seu build`},
+               ${texto.slice(0, 120)},
+               ${`/g/.../${veiculoId}`}
+             )
     `
   }
 
@@ -78,15 +98,15 @@ comentariosRoutes.post("/:veiculoId", async (c) => {
   }, 201)
 })
 
-// DELETE /:comentarioId — dono do comentário (montado em /comentarios via app.ts)
-comentariosRoutes.delete("/:comentarioId", async (c) => {
+// DELETE /:comentarioId
+comentariosAuthRoutes.delete("/:comentarioId", async (c) => {
   const userId = c.get("userId") as string
   const { comentarioId } = c.req.param()
 
   const result = await sql`
     DELETE FROM comentarios
     WHERE id = ${comentarioId} AND usuario_id = ${userId}
-    RETURNING id
+      RETURNING id
   `
   if (result.length === 0) return c.json({ error: "Comentário não encontrado" }, 404)
   return c.json({ deleted: true })

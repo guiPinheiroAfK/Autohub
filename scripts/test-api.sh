@@ -52,6 +52,13 @@ EMAIL_A="teste_a_${TIMESTAMP}@autohub.test"
 EMAIL_B="teste_b_${TIMESTAMP}@autohub.test"
 SENHA="Senha@123"
 
+# Cada execução usa email com timestamp único → garagem sempre começa vazia.
+# Para limpar resíduos antigos no banco, rode no Neon SQL Editor:
+#   DELETE FROM veiculos WHERE garagem_id IN (
+#     SELECT g.id FROM garagens g JOIN usuarios u ON u.id = g.usuario_id
+#     WHERE u.email LIKE 'teste_%@autohub.test'
+#   );
+
 # ── 1. Healthcheck ─────────────────────────────────────────────────────────────
 
 blue "1. Healthcheck"
