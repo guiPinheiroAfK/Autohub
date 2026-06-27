@@ -1,6 +1,5 @@
 import { Hono } from "hono"
 import { sql } from "../db/client.ts"
-import { authMiddleware } from "../middleware/auth.ts"
 import type { AppEnv } from "../types.ts"
 
 export const comentariosPublicoRoutes = new Hono()
@@ -26,7 +25,7 @@ comentariosPublicoRoutes.get("/comentarios/:veiculoId", async (c) => {
 
 export const comentariosRoutes = new Hono<AppEnv>()
 
-comentariosRoutes.use("*", authMiddleware)
+// Auth já é garantido pelo grupo pai (api.use("*", authMiddleware) em app.ts)
 
 // POST /comentarios/:veiculoId — requer auth
 comentariosRoutes.post("/comentarios/:veiculoId", async (c) => {

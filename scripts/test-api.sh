@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AutoHub API Test Script — v5
+# AutoHub API Test Script — v6
 # Uso: bash scripts/test-api.sh [BASE_URL]
 # Ex:  bash scripts/test-api.sh http://localhost:8000
 #      bash scripts/test-api.sh https://autohubbr.netlify.app
@@ -547,23 +547,24 @@ fi
 MANIFEST_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "$MANIFEST_URL/manifest.json" 2>/dev/null)
 if [[ "$MANIFEST_STATUS" == "200" ]]; then
   green "GET /manifest.json — HTTP 200"; ((PASS++))
-  MANIFEST=$(curl -sf "$MANIFEST_URL/manifest.json" 2>/dev/null)
-  if echo "$MANIFEST" | grep -q '"name"'; then
+  # tr -d '\r' remove CRLF do Windows antes de greping
+  MANIFEST=$(curl -sf "$MANIFEST_URL/manifest.json" 2>/dev/null | tr -d '\r')
+  if echo "$MANIFEST" | grep -qF '"name"'; then
     green "manifest.json — campo name presente"; ((PASS++))
   else
     red "manifest.json — sem campo name"; ((FAIL++))
   fi
-  if echo "$MANIFEST" | grep -q '"theme_color"'; then
+  if echo "$MANIFEST" | grep -qF '"theme_color"'; then
     green "manifest.json — campo theme_color presente"; ((PASS++))
   else
     red "manifest.json — sem theme_color"; ((FAIL++))
   fi
-  if echo "$MANIFEST" | grep -q '"display".*standalone'; then
+  if echo "$MANIFEST" | grep -qF '"display"'; then
     green "manifest.json — display: standalone (PWA nativo)"; ((PASS++))
   else
     red "manifest.json — display não é standalone"; ((FAIL++))
   fi
-  if echo "$MANIFEST" | grep -q '"start_url"'; then
+  if echo "$MANIFEST" | grep -qF '"start_url"'; then
     green "manifest.json — campo start_url presente"; ((PASS++))
   else
     red "manifest.json — sem start_url"; ((FAIL++))
