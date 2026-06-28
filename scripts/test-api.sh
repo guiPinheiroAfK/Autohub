@@ -541,9 +541,72 @@ else
   gray "Comentários — pulado: sem VEICULO_ID"
 fi
 
-# ── 21. PWA — manifest.webmanifest ──────────────────────────────────────────────
+# ── 21. AutoHub Tracks — rotas, destinos da comunidade e runs ───────────────────
 
-blue "21. PWA — manifest.webmanifest"
+blue "21. AutoHub Tracks"
+
+# Lista de rotas — deve conter o campo 'oficial' (coluna nova da migração v4)
+ROTAS_BODY=$(json_get_body /api/tracks/rotas)
+check "GET /api/tracks/rotas — HTTP 200" "$(json_get /api/tracks/rotas)" "200"
+if echo "$ROTAS_BODY" | grep -q '"oficial"'; then
+  green "GET /api/tracks/rotas — campo oficial presente (migração v4 OK)"; ((PASS++))
+else
+  red "GET /api/tracks/rotas — sem campo oficial (rodou a migração?)"; ((FAIL++))
+fi
+
+# Criar ponto de chegada da comunidade (largada livre); pede oficial:true de propósito
+ROTA_RESP=$(curl -sf -X POST "$BASE/api/tracks/rotas" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"nome":"Chegada Teste","lat":-25.5163,"lng":-54.5854,"regiao":"Sul","oficial":true}')
+ROTA_ID=$(echo "$ROTA_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [[ -n "$ROTA_ID" ]]; then
+  green "POST /api/tracks/rotas — destino criado id=$ROTA_ID"; ((PASS++))
+else
+  red "POST /api/tracks/rotas — sem id"; ((FAIL++))
+fi
+
+# Usuário comum não pode marcar como oficial → deve vir oficial:false
+if echo "$ROTA_RESP" | grep -qE '"oficial":false'; then
+  green "POST /api/tracks/rotas — oficial negado para não-admin"; ((PASS++))
+else
+  red "POST /api/tracks/rotas — não-admin conseguiu marcar oficial"; ((FAIL++))
+fi
+
+# Validação — sem coordenadas → 400
+check "POST /api/tracks/rotas (sem lat/lng → 400)" \
+  "$(json_post /api/tracks/rotas '{"nome":"Sem coords"}')" "400"
+
+if [[ -n "$ROTA_ID" ]]; then
+  check "GET /api/tracks/rotas/:id" "$(json_get /api/tracks/rotas/$ROTA_ID)" "200"
+  check "GET /api/tracks/rotas/:id/leaderboard" \
+    "$(json_get "/api/tracks/rotas/$ROTA_ID/leaderboard?modo=tempo")" "200"
+  check "GET /api/tracks/rotas/:id/ghosts" \
+    "$(json_get /api/tracks/rotas/$ROTA_ID/ghosts)" "200"
+
+  # Iniciar uma run (precisa de veículo da seção 10)
+  if [[ -n "$VEICULO_ID" ]]; then
+    RUN_RESP=$(curl -sf -X POST "$BASE/api/tracks/runs" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "{\"rota_id\":\"$ROTA_ID\",\"veiculo_id\":\"$VEICULO_ID\"}")
+    RUN_ID=$(echo "$RUN_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    if [[ -n "$RUN_ID" ]]; then
+      green "POST /api/tracks/runs — run iniciada id=$RUN_ID"; ((PASS++))
+    else
+      red "POST /api/tracks/runs — sem id"; ((FAIL++))
+    fi
+  fi
+
+  check "GET /api/tracks/meus-runs" "$(json_get /api/tracks/meus-runs)" "200"
+  check "GET /api/tracks/badges" "$(json_get /api/tracks/badges)" "200"
+else
+  gray "Tracks runs — pulado: sem ROTA_ID"
+fi
+
+# ── 22. PWA — manifest.webmanifest ──────────────────────────────────────────────
+
+blue "22. PWA — manifest.webmanifest"
 # Quando rodando na API local (porta 8000), tenta o front em 5173
 MANIFEST_URL="$BASE"
 if [[ "$MANIFEST_URL" =~ ":8000" ]]; then
