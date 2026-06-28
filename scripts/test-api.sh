@@ -579,8 +579,10 @@ check "POST /api/tracks/rotas (sem lat/lng → 400)" \
 
 if [[ -n "$ROTA_ID" ]]; then
   check "GET /api/tracks/rotas/:id" "$(json_get /api/tracks/rotas/$ROTA_ID)" "200"
-  check "GET /api/tracks/rotas/:id/leaderboard" \
-    "$(json_get "/api/tracks/rotas/$ROTA_ID/leaderboard?modo=tempo")" "200"
+  check "GET /api/tracks/rotas/:id/leaderboard (regularidade)" \
+    "$(json_get "/api/tracks/rotas/$ROTA_ID/leaderboard?modo=regularidade")" "200"
+  check "GET /api/tracks/rotas/:id/leaderboard (ritmo)" \
+    "$(json_get "/api/tracks/rotas/$ROTA_ID/leaderboard?modo=ritmo")" "200"
   check "GET /api/tracks/rotas/:id/ghosts" \
     "$(json_get /api/tracks/rotas/$ROTA_ID/ghosts)" "200"
 

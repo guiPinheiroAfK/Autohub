@@ -1,18 +1,18 @@
 /**
- * RunPage — HUD de corrida ativo.
+ * RunPage — HUD de corrida ativo (largada livre → 1 chegada).
  *
  * Fluxo:
  * 1. Monta → cria run no backend → carrega ghosts + rota.
  * 2. Pede permissão de GPS. Se negado, mostra erro.
  * 3. watchPosition registra posição continuamente.
  * 4. A cada 5s envia lote de pontos para o backend.
- * 5. Mapa Leaflet mostra usuário (azul) + ghosts (roxo).
- * 6. Ao clicar "Finalizar" (ou chegar perto do ponto B), salva run.
+ * 5. Mapa Leaflet (dark) mostra usuário + chegada + ghosts.
+ * 6. Ao clicar "Finalizar" (ou chegar perto da chegada), salva run.
  */
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useParams, useSearchParams, useNavigate } from "react-router-dom"
-import { Flag, MapPin, Timer, Gauge, TrendingUp, X, CheckCircle } from "lucide-react"
+import { Flag, MapPin, X, CheckCircle, Ghost as GhostIcon, Navigation } from "lucide-react"
 import { api } from "@/lib/api/client"
 import type { Rota, Ghost, GhostPonto } from "@/types/tracks"
 import type { VeiculoComMetricas } from "@/types"
@@ -25,8 +25,8 @@ interface Ponto {
   lat: number
   lng: number
   velocidade_kmh: number
-  ts: number        // Date.now() quando capturado
-  offset_ms: number // ms desde início da run
+  ts: number
+  offset_ms: number
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -36,17 +36,21 @@ function formatDuracao(ms: number) {
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
   const sec = s % 60
-  if (h > 0) return `${h}:${m.toString().padStart(2,"0")}:${sec.toString().padStart(2,"0")}`
-  return `${m.toString().padStart(2,"0")}:${sec.toString().padStart(2,"0")}`
+  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`
+  return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`
 }
 
 /** Haversine distance em km */
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLng = ((lng2 - lng1) * Math.PI) / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function formatDist(km: number) {
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`
 }
 
 /** Interpola posição do fantasma no tempo elapsed_ms */
@@ -56,7 +60,7 @@ function ghostPosAt(pontos: GhostPonto[], elapsed_ms: number): [number, number] 
   if (elapsed_ms >= last.offset_ms) return [Number(last.lat), Number(last.lng)]
   for (let i = 1; i < pontos.length; i++) {
     if (pontos[i].offset_ms >= elapsed_ms) {
-      const prev = pontos[i-1]
+      const prev = pontos[i - 1]
       const curr = pontos[i]
       const t = (elapsed_ms - prev.offset_ms) / (curr.offset_ms - prev.offset_ms)
       return [
@@ -68,17 +72,38 @@ function ghostPosAt(pontos: GhostPonto[], elapsed_ms: number): [number, number] 
   return [Number(pontos[0].lat), Number(pontos[0].lng)]
 }
 
-// Ícones customizados para Leaflet (evita o problema do default icon path no Vite)
-function makeIcon(color: string, size = 14) {
+// Ícones Leaflet (evita o problema do default icon path no Vite)
+function dotIcon(color: string, size = 14) {
   return L.divIcon({
     className: "",
-    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 0 6px ${color}66"></div>`,
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 0 8px ${color}aa"></div>`,
     iconSize: [size, size],
-    iconAnchor: [size/2, size/2],
+    iconAnchor: [size / 2, size / 2],
+  })
+}
+
+function carIcon() {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:24px;height:24px;border-radius:50%;background:#e879f9;border:3px solid white;box-shadow:0 0 0 4px rgba(232,121,249,0.3),0 0 12px #e879f9"></div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  })
+}
+
+function flagIcon() {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:30px;height:30px;border-radius:50%;background:#7f77dd;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 6px rgba(127,119,221,0.25)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+    </div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
   })
 }
 
 const GHOST_COLORS = ["#a855f7", "#ec4899", "#f97316"]
+const DARK_TILES = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
@@ -99,16 +124,16 @@ export default function RunPage() {
   const [, setRunId] = useState<string | null>(null)
 
   // Telemetria ao vivo
-  const [elapsed, setElapsed] = useState(0)          // ms
-  const [speed, setSpeed] = useState(0)              // km/h
+  const [elapsed, setElapsed] = useState(0)
+  const [speed, setSpeed] = useState(0)
   const [maxSpeed, setMaxSpeed] = useState(0)
-  const [distancia, setDistancia] = useState(0)      // km
-  const [perto, setPerto] = useState(false)           // perto do ponto B
+  const [distancia, setDistancia] = useState(0)
+  const [distFalta, setDistFalta] = useState<number | null>(null)
+  const [perto, setPerto] = useState(false)
 
-  // Resultado final
   const [resultado, setResultado] = useState<{ duracao_s: number; vel_media_kmh: number; vel_max_kmh: number; badges: string[] } | null>(null)
 
-  // Refs (não causam re-render)
+  // Refs
   const mapRef = useRef<HTMLDivElement>(null)
   const leafletMap = useRef<L.Map | null>(null)
   const userMarker = useRef<L.Marker | null>(null)
@@ -122,19 +147,18 @@ export default function RunPage() {
   const syncTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const runIdRef = useRef<string | null>(null)
   const finalizando = useRef(false)
+  const centralizou = useRef(false)
 
   // ── Inicialização ─────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!rotaId || !veiculoId) { navigate("/tracks"); return }
 
-    // Carrega dados em paralelo
     Promise.all([
-      api.get<{ rota: Rota }>(`/api/tracks/rotas/${rotaId}`).then(r => r.rota),
-      api.get<{ ghosts: Ghost[] }>(`/api/tracks/rotas/${rotaId}/ghosts`).then(r => r.ghosts),
-      api.get<VeiculoComMetricas[]>("/api/veiculos").then(vs => vs.find(v => v.id === veiculoId) ?? null),
-      api.post<{ run: { id: string } }>("/api/tracks/runs", { rota_id: rotaId, veiculo_id: veiculoId })
-        .then(r => r.run.id),
+      api.get<{ rota: Rota }>(`/api/tracks/rotas/${rotaId}`).then((r) => r.rota),
+      api.get<{ ghosts: Ghost[] }>(`/api/tracks/rotas/${rotaId}/ghosts`).then((r) => r.ghosts),
+      api.get<VeiculoComMetricas[]>("/api/veiculos").then((vs) => vs.find((v) => v.id === veiculoId) ?? null),
+      api.post<{ run: { id: string } }>("/api/tracks/runs", { rota_id: rotaId, veiculo_id: veiculoId }).then((r) => r.run.id),
     ]).then(([r, g, v, rid]) => {
       setRota(r)
       setGhosts(g)
@@ -142,47 +166,43 @@ export default function RunPage() {
       setRunId(rid)
       runIdRef.current = rid
       iniciarGPS()
-    }).catch(err => {
+    }).catch((err) => {
       setErroMsg(String(err))
       setPhase("gps_error")
     })
 
     return () => cleanup()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── Leaflet: monta o mapa após entrar em "running" ────────────────────────
 
   useEffect(() => {
     if (phase !== "running" || !mapRef.current || !rota) return
-    if (leafletMap.current) return // já montado
+    if (leafletMap.current) return
 
     const map = L.map(mapRef.current, { zoomControl: false, attributionControl: false })
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(map)
+    L.tileLayer(DARK_TILES, { maxZoom: 19, subdomains: "abcd" }).addTo(map)
 
-    // Ponto A (verde) e Ponto B (vermelho)
-    L.marker([rota.ponto_a_lat, rota.ponto_a_lng], { icon: makeIcon("#22c55e", 16) })
-      .bindPopup(`<b>Início</b><br>${rota.ponto_a_nome}`).addTo(map)
-    L.marker([rota.ponto_b_lat, rota.ponto_b_lng], { icon: makeIcon("#ef4444", 16) })
+    // Chegada (largada livre → só o destino)
+    L.marker([rota.ponto_b_lat, rota.ponto_b_lng], { icon: flagIcon() })
       .bindPopup(`<b>Chegada</b><br>${rota.ponto_b_nome}`).addTo(map)
 
-    // Marcadores dos fantasmas
+    // Fantasmas — começam no primeiro ponto gravado de cada um
     ghostMarkers.current = ghosts.map((g, i) => {
-      const m = L.marker([rota.ponto_a_lat, rota.ponto_a_lng], {
-        icon: makeIcon(GHOST_COLORS[i] ?? "#888"),
-      })
+      const start = g.pontos[0]
+      const ll: [number, number] = start ? [Number(start.lat), Number(start.lng)] : [rota.ponto_b_lat, rota.ponto_b_lng]
+      return L.marker(ll, { icon: dotIcon(GHOST_COLORS[i] ?? "#888") })
         .bindPopup(`<b>👻 ${g.usuario_nome}</b><br>${g.veiculo_apelido}`)
         .addTo(map)
-      return m
     })
 
-    // Marcador do usuário
-    userMarker.current = L.marker([rota.ponto_a_lat, rota.ponto_a_lng], {
-      icon: makeIcon("#3b82f6", 18),
-      zIndexOffset: 1000,
-    }).bindPopup("Você").addTo(map)
+    // Usuário
+    userMarker.current = L.marker([rota.ponto_b_lat, rota.ponto_b_lng], { icon: carIcon(), zIndexOffset: 1000 })
+      .bindPopup("Você").addTo(map)
 
-    map.setView([rota.ponto_a_lat, rota.ponto_a_lng], 14)
+    map.setView([rota.ponto_b_lat, rota.ponto_b_lng], 14)
+    setTimeout(() => map.invalidateSize(), 80)
     leafletMap.current = map
   }, [phase, rota, ghosts])
 
@@ -199,34 +219,29 @@ export default function RunPage() {
       () => {
         startedAt.current = Date.now()
 
-        // Timer de elapsed
-        elapsedTimer.current = setInterval(() => {
-          setElapsed(Date.now() - startedAt.current)
-        }, 500)
+        elapsedTimer.current = setInterval(() => setElapsed(Date.now() - startedAt.current), 500)
 
-        // Sync para o backend a cada 5s
         syncTimer.current = setInterval(async () => {
           if (pontosBuffer.current.length === 0 || !runIdRef.current) return
           const lote = [...pontosBuffer.current]
           pontosBuffer.current = []
           try {
             await api.post(`/api/tracks/runs/${runIdRef.current}/pontos`, { pontos: lote })
-          } catch { /* silencioso, re-tenta no próximo ciclo */ }
+          } catch { /* re-tenta no próximo ciclo */ }
         }, 5000)
 
-        // Tracking contínuo
         watchId.current = navigator.geolocation.watchPosition(
-          pos => onPosicao(pos),
-          err => console.warn("GPS:", err),
+          (pos) => onPosicao(pos),
+          (err) => console.warn("GPS:", err),
           { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
         )
 
         setPhase("running")
       },
-      err => {
+      (err) => {
         setErroMsg(
           err.code === 1
-            ? "Permissão de localização negada. Habilite o GPS nas configurações do browser."
+            ? "Permissão de localização negada. Habilite o GPS nas configurações do navegador."
             : "Não foi possível obter sua localização. Verifique o GPS."
         )
         setPhase("gps_error")
@@ -246,28 +261,27 @@ export default function RunPage() {
     pontosBuffer.current.push(ponto)
     allPontos.current.push(ponto)
 
-    // Distância acumulada
     if (lastPos.current) {
       const d = haversine(lastPos.current.lat, lastPos.current.lng, lat, lng)
-      setDistancia(prev => prev + d)
+      setDistancia((prev) => prev + d)
     }
     lastPos.current = { lat, lng }
 
     setSpeed(Math.round(spd))
-    setMaxSpeed(prev => Math.max(prev, spd))
+    setMaxSpeed((prev) => Math.max(prev, spd))
 
-    // Atualiza marcador do usuário no mapa
-    if (userMarker.current) {
-      userMarker.current.setLatLng([lat, lng])
-    }
+    if (userMarker.current) userMarker.current.setLatLng([lat, lng])
     if (leafletMap.current) {
-      leafletMap.current.setView([lat, lng], leafletMap.current.getZoom(), { animate: true })
+      // primeira posição: aproxima a câmera no usuário
+      const zoom = centralizou.current ? leafletMap.current.getZoom() : 16
+      centralizou.current = true
+      leafletMap.current.setView([lat, lng], zoom, { animate: true })
     }
 
-    // Verifica proximidade do ponto B
     if (rota) {
       const distB = haversine(lat, lng, rota.ponto_b_lat, rota.ponto_b_lng)
-      setPerto(distB < 0.3) // 300 metros
+      setDistFalta(distB)
+      setPerto(distB < 0.3) // 300 m
     }
   }
 
@@ -279,9 +293,7 @@ export default function RunPage() {
       const el = Date.now() - startedAt.current
       ghosts.forEach((g, i) => {
         const pos = ghostPosAt(g.pontos, el)
-        if (pos && ghostMarkers.current[i]) {
-          ghostMarkers.current[i].setLatLng(pos)
-        }
+        if (pos && ghostMarkers.current[i]) ghostMarkers.current[i].setLatLng(pos)
       })
     }, 1000)
     return () => clearInterval(interval)
@@ -301,7 +313,6 @@ export default function RunPage() {
 
     cleanup()
 
-    // Envia pontos restantes
     if (pontosBuffer.current.length > 0) {
       await api.post(`/api/tracks/runs/${runIdRef.current}/pontos`, { pontos: pontosBuffer.current }).catch(() => {})
     }
@@ -343,9 +354,9 @@ export default function RunPage() {
   // Loading
   if (phase === "loading") {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-        <div className="size-10 animate-spin rounded-full border-2 border-border border-t-purple" />
-        <p className="text-sm text-muted-foreground">Carregando rota e fantasmas...</p>
+      <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 bg-[#0b0b10]">
+        <div className="size-10 animate-spin rounded-full border-2 border-white/20 border-t-purple" />
+        <p className="text-sm text-white/60">Carregando rota e fantasmas...</p>
       </div>
     )
   }
@@ -353,18 +364,15 @@ export default function RunPage() {
   // Erro GPS
   if (phase === "gps_error") {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
+      <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 bg-[#0b0b10] px-6 text-center">
         <div className="flex size-12 items-center justify-center rounded-xl bg-red-bg text-red">
           <MapPin className="size-6" />
         </div>
         <div>
-          <p className="font-medium text-foreground">GPS indisponível</p>
-          <p className="mt-1 max-w-[360px] text-sm text-muted-foreground">{erroMsg}</p>
+          <p className="font-medium text-white">GPS indisponível</p>
+          <p className="mt-1 max-w-[360px] text-sm text-white/60">{erroMsg}</p>
         </div>
-        <button
-          onClick={() => navigate(`/tracks/${rotaId}`)}
-          className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-surface"
-        >
+        <button onClick={() => navigate(`/tracks/${rotaId}`)} className="rounded-lg border border-white/15 px-4 py-2 text-sm text-white hover:bg-white/10">
           Voltar
         </button>
       </div>
@@ -373,72 +381,51 @@ export default function RunPage() {
 
   // Resultado final
   if (phase === "finished" && resultado) {
+    const diff = rota?.tempo_ideal_s ? resultado.duracao_s - rota.tempo_ideal_s : null
     return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center gap-6 text-center">
+      <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-6 overflow-y-auto bg-[#0b0b10] px-6 py-10 text-center">
         <CheckCircle className="size-16 text-green" />
         <div>
-          <p className="font-display text-[28px] font-bold text-foreground">
-            {formatDuracao(resultado.duracao_s * 1000)}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {rota?.nome}
-            {veiculo ? ` · ${veiculo.apelido}` : ""}
-          </p>
+          <p className="font-display text-[40px] font-bold leading-none text-white">{formatDuracao(resultado.duracao_s * 1000)}</p>
+          <p className="mt-2 text-sm text-white/60">{rota?.nome}{veiculo ? ` · ${veiculo.apelido}` : ""}</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 w-full max-w-[360px]">
-          <div className="rounded-xl border border-border bg-surface p-3">
-            <p className="font-data text-lg font-bold text-foreground">{resultado.duracao_s}s</p>
-            <p className="text-[10px] text-faint-foreground">duração</p>
-          </div>
-          <div className="rounded-xl border border-border bg-surface p-3">
-            <p className="font-data text-lg font-bold text-foreground">
-              {resultado.vel_media_kmh.toFixed(0)}
-            </p>
-            <p className="text-[10px] text-faint-foreground">km/h média</p>
-          </div>
-          <div className="rounded-xl border border-border bg-surface p-3">
-            <p className="font-data text-lg font-bold text-foreground">
-              {resultado.vel_max_kmh.toFixed(0)}
-            </p>
-            <p className="text-[10px] text-faint-foreground">km/h max</p>
-          </div>
+        <div className="grid w-full max-w-[360px] grid-cols-3 gap-3">
+          {[
+            { v: `${distancia.toFixed(1)}`, l: "km" },
+            { v: resultado.vel_media_kmh.toFixed(0), l: "km/h média" },
+            { v: resultado.vel_max_kmh.toFixed(0), l: "km/h máx" },
+          ].map((s) => (
+            <div key={s.l} className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="font-data text-lg font-bold text-white">{s.v}</p>
+              <p className="text-[10px] text-white/40">{s.l}</p>
+            </div>
+          ))}
         </div>
 
-        {rota?.tempo_ideal_s && (
-          <div className="rounded-xl border border-border bg-surface px-5 py-3 text-[13px]">
-            <span className="text-muted-foreground">Diff do ideal: </span>
-            <span className="font-medium text-foreground">
-              {resultado.duracao_s > rota.tempo_ideal_s ? "+" : "-"}
-              {Math.abs(resultado.duracao_s - rota.tempo_ideal_s)}s
+        {diff != null && (
+          <div className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-[13px]">
+            <span className="text-white/50">Diferença do ideal: </span>
+            <span className={`font-medium ${diff <= 0 ? "text-green" : "text-amber"}`}>
+              {diff > 0 ? "+" : ""}{diff}s
             </span>
           </div>
         )}
 
         {resultado.badges.length > 0 && (
-          <div className="flex flex-col gap-2 w-full max-w-[360px]">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-faint-foreground">
-              Conquistas desbloqueadas
-            </p>
-            {resultado.badges.map(b => (
-              <div key={b} className="flex items-center gap-2 rounded-xl border border-green/30 bg-green-bg px-4 py-2 text-[13px] text-green">
-                🏆 {b}
-              </div>
+          <div className="flex w-full max-w-[360px] flex-col gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Conquistas desbloqueadas</p>
+            {resultado.badges.map((b) => (
+              <div key={b} className="flex items-center gap-2 rounded-xl border border-green/30 bg-green-bg px-4 py-2 text-[13px] text-green">🏆 {b}</div>
             ))}
           </div>
         )}
 
         <div className="flex gap-3">
-          <button
-            onClick={() => navigate(`/tracks/${rotaId}`)}
-            className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-surface"
-          >
+          <button onClick={() => navigate(`/tracks/${rotaId}`)} className="rounded-lg border border-white/15 px-4 py-2 text-sm text-white hover:bg-white/10">
             Ver leaderboard
           </button>
-          <button
-            onClick={() => navigate("/tracks")}
-            className="rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
+          <button onClick={() => navigate("/tracks")} className="rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90">
             Outras rotas
           </button>
         </div>
@@ -446,90 +433,79 @@ export default function RunPage() {
     )
   }
 
-  // ── HUD de corrida ────────────────────────────────────────────────────────
+  // ── HUD de corrida (full-screen imersivo) ─────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-0 -mx-6 -mt-6" style={{ height: "calc(100dvh - 64px)" }}>
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0b0b10]">
+      {/* Mapa */}
+      <div ref={mapRef} className="absolute inset-0 z-0" />
 
-      {/* Mapa (preenche tela) */}
-      <div ref={mapRef} className="flex-1 z-0" />
+      {/* Top overlay */}
+      <div className="relative z-10 flex items-start justify-between gap-2 bg-gradient-to-b from-black/80 to-transparent px-4 pb-8 pt-[max(14px,env(safe-area-inset-top))]">
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-semibold text-white">{rota?.nome}</p>
+          <p className="truncate text-[11px] text-purple-300">chegada · {rota?.ponto_b_nome}</p>
+        </div>
+        <button onClick={cancelar} className="flex size-9 shrink-0 items-center justify-center rounded-full bg-black/40 text-white/80 backdrop-blur-sm hover:bg-black/60 hover:text-white">
+          <X className="size-4" />
+        </button>
+      </div>
 
-      {/* HUD flutuante (bottom sheet) */}
-      <div className="relative z-10 border-t border-border bg-background/95 backdrop-blur-md px-5 py-4">
+      {/* Distância até a chegada (flutuante) */}
+      {distFalta != null && (
+        <div className="relative z-10 mx-auto -mt-2 flex items-center gap-1.5 rounded-full bg-purple/90 px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-lg backdrop-blur-sm">
+          <Navigation className="size-3.5" />
+          faltam {formatDist(distFalta)}
+        </div>
+      )}
 
-        {/* Barra de rota */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-            <MapPin className="size-3 text-green" />
-            <span className="truncate max-w-[140px]">{rota?.ponto_a_nome}</span>
-            <span className="text-faint-foreground">→</span>
-            <Flag className="size-3 text-purple" />
-            <span className="truncate max-w-[140px]">{rota?.ponto_b_nome}</span>
-          </div>
-          <button onClick={cancelar} className="flex size-7 items-center justify-center rounded-lg text-faint-foreground hover:bg-surface hover:text-red">
-            <X className="size-4" />
-          </button>
+      <div className="flex-1" />
+
+      {/* Bottom HUD */}
+      <div className="relative z-10 bg-gradient-to-t from-[#0b0b10] via-[#0b0b10]/95 to-transparent px-5 pt-10 pb-[max(20px,env(safe-area-inset-bottom))]">
+        {/* Velocímetro */}
+        <div className="flex items-end justify-center gap-2">
+          <span className="font-data text-[68px] font-bold leading-[0.85] tracking-tight text-white tabular-nums">{speed}</span>
+          <span className="mb-3 text-sm font-medium text-white/40">km/h</span>
         </div>
 
-        {/* Stats principais */}
-        <div className="grid grid-cols-4 gap-3 mb-4">
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 text-faint-foreground mb-0.5">
-              <Timer className="size-3" />
+        {/* Stats */}
+        <div className="mt-4 flex items-stretch justify-between gap-2">
+          {[
+            { v: formatDuracao(elapsed), l: "tempo" },
+            { v: distFalta != null ? formatDist(distFalta) : "—", l: "faltam" },
+            { v: `${Math.round(maxSpeed)}`, l: "máx km/h" },
+          ].map((s) => (
+            <div key={s.l} className="flex-1 text-center">
+              <p className="font-data text-[17px] font-bold leading-none text-white">{s.v}</p>
+              <p className="mt-1 text-[10px] uppercase tracking-wider text-white/40">{s.l}</p>
             </div>
-            <p className="font-data text-[20px] font-bold text-foreground leading-none">{formatDuracao(elapsed)}</p>
-            <p className="text-[9px] text-faint-foreground mt-0.5">tempo</p>
-          </div>
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 text-faint-foreground mb-0.5">
-              <Gauge className="size-3" />
-            </div>
-            <p className="font-data text-[20px] font-bold text-foreground leading-none">{speed}</p>
-            <p className="text-[9px] text-faint-foreground mt-0.5">km/h</p>
-          </div>
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 text-faint-foreground mb-0.5">
-              <TrendingUp className="size-3" />
-            </div>
-            <p className="font-data text-[20px] font-bold text-foreground leading-none">{Math.round(maxSpeed)}</p>
-            <p className="text-[9px] text-faint-foreground mt-0.5">max km/h</p>
-          </div>
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 text-faint-foreground mb-0.5">
-              <Flag className="size-3" />
-            </div>
-            <p className="font-data text-[20px] font-bold text-foreground leading-none">
-              {distancia.toFixed(1)}
-            </p>
-            <p className="text-[9px] text-faint-foreground mt-0.5">km</p>
-          </div>
+          ))}
         </div>
 
         {/* Legenda dos fantasmas */}
         {ghosts.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1">
             {ghosts.map((g, i) => (
-              <span key={g.id} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                <span
-                  className="inline-block size-2 rounded-full"
-                  style={{ background: GHOST_COLORS[i] ?? "#888" }}
-                />
-                👻 {g.usuario_nome} · {g.veiculo_apelido}
+              <span key={g.id} className="flex items-center gap-1 text-[10px] text-white/50">
+                <span className="inline-block size-2 rounded-full" style={{ background: GHOST_COLORS[i] ?? "#888" }} />
+                <GhostIcon className="size-2.5" /> {g.usuario_nome}
               </span>
             ))}
           </div>
         )}
 
-        {/* Botão finalizar */}
+        {/* Finalizar */}
         <button
           onClick={finalizar}
-          className={`w-full rounded-xl py-3 text-[14px] font-semibold transition-all ${
+          className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-[14px] font-semibold transition-all ${
             perto
-              ? "bg-green text-white shadow-lg shadow-green/30 animate-pulse"
-              : "bg-surface border border-border text-muted-foreground"
+              ? "animate-pulse bg-green text-white shadow-lg shadow-green/30"
+              : "border border-white/15 bg-white/5 text-white/70"
           }`}
         >
-          {perto ? "🏁 Você está chegando! Finalizar run" : "Finalizar run"}
+          <Flag className="size-4" />
+          {perto ? "Você chegou! Finalizar" : "Finalizar run"}
         </button>
       </div>
     </div>

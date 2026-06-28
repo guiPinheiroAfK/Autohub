@@ -91,7 +91,7 @@ tracksRoutes.get("/rotas/:id", async (c) => {
 
 tracksRoutes.get("/rotas/:id/leaderboard", async (c) => {
   const rotaId = c.req.param("id")
-  const modo = (c.req.query("modo") ?? "regularidade") as "regularidade" | "tempo"
+  const modo = (c.req.query("modo") ?? "regularidade") as "regularidade" | "tempo" | "ritmo"
   const perfil = c.req.query("perfil")
 
   const [rota] = await sql`SELECT tempo_ideal_s FROM rotas WHERE id = ${rotaId}`
@@ -121,8 +121,9 @@ tracksRoutes.get("/rotas/:id/leaderboard", async (c) => {
       AND ru.status  = 'concluida'
       AND ru.duracao_s IS NOT NULL
       ${perfilFilter}
-    ORDER BY ${modo === "regularidade"
-      ? sql`diff_ideal_s ASC`
+    ORDER BY ${
+      modo === "regularidade" ? sql`diff_ideal_s ASC`
+      : modo === "ritmo" ? sql`ru.vel_media_kmh DESC NULLS LAST`
       : sql`ru.duracao_s ASC`}
     LIMIT 50
   `

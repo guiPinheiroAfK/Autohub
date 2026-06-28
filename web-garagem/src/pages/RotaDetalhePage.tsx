@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import {
-  MapPin, Flag, Clock, Route, Trophy, Play, ChevronLeft,
-  Users, Wind, Sun, CloudRain, Cloud, Zap
+  MapPin, Flag, Clock, Route, Trophy, Play, ChevronLeft, ChevronRight,
+  Users, Wind, Sun, CloudRain, Cloud, Zap, BadgeCheck
 } from "lucide-react"
 import { api } from "@/lib/api/client"
 import type { Rota, LeaderboardEntry } from "@/types/tracks"
@@ -111,7 +111,7 @@ export default function RotaDetalhePage() {
   const [rota, setRota] = useState<Rota | null>(null)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [tempoIdeal, setTempoIdeal] = useState<number | null>(null)
-  const [modo, setModo] = useState<"regularidade" | "tempo">("regularidade")
+  const [modo, setModo] = useState<"regularidade" | "ritmo">("regularidade")
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
 
@@ -153,14 +153,28 @@ export default function RotaDetalhePage() {
       <div className="rounded-2xl border border-border bg-surface p-6">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            {rota.regiao && (
-              <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.12em] text-faint-foreground">
-                {rota.regiao}
-              </span>
-            )}
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              {rota.oficial ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-purple-bg px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-purple">
+                  <BadgeCheck className="size-3" /> Oficial
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Comunidade
+                </span>
+              )}
+              {rota.regiao && (
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-faint-foreground">
+                  {rota.regiao}
+                </span>
+              )}
+            </div>
             <h1 className="font-display text-[22px] font-semibold text-foreground">{rota.nome}</h1>
             {rota.descricao && (
               <p className="mt-1 text-[13px] text-muted-foreground">{rota.descricao}</p>
+            )}
+            {!rota.oficial && rota.criador_nome && (
+              <p className="mt-1 text-[11px] text-faint-foreground">criada por {rota.criador_nome}</p>
             )}
           </div>
 
@@ -172,17 +186,16 @@ export default function RotaDetalhePage() {
           </button>
         </div>
 
-        {/* Rota visual */}
-        <div className="flex flex-col gap-1.5 mb-5">
-          <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-            <MapPin className="size-4 shrink-0 text-green" />
-            <span className="font-medium">{rota.ponto_a_nome}</span>
-          </div>
-          <div className="ml-2 h-4 border-l-2 border-dashed border-border" />
-          <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+        {/* Largada livre → chegada */}
+        <div className="mb-5 flex items-center gap-3 rounded-xl bg-surface-2/50 p-3">
+          <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <MapPin className="size-3.5 text-faint-foreground" /> largada livre
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-faint-foreground" />
+          <span className="flex min-w-0 items-center gap-1.5 text-[13px]">
             <Flag className="size-4 shrink-0 text-purple" />
-            <span className="font-medium">{rota.ponto_b_nome}</span>
-          </div>
+            <span className="truncate font-medium text-foreground">{rota.ponto_b_nome}</span>
+          </span>
         </div>
 
         {/* Stats da rota */}
@@ -216,7 +229,7 @@ export default function RotaDetalhePage() {
 
           {/* Toggle modo */}
           <div className="flex rounded-lg border border-border bg-surface p-0.5 text-[11px]">
-            {(["regularidade", "tempo"] as const).map(m => (
+            {(["regularidade", "ritmo"] as const).map(m => (
               <button
                 key={m}
                 onClick={() => setModo(m)}
@@ -224,7 +237,7 @@ export default function RotaDetalhePage() {
                   modo === m ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {m === "regularidade" ? "🎯 Regularidade" : "⚡ Tempo"}
+                {m === "regularidade" ? "🎯 Regularidade" : "⚡ Ritmo"}
               </button>
             ))}
           </div>
@@ -286,20 +299,24 @@ export default function RotaDetalhePage() {
                   )}
                 </div>
 
-                {/* Tempo */}
+                {/* Métrica */}
                 <div className="text-right shrink-0">
-                  <p className="font-data text-[14px] font-bold text-foreground">
-                    {formatTempo(entry.duracao_s)}
-                  </p>
-                  {modo === "regularidade" && tempoIdeal && (
-                    <p className="text-[10px]">
-                      {formatDiff(entry.diff_ideal_s, tempoIdeal)}
-                    </p>
-                  )}
-                  {modo === "tempo" && (
-                    <p className="text-[10px] text-faint-foreground">
-                      {Number(entry.vel_media_kmh).toFixed(0)} km/h méd.
-                    </p>
+                  {modo === "ritmo" ? (
+                    <>
+                      <p className="font-data text-[14px] font-bold text-foreground">
+                        {Number(entry.vel_media_kmh).toFixed(0)}<span className="ml-0.5 text-[10px] font-normal text-faint-foreground">km/h</span>
+                      </p>
+                      <p className="text-[10px] text-faint-foreground">{formatTempo(entry.duracao_s)}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-data text-[14px] font-bold text-foreground">{formatTempo(entry.duracao_s)}</p>
+                      {tempoIdeal ? (
+                        <p className="text-[10px]">{formatDiff(entry.diff_ideal_s, tempoIdeal)}</p>
+                      ) : (
+                        <p className="text-[10px] text-faint-foreground">{Number(entry.vel_media_kmh).toFixed(0)} km/h méd.</p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
