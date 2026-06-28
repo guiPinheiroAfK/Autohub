@@ -148,6 +148,7 @@ export default function RunPage() {
   const runIdRef = useRef<string | null>(null)
   const finalizando = useRef(false)
   const centralizou = useRef(false)
+  const rotaRef = useRef<Rota | null>(null) // evita closure stale em onPosicao
 
   // ── Inicialização ─────────────────────────────────────────────────────────
 
@@ -161,6 +162,7 @@ export default function RunPage() {
       api.post<{ run: { id: string } }>("/api/tracks/runs", { rota_id: rotaId, veiculo_id: veiculoId }).then((r) => r.run.id),
     ]).then(([r, g, v, rid]) => {
       setRota(r)
+      rotaRef.current = r
       setGhosts(g)
       setVeiculo(v)
       setRunId(rid)
@@ -201,8 +203,10 @@ export default function RunPage() {
     userMarker.current = L.marker([rota.ponto_b_lat, rota.ponto_b_lng], { icon: carIcon(), zIndexOffset: 1000 })
       .bindPopup("Você").addTo(map)
 
-    map.setView([rota.ponto_b_lat, rota.ponto_b_lng], 14)
+    map.setView([rota.ponto_b_lat, rota.ponto_b_lng], 15)
+    // Mapa em tela cheia: recalcula o tamanho assim que o container existir
     setTimeout(() => map.invalidateSize(), 80)
+    setTimeout(() => map.invalidateSize(), 400)
     leafletMap.current = map
   }, [phase, rota, ghosts])
 
@@ -278,8 +282,9 @@ export default function RunPage() {
       leafletMap.current.setView([lat, lng], zoom, { animate: true })
     }
 
-    if (rota) {
-      const distB = haversine(lat, lng, rota.ponto_b_lat, rota.ponto_b_lng)
+    const r = rotaRef.current
+    if (r) {
+      const distB = haversine(lat, lng, r.ponto_b_lat, r.ponto_b_lng)
       setDistFalta(distB)
       setPerto(distB < 0.3) // 300 m
     }

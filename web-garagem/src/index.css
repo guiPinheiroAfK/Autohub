@@ -121,8 +121,11 @@ body {
   }
 }
 
+/* fill: backwards (não "both") — após a animação o elemento volta ao próprio
+   estilo (transform: none). Isso evita criar um containing block permanente que
+   prenderia overlays `position: fixed` (modais) dentro do <main>. */
 .animate-page-in {
-  animation: slide-up-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: slide-up-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 @keyframes wheel-spin {
