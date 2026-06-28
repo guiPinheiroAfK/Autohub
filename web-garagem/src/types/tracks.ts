@@ -11,6 +11,9 @@ export interface Rota {
   distancia_km: number | null
   tempo_ideal_s: number | null
   regiao: string | null
+  oficial: boolean
+  criado_por: string | null
+  criador_nome: string | null
   total_runs: number
 }
 
