@@ -119,7 +119,7 @@ const DARK_TILES = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.pn
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
-type RunPhase = "loading" | "gps_error" | "running" | "finished"
+type RunPhase = "loading" | "gps_error" | "staging" | "running" | "finished"
 
 export default function RunPage() {
   const { rotaId } = useParams<{ rotaId: string }>()
@@ -142,6 +142,10 @@ export default function RunPage() {
   const [distancia, setDistancia] = useState(0)
   const [distFalta, setDistFalta] = useState<number | null>(null)
   const [perto, setPerto] = useState(false)
+
+  // Largada
+  const [userStart, setUserStart] = useState<{ lat: number; lng: number } | null>(null)
+  const [beat, setBeat] = useState(-1) // -1 parado · 0 vermelho · 1,2 amarelo · 3 verde
 
   const [resultado, setResultado] = useState<{ duracao_s: number; vel_media_kmh: number; vel_max_kmh: number; badges: string[] } | null>(null)
 
@@ -199,43 +203,50 @@ export default function RunPage() {
   // ── Leaflet: monta o mapa após entrar em "running" ────────────────────────
 
   useEffect(() => {
-    if (phase !== "running" || !mapRef.current || !rota) return
+    if ((phase !== "staging" && phase !== "running") || !mapRef.current || !rota) return
     if (leafletMap.current) return
 
+    const chegada: [number, number] = [rota.ponto_b_lat, rota.ponto_b_lng]
+    const inicio: [number, number] = userStart ? [userStart.lat, userStart.lng] : chegada
+
     const map = L.map(mapRef.current, { zoomControl: false, attributionControl: false })
-    L.tileLayer(DARK_TILES, { maxZoom: 19, subdomains: "abcd" }).addTo(map)
+    L.tileLayer(DARK_TILES, { maxZoom: 19, subdomains: "abcd", detectRetina: true }).addTo(map)
 
     // Chegada (largada livre → só o destino)
-    L.marker([rota.ponto_b_lat, rota.ponto_b_lng], { icon: flagIcon() })
+    L.marker(chegada, { icon: flagIcon() })
       .bindPopup(`<b>Chegada</b><br>${rota.ponto_b_nome}`).addTo(map)
 
     // Fantasmas — começam no primeiro ponto gravado de cada um
     ghostMarkers.current = ghosts.map((g, i) => {
       const start = g.pontos[0]
-      const ll: [number, number] = start ? [Number(start.lat), Number(start.lng)] : [rota.ponto_b_lat, rota.ponto_b_lng]
+      const ll: [number, number] = start ? [Number(start.lat), Number(start.lng)] : chegada
       return L.marker(ll, { icon: dotIcon(GHOST_COLORS[i] ?? "#888") })
         .bindPopup(`<b>👻 ${g.usuario_nome}</b><br>${g.veiculo_apelido}`)
         .addTo(map)
     })
 
     // Linha de rota (usuário → chegada)
-    routeLine.current = L.polyline([[rota.ponto_b_lat, rota.ponto_b_lng]], {
+    routeLine.current = L.polyline([inicio, chegada], {
       color: "#7f77dd", weight: 4, opacity: 0.85, dashArray: "1 12", lineCap: "round",
     }).addTo(map)
 
     // Usuário
-    userMarker.current = L.marker([rota.ponto_b_lat, rota.ponto_b_lng], { icon: carIcon(), zIndexOffset: 1000 })
+    userMarker.current = L.marker(inicio, { icon: carIcon(), zIndexOffset: 1000 })
       .bindPopup("Você").addTo(map)
 
     // Para de seguir quando o usuário arrasta o mapa
     map.on("dragstart", () => { following.current = false })
 
-    map.setView([rota.ponto_b_lat, rota.ponto_b_lng], 15)
-    // Mapa em tela cheia: recalcula o tamanho assim que o container existir
+    // Largada: enquadra trajeto inteiro; correndo: aproxima no usuário
+    if (userStart) {
+      map.fitBounds(L.latLngBounds([inicio, chegada]), { padding: [70, 70], maxZoom: 16 })
+    } else {
+      map.setView(chegada, 15)
+    }
     setTimeout(() => map.invalidateSize(), 80)
     setTimeout(() => map.invalidateSize(), 400)
     leafletMap.current = map
-  }, [phase, rota, ghosts])
+  }, [phase, rota, ghosts, userStart])
 
   // ── GPS ───────────────────────────────────────────────────────────────────
 
@@ -247,27 +258,13 @@ export default function RunPage() {
     }
 
     navigator.geolocation.getCurrentPosition(
-      () => {
-        startedAt.current = Date.now()
-
-        elapsedTimer.current = setInterval(() => setElapsed(Date.now() - startedAt.current), 500)
-
-        syncTimer.current = setInterval(async () => {
-          if (pontosBuffer.current.length === 0 || !runIdRef.current) return
-          const lote = [...pontosBuffer.current]
-          pontosBuffer.current = []
-          try {
-            await api.post(`/api/tracks/runs/${runIdRef.current}/pontos`, { pontos: lote })
-          } catch { /* re-tenta no próximo ciclo */ }
-        }, 5000)
-
-        watchId.current = navigator.geolocation.watchPosition(
-          (pos) => onPosicao(pos),
-          (err) => console.warn("GPS:", err),
-          { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
-        )
-
-        setPhase("running")
+      (pos) => {
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        lastPos.current = p
+        setUserStart(p)
+        const r = rotaRef.current
+        if (r) setDistFalta(haversine(p.lat, p.lng, r.ponto_b_lat, r.ponto_b_lng))
+        setPhase("staging") // mostra o trajeto e espera a largada (semáforo)
       },
       (err) => {
         setErroMsg(
@@ -280,6 +277,41 @@ export default function RunPage() {
       { enableHighAccuracy: true, timeout: 15000 }
     )
   }, [])
+
+  // Inicia cronômetro + tracking de fato (chamado após o semáforo)
+  function startRun() {
+    startedAt.current = Date.now()
+    following.current = true
+
+    elapsedTimer.current = setInterval(() => setElapsed(Date.now() - startedAt.current), 500)
+
+    syncTimer.current = setInterval(async () => {
+      if (pontosBuffer.current.length === 0 || !runIdRef.current) return
+      const lote = [...pontosBuffer.current]
+      pontosBuffer.current = []
+      try {
+        await api.post(`/api/tracks/runs/${runIdRef.current}/pontos`, { pontos: lote })
+      } catch { /* re-tenta no próximo ciclo */ }
+    }, 5000)
+
+    watchId.current = navigator.geolocation.watchPosition(
+      (pos) => onPosicao(pos),
+      (err) => console.warn("GPS:", err),
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+    )
+
+    setPhase("running")
+  }
+
+  // Semáforo de largada: vermelho → amarelo → amarelo → verde → GO!
+  function largar() {
+    if (beat >= 0) return
+    setBeat(0)
+    setTimeout(() => setBeat(1), 800)
+    setTimeout(() => setBeat(2), 1500)
+    setTimeout(() => setBeat(3), 2200)
+    setTimeout(() => { setBeat(-1); startRun() }, 3000)
+  }
 
   function onPosicao(pos: GeolocationPosition) {
     if (!startedAt.current) return
@@ -510,7 +542,8 @@ export default function RunPage() {
 
       <div className="flex-1" />
 
-      {/* Bottom HUD */}
+      {/* Bottom HUD (apenas correndo) */}
+      {phase === "running" && (
       <div className="relative z-10 bg-gradient-to-t from-[#0b0b10] via-[#0b0b10]/95 to-transparent px-5 pt-10 pb-[max(20px,env(safe-area-inset-bottom))]">
         {/* Recentralizar (acima do HUD) */}
         <button
@@ -574,6 +607,54 @@ export default function RunPage() {
           Cancelar corrida
         </button>
       </div>
+      )}
+
+      {/* Painel de largada (staging) */}
+      {phase === "staging" && (
+        <div className="relative z-10 bg-gradient-to-t from-[#0b0b10] via-[#0b0b10]/95 to-transparent px-5 pt-10 pb-[max(20px,env(safe-area-inset-bottom))]">
+          <div className="mb-4 text-center">
+            <p className="text-[12px] uppercase tracking-wider text-white/40">Trajeto até</p>
+            <p className="font-display text-lg font-bold text-white">{rota?.ponto_b_nome}</p>
+            {distFalta != null && (
+              <p className="mt-1 text-[12px] text-purple-200">{formatDist(distFalta)} em linha reta</p>
+            )}
+          </div>
+          <button
+            onClick={largar}
+            disabled={beat >= 0}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-green py-4 text-[15px] font-bold text-white shadow-lg shadow-green/30 transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
+            <Flag className="size-5" /> Largar
+          </button>
+          <p className="mt-2 text-center text-[11px] text-white/40">Confira o trajeto no mapa e largue quando estiver pronto.</p>
+        </div>
+      )}
+
+      {/* Semáforo de largada */}
+      {beat >= 0 && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-6 bg-black/70 backdrop-blur-sm">
+          <div className="flex flex-col gap-3 rounded-3xl bg-black/60 p-5 ring-1 ring-white/10">
+            {[
+              { on: beat === 0, color: "#e24b4a" },
+              { on: beat === 1 || beat === 2, color: "#ef9f27" },
+              { on: beat === 3, color: "#1d9e75" },
+            ].map((b, i) => (
+              <div
+                key={i}
+                className="size-16 rounded-full transition-all duration-150"
+                style={{
+                  background: b.on ? b.color : "#1c1c1c",
+                  boxShadow: b.on ? `0 0 32px ${b.color}` : "none",
+                  opacity: b.on ? 1 : 0.3,
+                }}
+              />
+            ))}
+          </div>
+          <p className="font-display text-2xl font-bold text-white">
+            {beat === 3 ? "VAI! 🏁" : "Prepare-se…"}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
