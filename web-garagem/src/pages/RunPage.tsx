@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useParams, useSearchParams, useNavigate } from "react-router-dom"
-import { Flag, MapPin, X, CheckCircle, Ghost as GhostIcon, Navigation } from "lucide-react"
+import { Flag, MapPin, X, CheckCircle, Ghost as GhostIcon, Navigation, LocateFixed } from "lucide-react"
 import { api } from "@/lib/api/client"
 import type { Rota, Ghost, GhostPonto } from "@/types/tracks"
 import type { VeiculoComMetricas } from "@/types"
@@ -91,6 +91,18 @@ function carIcon() {
   })
 }
 
+// Seta de direção (quando o GPS reporta heading)
+function arrowIcon(heading: number) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;transform:rotate(${heading}deg)">
+      <div style="width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:22px solid #e879f9;filter:drop-shadow(0 0 5px #e879f9)"></div>
+    </div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+  })
+}
+
 function flagIcon() {
   return L.divIcon({
     className: "",
@@ -149,29 +161,36 @@ export default function RunPage() {
   const finalizando = useRef(false)
   const centralizou = useRef(false)
   const rotaRef = useRef<Rota | null>(null) // evita closure stale em onPosicao
+  const routeLine = useRef<L.Polyline | null>(null)
+  const following = useRef(true)            // câmera segue o usuário até ele arrastar o mapa
+  const initStarted = useRef(false)         // evita criar run 2x (StrictMode em dev)
 
   // ── Inicialização ─────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!rotaId || !veiculoId) { navigate("/tracks"); return }
 
-    Promise.all([
-      api.get<{ rota: Rota }>(`/api/tracks/rotas/${rotaId}`).then((r) => r.rota),
-      api.get<{ ghosts: Ghost[] }>(`/api/tracks/rotas/${rotaId}/ghosts`).then((r) => r.ghosts),
-      api.get<VeiculoComMetricas[]>("/api/veiculos").then((vs) => vs.find((v) => v.id === veiculoId) ?? null),
-      api.post<{ run: { id: string } }>("/api/tracks/runs", { rota_id: rotaId, veiculo_id: veiculoId }).then((r) => r.run.id),
-    ]).then(([r, g, v, rid]) => {
-      setRota(r)
-      rotaRef.current = r
-      setGhosts(g)
-      setVeiculo(v)
-      setRunId(rid)
-      runIdRef.current = rid
-      iniciarGPS()
-    }).catch((err) => {
-      setErroMsg(String(err))
-      setPhase("gps_error")
-    })
+    // Cria a run uma única vez (StrictMode chama o efeito 2x em dev)
+    if (!initStarted.current) {
+      initStarted.current = true
+      Promise.all([
+        api.get<{ rota: Rota }>(`/api/tracks/rotas/${rotaId}`).then((r) => r.rota),
+        api.get<{ ghosts: Ghost[] }>(`/api/tracks/rotas/${rotaId}/ghosts`).then((r) => r.ghosts),
+        api.get<VeiculoComMetricas[]>("/api/veiculos").then((vs) => vs.find((v) => v.id === veiculoId) ?? null),
+        api.post<{ run: { id: string } }>("/api/tracks/runs", { rota_id: rotaId, veiculo_id: veiculoId }).then((r) => r.run.id),
+      ]).then(([r, g, v, rid]) => {
+        setRota(r)
+        rotaRef.current = r
+        setGhosts(g)
+        setVeiculo(v)
+        setRunId(rid)
+        runIdRef.current = rid
+        iniciarGPS()
+      }).catch((err) => {
+        setErroMsg(String(err))
+        setPhase("gps_error")
+      })
+    }
 
     return () => cleanup()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -199,9 +218,17 @@ export default function RunPage() {
         .addTo(map)
     })
 
+    // Linha de rota (usuário → chegada)
+    routeLine.current = L.polyline([[rota.ponto_b_lat, rota.ponto_b_lng]], {
+      color: "#7f77dd", weight: 4, opacity: 0.85, dashArray: "1 12", lineCap: "round",
+    }).addTo(map)
+
     // Usuário
     userMarker.current = L.marker([rota.ponto_b_lat, rota.ponto_b_lng], { icon: carIcon(), zIndexOffset: 1000 })
       .bindPopup("Você").addTo(map)
+
+    // Para de seguir quando o usuário arrasta o mapa
+    map.on("dragstart", () => { following.current = false })
 
     map.setView([rota.ponto_b_lat, rota.ponto_b_lng], 15)
     // Mapa em tela cheia: recalcula o tamanho assim que o container existir
@@ -274,19 +301,33 @@ export default function RunPage() {
     setSpeed(Math.round(spd))
     setMaxSpeed((prev) => Math.max(prev, spd))
 
-    if (userMarker.current) userMarker.current.setLatLng([lat, lng])
-    if (leafletMap.current) {
-      // primeira posição: aproxima a câmera no usuário
-      const zoom = centralizou.current ? leafletMap.current.getZoom() : 16
-      centralizou.current = true
-      leafletMap.current.setView([lat, lng], zoom, { animate: true })
+    if (userMarker.current) {
+      userMarker.current.setLatLng([lat, lng])
+      const hd = pos.coords.heading
+      if (hd != null && !Number.isNaN(hd)) userMarker.current.setIcon(arrowIcon(hd))
     }
 
     const r = rotaRef.current
     if (r) {
+      // linha de rota até a chegada
+      routeLine.current?.setLatLngs([[lat, lng], [r.ponto_b_lat, r.ponto_b_lng]])
+
       const distB = haversine(lat, lng, r.ponto_b_lat, r.ponto_b_lng)
       setDistFalta(distB)
       setPerto(distB < 0.3) // 300 m
+    }
+
+    if (leafletMap.current && following.current) {
+      const zoom = centralizou.current ? leafletMap.current.getZoom() : 16
+      centralizou.current = true
+      leafletMap.current.setView([lat, lng], zoom, { animate: true })
+    }
+  }
+
+  function recentralizar() {
+    following.current = true
+    if (leafletMap.current && lastPos.current) {
+      leafletMap.current.setView([lastPos.current.lat, lastPos.current.lng], 16, { animate: true })
     }
   }
 
@@ -451,7 +492,10 @@ export default function RunPage() {
           <p className="truncate text-[13px] font-semibold text-white">{rota?.nome}</p>
           <p className="truncate text-[11px] text-purple-300">chegada · {rota?.ponto_b_nome}</p>
         </div>
-        <button onClick={cancelar} className="flex size-9 shrink-0 items-center justify-center rounded-full bg-black/40 text-white/80 backdrop-blur-sm hover:bg-black/60 hover:text-white">
+        <button
+          onClick={() => { if (window.confirm("Cancelar a corrida? O progresso será descartado.")) cancelar() }}
+          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-black/40 text-white/80 backdrop-blur-sm hover:bg-black/60 hover:text-white"
+        >
           <X className="size-4" />
         </button>
       </div>
@@ -468,6 +512,15 @@ export default function RunPage() {
 
       {/* Bottom HUD */}
       <div className="relative z-10 bg-gradient-to-t from-[#0b0b10] via-[#0b0b10]/95 to-transparent px-5 pt-10 pb-[max(20px,env(safe-area-inset-bottom))]">
+        {/* Recentralizar (acima do HUD) */}
+        <button
+          onClick={recentralizar}
+          aria-label="Recentralizar"
+          className="absolute -top-14 right-4 flex size-11 items-center justify-center rounded-full bg-[#16121f]/90 text-purple-200 shadow-lg ring-1 ring-white/10 backdrop-blur-sm hover:text-white"
+        >
+          <LocateFixed className="size-5" />
+        </button>
+
         {/* Velocímetro */}
         <div className="flex items-end justify-center gap-2">
           <span className="font-data text-[68px] font-bold leading-[0.85] tracking-tight text-white tabular-nums">{speed}</span>
@@ -511,6 +564,14 @@ export default function RunPage() {
         >
           <Flag className="size-4" />
           {perto ? "Você chegou! Finalizar" : "Finalizar run"}
+        </button>
+
+        {/* Cancelar */}
+        <button
+          onClick={() => { if (window.confirm("Cancelar a corrida? O progresso será descartado.")) cancelar() }}
+          className="mt-2 w-full py-2 text-[12px] font-medium text-white/40 hover:text-red"
+        >
+          Cancelar corrida
         </button>
       </div>
     </div>
