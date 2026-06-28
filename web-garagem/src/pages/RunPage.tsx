@@ -206,8 +206,15 @@ export default function RunPage() {
     })
     mapInst.current = map
     map.on("dragstart", () => { following.current = false })
+    map.on("error", (ev) => console.error("[maplibre]", ev.error))
+
+    // MapLibre mede o container no construtor; se ainda não tinha tamanho,
+    // o mapa nasce 0x0 e fica preto. resize() força a remedição.
+    setTimeout(() => map.resize(), 80)
+    setTimeout(() => map.resize(), 400)
 
     map.on("load", () => {
+      map.resize()
       new maplibregl.Marker({ element: flagEl(), anchor: "center" }).setLngLat([chegada.lng, chegada.lat]).addTo(map)
       userMarker.current = new maplibregl.Marker({ element: carEl(), anchor: "center" }).setLngLat([inicio.lng, inicio.lat]).addTo(map)
       ghostMarkers.current = ghosts.map((g, i) => {
