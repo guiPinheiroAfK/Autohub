@@ -1,4 +1,4 @@
-const CACHE = "autohub-v1"
+const CACHE = "autohub-v2"
 const STATIC = ["/", "/index.html"]
 
 // Instala e pré-cacheia shell estático
@@ -20,17 +20,20 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url)
 
+  // Cross-origin (mapas/tiles vetoriais, glyphs, sprites, fontes externas):
+  // NÃO intercepta — deixa o browser cuidar. O MapLibre cancela requisições de
+  // tile ao mover o mapa; envolvê-las no SW quebra esse cancelamento e os tiles
+  // nunca carregam (mapa preto).
+  if (url.origin !== self.location.origin) return
+
   // API: sempre network-first — não cacheamos dados
   if (url.pathname.startsWith("/api") || url.pathname.startsWith("/auth")) {
     e.respondWith(fetch(e.request))
     return
   }
 
-  // Assets estáticos (JS/CSS/imagens): cache-first
-  if (
-    url.pathname.match(/\.(js|css|woff2?|png|jpg|jpeg|webp|svg|ico)$/) ||
-    url.origin !== self.location.origin
-  ) {
+  // Assets estáticos same-origin (JS/CSS/imagens): cache-first
+  if (url.pathname.match(/\.(js|css|woff2?|png|jpg|jpeg|webp|svg|ico)$/)) {
     e.respondWith(
       caches.match(e.request).then(cached => {
         if (cached) return cached
