@@ -297,107 +297,189 @@ function ProximosEventos() {
   )
 }
 
-// Silhueta de carro esportivo — perfil RX-7 FD / C5: nariz longo, fastback, faróis retráteis abertos
 function CarSilhouette() {
-  function Wheel({ cx, cy }: { cx: number; cy: number }) {
-    const R = 15, rInner = 9, rHub = 3.5
+  const [pct, setPct] = useState({ s: 0, r: 0 })
+
+  // Simulação de volta num circuito: aceleração, trocas de marcha, freadas, curvas
+  useEffect(() => {
+    const INTRO = 1200   // ms de subida inicial
+    const TOTAL = 19000  // ms de volta completa (loop)
+
+    // Keyframes: { t = ms na volta, s = velocidade 0-1, r = RPM 0-1 }
+    // RPM cai brevemente em trocas de marcha; velocidade cai em freadas
+    const KF = [
+      { t: 0,     s: 0.12, r: 0.22 },  // saída de curva lenta
+      { t: 1800,  s: 0.78, r: 0.87 },  // aceleração forte
+      { t: 3000,  s: 0.85, r: 0.74 },  // troca de marcha (RPM despenca)
+      { t: 3400,  s: 0.87, r: 0.89 },  // retoma após troca
+      { t: 5000,  s: 0.91, r: 0.91 },  // reta a fundo
+      { t: 5350,  s: 0.92, r: 0.78 },  // troca de marcha
+      { t: 5750,  s: 0.93, r: 0.92 },  // fundo da reta
+      { t: 7100,  s: 0.42, r: 0.50 },  // freada forte
+      { t: 8100,  s: 0.32, r: 0.55 },  // curva lenta
+      { t: 9300,  s: 0.68, r: 0.83 },  // aceleração
+      { t: 10400, s: 0.78, r: 0.72 },  // troca de marcha
+      { t: 10800, s: 0.80, r: 0.86 },  // retoma
+      { t: 12600, s: 0.28, r: 0.46 },  // freada muito forte
+      { t: 13600, s: 0.22, r: 0.50 },  // hairpin
+      { t: 15800, s: 0.62, r: 0.80 },  // saída acelerando
+      { t: 17200, s: 0.75, r: 0.86 },  // chegando na última curva
+      { t: 19000, s: 0.12, r: 0.22 },  // fecha o loop
+    ]
+
+    let origin: number | null = null
+    let raf: number
+
+    const step = (now: number) => {
+      if (origin === null) origin = now
+      const total = now - origin
+
+      let s: number, r: number
+
+      if (total < INTRO) {
+        // Arrancada inicial suave
+        const e = 1 - (1 - total / INTRO) ** 3
+        s = KF[0].s * e
+        r = KF[0].r * e
+      } else {
+        const lap = (total - INTRO) % TOTAL
+
+        // Interpola entre os dois keyframes vizinhos
+        let a = KF[KF.length - 1], b = KF[0]
+        for (let i = 0; i < KF.length - 1; i++) {
+          if (lap >= KF[i].t && lap < KF[i + 1].t) { a = KF[i]; b = KF[i + 1]; break }
+        }
+        const seg = b.t - a.t
+        const t   = seg > 0 ? (lap - a.t) / seg : 0
+        const e   = t * t * (3 - 2 * t)  // smoothstep
+
+        s = a.s + (b.s - a.s) * e
+        r = a.r + (b.r - a.r) * e
+
+        // Micro-vibração do motor (frequências diferentes para s e r = mais natural)
+        r += Math.sin(now * 0.023) * 0.010
+        s += Math.sin(now * 0.011) * 0.004
+      }
+
+      setPct({
+        s: Math.max(0, Math.min(1, s)),
+        r: Math.max(0, Math.min(1, r)),
+      })
+      raf = requestAnimationFrame(step)
+    }
+
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  // Ponto na circunferência (ângulo em graus, sentido horário SVG)
+  const ap = (cx: number, cy: number, r: number, deg: number) => [
+    cx + r * Math.cos((deg * Math.PI) / 180),
+    cy + r * Math.sin((deg * Math.PI) / 180),
+  ] as const
+
+  // Renderiza um gauge como JSX (não componente — evita re-mount em cada frame)
+  const gauge = (cx: number, cy: number, R: number, val: number, label: string) => {
+    const S = 135, T = 270                          // 7h → 5h, 270° de varredura
+    const [sx, sy] = ap(cx, cy, R, S)              // início do arco
+    const [ex, ey] = ap(cx, cy, R, S + T)          // fim do arco
+    const [fx, fy] = ap(cx, cy, R, S + val * T)    // ponteiro — arco cheio
+    const [nx, ny] = ap(cx, cy, R - 14, S + val * T) // ponta do ponteiro
+    const [rx, ry] = ap(cx, cy, R, S + 0.82 * T)  // início da zona vermelha
+    const laf = val * T > 180 ? 1 : 0              // large-arc-flag
+
     return (
       <g>
-        <circle cx={cx} cy={cy} r={R} fill="rgba(10,10,18,0.98)" stroke="rgba(127,119,221,0.65)" strokeWidth="2"/>
-        {Array.from({ length: 5 }).map((_, i) => {
-          const a = ((-90 + i * 72) * Math.PI) / 180
+        {/* Brilho ambiente */}
+        <circle cx={cx} cy={cy} r={R + 10} fill="rgba(127,119,221,0.04)" />
+        <circle cx={cx} cy={cy} r={R + 2} fill="none"
+          stroke="rgba(127,119,221,0.07)" strokeWidth="1" />
+
+        {/* Trilha */}
+        <path d={`M${sx} ${sy}A${R} ${R} 0 1 1 ${ex} ${ey}`}
+          fill="none" stroke="rgba(127,119,221,0.13)" strokeWidth="8" strokeLinecap="round" />
+
+        {/* Zona vermelha — últimos 18% */}
+        <path d={`M${rx} ${ry}A${R} ${R} 0 0 1 ${ex} ${ey}`}
+          fill="none" stroke="rgba(210,50,50,0.4)" strokeWidth="8" strokeLinecap="round" />
+
+        {/* Arco de preenchimento */}
+        {val > 0.005 && (
+          <path d={`M${sx} ${sy}A${R} ${R} 0 ${laf} 1 ${fx} ${fy}`}
+            fill="none" stroke="rgba(127,119,221,0.88)" strokeWidth="8" strokeLinecap="round" />
+        )}
+
+        {/* Face interna escura */}
+        <circle cx={cx} cy={cy} r={R - 18} fill="rgba(6,6,14,0.85)" />
+
+        {/* Marcações (10 ticks: 4 major + 6 minor) */}
+        {Array.from({ length: 10 }, (_, i) => {
+          const deg = S + (i / 9) * T
+          const major = i % 3 === 0
+          const [ax, ay] = ap(cx, cy, R - (major ? 15 : 10), deg)
+          const [bx, by] = ap(cx, cy, R - 2, deg)
           return (
-            <line key={i}
-              x1={cx} y1={cy}
-              x2={cx + (R - 1.5) * Math.cos(a)}
-              y2={cy + (R - 1.5) * Math.sin(a)}
-              stroke="rgba(127,119,221,0.55)" strokeWidth="1.5"
-            />
+            <line key={i} x1={ax} y1={ay} x2={bx} y2={by}
+              stroke={`rgba(255,255,255,${major ? 0.3 : 0.1})`}
+              strokeWidth={major ? 1.5 : 1} strokeLinecap="round" />
           )
         })}
-        <circle cx={cx} cy={cy} r={rInner} fill="rgba(127,119,221,0.12)" stroke="rgba(127,119,221,0.45)" strokeWidth="1.5"/>
-        <circle cx={cx} cy={cy} r={rHub}   fill="rgba(127,119,221,0.85)"/>
+
+        {/* Ponteiro */}
+        {val > 0 && (
+          <line x1={cx} y1={cy} x2={nx} y2={ny}
+            stroke="rgba(255,255,255,0.92)" strokeWidth="2" strokeLinecap="round" />
+        )}
+
+        {/* Hub */}
+        <circle cx={cx} cy={cy} r="5" fill="rgba(127,119,221,0.9)" />
+        <circle cx={cx} cy={cy} r="2" fill="rgba(255,255,255,0.6)" />
+
+        {/* Label dentro da face */}
+        <text x={cx} y={cy + 20} textAnchor="middle"
+          fontSize="7" fontWeight="600" letterSpacing="1.5"
+          fill="rgba(127,119,221,0.45)" fontFamily="ui-monospace,monospace">
+          {label}
+        </text>
       </g>
     )
   }
 
+  const speedKmh = Math.round(pct.s * 280)
+  const rpmStr   = (pct.r * 9).toFixed(1)
+
   return (
-    <svg viewBox="0 0 310 86" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-[260px]">
-      {/* ── Corpo (fastback longo, nariz baixo — RX-7 FD) ── */}
-      <path
-        d="
-          M 22 76
-          L 22 66
-          Q 38 48 65 32
-          Q 90 19 118 16
-          L 210 13
-          Q 233 13 250 26
-          Q 265 39 272 51
-          L 289 55
-          Q 298 57 301 65
-          L 303 76
-          Z
-        "
-        fill="rgba(127,119,221,0.13)"
-        stroke="rgba(127,119,221,0.52)"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+    <svg viewBox="0 0 340 132" fill="none" xmlns="http://www.w3.org/2000/svg"
+      className="w-full max-w-[320px]">
 
-      {/* ── Janela lateral ── */}
-      <path
-        d="
-          M 121 16
-          L 210 13
-          Q 233 13 250 26
-          Q 260 35 264 43
-          L 175 42
-          Q 152 41 132 29
-          Z
-        "
-        fill="rgba(127,119,221,0.07)"
-        stroke="rgba(127,119,221,0.27)"
-        strokeWidth="1"
-        strokeLinejoin="round"
-      />
+      {/* Painel de fundo */}
+      <rect x="0.5" y="0.5" width="339" height="131" rx="12"
+        fill="rgba(8,8,18,0.55)" stroke="rgba(127,119,221,0.1)" strokeWidth="1" />
 
-      {/* ── Coluna C / linha do fastback ── */}
-      <path d="M 121 16 Q 100 22 80 35" stroke="rgba(127,119,221,0.30)" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+      {/* Tacômetro (esquerda) */}
+      {gauge(78, 65, 50, pct.r, "RPM")}
 
-      {/* ── Para-brisa (coluna A) ── */}
-      <path d="M 250 26 Q 266 40 272 51" stroke="rgba(127,119,221,0.38)" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+      {/* Velocímetro (direita) */}
+      {gauge(262, 65, 50, pct.s, "KM/H")}
 
-      {/* ── Spoiler/lip traseiro ── */}
-      <path d="M 22 63 L 28 59 L 30 62" stroke="rgba(127,119,221,0.45)" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-
-      {/* ── Faróis retráteis ABERTOS (detalhe icônico do FD!) ── */}
-      {/* caixa do farol (no capô) */}
-      <rect x="285" y="52" width="16" height="5" rx="1"
-        fill="rgba(18,18,30,0.9)" stroke="rgba(127,119,221,0.35)" strokeWidth="1"/>
-      {/* lente do farol (aberta, inclinada para trás ~15°) */}
-      <rect x="287" y="39" width="9" height="15" rx="1.5"
-        fill="rgba(232,121,249,0.68)"
-        transform="rotate(15 293 52)"
-      />
-      {/* reflexo na lente */}
-      <rect x="288" y="40" width="4" height="6" rx="1"
-        fill="rgba(255,255,255,0.22)"
-        transform="rotate(15 293 52)"
-      />
-
-      {/* ── Farol traseiro ── */}
-      <path d="M 21 62 L 21 73 Q 21 75 23 75 L 25 75 L 25 63 Z" fill="rgba(226,75,74,0.55)"/>
-
-      {/* ── Reflexo sutil no teto ── */}
-      <path d="M 122 16 Q 165 12 210 13" stroke="rgba(255,255,255,0.07)" strokeWidth="2" fill="none"/>
-
-      {/* ── Character line ── */}
-      <path d="M 26 62 Q 168 56 291 59" stroke="rgba(127,119,221,0.13)" strokeWidth="1" fill="none"/>
-
-      {/* ── Rodas (5 raios — mesma linguagem do ícone do app) ── */}
-      <Wheel cx={82}  cy={76} />
-      <Wheel cx={238} cy={76} />
+      {/* Display digital central */}
+      <text x="170" y="56" textAnchor="middle"
+        fontSize="36" fontWeight="700" fill="rgba(255,255,255,0.92)"
+        fontFamily="ui-monospace,monospace">
+        {speedKmh}
+      </text>
+      <text x="170" y="71" textAnchor="middle"
+        fontSize="7.5" fontWeight="600" letterSpacing="3"
+        fill="rgba(127,119,221,0.55)" fontFamily="ui-monospace,monospace">
+        KM / H
+      </text>
+      <line x1="148" y1="80" x2="192" y2="80"
+        stroke="rgba(127,119,221,0.15)" strokeWidth="1" />
+      <text x="170" y="93" textAnchor="middle"
+        fontSize="9" fontWeight="500" letterSpacing="0.8"
+        fill="rgba(127,119,221,0.38)" fontFamily="ui-monospace,monospace">
+        {rpmStr}k RPM
+      </text>
     </svg>
   )
 }
