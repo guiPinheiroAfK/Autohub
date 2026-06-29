@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react"
 import { Link } from "react-router-dom"
-import { Wrench, TrendingUp, Users, Clock, MessageCircle } from "lucide-react"
+import { Wrench, TrendingUp, Users, Clock, MessageCircle, Heart } from "lucide-react"
 import { api } from "@/lib/api/client"
+import { useAuth } from "@/context/AuthContext"
 
 interface VeiculoFeed {
   id: string
@@ -21,6 +22,7 @@ interface VeiculoFeed {
   total_itens: number
   itens_concluidos: number
   total_comentarios: number
+  total_curtidas: number
 }
 
 const PERFIL_LABEL: Record<string, string> = {
@@ -45,29 +47,66 @@ function timeAgo(iso: string): string {
   return `${Math.floor(d / 30)} meses atrás`
 }
 
-function BuildCard({ v }: { v: VeiculoFeed }) {
+function BuildCard({ v, curtidoInicial }: { v: VeiculoFeed; curtidoInicial: boolean }) {
+  const { user } = useAuth()
+  const [curtido, setCurtido] = useState(curtidoInicial)
+  const [curtidas, setCurtidas] = useState(v.total_curtidas)
+  const [curtindoLoading, setCurtindoLoading] = useState(false)
+
   const progresso = v.total_itens > 0
     ? Math.round((v.itens_concluidos / v.total_itens) * 100)
     : 0
 
+  async function toggleCurtir(e: React.MouseEvent) {
+    e.preventDefault()
+    if (!user || curtindoLoading) return
+    setCurtindoLoading(true)
+    try {
+      if (curtido) {
+        const r = await api.delete<{ total: number }>(`/api/social/curtidas/${v.id}`)
+        setCurtido(false)
+        setCurtidas(r.total)
+      } else {
+        const r = await api.post<{ total: number }>(`/api/social/curtidas/${v.id}`, {})
+        setCurtido(true)
+        setCurtidas(r.total)
+      }
+    } finally {
+      setCurtindoLoading(false)
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-surface transition-all hover:border-border-strong hover:shadow-sm">
-      {v.capa_url ? (
-        <img src={v.capa_url} alt={v.apelido} className="h-44 w-full object-cover" loading="lazy" />
-      ) : (
-        <div className="flex h-44 items-center justify-center bg-surface-2 text-5xl">🚗</div>
-      )}
+    <div className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface transition-all hover:border-border-strong hover:shadow-md">
+      {/* Imagem clicável → build do carro */}
+      <Link to={`/g/${v.garagem_slug}/${v.id}`} className="block overflow-hidden">
+        {v.capa_url ? (
+          <img
+            src={v.capa_url}
+            alt={v.apelido}
+            className="h-44 w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex h-44 items-center justify-center bg-surface-2 text-5xl transition-transform duration-300 group-hover:scale-[1.03]">
+            🚗
+          </div>
+        )}
+      </Link>
 
       <div className="flex flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-2">
+        {/* Nome + status — clicável → build */}
+        <Link to={`/g/${v.garagem_slug}/${v.id}`} className="flex items-start justify-between gap-2">
           <div>
-            <h3 className="font-display text-[15px] font-bold text-foreground">{v.apelido}</h3>
+            <h3 className="font-display text-[15px] font-bold text-foreground group-hover:text-purple transition-colors">
+              {v.apelido}
+            </h3>
             <p className="text-[12px] text-muted-foreground">{v.marca} {v.modelo} · {v.ano_fabricacao}</p>
           </div>
           <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${STATUS_COLOR[v.status]}`}>
             {v.status.replace("_", " ")}
           </span>
-        </div>
+        </Link>
 
         <div className="flex items-center justify-between text-[10px] text-faint-foreground">
           <span>{progresso}% concluído · {v.total_fases} fases</span>
@@ -80,24 +119,46 @@ function BuildCard({ v }: { v: VeiculoFeed }) {
           <div className="h-full rounded-full bg-purple transition-all" style={{ width: `${progresso}%` }} />
         </div>
 
+        {/* Footer: dono (→ garagem) + curtidas + comentários + tempo */}
         <div className="flex items-center justify-between border-t border-border pt-2">
+          {/* Dono → garagem pública */}
           <Link
             to={`/g/${v.garagem_slug}`}
             className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-purple transition-colors"
+            onClick={e => e.stopPropagation()}
           >
-            <div className="flex size-5 items-center justify-center rounded-full bg-purple-bg text-[9px] font-bold text-purple">
+            <div className="flex size-5 items-center justify-center rounded-full bg-purple-bg text-[9px] font-bold text-purple overflow-hidden">
               {v.dono_avatar
-                ? <img src={v.dono_avatar} className="size-full rounded-full object-cover" alt="" />
+                ? <img src={v.dono_avatar} className="size-full object-cover" alt="" />
                 : (v.dono_nome?.[0] ?? "?").toUpperCase()
               }
             </div>
             {v.dono_nome}
           </Link>
+
           <div className="flex items-center gap-2.5 text-[10px] text-faint-foreground">
+            {/* Curtir */}
+            <button
+              onClick={toggleCurtir}
+              disabled={!user || curtindoLoading}
+              className={`flex items-center gap-1 transition-colors ${
+                curtido
+                  ? "text-red"
+                  : "hover:text-red disabled:opacity-40"
+              }`}
+              title={user ? (curtido ? "Descurtir" : "Curtir") : "Entre para curtir"}
+            >
+              <Heart
+                className={`size-3.5 transition-all ${curtido ? "fill-red" : ""} ${curtindoLoading ? "animate-pulse" : ""}`}
+              />
+              {curtidas > 0 && <span>{curtidas}</span>}
+            </button>
+
             {v.total_comentarios > 0 && (
               <Link
                 to={`/g/${v.garagem_slug}/${v.id}`}
                 className="flex items-center gap-1 hover:text-purple transition-colors"
+                onClick={e => e.stopPropagation()}
               >
                 <MessageCircle className="size-3" />
                 {v.total_comentarios}
@@ -115,11 +176,13 @@ function BuildCard({ v }: { v: VeiculoFeed }) {
 }
 
 export default function FeedPage() {
+  const { user } = useAuth()
   const [veiculos, setVeiculos] = useState<VeiculoFeed[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(true)
+  const [mesCurtidas, setMeusCurtidas] = useState<Set<string>>(new Set())
 
   const load = useCallback(async (off: number) => {
     const setter = off === 0 ? setLoading : setLoadingMore
@@ -138,6 +201,13 @@ export default function FeedPage() {
   }, [])
 
   useEffect(() => { load(0) }, [load])
+
+  useEffect(() => {
+    if (!user) return
+    api.get<{ curtidas: string[] }>("/api/social/curtidas")
+      .then(r => setMeusCurtidas(new Set(r.curtidas)))
+      .catch(() => {})
+  }, [user])
 
   return (
     <div className="flex flex-col gap-8">
@@ -184,7 +254,9 @@ export default function FeedPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {veiculos.map(v => <BuildCard key={v.id} v={v} />)}
+            {veiculos.map(v => (
+              <BuildCard key={v.id} v={v} curtidoInicial={mesCurtidas.has(v.id)} />
+            ))}
           </div>
 
           {hasMore && (

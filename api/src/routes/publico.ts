@@ -104,17 +104,19 @@ publicoRoutes.get("/feed", async (c) => {
                v.perfil, v.status, v.capa_url, v.criado_em,
                g.slug as garagem_slug, g.nome as garagem_nome,
                u.nome as dono_nome, u.avatar_url as dono_avatar,
-               COUNT(DISTINCT f.id)::int as total_fases,
-               COUNT(DISTINCT i.id)::int as total_itens,
-               COUNT(DISTINCT i2.id)::int as itens_concluidos,
-               COUNT(DISTINCT c.id)::int as total_comentarios
+               COUNT(DISTINCT f.id)::int   as total_fases,
+               COUNT(DISTINCT i.id)::int   as total_itens,
+               COUNT(DISTINCT i2.id)::int  as itens_concluidos,
+               COUNT(DISTINCT c.id)::int   as total_comentarios,
+               COUNT(DISTINCT cu.usuario_id)::int as total_curtidas
         FROM veiculos v
         JOIN garagens g ON g.id = v.garagem_id
         JOIN usuarios u ON u.id = g.usuario_id
-        LEFT JOIN fases f ON f.veiculo_id = v.id
-        LEFT JOIN itens i ON i.fase_id = f.id
-        LEFT JOIN itens i2 ON i2.fase_id = f.id AND i2.status = 'concluido'
-        LEFT JOIN comentarios c ON c.veiculo_id = v.id
+        LEFT JOIN fases f       ON f.veiculo_id  = v.id
+        LEFT JOIN itens i       ON i.fase_id     = f.id
+        LEFT JOIN itens i2      ON i2.fase_id    = f.id AND i2.status = 'concluido'
+        LEFT JOIN comentarios c ON c.veiculo_id  = v.id
+        LEFT JOIN curtidas cu   ON cu.veiculo_id = v.id
         WHERE v.visibilidade = 'publico'
           AND g.publica = true
           AND u.email NOT LIKE 'teste\_%@autohub.test'
@@ -127,23 +129,26 @@ publicoRoutes.get("/feed", async (c) => {
                v.perfil, v.status, v.capa_url, v.criado_em,
                g.slug as garagem_slug, g.nome as garagem_nome,
                u.nome as dono_nome, u.avatar_url as dono_avatar,
-               COUNT(DISTINCT f.id)::int as total_fases,
-               COUNT(DISTINCT i.id)::int as total_itens,
-               COUNT(DISTINCT i2.id)::int as itens_concluidos,
-               COUNT(DISTINCT c.id)::int as total_comentarios
+               COUNT(DISTINCT f.id)::int   as total_fases,
+               COUNT(DISTINCT i.id)::int   as total_itens,
+               COUNT(DISTINCT i2.id)::int  as itens_concluidos,
+               COUNT(DISTINCT c.id)::int   as total_comentarios,
+               COUNT(DISTINCT cu.usuario_id)::int as total_curtidas
         FROM veiculos v
         JOIN garagens g ON g.id = v.garagem_id
         JOIN usuarios u ON u.id = g.usuario_id
-        LEFT JOIN fases f ON f.veiculo_id = v.id
-        LEFT JOIN itens i ON i.fase_id = f.id
-        LEFT JOIN itens i2 ON i2.fase_id = f.id AND i2.status = 'concluido'
-        LEFT JOIN comentarios c ON c.veiculo_id = v.id
+        LEFT JOIN fases f       ON f.veiculo_id  = v.id
+        LEFT JOIN itens i       ON i.fase_id     = f.id
+        LEFT JOIN itens i2      ON i2.fase_id    = f.id AND i2.status = 'concluido'
+        LEFT JOIN comentarios c ON c.veiculo_id  = v.id
+        LEFT JOIN curtidas cu   ON cu.veiculo_id = v.id
         WHERE v.visibilidade = 'publico'
           AND g.publica = true
           AND u.email NOT LIKE 'teste\_%@autohub.test'
         GROUP BY v.id, g.slug, g.nome, u.nome, u.avatar_url
         ORDER BY (
-          (COUNT(DISTINCT c.id) * 3 + COUNT(DISTINCT f.id) + COUNT(DISTINCT i2.id) + 1)
+          (COUNT(DISTINCT c.id) * 3 + COUNT(DISTINCT cu.usuario_id) * 2
+           + COUNT(DISTINCT f.id) + COUNT(DISTINCT i2.id) + 1)
           / power(EXTRACT(EPOCH FROM (now() - v.criado_em)) / 3600 + 2, 1.5)
         ) DESC, v.criado_em DESC
         LIMIT ${limit} OFFSET ${offset}

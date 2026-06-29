@@ -123,3 +123,36 @@ socialRoutes.patch("/notificacoes/todas-lidas", async (c) => {
   await sql`UPDATE notificacoes SET lida = true WHERE usuario_id = ${userId}`
   return c.json({ ok: true })
 })
+
+// POST /social/curtidas/:veiculoId — curtir um veículo público
+socialRoutes.post("/curtidas/:veiculoId", async (c) => {
+  const userId = c.get("userId") as string
+  const { veiculoId } = c.req.param()
+
+  const [v] = await sql`SELECT id FROM veiculos WHERE id = ${veiculoId} AND visibilidade = 'publico'`
+  if (!v) return c.json({ error: "Veículo não encontrado" }, 404)
+
+  await sql`
+    INSERT INTO curtidas (veiculo_id, usuario_id) VALUES (${veiculoId}, ${userId})
+    ON CONFLICT DO NOTHING
+  `
+  const [{ total }] = await sql`SELECT COUNT(*)::int as total FROM curtidas WHERE veiculo_id = ${veiculoId}`
+  return c.json({ ok: true, total })
+})
+
+// DELETE /social/curtidas/:veiculoId — descurtir
+socialRoutes.delete("/curtidas/:veiculoId", async (c) => {
+  const userId = c.get("userId") as string
+  const { veiculoId } = c.req.param()
+
+  await sql`DELETE FROM curtidas WHERE veiculo_id = ${veiculoId} AND usuario_id = ${userId}`
+  const [{ total }] = await sql`SELECT COUNT(*)::int as total FROM curtidas WHERE veiculo_id = ${veiculoId}`
+  return c.json({ ok: true, total })
+})
+
+// GET /social/curtidas — veículos curtidos pelo usuário autenticado
+socialRoutes.get("/curtidas", async (c) => {
+  const userId = c.get("userId") as string
+  const curtidas = await sql`SELECT veiculo_id FROM curtidas WHERE usuario_id = ${userId}`
+  return c.json({ curtidas: curtidas.map(r => r.veiculo_id) })
+})

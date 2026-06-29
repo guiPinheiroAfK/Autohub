@@ -141,24 +141,30 @@ export default function GaragemPublicaPage() {
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col items-end gap-3">
             {user && !isMinhaGaragem && (
               <button
                 onClick={toggleFollow}
                 disabled={followLoading}
-                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-semibold shadow-sm transition-all ${
                   seguindo
-                    ? "border-purple/30 bg-purple-bg text-purple"
-                    : "border-border text-muted-foreground hover:border-purple/30 hover:bg-purple-bg hover:text-purple"
+                    ? "border border-purple/40 bg-purple-bg text-purple hover:bg-purple/20"
+                    : "bg-purple text-white hover:opacity-90"
                 }`}
               >
-                {seguindo ? <UserCheck className="size-3.5" /> : <UserPlus className="size-3.5" />}
-                {seguindo ? "Seguindo" : "Seguir"}
+                {followLoading
+                  ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  : seguindo
+                    ? <UserCheck className="size-4" />
+                    : <UserPlus className="size-4" />
+                }
+                {seguindo ? "Seguindo" : "Seguir garagem"}
               </button>
             )}
-            <div className="flex items-center gap-1 text-[11px] text-faint-foreground">
-              <Users className="size-3" />
-              {garagem.total_follows} {garagem.total_follows === 1 ? "seguidor" : "seguidores"}
+            <div className="flex items-center gap-1 text-[12px] font-medium text-muted-foreground">
+              <Users className="size-3.5" />
+              <span className="font-bold text-foreground">{garagem.total_follows}</span>
+              {garagem.total_follows === 1 ? "seguidor" : "seguidores"}
             </div>
           </div>
         </div>

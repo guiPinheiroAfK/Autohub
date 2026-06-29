@@ -211,7 +211,8 @@ function SocialWidget() {
           </p>
         ) : (
           lista.map(item => {
-            const nome = (tab === "seguidores" ? item.dono_nome : (item.garagem_nome ?? item.dono_nome)) ?? "?"
+            // garagem_nome (seguidores) ou nome (follows) = nome da garagem, sempre definido
+            const nome = item.garagem_nome ?? item.nome ?? item.dono_nome ?? "Usuário"
             return (
               <Link
                 key={item.id + tab}
@@ -219,7 +220,7 @@ function SocialWidget() {
                 className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 transition-colors hover:border-purple/40 hover:bg-surface-2"
               >
                 <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-purple-bg text-[10px] font-bold text-purple">
-                  {nome[0]?.toUpperCase() ?? "?"}
+                  {nome[0]?.toUpperCase() ?? "G"}
                 </div>
                 <span className="text-[12px] font-medium text-foreground">{nome}</span>
                 {item.mutuo && (
@@ -296,6 +297,38 @@ function ProximosEventos() {
   )
 }
 
+// SVG silhueta de carro (estilizado, estilo "low profile")
+function CarSilhouette() {
+  return (
+    <svg viewBox="0 0 220 90" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-[220px]">
+      {/* carroceria */}
+      <path
+        d="M8 58 L28 58 L42 34 L65 22 L145 22 L168 34 L192 58 L206 58 Q212 58 212 64 L212 70 Q212 76 206 76 L14 76 Q8 76 8 70 Z"
+        fill="rgba(127,119,221,0.15)" stroke="rgba(127,119,221,0.45)" strokeWidth="1.5" strokeLinejoin="round"
+      />
+      {/* janelas */}
+      <path
+        d="M46 36 L65 24 L143 24 L162 36 Z"
+        fill="rgba(127,119,221,0.1)" stroke="rgba(127,119,221,0.3)" strokeWidth="1" strokeLinejoin="round"
+      />
+      {/* divisor janelas */}
+      <line x1="105" y1="24" x2="102" y2="36" stroke="rgba(127,119,221,0.25)" strokeWidth="1" />
+      {/* roda traseira */}
+      <circle cx="55" cy="74" r="14" fill="rgba(20,20,35,1)" stroke="rgba(127,119,221,0.55)" strokeWidth="2"/>
+      <circle cx="55" cy="74" r="7" fill="rgba(127,119,221,0.25)" stroke="rgba(127,119,221,0.5)" strokeWidth="1"/>
+      <circle cx="55" cy="74" r="3" fill="rgba(127,119,221,0.6)"/>
+      {/* roda dianteira */}
+      <circle cx="162" cy="74" r="14" fill="rgba(20,20,35,1)" stroke="rgba(127,119,221,0.55)" strokeWidth="2"/>
+      <circle cx="162" cy="74" r="7" fill="rgba(127,119,221,0.25)" stroke="rgba(127,119,221,0.5)" strokeWidth="1"/>
+      <circle cx="162" cy="74" r="3" fill="rgba(127,119,221,0.6)"/>
+      {/* farol */}
+      <ellipse cx="204" cy="54" rx="4" ry="6" fill="rgba(232,121,249,0.6)" />
+      {/* detalhe lateral */}
+      <line x1="30" y1="52" x2="190" y2="52" stroke="rgba(127,119,221,0.12)" strokeWidth="1"/>
+    </svg>
+  )
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function GaragemOverview() {
@@ -319,30 +352,46 @@ export default function GaragemOverview() {
   return (
     <div className="flex flex-col gap-8">
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-faint-foreground">
-            Garagem
-          </div>
-          <h1 className="font-display text-[28px] font-semibold leading-tight text-foreground">
-            {user?.garagem?.nome ?? "Minha Garagem"}
-          </h1>
-          {!loading && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {veiculos.length === 0
-                ? "Nenhum veículo ainda"
-                : `${veiculos.length} veículo${veiculos.length !== 1 ? "s" : ""}`}
+      {/* ── Hero de boas-vindas ─────────────────────────────────────────── */}
+      <div className="animate-page-in relative overflow-hidden rounded-2xl border border-border bg-surface">
+        {/* glow de fundo */}
+        <div className="pointer-events-none absolute -right-10 -top-10 size-64 rounded-full bg-purple/8 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-10 left-1/4 size-40 rounded-full bg-purple/5 blur-2xl" />
+
+        <div className="relative flex items-center gap-4 px-6 py-5 sm:gap-8">
+          <div className="flex-1 min-w-0">
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint-foreground">
+              Minha garagem
+            </div>
+            <h1 className="font-display text-[26px] font-bold leading-tight text-foreground">
+              {user?.garagem?.nome ?? "Minha Garagem"}
+            </h1>
+            <p className="mt-1.5 text-[13px] text-muted-foreground">
+              {loading
+                ? "Carregando..."
+                : veiculos.length === 0
+                  ? "Nenhum projeto ainda — adicione seu primeiro build abaixo"
+                  : `${veiculos.length} projeto${veiculos.length !== 1 ? "s" : ""} · ${emAndamento} em andamento`}
             </p>
-          )}
+          </div>
+          {/* Silhueta do carro (decorativa) */}
+          <div className="hidden sm:block shrink-0 opacity-80">
+            <CarSilhouette />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Botão novo veículo ──────────────────────────────────────────── */}
+      <div className="animate-page-in flex items-center justify-between" style={{ animationDelay: "80ms" }}>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-faint-foreground">
+          {veiculos.length > 0 ? `${veiculos.length} veículo${veiculos.length !== 1 ? "s" : ""}` : "Builds"}
         </div>
 
         {veiculos.length >= 10 ? (
           <div className="relative group">
             <button
               disabled
-              className="animate-page-in flex items-center gap-1.5 rounded-lg bg-purple/40 px-4 py-2 text-sm font-medium text-white/60 cursor-not-allowed"
-              style={{ animationDelay: "200ms" }}
+              className="flex items-center gap-1.5 rounded-lg bg-purple/40 px-4 py-2 text-sm font-medium text-white/60 cursor-not-allowed"
             >
               <Plus className="size-4" />
               Novo veículo
@@ -354,18 +403,17 @@ export default function GaragemOverview() {
         ) : (
           <Link
             to="/novo"
-            className="animate-page-in flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-            style={{ animationDelay: "200ms" }}
+            className="flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
           >
             <Plus className="size-4" />
-            {veiculos.length === 0 ? "Criar primeiro veículo" : "Novo veículo"}
+            {veiculos.length === 0 ? "Criar primeiro build" : "Novo veículo"}
           </Link>
         )}
       </div>
 
       {/* ── Stats + cotações ─────────────────────────────────────────────── */}
       {!loading && veiculos.length > 0 && (
-        <div className="flex flex-col gap-2.5">
+        <div className="animate-page-in flex flex-col gap-2.5" style={{ animationDelay: "120ms" }}>
           <div className="grid grid-cols-3 gap-2.5">
             <GaragemStat icon={Wrench} label="em andamento" value={emAndamento} accent="text-amber" />
             <GaragemStat icon={Gauge}  label="fases totais"  value={totalFases}  accent="text-purple" />
@@ -390,7 +438,9 @@ export default function GaragemOverview() {
       )}
 
       {/* ── Comunidade ───────────────────────────────────────────────────── */}
-      <SocialWidget />
+      <div className="animate-page-in" style={{ animationDelay: "160ms" }}>
+        <SocialWidget />
+      </div>
 
       {/* ── Grid de veículos ─────────────────────────────────────────────── */}
       {!loading && veiculos.length > 0 && (
@@ -399,7 +449,7 @@ export default function GaragemOverview() {
             <div
               key={v.id}
               className="animate-page-in"
-              style={{ animationDelay: `${index * 100}ms` }}
+              style={{ animationDelay: `${200 + index * 80}ms` }}
             >
               <VeiculoCard veiculo={v} />
             </div>
@@ -408,20 +458,28 @@ export default function GaragemOverview() {
       )}
 
       {!loading && !erro && veiculos.length === 0 && (
-        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border py-20 text-center">
-          <div className="flex size-12 items-center justify-center rounded-xl bg-surface text-faint-foreground">
-            <Wrench className="size-6" />
+        <div className="animate-page-in flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border py-20 text-center" style={{ animationDelay: "200ms" }}>
+          {/* mini car */}
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-surface-2">
+            <div className="w-12 opacity-70"><CarSilhouette /></div>
           </div>
           <div>
-            <p className="text-sm font-medium text-foreground">Garagem vazia</p>
-            <p className="mt-1 text-sm text-muted-foreground">Adicione seu primeiro projeto de build</p>
+            <p className="font-display text-[16px] font-bold text-foreground">Garagem vazia</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Adicione seu primeiro projeto e acompanhe o build passo a passo
+            </p>
           </div>
-          <Link
-            to="/novo"
-            className="flex items-center gap-1.5 rounded-lg bg-purple px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            <Plus className="size-4" /> Criar primeiro veículo
-          </Link>
+          <div className="flex flex-col items-center gap-2">
+            <Link
+              to="/novo"
+              className="flex items-center gap-1.5 rounded-xl bg-purple px-5 py-2.5 text-[14px] font-semibold text-white hover:opacity-90 transition-opacity shadow-lg shadow-purple/20"
+            >
+              <Plus className="size-4" /> Criar primeiro build
+            </Link>
+            <Link to="/feed" className="text-[12px] text-muted-foreground hover:text-purple transition-colors">
+              ou explore builds da comunidade →
+            </Link>
+          </div>
         </div>
       )}
 
