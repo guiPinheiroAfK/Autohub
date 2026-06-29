@@ -1,22 +1,81 @@
 ﻿import { Hono } from "hono"
 import { sql } from "../db/client.ts"
+import { isAdmin } from "../lib/admin.ts"
 import type { AppEnv } from "../types.ts"
 
 export const tracksRoutes = new Hono<AppEnv>()
+
+function slugify(nome: string) {
+  return nome
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 48) || "rota"
+}
 
 // ── GET /api/tracks/rotas ─────────────────────────────────────────────────────
 
 tracksRoutes.get("/rotas", async (c) => {
   const rotas = await sql`
     SELECT r.*,
+      u.nome AS criador_nome,
       COUNT(ru.id) FILTER (WHERE ru.status = 'concluida') AS total_runs
     FROM rotas r
     LEFT JOIN runs ru ON ru.rota_id = r.id
+    LEFT JOIN usuarios u ON u.id = r.criado_por
     WHERE r.ativa = true
-    GROUP BY r.id
-    ORDER BY r.regiao, r.nome
+    GROUP BY r.id, u.nome
+    ORDER BY r.oficial DESC, r.regiao NULLS LAST, r.nome
   `
   return c.json({ rotas })
+})
+
+// ── POST /api/tracks/rotas — cria um ponto de chegada (largada livre) ──────────
+// Qualquer usuário pode criar destinos da comunidade.
+// Só admin (ADMIN_EMAILS) pode marcar como oficial.
+
+tracksRoutes.post("/rotas", async (c) => {
+  const userId = c.get("userId")
+  const email = c.get("userEmail")
+
+  const body = await c.req.json<{
+    nome: string
+    lat: number
+    lng: number
+    regiao?: string
+    descricao?: string
+    ponto_b_nome?: string
+    tempo_ideal_s?: number
+    oficial?: boolean
+  }>().catch(() => null)
+
+  if (!body?.nome?.trim() || typeof body.lat !== "number" || typeof body.lng !== "number") {
+    return c.json({ error: "nome, lat e lng são obrigatórios" }, 400)
+  }
+  if (body.lat < -90 || body.lat > 90 || body.lng < -180 || body.lng > 180) {
+    return c.json({ error: "Coordenadas inválidas" }, 400)
+  }
+
+  const oficial = !!body.oficial && isAdmin(email)
+  const id = `${slugify(body.nome)}-${crypto.randomUUID().slice(0, 6)}`
+  const chegadaNome = body.ponto_b_nome?.trim() || body.nome.trim()
+
+  const [rota] = await sql`
+    INSERT INTO rotas (
+      id, nome, descricao, regiao,
+      ponto_a_nome, ponto_b_nome, ponto_b_lat, ponto_b_lng,
+      tempo_ideal_s, oficial, criado_por
+    )
+    VALUES (
+      ${id}, ${body.nome.trim()}, ${body.descricao ?? null}, ${body.regiao ?? null},
+      ${"Largada livre"}, ${chegadaNome}, ${body.lat}, ${body.lng},
+      ${body.tempo_ideal_s ?? null}, ${oficial}, ${userId}
+    )
+    RETURNING *
+  `
+  return c.json({ rota }, 201)
 })
 
 // ── GET /api/tracks/rotas/:id ─────────────────────────────────────────────────
@@ -32,7 +91,7 @@ tracksRoutes.get("/rotas/:id", async (c) => {
 
 tracksRoutes.get("/rotas/:id/leaderboard", async (c) => {
   const rotaId = c.req.param("id")
-  const modo = (c.req.query("modo") ?? "regularidade") as "regularidade" | "tempo"
+  const modo = (c.req.query("modo") ?? "regularidade") as "regularidade" | "tempo" | "ritmo"
   const perfil = c.req.query("perfil")
 
   const [rota] = await sql`SELECT tempo_ideal_s FROM rotas WHERE id = ${rotaId}`
@@ -62,8 +121,9 @@ tracksRoutes.get("/rotas/:id/leaderboard", async (c) => {
       AND ru.status  = 'concluida'
       AND ru.duracao_s IS NOT NULL
       ${perfilFilter}
-    ORDER BY ${modo === "regularidade"
-      ? sql`diff_ideal_s ASC`
+    ORDER BY ${
+      modo === "regularidade" ? sql`diff_ideal_s ASC`
+      : modo === "ritmo" ? sql`ru.vel_media_kmh DESC NULLS LAST`
       : sql`ru.duracao_s ASC`}
     LIMIT 50
   `

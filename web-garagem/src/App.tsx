@@ -73,6 +73,9 @@ export default function App() {
 
               {/* Rotas protegidas */}
               <Route element={<ProtectedRoute />}>
+                {/* Corrida — tela cheia imersiva, fora do Layout (sem header/nav) */}
+                <Route path="/tracks/:rotaId/run" element={<S><RunPage /></S>} />
+
                 <Route element={<Layout />}>
                   <Route path="/" element={<S><GaragemOverview /></S>} />
                   <Route path="/novo" element={<S><NovoVeiculo /></S>} />
@@ -83,7 +86,6 @@ export default function App() {
                   <Route path="/marketplace" element={<S><MarketplacePage /></S>} />
                   <Route path="/tracks" element={<S><TracksPage /></S>} />
                   <Route path="/tracks/:rotaId" element={<S><RotaDetalhePage /></S>} />
-                  <Route path="/tracks/:rotaId/run" element={<S><RunPage /></S>} />
                   <Route path="/minha-loja" element={<S><MinhaLojaPage /></S>} />
                 </Route>
               </Route>
