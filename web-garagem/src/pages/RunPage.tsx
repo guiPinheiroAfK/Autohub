@@ -192,43 +192,63 @@ export default function RunPage() {
     if ((phase !== "staging" && phase !== "running") || !mapRef.current || !rota) return
     if (mapInst.current) return
 
-    const chegada: LngLat = { lat: rota.ponto_b_lat, lng: rota.ponto_b_lng }
-    const inicio: LngLat = userStart ?? chegada
+    const container = mapRef.current
+    let cancelled = false
 
-    const map = new maplibregl.Map({
-      container: mapRef.current,
-      style: CARTO_DARK,
-      center: [inicio.lng, inicio.lat],
-      zoom: 14,
-      pitch: 0,
-      bearing: 0,
-      attributionControl: false,
-    })
-    mapInst.current = map
-    map.on("dragstart", () => { following.current = false })
-    map.on("error", (ev) => console.error("[maplibre]", ev.error))
+    // rAF garante que o browser pintou o container antes do MapLibre medir.
+    // Sem isso, clientWidth/clientHeight podem ser 0 → canvas 0×0 → tela preta.
+    const rafId = requestAnimationFrame(() => {
+      if (cancelled || !container) return
 
-    // MapLibre mede o container no construtor; se ainda não tinha tamanho,
-    // o mapa nasce 0x0 e fica preto. resize() força a remedição.
-    setTimeout(() => map.resize(), 80)
-    setTimeout(() => map.resize(), 400)
+      const { clientWidth: w, clientHeight: h } = container
+      console.log(`[RunPage] container: ${w}×${h}`)
 
-    map.on("load", () => {
-      map.resize()
-      new maplibregl.Marker({ element: flagEl(), anchor: "center" }).setLngLat([chegada.lng, chegada.lat]).addTo(map)
-      userMarker.current = new maplibregl.Marker({ element: carEl(), anchor: "center" }).setLngLat([inicio.lng, inicio.lat]).addTo(map)
-      ghostMarkers.current = ghosts.map((g, i) => {
-        const s = g.pontos[0]
-        const ll: [number, number] = s ? [Number(s.lng), Number(s.lat)] : [chegada.lng, chegada.lat]
-        return new maplibregl.Marker({ element: ghostEl(GHOST_COLORS[i] ?? "#888"), anchor: "center" }).setLngLat(ll).addTo(map)
+      const chegada: LngLat = { lat: rota.ponto_b_lat, lng: rota.ponto_b_lng }
+      const inicio: LngLat = userStart ?? chegada
+
+      const map = new maplibregl.Map({
+        container,
+        style: CARTO_DARK,
+        center: [inicio.lng, inicio.lat],
+        zoom: 14,
+        pitch: 0,
+        bearing: 0,
+        attributionControl: false,
       })
+      mapInst.current = map
 
-      map.addSource("route", { type: "geojson", data: lineFeature([[inicio.lng, inicio.lat], [chegada.lng, chegada.lat]]) })
-      map.addLayer({ id: "route-glow", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#7f77dd", "line-width": 11, "line-opacity": 0.25 } })
-      map.addLayer({ id: "route", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#a78bfa", "line-width": 5, "line-opacity": 0.95 } })
+      map.on("dragstart", () => { following.current = false })
+      map.on("error", (ev) => console.error("[maplibre error]", ev.error))
+      map.on("style.load", () => console.log("[maplibre] style carregado OK"))
 
-      atualizarRota(inicio, chegada, true)
+      // Se o container ainda era 0 no rAF (raro), resize força nova medição
+      setTimeout(() => { if (!cancelled) map.resize() }, 150)
+
+      map.on("load", () => {
+        map.resize()
+        const cv = map.getCanvas()
+        console.log(`[maplibre] load — canvas: ${cv.width}×${cv.height}`)
+
+        new maplibregl.Marker({ element: flagEl(), anchor: "center" }).setLngLat([chegada.lng, chegada.lat]).addTo(map)
+        userMarker.current = new maplibregl.Marker({ element: carEl(), anchor: "center" }).setLngLat([inicio.lng, inicio.lat]).addTo(map)
+        ghostMarkers.current = ghosts.map((g, i) => {
+          const s = g.pontos[0]
+          const ll: [number, number] = s ? [Number(s.lng), Number(s.lat)] : [chegada.lng, chegada.lat]
+          return new maplibregl.Marker({ element: ghostEl(GHOST_COLORS[i] ?? "#888"), anchor: "center" }).setLngLat(ll).addTo(map)
+        })
+
+        map.addSource("route", { type: "geojson", data: lineFeature([[inicio.lng, inicio.lat], [chegada.lng, chegada.lat]]) })
+        map.addLayer({ id: "route-glow", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#7f77dd", "line-width": 11, "line-opacity": 0.25 } })
+        map.addLayer({ id: "route", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#a78bfa", "line-width": 5, "line-opacity": 0.95 } })
+
+        atualizarRota(inicio, chegada, true)
+      })
     })
+
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(rafId)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, rota, ghosts, userStart])
 
@@ -485,7 +505,7 @@ export default function RunPage() {
   // staging / running
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#0b0b10]">
-      <div ref={mapRef} className="absolute inset-0 z-0" />
+      <div ref={mapRef} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 0 }} />
 
       {/* Top overlay */}
       <div className="relative z-10 flex items-start justify-between gap-2 bg-gradient-to-b from-black/80 to-transparent px-4 pb-8 pt-[max(14px,env(safe-area-inset-top))]">

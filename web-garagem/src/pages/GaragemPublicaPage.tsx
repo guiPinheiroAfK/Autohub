@@ -60,12 +60,17 @@ export default function GaragemPublicaPage() {
       .finally(() => setLoading(false))
   }, [slug])
 
+  // Usa garagem?.id (string estável) em vez do objeto garagem inteiro.
+  // Se a dependência fosse `garagem`, o efeito re-dispararia a cada toggleFollow
+  // (que chama setGaragem criando novo objeto), sobrescrevendo `seguindo` de forma
+  // assíncrona e dessincronizando o contador de seguidores.
+  const garagemId = garagem?.id
   useEffect(() => {
-    if (!user || !garagem) return
+    if (!user || !garagemId) return
     api.get<{ follows: { garagem_id: string }[] }>("/api/social/follows")
-      .then(r => setSeguindo(r.follows.some(f => f.garagem_id === garagem.id)))
+      .then(r => setSeguindo(r.follows.some(f => f.garagem_id === garagemId)))
       .catch(() => {})
-  }, [user, garagem])
+  }, [user, garagemId])
 
   async function toggleFollow() {
     if (!garagem || !user) return
