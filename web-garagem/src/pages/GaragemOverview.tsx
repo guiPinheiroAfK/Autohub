@@ -297,10 +297,10 @@ function ProximosEventos() {
   )
 }
 
-// Silhueta de carro esportivo — perfil hot-hatch, baixo, com rodas de 5 raios
+// Silhueta de carro esportivo — perfil RX-7 FD / C5: nariz longo, fastback, faróis retráteis abertos
 function CarSilhouette() {
   function Wheel({ cx, cy }: { cx: number; cy: number }) {
-    const R = 16, rInner = 9.5, rHub = 3.5
+    const R = 15, rInner = 9, rHub = 3.5
     return (
       <g>
         <circle cx={cx} cy={cy} r={R} fill="rgba(10,10,18,0.98)" stroke="rgba(127,119,221,0.65)" strokeWidth="2"/>
@@ -322,35 +322,82 @@ function CarSilhouette() {
   }
 
   return (
-    <svg viewBox="0 0 300 92" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-[240px]">
-      {/* Carroceria */}
+    <svg viewBox="0 0 310 86" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-[260px]">
+      {/* ── Corpo (fastback longo, nariz baixo — RX-7 FD) ── */}
       <path
-        d="M 18 75 L 18 62 L 34 44 L 54 26 L 78 18 L 200 16 L 232 21 Q 258 38 265 49 L 280 55 L 293 63 L 295 73 L 295 75 Z"
-        fill="rgba(127,119,221,0.13)" stroke="rgba(127,119,221,0.52)" strokeWidth="1.5" strokeLinejoin="round"
+        d="
+          M 22 76
+          L 22 66
+          Q 38 48 65 32
+          Q 90 19 118 16
+          L 210 13
+          Q 233 13 250 26
+          Q 265 39 272 51
+          L 289 55
+          Q 298 57 301 65
+          L 303 76
+          Z
+        "
+        fill="rgba(127,119,221,0.13)"
+        stroke="rgba(127,119,221,0.52)"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
       />
-      {/* Vidro traseiro (hatch) */}
+
+      {/* ── Janela lateral ── */}
       <path
-        d="M 37 44 L 54 26 L 60 38 Z"
-        fill="rgba(127,119,221,0.07)" stroke="rgba(127,119,221,0.25)" strokeWidth="1" strokeLinejoin="round"
+        d="
+          M 121 16
+          L 210 13
+          Q 233 13 250 26
+          Q 260 35 264 43
+          L 175 42
+          Q 152 41 132 29
+          Z
+        "
+        fill="rgba(127,119,221,0.07)"
+        stroke="rgba(127,119,221,0.27)"
+        strokeWidth="1"
+        strokeLinejoin="round"
       />
-      {/* Janela lateral (3-door, sem B-pilar) */}
-      <path
-        d="M 56 26 L 78 18 L 200 16 L 232 21 L 228 40 L 82 40 L 60 40 Z"
-        fill="rgba(127,119,221,0.07)" stroke="rgba(127,119,221,0.28)" strokeWidth="1" strokeLinejoin="round"
+
+      {/* ── Coluna C / linha do fastback ── */}
+      <path d="M 121 16 Q 100 22 80 35" stroke="rgba(127,119,221,0.30)" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+
+      {/* ── Para-brisa (coluna A) ── */}
+      <path d="M 250 26 Q 266 40 272 51" stroke="rgba(127,119,221,0.38)" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+
+      {/* ── Spoiler/lip traseiro ── */}
+      <path d="M 22 63 L 28 59 L 30 62" stroke="rgba(127,119,221,0.45)" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+
+      {/* ── Faróis retráteis ABERTOS (detalhe icônico do FD!) ── */}
+      {/* caixa do farol (no capô) */}
+      <rect x="285" y="52" width="16" height="5" rx="1"
+        fill="rgba(18,18,30,0.9)" stroke="rgba(127,119,221,0.35)" strokeWidth="1"/>
+      {/* lente do farol (aberta, inclinada para trás ~15°) */}
+      <rect x="287" y="39" width="9" height="15" rx="1.5"
+        fill="rgba(232,121,249,0.68)"
+        transform="rotate(15 293 52)"
       />
-      {/* Coluna A / para-brisa */}
-      <path d="M 232 21 Q 258 38 265 49" stroke="rgba(127,119,221,0.4)" strokeWidth="1.5" fill="none"/>
-      {/* Character line */}
-      <path d="M 22 57 Q 158 53 282 57" stroke="rgba(127,119,221,0.14)" strokeWidth="1" fill="none"/>
-      {/* Reflexo no teto */}
-      <path d="M 82 18 Q 140 15 200 16" stroke="rgba(255,255,255,0.07)" strokeWidth="2" fill="none"/>
-      {/* Farol dianteiro */}
-      <path d="M 291 61 L 294 55 L 296 57 L 296 67 L 294 68 Z" fill="rgba(232,121,249,0.75)"/>
-      {/* Farol traseiro */}
-      <rect x="16" y="58" width="3" height="10" rx="1.5" fill="rgba(226,75,74,0.6)"/>
-      {/* Rodas */}
-      <Wheel cx={72}  cy={75} />
-      <Wheel cx={222} cy={75} />
+      {/* reflexo na lente */}
+      <rect x="288" y="40" width="4" height="6" rx="1"
+        fill="rgba(255,255,255,0.22)"
+        transform="rotate(15 293 52)"
+      />
+
+      {/* ── Farol traseiro ── */}
+      <path d="M 21 62 L 21 73 Q 21 75 23 75 L 25 75 L 25 63 Z" fill="rgba(226,75,74,0.55)"/>
+
+      {/* ── Reflexo sutil no teto ── */}
+      <path d="M 122 16 Q 165 12 210 13" stroke="rgba(255,255,255,0.07)" strokeWidth="2" fill="none"/>
+
+      {/* ── Character line ── */}
+      <path d="M 26 62 Q 168 56 291 59" stroke="rgba(127,119,221,0.13)" strokeWidth="1" fill="none"/>
+
+      {/* ── Rodas (5 raios — mesma linguagem do ícone do app) ── */}
+      <Wheel cx={82}  cy={76} />
+      <Wheel cx={238} cy={76} />
     </svg>
   )
 }
