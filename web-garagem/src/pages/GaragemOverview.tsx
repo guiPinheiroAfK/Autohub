@@ -297,34 +297,60 @@ function ProximosEventos() {
   )
 }
 
-// SVG silhueta de carro (estilizado, estilo "low profile")
+// Silhueta de carro esportivo — perfil hot-hatch, baixo, com rodas de 5 raios
 function CarSilhouette() {
+  function Wheel({ cx, cy }: { cx: number; cy: number }) {
+    const R = 16, rInner = 9.5, rHub = 3.5
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={R} fill="rgba(10,10,18,0.98)" stroke="rgba(127,119,221,0.65)" strokeWidth="2"/>
+        {Array.from({ length: 5 }).map((_, i) => {
+          const a = ((-90 + i * 72) * Math.PI) / 180
+          return (
+            <line key={i}
+              x1={cx} y1={cy}
+              x2={cx + (R - 1.5) * Math.cos(a)}
+              y2={cy + (R - 1.5) * Math.sin(a)}
+              stroke="rgba(127,119,221,0.55)" strokeWidth="1.5"
+            />
+          )
+        })}
+        <circle cx={cx} cy={cy} r={rInner} fill="rgba(127,119,221,0.12)" stroke="rgba(127,119,221,0.45)" strokeWidth="1.5"/>
+        <circle cx={cx} cy={cy} r={rHub}   fill="rgba(127,119,221,0.85)"/>
+      </g>
+    )
+  }
+
   return (
-    <svg viewBox="0 0 220 90" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-[220px]">
-      {/* carroceria */}
+    <svg viewBox="0 0 300 92" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-[240px]">
+      {/* Carroceria */}
       <path
-        d="M8 58 L28 58 L42 34 L65 22 L145 22 L168 34 L192 58 L206 58 Q212 58 212 64 L212 70 Q212 76 206 76 L14 76 Q8 76 8 70 Z"
-        fill="rgba(127,119,221,0.15)" stroke="rgba(127,119,221,0.45)" strokeWidth="1.5" strokeLinejoin="round"
+        d="M 18 75 L 18 62 L 34 44 L 54 26 L 78 18 L 200 16 L 232 21 Q 258 38 265 49 L 280 55 L 293 63 L 295 73 L 295 75 Z"
+        fill="rgba(127,119,221,0.13)" stroke="rgba(127,119,221,0.52)" strokeWidth="1.5" strokeLinejoin="round"
       />
-      {/* janelas */}
+      {/* Vidro traseiro (hatch) */}
       <path
-        d="M46 36 L65 24 L143 24 L162 36 Z"
-        fill="rgba(127,119,221,0.1)" stroke="rgba(127,119,221,0.3)" strokeWidth="1" strokeLinejoin="round"
+        d="M 37 44 L 54 26 L 60 38 Z"
+        fill="rgba(127,119,221,0.07)" stroke="rgba(127,119,221,0.25)" strokeWidth="1" strokeLinejoin="round"
       />
-      {/* divisor janelas */}
-      <line x1="105" y1="24" x2="102" y2="36" stroke="rgba(127,119,221,0.25)" strokeWidth="1" />
-      {/* roda traseira */}
-      <circle cx="55" cy="74" r="14" fill="rgba(20,20,35,1)" stroke="rgba(127,119,221,0.55)" strokeWidth="2"/>
-      <circle cx="55" cy="74" r="7" fill="rgba(127,119,221,0.25)" stroke="rgba(127,119,221,0.5)" strokeWidth="1"/>
-      <circle cx="55" cy="74" r="3" fill="rgba(127,119,221,0.6)"/>
-      {/* roda dianteira */}
-      <circle cx="162" cy="74" r="14" fill="rgba(20,20,35,1)" stroke="rgba(127,119,221,0.55)" strokeWidth="2"/>
-      <circle cx="162" cy="74" r="7" fill="rgba(127,119,221,0.25)" stroke="rgba(127,119,221,0.5)" strokeWidth="1"/>
-      <circle cx="162" cy="74" r="3" fill="rgba(127,119,221,0.6)"/>
-      {/* farol */}
-      <ellipse cx="204" cy="54" rx="4" ry="6" fill="rgba(232,121,249,0.6)" />
-      {/* detalhe lateral */}
-      <line x1="30" y1="52" x2="190" y2="52" stroke="rgba(127,119,221,0.12)" strokeWidth="1"/>
+      {/* Janela lateral (3-door, sem B-pilar) */}
+      <path
+        d="M 56 26 L 78 18 L 200 16 L 232 21 L 228 40 L 82 40 L 60 40 Z"
+        fill="rgba(127,119,221,0.07)" stroke="rgba(127,119,221,0.28)" strokeWidth="1" strokeLinejoin="round"
+      />
+      {/* Coluna A / para-brisa */}
+      <path d="M 232 21 Q 258 38 265 49" stroke="rgba(127,119,221,0.4)" strokeWidth="1.5" fill="none"/>
+      {/* Character line */}
+      <path d="M 22 57 Q 158 53 282 57" stroke="rgba(127,119,221,0.14)" strokeWidth="1" fill="none"/>
+      {/* Reflexo no teto */}
+      <path d="M 82 18 Q 140 15 200 16" stroke="rgba(255,255,255,0.07)" strokeWidth="2" fill="none"/>
+      {/* Farol dianteiro */}
+      <path d="M 291 61 L 294 55 L 296 57 L 296 67 L 294 68 Z" fill="rgba(232,121,249,0.75)"/>
+      {/* Farol traseiro */}
+      <rect x="16" y="58" width="3" height="10" rx="1.5" fill="rgba(226,75,74,0.6)"/>
+      {/* Rodas */}
+      <Wheel cx={72}  cy={75} />
+      <Wheel cx={222} cy={75} />
     </svg>
   )
 }
