@@ -52,6 +52,10 @@ export default function MinhaLojaPage() {
   }, [])
 
   async function uploadImagem(file: File, tipo: "logo" | "banner") {
+    if (file.size > 2 * 1024 * 1024) {
+      alert("A imagem não pode ultrapassar 2 MB.")
+      return
+    }
     const setUploading = tipo === "logo" ? setUploadingLogo : setUploadingBanner
     setUploading(true)
     try {

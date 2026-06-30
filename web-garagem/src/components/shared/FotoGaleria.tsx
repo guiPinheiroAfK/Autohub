@@ -68,6 +68,10 @@ export function FotoGaleria({ veiculoId }: { veiculoId: string }) {
     try {
       for (const file of Array.from(files)) {
         if (!file.type.startsWith("image/")) continue
+        if (file.size > 2 * 1024 * 1024) {
+          alert(`"${file.name}" excede 2 MB e foi ignorada.`)
+          continue
+        }
         const url = await uploadCloudinary(veiculoId, file)
         await api.post(`/api/veiculos/${veiculoId}/fotos`, { url })
       }
