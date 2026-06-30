@@ -470,6 +470,10 @@ export default function VeiculoDetalhe() {
 
     async function handleUploadCapa(file: File) {
         if (!id || !data) return
+        if (file.size > 2 * 1024 * 1024) {
+            alert("A imagem não pode ultrapassar 2 MB.")
+            return
+        }
         setUploadingCapa(true)
         try {
             const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME

@@ -1,9 +1,11 @@
 import { Link, useLocation } from "react-router-dom"
-import { ArrowLeft, Settings, LogOut, CalendarDays, Navigation, Bell, Users, Check, CheckCheck, ShoppingBag, Store } from "lucide-react"
+import { ArrowLeft, Settings, LogOut, CalendarDays, Navigation, Bell, Users, Check, CheckCheck, ShoppingBag, Store, Globe } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { Logo } from "@/components/shared/Logo"
 import { useEffect, useRef, useState } from "react"
 import { api } from "@/lib/api/client"
+import { useLang } from "@/context/LangContext"
+import { LANG_OPTIONS, type Lang } from "@/lib/i18n"
 
 interface Notif {
   id: string
@@ -26,6 +28,7 @@ function timeAgo(iso: string) {
 }
 
 function NotifDropdown() {
+  const { t } = useLang()
   const [open, setOpen] = useState(false)
   const [notifs, setNotifs] = useState<Notif[]>([])
   const [naoLidas, setNaoLidas] = useState(0)
@@ -55,7 +58,6 @@ function NotifDropdown() {
       .finally(() => setLoading(false))
   }, [open])
 
-  // Fecha ao clicar fora
   useEffect(() => {
     if (!open) return
     function onClickOutside(e: MouseEvent) {
@@ -81,7 +83,7 @@ function NotifDropdown() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(v => !v)}
-        title="Notificações"
+        title={t.notif_title}
         className={`relative flex size-8 items-center justify-center rounded-lg transition-colors ${
           open ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
         }`}
@@ -96,20 +98,18 @@ function NotifDropdown() {
 
       {open && (
         <div className="absolute right-0 top-full z-50 mt-2 w-[340px] overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
-          {/* header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <span className="text-[13px] font-semibold text-foreground">Notificações</span>
+            <span className="text-[13px] font-semibold text-foreground">{t.notif_title}</span>
             {naoLidas > 0 && (
               <button
                 onClick={marcarTodasLidas}
                 className="flex items-center gap-1 text-[11px] text-purple hover:underline"
               >
-                <CheckCheck className="size-3" /> Marcar todas como lidas
+                <CheckCheck className="size-3" /> {t.notif_mark_all}
               </button>
             )}
           </div>
 
-          {/* lista */}
           <div className="max-h-[360px] overflow-y-auto">
             {loading ? (
               <div className="flex flex-col gap-2 p-3">
@@ -120,7 +120,7 @@ function NotifDropdown() {
             ) : notifs.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-10 text-center">
                 <Bell className="size-6 text-faint-foreground" />
-                <p className="text-[12px] text-muted-foreground">Nenhuma notificação</p>
+                <p className="text-[12px] text-muted-foreground">{t.notif_empty}</p>
               </div>
             ) : (
               notifs.map(n => (
@@ -158,9 +158,58 @@ function NotifDropdown() {
   )
 }
 
+function LangSwitcher() {
+  const { lang, setLang } = useLang()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onClickOutside)
+    return () => document.removeEventListener("mousedown", onClickOutside)
+  }, [open])
+
+  const current = LANG_OPTIONS.find(o => o.value === lang)!
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        title={current.label}
+        className={`flex size-8 items-center justify-center rounded-lg text-[13px] transition-colors ${
+          open ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+        }`}
+      >
+        <Globe className="size-4" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-[130px] overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+          {LANG_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => { setLang(opt.value as Lang); setOpen(false) }}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-[12px] transition-colors hover:bg-surface-2 ${
+                opt.value === lang ? "text-purple font-semibold" : "text-foreground"
+              }`}
+            >
+              <span>{opt.flag}</span>
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Header() {
   const { pathname } = useLocation()
   const { user, logout } = useAuth()
+  const { t } = useLang()
   const naHome = pathname === "/" || pathname === "/configuracoes"
   const naTracksSection = pathname.startsWith("/tracks")
   const [spinning, setSpinning] = useState(false)
@@ -213,7 +262,6 @@ export function Header() {
               {user.nome.split(" ")[0]}
             </span>
 
-            {/* Links de navegação: escondidos no mobile (BottomNav assume) */}
             <Link
               to="/tracks"
               title="AutoHub Tracks"
@@ -222,59 +270,61 @@ export function Header() {
               }`}
             >
               <Navigation className="size-3.5" />
-              <span>Tracks</span>
+              <span>{t.nav_tracks}</span>
             </Link>
 
             <Link
               to="/eventos"
-              title="Eventos automotivos"
+              title={t.nav_events}
               className={`hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
                 pathname === "/eventos" ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <CalendarDays className="size-3.5" />
-              <span>Eventos</span>
+              <span>{t.nav_events}</span>
             </Link>
 
             <Link
               to="/feed"
-              title="Feed da comunidade"
+              title={t.nav_feed}
               className={`hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
                 pathname === "/feed" ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <Users className="size-3.5" />
-              <span>Feed</span>
+              <span>{t.nav_feed}</span>
             </Link>
 
             <Link
               to="/marketplace"
-              title="Marketplace"
+              title={t.nav_marketplace}
               className={`hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
                 pathname === "/marketplace" ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <ShoppingBag className="size-3.5" />
-              <span>Marketplace</span>
+              <span>{t.nav_marketplace}</span>
             </Link>
 
             <Link
               to="/minha-loja"
-              title="Minha Loja"
+              title={t.nav_my_store}
               className={`hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
                 pathname === "/minha-loja" ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
             >
               <Store className="size-3.5" />
-              <span>Minha Loja</span>
+              <span>{t.nav_my_store}</span>
             </Link>
 
             {/* Sempre visíveis */}
             <NotifDropdown />
 
+            <LangSwitcher />
+
             <Link
               to="/configuracoes"
-              title="Configurações"
+              title={t.nav_settings}
               className={`flex size-8 items-center justify-center rounded-lg transition-colors ${
                 pathname === "/configuracoes" ? "bg-purple-bg text-purple" : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
               }`}
@@ -284,7 +334,7 @@ export function Header() {
 
             <button
               onClick={logout}
-              title="Sair"
+              title={t.nav_logout}
               className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-red"
             >
               <LogOut className="size-4" />

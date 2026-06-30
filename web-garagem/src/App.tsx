@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { lazy, Suspense } from "react"
 import { AuthProvider } from "@/context/AuthContext"
 import { SettingsProvider } from "@/context/SettingsContext"
+import { LangProvider } from "@/context/LangContext"
 import { ProtectedRoute } from "@/components/shared/ProtectedRoute"
 import { Layout } from "@/components/layout/Layout"
 import { InstallPWA } from "@/components/layout/InstallPWA"
@@ -41,6 +42,7 @@ const S = ({ children }: { children: React.ReactNode }) => (
 
 export default function App() {
   return (
+      <LangProvider>
       <SettingsProvider>
         <BrowserRouter>
           <AuthProvider>
@@ -93,5 +95,6 @@ export default function App() {
           </AuthProvider>
         </BrowserRouter>
       </SettingsProvider>
+      </LangProvider>
   )
 }

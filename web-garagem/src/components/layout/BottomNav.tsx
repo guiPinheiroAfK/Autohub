@@ -1,16 +1,18 @@
 import { Link, useLocation } from "react-router-dom"
 import { Home, Users, ShoppingBag, Store, Navigation } from "lucide-react"
-
-const ITEMS = [
-  { to: "/",            icon: Home,        label: "Garagem"    },
-  { to: "/feed",        icon: Users,       label: "Feed"       },
-  { to: "/marketplace", icon: ShoppingBag, label: "Marketplace"},
-  { to: "/minha-loja",  icon: Store,       label: "Minha Loja" },
-  { to: "/tracks",      icon: Navigation,  label: "Tracks"     },
-]
+import { useLang } from "@/context/LangContext"
 
 export function BottomNav() {
   const { pathname } = useLocation()
+  const { t } = useLang()
+
+  const ITEMS = [
+    { to: "/",            icon: Home,        label: t.nav_garage     },
+    { to: "/feed",        icon: Users,       label: t.nav_feed       },
+    { to: "/marketplace", icon: ShoppingBag, label: t.nav_marketplace },
+    { to: "/minha-loja",  icon: Store,       label: t.nav_my_store   },
+    { to: "/tracks",      icon: Navigation,  label: t.nav_tracks     },
+  ]
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur-sm sm:hidden">
