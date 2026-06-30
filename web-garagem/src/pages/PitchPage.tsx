@@ -1,5 +1,5 @@
 import { Logo } from "@/components/shared/Logo"
-import { LangProvider, useLang } from "@/context/LangContext"
+import { useLang } from "@/context/LangContext"
 import type { Lang } from "@/lib/i18n"
 import {
   Wrench, TrendingUp, Users, ShoppingBag, Navigation, CalendarDays,
