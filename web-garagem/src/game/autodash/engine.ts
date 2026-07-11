@@ -4,9 +4,9 @@
 import {
   CANVAS_W, CANVAS_H, SEG_LEN, ROAD_WIDTH, CAM_HEIGHT, CAM_DEPTH, DRAW_DIST,
   KMH2UPS, RPM_IDLE, RPM_REDLINE, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH,
-  CARS, PAINTS, STRIPES, NEONS, NEON_NAMES,
-  loadConfig, saveConfig, loadScores, saveScore,
-  type CarSpec, type GameConfig, type ScoreEntry,
+  CARS, PAINTS, STRIPES, NEONS, NEON_NAMES, WHEELS, WINGS,
+  loadConfig, saveConfig, cachedScores, fetchLeaderboard, submitScore,
+  type CarSpec, type CarCustom, type GameConfig, type ScoreEntry,
 } from "./data"
 import { AudioBus } from "./audio"
 
@@ -74,7 +74,7 @@ export class AutoDashEngine {
   private ctx: CanvasRenderingContext2D
   private audio = new AudioBus()
   private cfg: GameConfig = loadConfig()
-  private scores: ScoreEntry[] = loadScores()
+  private scores: ScoreEntry[] = cachedScores()
 
   private state: GameState = "menu"
   private raf = 0
@@ -141,6 +141,8 @@ export class AutoDashEngine {
   private mouseGas = false
   private mouseBrake = false
   private mouseXn = 0.5
+  private mousePx = { x: -1, y: -1 }
+  private uiRegions: { x: number; y: number; w: number; h: number; act: () => void }[] = []
   private nameBuf = ""
   private newRecord = false
   private beamT = 0
@@ -157,6 +159,7 @@ export class AutoDashEngine {
     this.buildTrack()
     this.seedTraffic(14)
     this.bind()
+    void this.refreshScores()
     this.lastT = performance.now()
     const loop = (t: number) => {
       if (this.destroyed) return
@@ -699,8 +702,17 @@ export class AutoDashEngine {
       km: Math.round(this.km * 10) / 10,
     }
     this.newRecord = entry.score > 300 && (this.scores.length === 0 || entry.score > this.scores[0].score)
-    if (entry.score > 300) this.scores = saveScore(entry)
+    if (entry.score > 300) {
+      void submitScore(entry).then((scores) => {
+        if (!this.destroyed && scores.length) this.scores = scores
+      })
+    }
     this.state = "gameover"
+  }
+
+  private async refreshScores() {
+    const scores = await fetchLeaderboard()
+    if (!this.destroyed && scores.length) this.scores = scores
   }
 
   private startRace() {
@@ -797,6 +809,7 @@ export class AutoDashEngine {
   // ---------- render ----------
   private render() {
     const ctx = this.ctx
+    this.uiRegions = []
     const sky = this.skyNow()
     const amb = sky.amb
 
@@ -1349,7 +1362,7 @@ export class AutoDashEngine {
       ctx.ellipse(W / 2, H - 68 + bounce, pw * 0.75, 62, 0, 0, Math.PI * 2)
       ctx.fill(); ctx.stroke()
     }
-    drawPlayerCar(ctx, W / 2, H - 34 + bounce, spec, custom.paint, custom.stripe, custom.neon, steer, braking, amb, this.nitroOn && this.nitroMeter > 1)
+    drawPlayerCar(ctx, W / 2, H - 34 + bounce, spec, custom, steer, braking, amb, this.nitroOn && this.nitroMeter > 1)
 
     // sensação de velocidade: streaks translúcidos varrendo as bordas
     if (this.speed > 165 && this.state === "racing") {
@@ -1394,6 +1407,45 @@ export class AutoDashEngine {
     ctx.beginPath()
     ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, r)
     ctx.stroke()
+  }
+
+  private isHover(x: number, y: number, w: number, h: number) {
+    return this.mousePx.x >= x && this.mousePx.x <= x + w && this.mousePx.y >= y && this.mousePx.y <= y + h
+  }
+
+  /** Botão pill clicável (mouse) com hover; o atalho de teclado continua valendo. */
+  private pill(label: string, x: number, y: number, w: number, act: () => void, opts: { primary?: boolean; h?: number; font?: number } = {}) {
+    const ctx = this.ctx
+    const h = opts.h ?? 28
+    const hov = this.isHover(x, y, w, h)
+    ctx.fillStyle = opts.primary
+      ? (hov ? "#fde047" : "#facc15")
+      : (hov ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.10)")
+    rr(ctx, x, y, w, h, h / 2)
+    ctx.strokeStyle = hov ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.18)"
+    ctx.lineWidth = 1
+    ctx.beginPath(); ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2); ctx.stroke()
+    ctx.fillStyle = opts.primary ? "#1c1917" : "#f8fafc"
+    ctx.font = `bold ${opts.font ?? 13}px 'Segoe UI', sans-serif`
+    ctx.textAlign = "center"
+    ctx.fillText(label, x + w / 2, y + h / 2 + (opts.font ?? 13) * 0.36)
+    ctx.textAlign = "left"
+    this.uiRegions.push({ x, y, w, h, act })
+  }
+
+  /** Seta clicável de navegação (◀ / ▶). */
+  private arrowBtn(x: number, y: number, dir: -1 | 1, act: () => void) {
+    const ctx = this.ctx
+    const s = 46
+    const hov = this.isHover(x, y, s, s)
+    ctx.fillStyle = hov ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.10)"
+    rr(ctx, x, y, s, s, 12)
+    ctx.fillStyle = "#f8fafc"
+    ctx.font = "bold 22px 'Segoe UI', sans-serif"
+    ctx.textAlign = "center"
+    ctx.fillText(dir < 0 ? "◀" : "▶", x + s / 2, y + s / 2 + 8)
+    ctx.textAlign = "left"
+    this.uiRegions.push({ x, y, w: s, h: s, act })
   }
 
   private renderHud() {
@@ -1604,11 +1656,9 @@ export class AutoDashEngine {
     ctx.fillStyle = "rgba(248,250,252,0.85)"
     ctx.font = "18px 'Segoe UI', sans-serif"
     ctx.fillText("costure o trânsito · respeite o câmbio · sobreviva", W / 2, 214)
-    if (Math.floor(this.demoT * 1.6) % 2 === 0) {
-      ctx.fillStyle = "#fde047"
-      ctx.font = "bold 24px 'Segoe UI', sans-serif"
-      ctx.fillText("clique ou ENTER para entrar na garagem", W / 2, 320)
-    }
+    ctx.textAlign = "left"
+    this.pill("BORA CORRER  [ENTER]", W / 2 - 150, 292, 300, () => this.enterFromMenu(), { primary: true, h: 46, font: 18 })
+    ctx.textAlign = "center"
     ctx.fillStyle = "rgba(248,250,252,0.6)"
     ctx.font = "14px 'Segoe UI', sans-serif"
     ctx.fillText("🖱 esq acelera · dir freia · scroll troca marcha · botão do meio = neutro", W / 2, 440)
@@ -1630,94 +1680,111 @@ export class AutoDashEngine {
     this.dim(0.72)
     const spec = CARS[this.cfg.carIdx]
     const custom = this.cfg.customs[this.cfg.carIdx]
+    const save = () => saveConfig(this.cfg)
 
     ctx.textAlign = "center"
     ctx.fillStyle = "#f8fafc"
     ctx.font = "bold 30px 'Segoe UI', sans-serif"
-    ctx.fillText("GARAGEM", W / 2, 46)
+    ctx.fillText("GARAGEM", W / 2, 44)
     ctx.fillStyle = "rgba(248,250,252,0.55)"
-    ctx.font = "15px 'Segoe UI', sans-serif"
-    ctx.fillText(`◀  ${this.cfg.carIdx + 1}/${CARS.length}  ▶`, W / 2, 72)
+    ctx.font = "14px 'Segoe UI', sans-serif"
+    ctx.fillText(`${this.cfg.carIdx + 1} / ${CARS.length}`, 240, 78)
+    ctx.textAlign = "left"
+
+    this.pill("← menu", 16, 16, 92, () => { this.state = "menu" }, { h: 26, font: 12 })
+    this.arrowBtn(38, 206, -1, () => { this.cfg.carIdx = (this.cfg.carIdx + CARS.length - 1) % CARS.length; save(); this.audio.ui() })
+    this.arrowBtn(396, 206, 1, () => { this.cfg.carIdx = (this.cfg.carIdx + 1) % CARS.length; save(); this.audio.ui() })
 
     // plataforma + carro
-    const px = 240, py = 330
+    const px = 240, py = 316
     const pg = ctx.createRadialGradient(px, py, 10, px, py, 150)
     const neon = NEONS[custom.neon]
     pg.addColorStop(0, custom.neon > 0 ? neon + "55" : "rgba(148,163,184,0.25)")
     pg.addColorStop(1, "rgba(0,0,0,0)")
     ctx.fillStyle = pg
     ctx.beginPath(); ctx.ellipse(px, py, 160, 46, 0, 0, Math.PI * 2); ctx.fill()
-    drawPlayerCar(ctx, px, py + 10, spec, custom.paint, custom.stripe, custom.neon, 0, false, 0.9, false, 1.5)
-
-    ctx.fillStyle = PAINTS[custom.paint]
-    ctx.font = "bold 26px 'Segoe UI', sans-serif"
-    ctx.fillText(spec.name, px, 408)
-    ctx.fillStyle = "rgba(248,250,252,0.7)"
-    ctx.font = "italic 13px 'Segoe UI', sans-serif"
-    ctx.fillText(spec.desc, px, 430)
-    ctx.fillStyle = "rgba(148,197,255,0.85)"
-    ctx.font = "13px 'Segoe UI', sans-serif"
-    ctx.fillText(`piloto: ${this.cfg.pilotName || "?"} · [N] trocar`, px, 455)
-    ctx.textAlign = "left"
-
-    // painel de vidro atrás da coluna de specs
-    this.glass(492, 92, 344, 444, 18)
-
-    // stats
-    const sx = 520, sw = 240
-    const stat = (label: string, frac: number, y: number, invert = false) => {
-      ctx.fillStyle = "rgba(248,250,252,0.75)"
-      ctx.font = "12px 'Segoe UI', sans-serif"
-      ctx.fillText(label, sx, y - 4)
-      ctx.fillStyle = "rgba(148,163,184,0.25)"
-      rr(ctx, sx, y, sw, 10, 5)
-      ctx.fillStyle = invert ? "#fb923c" : "#4ade80"
-      rr(ctx, sx, y, sw * clamp(frac, 0.05, 1), 10, 5)
-    }
-    stat("POTÊNCIA", spec.power / 58, 120)
-    stat("ADERÊNCIA (curvas)", spec.grip / 0.9, 156)
-    stat("VELOCIDADE FINAL", spec.topSpeed / 248, 192)
-    stat("LARGURA (atrapalha no corredor)", spec.width / 0.31, 228, true)
-
-    // opções
-    ctx.fillStyle = "rgba(248,250,252,0.85)"
-    ctx.font = "bold 14px 'Segoe UI', sans-serif"
-    ctx.fillText(`[C] pintura`, sx, 280)
-    for (let i = 0; i < PAINTS.length; i++) {
-      ctx.fillStyle = PAINTS[i]
-      ctx.beginPath(); ctx.arc(sx + 8 + i * 24, 300, 8, 0, Math.PI * 2); ctx.fill()
-      if (i === custom.paint) {
-        ctx.strokeStyle = "#f8fafc"; ctx.lineWidth = 2
-        ctx.beginPath(); ctx.arc(sx + 8 + i * 24, 300, 11, 0, Math.PI * 2); ctx.stroke()
-      }
-    }
-    ctx.fillStyle = "rgba(248,250,252,0.85)"
-    ctx.fillText(`[V] faixa: ${STRIPES[custom.stripe]}`, sx, 336)
-    ctx.fillText(`[B] neon: ${NEON_NAMES[custom.neon]}`, sx, 362)
-    if (custom.neon > 0) { ctx.fillStyle = NEONS[custom.neon]; ctx.beginPath(); ctx.arc(sx + 118, 357, 6, 0, Math.PI * 2); ctx.fill() }
-    ctx.fillStyle = "rgba(248,250,252,0.85)"
-    ctx.fillText(`[T] câmbio: ${this.cfg.transmission === "auto" ? "AUTOMÁTICO" : "SEQUENCIAL (scroll)"}`, sx, 396)
-    ctx.fillText(`[Y] direção: ${this.cfg.steering === "mouse" ? "MOUSE (volante)" : "TECLADO"}`, sx, 422)
-
-    // ranking
-    ctx.fillStyle = "rgba(253,224,71,0.9)"
-    ctx.font = "bold 13px 'Segoe UI', sans-serif"
-    ctx.fillText("TOP 5", sx, 450)
-    ctx.font = "12px 'Segoe UI', sans-serif"
-    ctx.fillStyle = "rgba(248,250,252,0.7)"
-    if (this.scores.length === 0) ctx.fillText("— ainda sem recordes —", sx, 468)
-    this.scores.forEach((s, i) => {
-      ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, sx, 468 + i * 16)
-    })
+    drawPlayerCar(ctx, px, py + 10, spec, custom, 0, false, 0.9, false, 1.5)
 
     ctx.textAlign = "center"
-    ctx.fillStyle = "#fde047"
-    ctx.font = "bold 22px 'Segoe UI', sans-serif"
-    ctx.fillText("[ENTER] pro grid de largada", 240, 490)
-    ctx.fillStyle = "rgba(248,250,252,0.5)"
-    ctx.font = "13px 'Segoe UI', sans-serif"
-    ctx.fillText("[ESC] menu", 240, 514)
+    ctx.fillStyle = PAINTS[custom.paint]
+    ctx.font = "bold 25px 'Segoe UI', sans-serif"
+    ctx.fillText(spec.name, px, 392)
+    ctx.fillStyle = "rgba(248,250,252,0.7)"
+    ctx.font = "italic 13px 'Segoe UI', sans-serif"
+    ctx.fillText(spec.desc, px, 414)
     ctx.textAlign = "left"
+
+    this.pill(`piloto: ${this.cfg.pilotName || "?"} · trocar [N]`, 120, 430, 240, () => {
+      this.nameBuf = this.cfg.pilotName
+      this.state = "nameentry"
+      this.audio.ui()
+    })
+    this.pill("ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); this.startRace() }, { primary: true, h: 42, font: 17 })
+
+    // painel de specs e customização
+    this.glass(486, 66, 456, 460, 18)
+    const sx = 510
+    const stat = (label: string, frac: number, x: number, y: number, invert = false) => {
+      ctx.fillStyle = "rgba(248,250,252,0.75)"
+      ctx.font = "11px 'Segoe UI', sans-serif"
+      ctx.fillText(label, x, y - 4)
+      ctx.fillStyle = "rgba(148,163,184,0.25)"
+      rr(ctx, x, y, 190, 9, 5)
+      ctx.fillStyle = invert ? "#fb923c" : "#4ade80"
+      rr(ctx, x, y, 190 * clamp(frac, 0.05, 1), 9, 5)
+    }
+    stat("POTÊNCIA", spec.power / 58, sx, 102)
+    stat("ADERÊNCIA (curvas)", spec.grip / 0.9, sx + 226, 102)
+    stat("VELOCIDADE FINAL", spec.topSpeed / 248, sx, 140)
+    stat("LARGURA (atrapalha no corredor)", spec.width / 0.31, sx + 226, 140, true)
+
+    // pintura e rodas — chips clicáveis
+    ctx.fillStyle = "rgba(248,250,252,0.75)"
+    ctx.font = "bold 11px 'Segoe UI', sans-serif"
+    ctx.fillText("PINTURA [C]", sx, 176)
+    for (let i = 0; i < PAINTS.length; i++) {
+      const cxp = sx + 10 + i * 26, cyp = 196
+      ctx.fillStyle = PAINTS[i]
+      ctx.beginPath(); ctx.arc(cxp, cyp, 9, 0, Math.PI * 2); ctx.fill()
+      if (i === custom.paint) {
+        ctx.strokeStyle = "#f8fafc"; ctx.lineWidth = 2
+        ctx.beginPath(); ctx.arc(cxp, cyp, 12, 0, Math.PI * 2); ctx.stroke()
+      }
+      this.uiRegions.push({ x: cxp - 12, y: cyp - 12, w: 24, h: 24, act: () => { custom.paint = i; save(); this.audio.ui() } })
+    }
+    ctx.fillStyle = "rgba(248,250,252,0.75)"
+    ctx.fillText("RODAS [R]", sx + 300, 176)
+    for (let i = 0; i < WHEELS.length; i++) {
+      const cxp = sx + 310 + i * 26, cyp = 196
+      ctx.fillStyle = "#0a0a0c"
+      ctx.beginPath(); ctx.arc(cxp, cyp, 9, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = WHEELS[i]
+      ctx.beginPath(); ctx.arc(cxp, cyp, 5, 0, Math.PI * 2); ctx.fill()
+      if (i === custom.wheel) {
+        ctx.strokeStyle = "#f8fafc"; ctx.lineWidth = 2
+        ctx.beginPath(); ctx.arc(cxp, cyp, 12, 0, Math.PI * 2); ctx.stroke()
+      }
+      this.uiRegions.push({ x: cxp - 12, y: cyp - 12, w: 24, h: 24, act: () => { custom.wheel = i; save(); this.audio.ui() } })
+    }
+
+    // pills de opções
+    this.pill(`faixa: ${STRIPES[custom.stripe]} [V]`, sx, 222, 200, () => { custom.stripe = (custom.stripe + 1) % STRIPES.length; save(); this.audio.ui() })
+    this.pill(`aerofólio: ${WINGS[custom.wing]} [G]`, sx + 216, 222, 200, () => { custom.wing = (custom.wing + 1) % WINGS.length; save(); this.audio.ui() })
+    this.pill(`neon: ${NEON_NAMES[custom.neon]} [B]`, sx, 258, 200, () => { custom.neon = (custom.neon + 1) % NEONS.length; save(); this.audio.ui() })
+    this.pill(`direção: ${this.cfg.steering === "mouse" ? "mouse" : "teclado"} [Y]`, sx + 216, 258, 200, () => { this.cfg.steering = this.cfg.steering === "mouse" ? "keyboard" : "mouse"; save(); this.audio.ui() })
+    this.pill(`câmbio: ${this.cfg.transmission === "auto" ? "automático" : "sequencial (scroll)"} [T]`, sx, 294, 416, () => { this.cfg.transmission = this.cfg.transmission === "auto" ? "manual" : "auto"; save(); this.audio.ui() })
+
+    // leaderboard global
+    ctx.fillStyle = "rgba(253,224,71,0.9)"
+    ctx.font = "bold 12px 'Segoe UI', sans-serif"
+    ctx.fillText("🌐 TOP 10 GLOBAL", sx, 348)
+    ctx.font = "11px 'Segoe UI', sans-serif"
+    ctx.fillStyle = "rgba(248,250,252,0.7)"
+    if (this.scores.length === 0) ctx.fillText("— ainda sem recordes, seja o primeiro —", sx, 368)
+    this.scores.slice(0, 10).forEach((s, i) => {
+      ctx.fillStyle = s.name === this.cfg.pilotName ? "rgba(253,224,71,0.95)" : "rgba(248,250,252,0.7)"
+      ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, sx, 368 + i * 15)
+    })
   }
 
   private renderPause() {
@@ -1726,11 +1793,11 @@ export class AutoDashEngine {
     ctx.textAlign = "center"
     ctx.fillStyle = "#f8fafc"
     ctx.font = "bold 46px 'Segoe UI', sans-serif"
-    ctx.fillText("PAUSADO", W / 2, H / 2 - 20)
-    ctx.font = "16px 'Segoe UI', sans-serif"
-    ctx.fillStyle = "rgba(248,250,252,0.75)"
-    ctx.fillText("[ESC] continuar   ·   [R] recomeçar   ·   [M] menu", W / 2, H / 2 + 24)
+    ctx.fillText("PAUSADO", W / 2, H / 2 - 60)
     ctx.textAlign = "left"
+    this.pill("CONTINUAR  [ESC]", W / 2 - 115, H / 2 - 20, 230, () => { this.state = "racing" }, { primary: true, h: 38, font: 15 })
+    this.pill("RECOMEÇAR  [R]", W / 2 - 115, H / 2 + 28, 230, () => this.startRace(), { h: 32 })
+    this.pill("MENU  [M]", W / 2 - 115, H / 2 + 68, 230, () => { this.state = "menu" }, { h: 32 })
   }
 
   private renderGameOver() {
@@ -1754,17 +1821,17 @@ export class AutoDashEngine {
 
     ctx.fillStyle = "rgba(253,224,71,0.9)"
     ctx.font = "bold 15px 'Segoe UI', sans-serif"
-    ctx.fillText("— TOP 5 —", W / 2, 300)
-    ctx.font = "14px 'Segoe UI', sans-serif"
-    this.scores.forEach((s, i) => {
-      ctx.fillStyle = "rgba(248,250,252,0.8)"
-      ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, W / 2, 326 + i * 22)
+    ctx.fillText("— 🌐 TOP 10 GLOBAL —", W / 2, 300)
+    ctx.font = "13px 'Segoe UI', sans-serif"
+    this.scores.slice(0, 10).forEach((s, i) => {
+      ctx.fillStyle = s.name === this.cfg.pilotName ? "rgba(253,224,71,0.95)" : "rgba(248,250,252,0.8)"
+      ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, W / 2, 322 + i * 16)
     })
-
-    ctx.fillStyle = "#fde047"
-    ctx.font = "bold 19px 'Segoe UI', sans-serif"
-    ctx.fillText("[ENTER/CLIQUE] correr de novo   ·   [G] garagem   ·   [M] menu", W / 2, 480)
     ctx.textAlign = "left"
+
+    this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 250, 490, 250, () => this.startRace(), { primary: true, h: 36, font: 14 })
+    this.pill("GARAGEM  [G]", W / 2 + 16, 490, 130, () => { this.state = "garage" }, { h: 36 })
+    this.pill("MENU  [M]", W / 2 + 160, 490, 100, () => { this.state = "menu" }, { h: 36 })
   }
 
   private renderNameEntry() {
@@ -1784,10 +1851,13 @@ export class AutoDashEngine {
     ctx.fillText((this.nameBuf || "") + cursor, W / 2, 305)
     ctx.fillStyle = "rgba(255,255,255,0.25)"
     ctx.fillRect(W / 2 - 150, 320, 300, 2)
-    ctx.fillStyle = "#fde047"
-    ctx.font = "bold 16px 'Segoe UI', sans-serif"
-    ctx.fillText("[ENTER] pra garagem", W / 2, 372)
     ctx.textAlign = "left"
+    this.pill("PRA GARAGEM  [ENTER]", W / 2 - 115, 352, 230, () => {
+      this.cfg.pilotName = (this.nameBuf.trim() || "PILOTO").slice(0, 12)
+      saveConfig(this.cfg)
+      this.state = "garage"
+      this.audio.ui()
+    }, { primary: true, h: 36, font: 14 })
   }
 
   // ---------- input ----------
@@ -1822,10 +1892,12 @@ export class AutoDashEngine {
         if (k === "c") { custom.paint = (custom.paint + 1) % PAINTS.length; this.audio.ui() }
         if (k === "v") { custom.stripe = (custom.stripe + 1) % STRIPES.length; this.audio.ui() }
         if (k === "b") { custom.neon = (custom.neon + 1) % NEONS.length; this.audio.ui() }
+        if (k === "r") { custom.wheel = (custom.wheel + 1) % WHEELS.length; this.audio.ui() }
+        if (k === "g") { custom.wing = (custom.wing + 1) % WINGS.length; this.audio.ui() }
         if (k === "t") { this.cfg.transmission = this.cfg.transmission === "auto" ? "manual" : "auto"; this.audio.ui() }
         if (k === "y") { this.cfg.steering = this.cfg.steering === "mouse" ? "keyboard" : "mouse"; this.audio.ui() }
         if (k === "n") { this.nameBuf = this.cfg.pilotName; this.state = "nameentry"; this.audio.ui() }
-        if (["c", "v", "b", "t", "y"].includes(k) || k.startsWith("arrow")) saveConfig(this.cfg)
+        if (["c", "v", "b", "r", "g", "t", "y"].includes(k) || k.startsWith("arrow")) saveConfig(this.cfg)
         if (k === "enter") startAndSave(this)
         if (k === "escape") this.state = "menu"
         break
@@ -1900,10 +1972,13 @@ export class AutoDashEngine {
   private onMouseDown = (e: MouseEvent) => {
     this.audio.ensure()
     if (e.button === 0) {
-      if (this.state === "racing" || this.state === "countdown") this.mouseGas = true
-      else if (this.state === "menu") this.enterFromMenu()
-      else if (this.state === "gameover") this.startRace()
-      else if (this.state === "garage") { saveConfig(this.cfg); this.startRace() }
+      if (this.state === "racing" || this.state === "countdown") {
+        this.mouseGas = true
+      } else {
+        const hit = this.regionAt(this.mousePx.x, this.mousePx.y)
+        if (hit) hit.act()
+        else if (this.state === "menu") this.enterFromMenu()
+      }
     }
     if (e.button === 2 && (this.state === "racing" || this.state === "countdown")) this.mouseBrake = true
     if (e.button === 1) { e.preventDefault(); this.toNeutral() }
@@ -1917,6 +1992,17 @@ export class AutoDashEngine {
   private onMouseMove = (e: MouseEvent) => {
     const rect = this.canvas.getBoundingClientRect()
     this.mouseXn = clamp((e.clientX - rect.left) / rect.width, 0, 1)
+    this.mousePx.x = ((e.clientX - rect.left) / rect.width) * W
+    this.mousePx.y = ((e.clientY - rect.top) / rect.height) * H
+    const uiState = ["menu", "garage", "paused", "gameover", "nameentry"].includes(this.state)
+    this.canvas.style.cursor = uiState && this.regionAt(this.mousePx.x, this.mousePx.y) ? "pointer" : "default"
+  }
+
+  private regionAt(x: number, y: number) {
+    for (const r of this.uiRegions) {
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r
+    }
+    return null
   }
   private onWheel = (e: WheelEvent) => {
     e.preventDefault()
@@ -1962,25 +2048,25 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   ctx.fill()
 }
 
-/** Carro do jogador visto de trás, com pintura/faixa/neon e inclinação ao esterçar. */
+/** Carro do jogador visto de trás — silhueta própria por carroceria + customização completa. */
 function drawPlayerCar(
   ctx: CanvasRenderingContext2D, cx: number, cy: number, spec: CarSpec,
-  paintIdx: number, stripeIdx: number, neonIdx: number,
-  steer: number, braking: boolean, amb: number, nitro: boolean, scale = 1,
+  custom: CarCustom, steer: number, braking: boolean, amb: number, nitro: boolean, scale = 1,
 ) {
   const w = spec.width * 640 * scale
   const h = w * 0.62
-  const paint = PAINTS[paintIdx]
+  const paint = PAINTS[custom.paint]
   const body = shade(paint, Math.max(0.5, amb))
   const dark = shade(paint, Math.max(0.3, amb * 0.55))
+  const rim = WHEELS[custom.wheel]
 
   ctx.save()
   ctx.translate(cx, cy)
   ctx.rotate(steer * 0.05)
 
   // neon
-  if (neonIdx > 0) {
-    const neon = NEONS[neonIdx]
+  if (custom.neon > 0) {
+    const neon = NEONS[custom.neon]
     const strength = amb < 0.7 ? 0.75 : 0.35
     const ng = ctx.createRadialGradient(0, 6, 4, 0, 6, w * 0.85)
     ng.addColorStop(0, neon + Math.round(strength * 255).toString(16).padStart(2, "0"))
@@ -1993,38 +2079,83 @@ function drawPlayerCar(
   ctx.beginPath(); ctx.ellipse(0, 2, w * 0.62, w * 0.10, 0, 0, Math.PI * 2); ctx.fill()
 
   const bx = -w / 2, by = -h
-  // pneus
+  // pneus + rodas coloridas
   ctx.fillStyle = "#0a0a0c"
-  rr(ctx, bx - w * 0.045, -h * 0.34, w * 0.09, h * 0.34, w * 0.02)
-  rr(ctx, bx + w - w * 0.045, -h * 0.34, w * 0.09, h * 0.34, w * 0.02)
+  rr(ctx, bx - w * 0.05, -h * 0.36, w * 0.10, h * 0.36, w * 0.025)
+  rr(ctx, bx + w - w * 0.05, -h * 0.36, w * 0.10, h * 0.36, w * 0.025)
+  ctx.fillStyle = rim
+  rr(ctx, bx - w * 0.038, -h * 0.26, w * 0.024, h * 0.16, w * 0.012)
+  rr(ctx, bx + w + w * 0.014, -h * 0.26, w * 0.024, h * 0.16, w * 0.012)
 
-  // carroceria
+  // ---- silhueta por carroceria (curvas, não caixas) ----
   ctx.fillStyle = body
-  if (spec.body === "muscle") {
-    rr(ctx, bx, by, w, h * 0.98, w * 0.10)
-    ctx.fillStyle = dark // para-lamas largos
-    rr(ctx, bx - w * 0.02, by + h * 0.55, w * 0.12, h * 0.4, w * 0.04)
-    rr(ctx, bx + w * 0.90, by + h * 0.55, w * 0.12, h * 0.4, w * 0.04)
-  } else if (spec.body === "ghost") {
+  const roofY = by
+  if (spec.body === "gt") {
+    // cupê: traseira larga, cabine afunilada com teto em arco
     ctx.beginPath()
-    ctx.moveTo(0, by)
-    ctx.lineTo(bx + w, by + h * 0.22)
-    ctx.lineTo(bx + w, by + h * 0.9)
-    ctx.lineTo(bx + w * 0.88, -0.5)
-    ctx.lineTo(bx + w * 0.12, -0.5)
-    ctx.lineTo(bx, by + h * 0.9)
-    ctx.lineTo(bx, by + h * 0.22)
+    ctx.moveTo(bx + w * 0.02, 0)
+    ctx.quadraticCurveTo(bx - w * 0.03, by + h * 0.52, bx + w * 0.07, by + h * 0.40)
+    ctx.quadraticCurveTo(bx + w * 0.13, by + h * 0.06, bx + w * 0.32, roofY + h * 0.02)
+    ctx.quadraticCurveTo(0, roofY - h * 0.04, bx + w * 0.68, roofY + h * 0.02)
+    ctx.quadraticCurveTo(bx + w * 0.87, by + h * 0.06, bx + w * 0.93, by + h * 0.40)
+    ctx.quadraticCurveTo(bx + w * 1.03, by + h * 0.52, bx + w * 0.98, 0)
+    ctx.closePath()
+    ctx.fill()
+    // ombros dos para-lamas
+    ctx.fillStyle = dark
+    ctx.beginPath(); ctx.ellipse(bx + w * 0.075, -h * 0.26, w * 0.055, h * 0.20, 0.2, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.ellipse(bx + w * 0.925, -h * 0.26, w * 0.055, h * 0.20, -0.2, 0, Math.PI * 2); ctx.fill()
+  } else if (spec.body === "muscle") {
+    // muscle: quadris largos, cabine achatada, capô com scoop
+    ctx.beginPath()
+    ctx.moveTo(bx - w * 0.02, 0)
+    ctx.quadraticCurveTo(bx - w * 0.06, by + h * 0.62, bx + w * 0.04, by + h * 0.44)
+    ctx.quadraticCurveTo(bx + w * 0.16, by + h * 0.10, bx + w * 0.30, by + h * 0.06)
+    ctx.lineTo(bx + w * 0.70, by + h * 0.06)
+    ctx.quadraticCurveTo(bx + w * 0.84, by + h * 0.10, bx + w * 0.96, by + h * 0.44)
+    ctx.quadraticCurveTo(bx + w * 1.06, by + h * 0.62, bx + w * 1.02, 0)
+    ctx.closePath()
+    ctx.fill()
+    // quadris musculosos
+    ctx.fillStyle = dark
+    ctx.beginPath(); ctx.ellipse(bx + w * 0.05, -h * 0.28, w * 0.075, h * 0.26, 0, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.ellipse(bx + w * 0.95, -h * 0.28, w * 0.075, h * 0.26, 0, 0, Math.PI * 2); ctx.fill()
+    // scoop no capô espiando por cima
+    rr(ctx, -w * 0.11, by, w * 0.22, h * 0.10, w * 0.03)
+  } else if (spec.body === "ninja") {
+    // gota aerodinâmica: um arco só, sem vinco
+    ctx.beginPath()
+    ctx.moveTo(bx + w * 0.03, 0)
+    ctx.quadraticCurveTo(bx - w * 0.02, by + h * 0.45, bx + w * 0.16, by + h * 0.14)
+    ctx.quadraticCurveTo(0, roofY - h * 0.10, bx + w * 0.84, by + h * 0.14)
+    ctx.quadraticCurveTo(bx + w * 1.02, by + h * 0.45, bx + w * 0.97, 0)
     ctx.closePath()
     ctx.fill()
   } else {
-    rr(ctx, bx, by, w, h * 0.98, spec.body === "ninja" ? w * 0.16 : w * 0.10)
+    // ghost: cunha facetada, ângulos duros
+    ctx.beginPath()
+    ctx.moveTo(0, roofY - h * 0.02)
+    ctx.lineTo(bx + w * 0.72, by + h * 0.10)
+    ctx.lineTo(bx + w * 0.98, by + h * 0.36)
+    ctx.lineTo(bx + w * 1.02, by + h * 0.78)
+    ctx.lineTo(bx + w * 0.90, 0)
+    ctx.lineTo(bx + w * 0.10, 0)
+    ctx.lineTo(bx - w * 0.02, by + h * 0.78)
+    ctx.lineTo(bx + w * 0.02, by + h * 0.36)
+    ctx.lineTo(bx + w * 0.28, by + h * 0.10)
+    ctx.closePath()
+    ctx.fill()
+    // vinco central afiado
+    ctx.strokeStyle = dark
+    ctx.lineWidth = Math.max(1, w * 0.012)
+    ctx.beginPath(); ctx.moveTo(0, roofY); ctx.lineTo(0, -h * 0.36); ctx.stroke()
   }
 
   // faixas
   ctx.fillStyle = "rgba(255,255,255,0.35)"
-  if (stripeIdx === 1) ctx.fillRect(-w * 0.05, by + 2, w * 0.10, h * 0.9)
-  if (stripeIdx === 2) { ctx.fillRect(-w * 0.11, by + 2, w * 0.07, h * 0.9); ctx.fillRect(w * 0.04, by + 2, w * 0.07, h * 0.9) }
-  if (stripeIdx === 3) { ctx.fillRect(bx + w * 0.04, by + 2, w * 0.06, h * 0.9); ctx.fillRect(bx + w * 0.90, by + 2, w * 0.06, h * 0.9) }
+  if (custom.stripe === 1) ctx.fillRect(-w * 0.05, by + h * 0.06, w * 0.10, h * 0.86)
+  if (custom.stripe === 2) { ctx.fillRect(-w * 0.11, by + h * 0.06, w * 0.07, h * 0.86); ctx.fillRect(w * 0.04, by + h * 0.06, w * 0.07, h * 0.86) }
+  if (custom.stripe === 3) { ctx.fillRect(bx + w * 0.06, by + h * 0.30, w * 0.05, h * 0.62); ctx.fillRect(bx + w * 0.89, by + h * 0.30, w * 0.05, h * 0.62) }
 
   // verniz: brilho no teto, sombra na base
   const gloss = ctx.createLinearGradient(0, by, 0, by + h)
@@ -2033,30 +2164,46 @@ function drawPlayerCar(
   gloss.addColorStop(0.6, "rgba(0,0,0,0)")
   gloss.addColorStop(1, "rgba(0,0,0,0.22)")
   ctx.fillStyle = gloss
-  rr(ctx, bx, by, w, h * 0.96, w * 0.12)
+  rr(ctx, bx + w * 0.02, by + h * 0.04, w * 0.96, h * 0.9, w * 0.14)
 
-  // vidro traseiro com reflexo
+  // vidro traseiro acompanhando a cabine
   ctx.fillStyle = shade("#0f172a", Math.max(0.6, amb))
-  rr(ctx, bx + w * 0.15, by + h * 0.10, w * 0.70, h * 0.26, w * 0.06)
+  if (spec.body === "ghost") {
+    ctx.beginPath()
+    ctx.moveTo(0, by + h * 0.06)
+    ctx.lineTo(bx + w * 0.68, by + h * 0.18)
+    ctx.lineTo(bx + w * 0.62, by + h * 0.36)
+    ctx.lineTo(bx + w * 0.38, by + h * 0.36)
+    ctx.lineTo(bx + w * 0.32, by + h * 0.18)
+    ctx.closePath()
+    ctx.fill()
+  } else {
+    const vw = spec.body === "ninja" ? 0.56 : spec.body === "muscle" ? 0.44 : 0.52
+    ctx.beginPath()
+    ctx.moveTo(-w * vw / 2, by + h * 0.36)
+    ctx.quadraticCurveTo(-w * vw * 0.42, by + h * 0.10, -w * vw * 0.30, by + h * 0.10)
+    ctx.lineTo(w * vw * 0.30, by + h * 0.10)
+    ctx.quadraticCurveTo(w * vw * 0.42, by + h * 0.10, w * vw / 2, by + h * 0.36)
+    ctx.closePath()
+    ctx.fill()
+  }
   ctx.fillStyle = "rgba(190,215,245,0.18)"
   ctx.beginPath()
-  ctx.moveTo(bx + w * 0.24, by + h * 0.11)
-  ctx.lineTo(bx + w * 0.40, by + h * 0.11)
-  ctx.lineTo(bx + w * 0.28, by + h * 0.34)
-  ctx.lineTo(bx + w * 0.18, by + h * 0.34)
+  ctx.moveTo(bx + w * 0.36, by + h * 0.12)
+  ctx.lineTo(bx + w * 0.46, by + h * 0.12)
+  ctx.lineTo(bx + w * 0.38, by + h * 0.33)
+  ctx.lineTo(bx + w * 0.30, by + h * 0.33)
   ctx.closePath()
   ctx.fill()
 
-  // aerofólio
-  if (spec.body === "gt" || spec.body === "ghost") {
-    ctx.fillStyle = dark
-    rr(ctx, bx - w * 0.03, by - h * 0.08, w * 1.06, h * 0.075, w * 0.03)
-    ctx.fillRect(bx + w * 0.12, by - h * 0.02, w * 0.05, h * 0.10)
-    ctx.fillRect(bx + w * 0.83, by - h * 0.02, w * 0.05, h * 0.10)
-  }
-  if (spec.body === "muscle") { // entrada de ar
-    ctx.fillStyle = dark
-    rr(ctx, -w * 0.14, by + h * 0.42, w * 0.28, h * 0.12, w * 0.03)
+  // aerofólio customizável
+  ctx.fillStyle = dark
+  if (custom.wing === 1) { // ducktail
+    rr(ctx, bx + w * 0.10, by + h * 0.34, w * 0.80, h * 0.055, w * 0.02)
+  } else if (custom.wing === 2) { // asa GT
+    rr(ctx, bx - w * 0.03, by - h * 0.10, w * 1.06, h * 0.075, w * 0.03)
+    ctx.fillRect(bx + w * 0.14, by - h * 0.04, w * 0.05, h * 0.14)
+    ctx.fillRect(bx + w * 0.81, by - h * 0.04, w * 0.05, h * 0.14)
   }
 
   // lanternas

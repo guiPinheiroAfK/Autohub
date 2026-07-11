@@ -67,10 +67,28 @@ export const STRIPES = ["sem faixa", "central", "dupla", "lateral"] as const
 export const NEONS = ["#00000000", "#38bdf8", "#a78bfa", "#4ade80", "#fb7185", "#fde047"]
 export const NEON_NAMES = ["desligado", "azul", "roxo", "verde", "rosa", "amarelo"]
 
+export const WHEELS = ["#1f2937", "#cbd5e1", "#eab308", "#f8fafc"]
+export const WHEEL_NAMES = ["preta", "prata", "dourada", "branca"]
+
+export const WINGS = ["sem aerofólio", "ducktail", "asa GT"]
+
 export interface CarCustom {
   paint: number
   stripe: number
   neon: number
+  wheel: number
+  wing: number
+}
+
+function defaultCustom(i: number): CarCustom {
+  const body = CARS[i]?.body
+  return {
+    paint: i % PAINTS.length,
+    stripe: 1,
+    neon: 0,
+    wheel: 0,
+    wing: body === "muscle" || body === "ninja" ? 1 : 2,
+  }
 }
 
 export interface GameConfig {
@@ -94,7 +112,7 @@ const SCORES_KEY = "autodash.scores.v1"
 export function defaultConfig(): GameConfig {
   return {
     carIdx: 0,
-    customs: CARS.map((_, i) => ({ paint: i % PAINTS.length, stripe: 1, neon: 0 })),
+    customs: CARS.map((_, i) => defaultCustom(i)),
     transmission: "auto",
     steering: "keyboard",
     sound: true,
@@ -107,7 +125,8 @@ export function loadConfig(): GameConfig {
     const raw = localStorage.getItem(CFG_KEY)
     if (!raw) return defaultConfig()
     const cfg = { ...defaultConfig(), ...JSON.parse(raw) } as GameConfig
-    while (cfg.customs.length < CARS.length) cfg.customs.push({ paint: 0, stripe: 0, neon: 0 })
+    // preenche campos novos em configs salvas por versões antigas
+    cfg.customs = CARS.map((_, i) => ({ ...defaultCustom(i), ...(cfg.customs[i] ?? {}) }))
     return cfg
   } catch {
     return defaultConfig()
@@ -118,22 +137,67 @@ export function saveConfig(cfg: GameConfig) {
   try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)) } catch { /* storage cheio/bloqueado */ }
 }
 
-export function loadScores(): ScoreEntry[] {
+// ── Leaderboard global (API do Autohub) com cache local de fallback ──────────
+
+const SCORES_CACHE_KEY = "autodash.scores.cache.v2"
+
+function readCache(): ScoreEntry[] {
   try {
-    const raw = localStorage.getItem(SCORES_KEY)
+    localStorage.removeItem(SCORES_KEY) // placar local antigo, aposentado
+    const raw = localStorage.getItem(SCORES_CACHE_KEY)
     return raw ? (JSON.parse(raw) as ScoreEntry[]) : []
   } catch {
     return []
   }
 }
 
-export function saveScore(entry: ScoreEntry): ScoreEntry[] {
-  const scores = [...loadScores(), entry].sort((a, b) => b.score - a.score).slice(0, 5)
-  try { localStorage.setItem(SCORES_KEY, JSON.stringify(scores)) } catch { /* ignora */ }
+function writeCache(scores: ScoreEntry[]) {
+  try { localStorage.setItem(SCORES_CACHE_KEY, JSON.stringify(scores)) } catch { /* ignora */ }
+}
+
+function localMerge(entry: ScoreEntry): ScoreEntry[] {
+  const scores = [...readCache(), entry].sort((a, b) => b.score - a.score).slice(0, 10)
+  writeCache(scores)
   return scores
 }
 
-export function isTop5(score: number): boolean {
-  const scores = loadScores()
-  return scores.length < 5 || score > scores[scores.length - 1].score
+interface ApiRow { nome: string; pontos: number; km: number }
+
+function mapRows(data: unknown): ScoreEntry[] {
+  const rows = (data as { scores?: ApiRow[] } | null)?.scores
+  if (!Array.isArray(rows)) return []
+  return rows.map((r) => ({ name: String(r.nome), score: Number(r.pontos), km: Number(r.km) }))
+}
+
+/** Último leaderboard conhecido (sincrono, para o primeiro frame). */
+export function cachedScores(): ScoreEntry[] {
+  return readCache()
+}
+
+export async function fetchLeaderboard(): Promise<ScoreEntry[]> {
+  try {
+    const res = await fetch("/api/autodash/leaderboard")
+    if (!res.ok) throw new Error(String(res.status))
+    const scores = mapRows(await res.json())
+    if (scores.length) writeCache(scores)
+    return scores.length ? scores : readCache()
+  } catch {
+    return readCache()
+  }
+}
+
+export async function submitScore(entry: ScoreEntry): Promise<ScoreEntry[]> {
+  try {
+    const res = await fetch("/api/autodash/score", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: entry.name, pontos: entry.score, km: entry.km }),
+    })
+    if (!res.ok) throw new Error(String(res.status))
+    const scores = mapRows(await res.json())
+    if (scores.length) writeCache(scores)
+    return scores.length ? scores : localMerge(entry)
+  } catch {
+    return localMerge(entry)
+  }
 }

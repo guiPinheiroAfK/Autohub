@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { Plus, Gauge, Wrench, Clock, TrendingUp, CalendarDays, ArrowRight, Users, ArrowLeftRight, MapPin } from "lucide-react"
+import { Plus, Gauge, Wrench, Clock, TrendingUp, CalendarDays, ArrowRight, Users, ArrowLeftRight, MapPin, Gamepad2 } from "lucide-react"
 import { api } from "@/lib/api/client"
 import { useAuth } from "@/context/AuthContext"
 import { VeiculoCard } from "@/components/shared/VeiculoCard"
@@ -535,6 +535,27 @@ export default function GaragemOverview() {
           </div>
         </div>
       </div>
+
+      {/* ── AutoDash (minigame) ─────────────────────────────────────────── */}
+      <Link
+        to="/autodash"
+        className="animate-page-in group relative overflow-hidden rounded-2xl border border-border bg-surface px-6 py-4 transition-colors hover:border-red-500/40"
+        style={{ animationDelay: "60ms" }}
+      >
+        <div className="pointer-events-none absolute -right-8 -top-8 size-40 rounded-full bg-red-500/10 blur-2xl" />
+        <div className="relative flex items-center gap-4">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-red-500/15 text-xl">🏁</div>
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-[15px] font-bold text-foreground">
+              AutoDash <span className="text-red-400">· minigame</span>
+            </div>
+            <p className="truncate text-[12px] text-muted-foreground">
+              Costure o trânsito, respeite o câmbio e dispute o top 10 global
+            </p>
+          </div>
+          <Gamepad2 className="size-5 shrink-0 text-faint-foreground transition-transform group-hover:translate-x-1 group-hover:text-red-400" />
+        </div>
+      </Link>
 
       {/* ── Botão novo veículo ──────────────────────────────────────────── */}
       <div className="animate-page-in flex items-center justify-between" style={{ animationDelay: "80ms" }}>
