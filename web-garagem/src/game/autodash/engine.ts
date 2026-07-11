@@ -127,6 +127,9 @@ export class AutoDashEngine {
   private particles: Particle[] = []
   private floaters: Floater[] = []
   private drops: Drop[] = []
+  private clouds = Array.from({ length: 6 }, (_, i) => ({
+    x: (i * 173) % W, y: 26 + (i * 61) % 130, s: 34 + (i * 37) % 44,
+  }))
   private raining = false
   private rainT = 0
   private rainRollT = 0
@@ -750,10 +753,17 @@ export class AutoDashEngine {
 
     ctx.save()
     if (this.shakeT > 0) ctx.translate((Math.random() - 0.5) * 14, (Math.random() - 0.5) * 10)
+    // "FOV pump" no nitro — a câmera aperta levemente
+    if (this.nitroOn && this.nitroMeter > 1 && this.state === "racing") {
+      ctx.translate(W / 2, H / 2)
+      ctx.scale(1.025, 1.025)
+      ctx.translate(-W / 2, -H / 2)
+    }
 
-    // céu
+    // céu em três tons
     const g = ctx.createLinearGradient(0, 0, 0, H * 0.55)
     g.addColorStop(0, sky.top)
+    g.addColorStop(0.55, mix(sky.top, sky.bot, 0.55))
     g.addColorStop(1, sky.bot)
     ctx.fillStyle = g
     ctx.fillRect(-10, -10, W + 20, H * 0.6 + 10)
@@ -824,12 +834,14 @@ export class AutoDashEngine {
     const camY = playerY + CAM_HEIGHT
     const camX = this.playerX * ROAD_WIDTH
 
-    // chão base (abaixo do horizonte)
-    ctx.fillStyle = shade("#0d7a43", amb)
+    // chão base com profundidade (abaixo do horizonte)
+    const gg = ctx.createLinearGradient(0, H * 0.5, 0, H)
+    gg.addColorStop(0, shade("#0c6b3c", amb * 0.85))
+    gg.addColorStop(1, shade("#0f8a4c", amb))
+    ctx.fillStyle = gg
     ctx.fillRect(-10, H * 0.5, W + 20, H * 0.5 + 10)
 
-    const grassL = shade("#0f8a4c", amb), grassD = shade("#0c7440", amb)
-    const roadL = shade("#6b6b72", amb), roadD = shade("#646469", amb)
+    const roadL = shade("#66666d", amb), roadD = shade("#616167", amb)
     const rumbA = shade("#e0342f", amb), rumbB = shade("#f1f5f9", amb)
     const laneC = shade("#f8fafc", amb)
 
@@ -852,6 +864,9 @@ export class AutoDashEngine {
       const arr = puBySeg.get(si)
       if (arr) arr.push(p); else puBySeg.set(si, [p])
     }
+    // bordas da pista acumuladas para o passe de brilho do asfalto
+    const edgeL: number[] = []
+    const edgeR: number[] = []
 
     for (let n = 0; n < DRAW_DIST; n++) {
       const idx = (baseIdx + n) % N
@@ -880,20 +895,29 @@ export class AutoDashEngine {
       }
 
       const alt = Math.floor(idx / RUMBLE) % 2 === 0
-      const fog = Math.pow(n / DRAW_DIST, 2.2) * 0.75
 
-      // grama
-      ctx.fillStyle = fog > 0.02 ? mixRgb(alt ? grassL : grassD, fogColor, fog) : (alt ? grassL : grassD)
+      // grama: listras sutis por cima do gradiente de base
+      ctx.fillStyle = alt ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)"
       ctx.fillRect(-10, sy2, W + 20, sy1 - sy2 + 1)
       // zebra
-      ctx.fillStyle = fog > 0.02 ? mixRgb(alt ? rumbA : rumbB, fogColor, fog) : (alt ? rumbA : rumbB)
-      poly(ctx, sx1 - sw1 * 1.13, sy1, sx1 + sw1 * 1.13, sy1, sx2 + sw2 * 1.13, sy2, sx2 - sw2 * 1.13, sy2)
+      ctx.fillStyle = alt ? rumbA : rumbB
+      poly(ctx, sx1 - sw1 * 1.11, sy1, sx1 + sw1 * 1.11, sy1, sx2 + sw2 * 1.11, sy2, sx2 - sw2 * 1.11, sy2)
       // asfalto
-      ctx.fillStyle = fog > 0.02 ? mixRgb(alt ? roadL : roadD, fogColor, fog) : (alt ? roadL : roadD)
+      ctx.fillStyle = alt ? roadL : roadD
       poly(ctx, sx1 - sw1, sy1, sx1 + sw1, sy1, sx2 + sw2, sy2, sx2 - sw2, sy2)
+      // trilhas de pneu escurecidas em cada faixa
+      if (n < 150) {
+        ctx.fillStyle = "rgba(0,0,0,0.05)"
+        for (let l = 0; l < 4; l++) {
+          const lc = -1 + (2 * l + 1) / 4
+          poly(ctx,
+            sx1 + sw1 * (lc - 0.085), sy1, sx1 + sw1 * (lc + 0.085), sy1,
+            sx2 + sw2 * (lc + 0.085), sy2, sx2 + sw2 * (lc - 0.085), sy2)
+        }
+      }
       // linhas de faixa
       if (alt) {
-        ctx.fillStyle = fog > 0.02 ? mixRgb(laneC, fogColor, fog) : laneC
+        ctx.fillStyle = laneC
         for (let l = 1; l < 4; l++) {
           const lx = -1 + (2 * l) / 4
           poly(ctx,
@@ -901,6 +925,8 @@ export class AutoDashEngine {
             sx2 + sw2 * lx + sw2 * 0.012, sy2, sx2 + sw2 * lx - sw2 * 0.012, sy2)
         }
       }
+      edgeL.push(sx1 - sw1 * 1.11, sy1, sx2 - sw2 * 1.11, sy2)
+      edgeR.push(sx1 + sw1 * 1.11, sy1, sx2 + sw2 * 1.11, sy2)
       maxY = sy2
 
       // sprites deste segmento
@@ -937,6 +963,31 @@ export class AutoDashEngine {
       }
     }
 
+    // passe de material do asfalto: sheen + espelho molhado na chuva
+    if (edgeL.length >= 4) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.moveTo(edgeL[0], edgeL[1])
+      for (let i = 0; i < edgeL.length; i += 2) ctx.lineTo(edgeL[i], edgeL[i + 1])
+      for (let i = edgeR.length - 2; i >= 0; i -= 2) ctx.lineTo(edgeR[i], edgeR[i + 1])
+      ctx.closePath()
+      ctx.clip()
+      const sheen = ctx.createLinearGradient(0, H * 0.45, 0, H)
+      sheen.addColorStop(0, "rgba(255,255,255,0)")
+      sheen.addColorStop(1, `rgba(255,255,255,${0.05 + 0.03 * amb})`)
+      ctx.fillStyle = sheen
+      ctx.fillRect(0, 0, W, H)
+      if (this.raining) {
+        const wet = ctx.createLinearGradient(0, H * 0.45, 0, H)
+        wet.addColorStop(0, "rgba(170,205,255,0.10)")
+        wet.addColorStop(0.5, "rgba(170,205,255,0.03)")
+        wet.addColorStop(1, "rgba(205,228,255,0.15)")
+        ctx.fillStyle = wet
+        ctx.fillRect(0, 0, W, H)
+      }
+      ctx.restore()
+    }
+
     // farol à noite
     if (amb < 0.62 && (this.state === "racing" || this.state === "countdown" || this.state === "paused")) {
       const lg = ctx.createRadialGradient(W / 2, H * 0.72, 20, W / 2, H * 0.72, 330)
@@ -955,11 +1006,31 @@ export class AutoDashEngine {
       else if (s.kind === "pu") this.drawPickup(s.p!, s.x, s.y, s.w, amb)
       else this.drawDeco(s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
     }
+
+    // névoa suave no horizonte — esfuma a pista e os sprites distantes
+    const fr = hexToRgb(fogColor)
+    const fogG = ctx.createLinearGradient(0, maxY - 34, 0, maxY + 120)
+    fogG.addColorStop(0, `rgba(${fr[0]},${fr[1]},${fr[2]},0)`)
+    fogG.addColorStop(0.25, `rgba(${fr[0]},${fr[1]},${fr[2]},${0.5 + 0.25 * amb})`)
+    fogG.addColorStop(1, `rgba(${fr[0]},${fr[1]},${fr[2]},0)`)
+    ctx.fillStyle = fogG
+    ctx.fillRect(0, maxY - 34, W, 154)
   }
 
   private renderBackdrop(amb: number) {
     const ctx = this.ctx
     const hz = H * 0.5
+    // nuvens macias em parallax
+    const ca = Math.max(0.05, amb * 0.35)
+    const wrapC = W + 220
+    for (const cl of this.clouds) {
+      const x = (((cl.x - this.bgShift * 0.05 - this.km * 160) % wrapC) + wrapC) % wrapC - 110
+      const cg = ctx.createRadialGradient(x, cl.y, 4, x, cl.y, cl.s)
+      cg.addColorStop(0, `rgba(255,255,255,${ca})`)
+      cg.addColorStop(1, "rgba(255,255,255,0)")
+      ctx.fillStyle = cg
+      ctx.beginPath(); ctx.ellipse(x, cl.y, cl.s * 1.7, cl.s * 0.55, 0, 0, Math.PI * 2); ctx.fill()
+    }
     // sol / lua
     if (amb > 0.62) {
       const sg = ctx.createRadialGradient(W * 0.78, hz - 105, 8, W * 0.78, hz - 105, 70)
@@ -1128,6 +1199,14 @@ export class AutoDashEngine {
     const bx = x - w / 2, by = y - h
     ctx.fillStyle = body
     rr(ctx, bx, by, w, h * 0.96, w * 0.14)
+    if (w > 9) { // verniz só em quem está perto o bastante pra valer
+      const gl = ctx.createLinearGradient(0, by, 0, by + h)
+      gl.addColorStop(0, "rgba(255,255,255,0.22)")
+      gl.addColorStop(0.4, "rgba(255,255,255,0.03)")
+      gl.addColorStop(1, "rgba(0,0,0,0.18)")
+      ctx.fillStyle = gl
+      rr(ctx, bx, by, w, h * 0.96, w * 0.14)
+    }
     ctx.fillStyle = dark
     // vidro traseiro
     rr(ctx, bx + w * 0.14, by + h * 0.10, w * 0.72, h * 0.30, w * 0.08)
@@ -1195,6 +1274,23 @@ export class AutoDashEngine {
       ctx.fill(); ctx.stroke()
     }
     drawPlayerCar(ctx, W / 2, H - 34 + bounce, spec, custom.paint, custom.stripe, custom.neon, steer, braking, amb, this.nitroOn && this.nitroMeter > 1)
+
+    // sensação de velocidade: streaks translúcidos varrendo as bordas
+    if (this.speed > 165 && this.state === "racing") {
+      const inten = Math.min(1, (this.speed - 165) / 90)
+      ctx.strokeStyle = `rgba(220,235,255,${0.08 + inten * 0.16})`
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      for (let i = 0; i < 9; i++) {
+        const side = i % 2 === 0 ? 1 : -1
+        const x = W / 2 + side * (W * 0.30 + Math.random() * W * 0.18)
+        const y = Math.random() * H
+        const len = 40 + Math.random() * 100 * inten
+        ctx.moveTo(x, y)
+        ctx.lineTo(x + side * 6, y + len)
+      }
+      ctx.stroke()
+    }
   }
 
   private renderParticles() {
@@ -1208,11 +1304,26 @@ export class AutoDashEngine {
   }
 
   // ---------- HUD ----------
+  private glass(x: number, y: number, w: number, h: number, r = 14) {
+    const ctx = this.ctx
+    ctx.fillStyle = "rgba(8,13,26,0.55)"
+    rr(ctx, x, y, w, h, r)
+    const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.55)
+    hl.addColorStop(0, "rgba(255,255,255,0.10)")
+    hl.addColorStop(1, "rgba(255,255,255,0)")
+    ctx.fillStyle = hl
+    rr(ctx, x, y, w, h * 0.55, r)
+    ctx.strokeStyle = "rgba(255,255,255,0.14)"
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, r)
+    ctx.stroke()
+  }
+
   private renderHud() {
     const ctx = this.ctx
     // placar
-    ctx.fillStyle = "rgba(2,6,23,0.55)"
-    rr(ctx, 14, 12, 210, 62, 12)
+    this.glass(14, 12, 210, 62)
     ctx.fillStyle = "#f8fafc"
     ctx.font = "bold 24px 'Segoe UI', sans-serif"
     ctx.fillText(`${Math.floor(this.score).toLocaleString("pt-BR")}`, 28, 40)
@@ -1262,8 +1373,7 @@ export class AutoDashEngine {
 
     // nitro
     const nx = 22, ny = H - 160, nh = 120
-    ctx.fillStyle = "rgba(2,6,23,0.55)"
-    rr(ctx, nx - 6, ny - 8, 34, nh + 34, 10)
+    this.glass(nx - 6, ny - 8, 34, nh + 34, 10)
     ctx.fillStyle = "rgba(148,163,184,0.3)"
     rr(ctx, nx, ny, 22, nh, 8)
     const nfill = nh * this.nitroMeter / 100
@@ -1277,17 +1387,29 @@ export class AutoDashEngine {
   private renderTacho() {
     const ctx = this.ctx
     const cx = W - 108, cy = H - 92, r = 74
-    ctx.fillStyle = "rgba(2,6,23,0.6)"
+    const bg = ctx.createRadialGradient(cx, cy - 26, 8, cx, cy, r + 16)
+    bg.addColorStop(0, "rgba(38,50,72,0.9)")
+    bg.addColorStop(1, "rgba(4,8,20,0.9)")
+    ctx.fillStyle = bg
     ctx.beginPath(); ctx.arc(cx, cy, r + 14, 0, Math.PI * 2); ctx.fill()
+    ctx.strokeStyle = "rgba(255,255,255,0.16)"
+    ctx.lineWidth = 1.5
+    ctx.beginPath(); ctx.arc(cx, cy, r + 13.5, 0, Math.PI * 2); ctx.stroke()
 
     const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25
-    // zona vermelha
+    // arco de giro preenchido até o RPM atual
     const redStart = a0 + (a1 - a0) * (RPM_REDLINE / 8000)
-    ctx.strokeStyle = "rgba(148,163,184,0.5)"
+    ctx.strokeStyle = "rgba(148,163,184,0.35)"
     ctx.lineWidth = 7
     ctx.beginPath(); ctx.arc(cx, cy, r, a0, redStart); ctx.stroke()
-    ctx.strokeStyle = "#ef4444"
+    ctx.strokeStyle = "rgba(239,68,68,0.6)"
     ctx.beginPath(); ctx.arc(cx, cy, r, redStart, a1); ctx.stroke()
+    const rpmA = a0 + (a1 - a0) * clamp(this.rpm / 8000, 0, 1)
+    ctx.strokeStyle = this.rpm > RPM_REDLINE ? "#ef4444" : this.rpm > 6200 ? "#fb923c" : "#38bdf8"
+    ctx.shadowColor = ctx.strokeStyle as string
+    ctx.shadowBlur = 10
+    ctx.beginPath(); ctx.arc(cx, cy, r, a0, rpmA); ctx.stroke()
+    ctx.shadowBlur = 0
     // ticks
     ctx.fillStyle = "rgba(248,250,252,0.7)"
     ctx.font = "10px 'Segoe UI', sans-serif"
@@ -1315,7 +1437,7 @@ export class AutoDashEngine {
     ctx.fillText(this.gear === 0 ? "N" : String(this.gear), cx, cy + 10)
     // velocidade
     ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 22px 'Segoe UI', sans-serif"
+    ctx.font = "italic 900 23px 'Segoe UI', sans-serif"
     ctx.fillText(String(Math.round(this.speed)), cx, cy + r - 8)
     ctx.font = "10px 'Segoe UI', sans-serif"
     ctx.fillStyle = "rgba(248,250,252,0.6)"
@@ -1385,9 +1507,24 @@ export class AutoDashEngine {
     const ctx = this.ctx
     this.dim(0.45)
     ctx.textAlign = "center"
-    ctx.fillStyle = "#e0342f"
-    ctx.font = "900 76px 'Segoe UI', sans-serif"
+    const tg = ctx.createLinearGradient(0, 118, 0, 185)
+    tg.addColorStop(0, "#ff7a45")
+    tg.addColorStop(0.55, "#e0342f")
+    tg.addColorStop(1, "#9f1d1a")
+    ctx.shadowColor = "rgba(224,52,47,0.6)"
+    ctx.shadowBlur = 34
+    ctx.fillStyle = tg
+    ctx.font = "italic 900 78px 'Segoe UI', sans-serif"
     ctx.fillText("AUTODASH", W / 2, 180)
+    ctx.shadowBlur = 0
+    ctx.fillStyle = "rgba(255,255,255,0.25)"
+    ctx.font = "italic 900 78px 'Segoe UI', sans-serif"
+    ctx.save()
+    ctx.scale(1, -0.28)
+    ctx.globalAlpha = 0.18
+    ctx.fillText("AUTODASH", W / 2, -680) // reflexo espelhado sob o título
+    ctx.restore()
+    ctx.globalAlpha = 1
     ctx.fillStyle = "rgba(248,250,252,0.85)"
     ctx.font = "18px 'Segoe UI', sans-serif"
     ctx.fillText("costure o trânsito · respeite o câmbio · sobreviva", W / 2, 214)
@@ -1440,6 +1577,9 @@ export class AutoDashEngine {
     ctx.fillText(spec.desc, px, 430)
     ctx.textAlign = "left"
 
+    // painel de vidro atrás da coluna de specs
+    this.glass(492, 92, 344, 444, 18)
+
     // stats
     const sx = 520, sw = 240
     const stat = (label: string, frac: number, y: number, invert = false) => {
@@ -1479,12 +1619,12 @@ export class AutoDashEngine {
     // ranking
     ctx.fillStyle = "rgba(253,224,71,0.9)"
     ctx.font = "bold 13px 'Segoe UI', sans-serif"
-    ctx.fillText("TOP 5", sx, 462)
+    ctx.fillText("TOP 5", sx, 450)
     ctx.font = "12px 'Segoe UI', sans-serif"
     ctx.fillStyle = "rgba(248,250,252,0.7)"
-    if (this.scores.length === 0) ctx.fillText("— ainda sem recordes —", sx, 482)
+    if (this.scores.length === 0) ctx.fillText("— ainda sem recordes —", sx, 468)
     this.scores.forEach((s, i) => {
-      ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, sx, 482 + i * 18)
+      ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, sx, 468 + i * 16)
     })
 
     ctx.textAlign = "center"
@@ -1711,14 +1851,6 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   ctx.fill()
 }
 
-function mixRgb(rgbStr: string, hexFog: string, p: number): string {
-  // rgbStr no formato rgb(r,g,b)
-  const m = rgbStr.match(/\d+/g)
-  if (!m) return rgbStr
-  const f = hexToRgb(hexFog)
-  return `rgb(${Math.round(+m[0] + (f[0] - +m[0]) * p)},${Math.round(+m[1] + (f[1] - +m[1]) * p)},${Math.round(+m[2] + (f[2] - +m[2]) * p)})`
-}
-
 /** Carro do jogador visto de trás, com pintura/faixa/neon e inclinação ao esterçar. */
 function drawPlayerCar(
   ctx: CanvasRenderingContext2D, cx: number, cy: number, spec: CarSpec,
@@ -1783,9 +1915,26 @@ function drawPlayerCar(
   if (stripeIdx === 2) { ctx.fillRect(-w * 0.11, by + 2, w * 0.07, h * 0.9); ctx.fillRect(w * 0.04, by + 2, w * 0.07, h * 0.9) }
   if (stripeIdx === 3) { ctx.fillRect(bx + w * 0.04, by + 2, w * 0.06, h * 0.9); ctx.fillRect(bx + w * 0.90, by + 2, w * 0.06, h * 0.9) }
 
-  // vidro traseiro
+  // verniz: brilho no teto, sombra na base
+  const gloss = ctx.createLinearGradient(0, by, 0, by + h)
+  gloss.addColorStop(0, "rgba(255,255,255,0.30)")
+  gloss.addColorStop(0.32, "rgba(255,255,255,0.06)")
+  gloss.addColorStop(0.6, "rgba(0,0,0,0)")
+  gloss.addColorStop(1, "rgba(0,0,0,0.22)")
+  ctx.fillStyle = gloss
+  rr(ctx, bx, by, w, h * 0.96, w * 0.12)
+
+  // vidro traseiro com reflexo
   ctx.fillStyle = shade("#0f172a", Math.max(0.6, amb))
   rr(ctx, bx + w * 0.15, by + h * 0.10, w * 0.70, h * 0.26, w * 0.06)
+  ctx.fillStyle = "rgba(190,215,245,0.18)"
+  ctx.beginPath()
+  ctx.moveTo(bx + w * 0.24, by + h * 0.11)
+  ctx.lineTo(bx + w * 0.40, by + h * 0.11)
+  ctx.lineTo(bx + w * 0.28, by + h * 0.34)
+  ctx.lineTo(bx + w * 0.18, by + h * 0.34)
+  ctx.closePath()
+  ctx.fill()
 
   // aerofólio
   if (spec.body === "gt" || spec.body === "ghost") {
