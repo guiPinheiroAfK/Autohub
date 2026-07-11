@@ -5,7 +5,7 @@ import {
   CANVAS_W, CANVAS_H, SEG_LEN, ROAD_WIDTH, CAM_HEIGHT, CAM_DEPTH, DRAW_DIST,
   KMH2UPS, RPM_IDLE, RPM_REDLINE, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH,
   CARS, PAINTS, STRIPES, NEONS, NEON_NAMES,
-  loadConfig, saveConfig, loadScores, saveScore, isTop5,
+  loadConfig, saveConfig, loadScores, saveScore,
   type CarSpec, type GameConfig, type ScoreEntry,
 } from "./data"
 import { AudioBus } from "./audio"
@@ -37,6 +37,7 @@ interface Traffic {
   blinkT: number      // >0: seta ligada antes/durante a troca de faixa
   prevD: number
   dead?: boolean
+  yieldT?: number     // >0: levou farol alto, tenta abrir caminho
 }
 
 const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
@@ -141,7 +142,10 @@ export class AutoDashEngine {
   private mouseBrake = false
   private mouseXn = 0.5
   private nameBuf = ""
-  private pendingScore: ScoreEntry | null = null
+  private newRecord = false
+  private beamT = 0
+  private beamCdT = 0
+  private pitchY = 0
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -191,11 +195,12 @@ export class AutoDashEngine {
     while (this.segments.length < 4000) {
       const roll = Math.random()
       const hill = r(-1, 1) * r(600, 2600)
-      if (roll < 0.28) addRoad(ri(20, 40), ri(30, 70), ri(20, 40), 0, hill)
+      if (roll < 0.10) addRoad(30, ri(110, 220), 30, 0, r(-1, 1) * r(400, 1600)) // retão pra esticar as marchas
+      else if (roll < 0.30) addRoad(ri(20, 40), ri(30, 70), ri(20, 40), 0, hill)
       else if (roll < 0.62) {
         const c = (Math.random() < 0.5 ? -1 : 1) * r(2, 5)
         addRoad(ri(25, 45), ri(30, 70), ri(25, 45), c, hill * 0.6)
-      } else if (roll < 0.85) {
+      } else if (roll < 0.86) {
         const c = (Math.random() < 0.5 ? -1 : 1) * r(2.5, 4.5)
         addRoad(25, 40, 25, c, hill * 0.4)
         addRoad(25, 40, 25, -c, -hill * 0.4)
@@ -260,6 +265,24 @@ export class AutoDashEngine {
     const spec = CARS[this.cfg.carIdx]
     for (const t of this.traffic) {
       const k = KINDS[t.kind]
+      // levou farol alto: caminhão/ônibus nem sempre colaboram
+      if (t.yieldT && t.yieldT > 0) {
+        t.yieldT -= dt
+        if (t.targetOffset === t.offset) {
+          const comply = t.kind === "car" || t.kind === "moto" || Math.random() < 0.02
+          if (comply) {
+            for (const side of this.playerX > t.offset ? [-0.5, 0.5] : [0.5, -0.5]) {
+              const lane = t.offset + side
+              if (lane < -0.9 || lane > 0.9) continue
+              let clear = true
+              for (const o of this.traffic) {
+                if (o !== t && Math.abs(o.targetOffset - lane) < 0.3 && Math.abs(this.wrapDz(o.z, t.z)) < 1100) { clear = false; break }
+              }
+              if (clear) { t.targetOffset = lane; t.blinkT = 0.6; t.yieldT = 0; break }
+            }
+          }
+        }
+      }
       // IA: não bater no da frente; tentar ultrapassar
       let ahead: Traffic | null = null
       for (const o of this.traffic) {
@@ -318,6 +341,8 @@ export class AutoDashEngine {
             this.score += pts
             this.nitroMeter = Math.min(100, this.nitroMeter + 14)
             this.floaters.push({ text: `QUASE! +${pts}  x${mult}`, color: "#fde047", y: H * 0.42, life: 1.2, big: false })
+            this.burst(W / 2 + (t.offset > this.playerX ? 72 : -72), H - 100, 9, ["#fde047", "#fff7c0"])
+            this.shakeT = Math.max(this.shakeT, 0.08)
             this.audio.nearMiss()
             if (Math.random() < 0.3) this.audio.horn()
           }
@@ -364,13 +389,29 @@ export class AutoDashEngine {
       this.gear = Math.max(1, Math.min(6, best))
       this.shiftT = CARS[this.cfg.carIdx].shiftMs / 1000
       this.audio.shift()
+      this.popExhaust()
       return
     }
     if (this.gear >= 6) return
     this.gear++
     this.shiftT = CARS[this.cfg.carIdx].shiftMs / 1000
     if (this.rpmFor(this.speed, this.gear) < 1500) this.audio.bog()
-    else this.audio.shift()
+    else { this.audio.shift(); this.popExhaust() }
+  }
+
+  /** Estouro no escape ao engatar — puro juice. */
+  private popExhaust() {
+    if (this.state !== "racing" || this.speed < 30) return
+    for (const sx of [-22, 22]) {
+      for (let i = 0; i < 3; i++) {
+        this.particles.push({
+          x: W / 2 + sx + (Math.random() - 0.5) * 6, y: H - 56,
+          vx: (Math.random() - 0.5) * 40, vy: 60 + Math.random() * 60,
+          size: 3 + Math.random() * 4, life: 0.18, maxLife: 0.18,
+          color: Math.random() < 0.5 ? "#fb923c" : "#fde047",
+        })
+      }
+    }
   }
 
   private shiftDown() {
@@ -453,7 +494,12 @@ export class AutoDashEngine {
     this.playerX -= centrif * dt
     const slip = Math.abs(centrif) * speedF
     this.audio.skid(slip > 0.3 ? slip : 0)
+    if (slip > 0.45 && Math.abs(this.steerVel) > 0.3 && Math.random() < 0.5) this.emitSmoke(1, "#6b7280")
     this.bgShift += seg.curve * this.speed * dt * 0.6
+
+    // transferência de peso: sobe o bico na freada, agacha no gás
+    const pitchTarget = braking && this.speed > 20 ? -4 : throttle ? 1.5 : 0
+    this.pitchY += (pitchTarget - this.pitchY) * Math.min(1, dt * 8)
 
     // fora da pista
     if (Math.abs(this.playerX) > 1.05) {
@@ -514,6 +560,8 @@ export class AutoDashEngine {
 
     if (this.goFlashT > 0) this.goFlashT -= dt
     if (this.mult2T > 0) this.mult2T -= dt
+    if (this.beamT > 0) this.beamT -= dt
+    if (this.beamCdT > 0) this.beamCdT -= dt
 
     // pontuação e combo
     const mult = (1 + this.combo) * (this.mult2T > 0 ? 2 : 1)
@@ -645,14 +693,14 @@ export class AutoDashEngine {
     this.audio.crash()
     this.shakeT = 0.6
     this.burst(W / 2, H - 110, 40, ["#fb923c", "#ef4444"])
-    const entry: ScoreEntry = { name: "", score: Math.floor(this.score), km: Math.round(this.km * 10) / 10 }
-    if (isTop5(entry.score) && entry.score > 500) {
-      this.pendingScore = entry
-      this.nameBuf = ""
-      this.state = "nameentry"
-    } else {
-      this.state = "gameover"
+    const entry: ScoreEntry = {
+      name: (this.cfg.pilotName || "PILOTO").trim(),
+      score: Math.floor(this.score),
+      km: Math.round(this.km * 10) / 10,
     }
+    this.newRecord = entry.score > 300 && (this.scores.length === 0 || entry.score > this.scores[0].score)
+    if (entry.score > 300) this.scores = saveScore(entry)
+    this.state = "gameover"
   }
 
   private startRace() {
@@ -670,6 +718,7 @@ export class AutoDashEngine {
     this.level = 0; this.levelUpT = 0
     this.powerups = []; this.puTimer = 6
     this.curveWarn = 0; this.collWarn = null
+    this.newRecord = false; this.beamT = 0; this.beamCdT = 0; this.pitchY = 0
     this.shiftT = 0; this.wheelspinT = 0; this.bogT = 0
     this.crashed = false
     this.raining = false; this.rainRollT = 0
@@ -758,6 +807,12 @@ export class AutoDashEngine {
       ctx.translate(W / 2, H / 2)
       ctx.scale(1.025, 1.025)
       ctx.translate(-W / 2, -H / 2)
+    }
+    // a câmera deita junto com o volante
+    if (this.state === "racing" && Math.abs(this.steerVel) > 0.04) {
+      ctx.translate(W / 2, H)
+      ctx.rotate(-this.steerVel * 0.011)
+      ctx.translate(-W / 2, -H)
     }
 
     // céu em três tons
@@ -961,6 +1016,16 @@ export class AutoDashEngine {
       } else if (idx % 51 === 17) {
         sprites.push({ kind: "deco", deco: 2, x: sx1 + sw1 * 1.75, y: sy1, w: sw1 * 0.55 })
       }
+    }
+
+    // farol alto: clarão pedindo passagem
+    if (this.beamT > 0) {
+      const a = Math.min(1, this.beamT / 0.55)
+      const beam = ctx.createRadialGradient(W / 2, H * 0.62, 30, W / 2, H * 0.62, 420)
+      beam.addColorStop(0, `rgba(255,250,215,${0.38 * a})`)
+      beam.addColorStop(1, "rgba(255,250,215,0)")
+      ctx.fillStyle = beam
+      ctx.beginPath(); ctx.ellipse(W / 2, H * 0.60, 400, 215, 0, 0, Math.PI * 2); ctx.fill()
     }
 
     // passe de material do asfalto: sheen + espelho molhado na chuva
@@ -1233,6 +1298,17 @@ export class AutoDashEngine {
     if (amb < 0.62) {
       ctx.fillStyle = "rgba(255,60,48,0.25)"
       ctx.beginPath(); ctx.ellipse(x, y - th * 1.6, w * 0.55, th * 2, 0, 0, Math.PI * 2); ctx.fill()
+      // light trails: lanternas riscando a noite quando você fecha rápido
+      const rel = Math.max(0, this.speed - t.speed)
+      const len = Math.min(w * 1.6, rel * w * 0.012)
+      if (len > 3 && w > 6) {
+        const trail = ctx.createLinearGradient(0, y - th * 2.2, 0, y - th * 2.2 + len)
+        trail.addColorStop(0, "rgba(255,60,48,0.32)")
+        trail.addColorStop(1, "rgba(255,60,48,0)")
+        ctx.fillStyle = trail
+        ctx.fillRect(bx + w * 0.06, y - th * 2.2, w * 0.22, len)
+        ctx.fillRect(bx + w * 0.72, y - th * 2.2, w * 0.22, len)
+      }
     }
     // seta
     if (t.blinkT > 0 && Math.floor(t.blinkT * 6) % 2 === 0) {
@@ -1263,7 +1339,7 @@ export class AutoDashEngine {
     const custom = this.cfg.customs[this.cfg.carIdx]
     const steer = clamp(this.steerVel * 1.1, -1, 1)
     const braking = this.mouseBrake || this.keys.has("s") || this.keys.has("arrowdown")
-    const bounce = Math.sin(this.position * 0.03) * Math.min(3, this.speed / 60)
+    const bounce = Math.sin(this.position * 0.03) * Math.min(3, this.speed / 60) + this.pitchY
     if (this.shield) {
       const pw = spec.width * 640
       ctx.fillStyle = "rgba(96,165,250,0.14)"
@@ -1404,7 +1480,8 @@ export class AutoDashEngine {
     ctx.beginPath(); ctx.arc(cx, cy, r, a0, redStart); ctx.stroke()
     ctx.strokeStyle = "rgba(239,68,68,0.6)"
     ctx.beginPath(); ctx.arc(cx, cy, r, redStart, a1); ctx.stroke()
-    const rpmA = a0 + (a1 - a0) * clamp(this.rpm / 8000, 0, 1)
+    const jitter = this.rpm >= RPM_REDLINE - 150 ? (Math.random() - 0.5) * 0.03 : 0
+    const rpmA = a0 + (a1 - a0) * clamp(this.rpm / 8000 + jitter, 0, 1)
     ctx.strokeStyle = this.rpm > RPM_REDLINE ? "#ef4444" : this.rpm > 6200 ? "#fb923c" : "#38bdf8"
     ctx.shadowColor = ctx.strokeStyle as string
     ctx.shadowBlur = 10
@@ -1419,10 +1496,9 @@ export class AutoDashEngine {
       ctx.textAlign = "center"
       ctx.fillText(String(i), tx, ty + 3)
     }
-    // agulha
-    const frac = clamp(this.rpm / 8000, 0, 1)
-    const na = a0 + (a1 - a0) * frac
-    ctx.strokeStyle = frac > RPM_REDLINE / 8000 ? "#ef4444" : "#f8fafc"
+    // agulha (com tremida na limitadora)
+    const na = rpmA
+    ctx.strokeStyle = this.rpm > RPM_REDLINE ? "#ef4444" : "#f8fafc"
     ctx.lineWidth = 3
     ctx.beginPath()
     ctx.moveTo(cx - Math.cos(na) * 10, cy - Math.sin(na) * 10)
@@ -1536,11 +1612,15 @@ export class AutoDashEngine {
     ctx.fillStyle = "rgba(248,250,252,0.6)"
     ctx.font = "14px 'Segoe UI', sans-serif"
     ctx.fillText("🖱 esq acelera · dir freia · scroll troca marcha · botão do meio = neutro", W / 2, 440)
-    ctx.fillText("⌨ A/D ou ←→ dirigem · W/S gás/freio · Q/E marchas · ESPAÇO nitro · ESC pausa", W / 2, 464)
+    ctx.fillText("⌨ A/D ou ←→ dirigem · W/S gás/freio · Q/E marchas · ESPAÇO nitro · F farol alto", W / 2, 464)
+    if (this.cfg.pilotName) {
+      ctx.fillStyle = "rgba(148,197,255,0.85)"
+      ctx.fillText(`fala, ${this.cfg.pilotName}! bora?`, W / 2, 496)
+    }
     const best = this.scores[0]
     if (best) {
       ctx.fillStyle = "rgba(253,224,71,0.9)"
-      ctx.fillText(`recorde: ${best.score.toLocaleString("pt-BR")} — ${best.name}`, W / 2, 500)
+      ctx.fillText(`recorde: ${best.score.toLocaleString("pt-BR")} — ${best.name}`, W / 2, this.cfg.pilotName ? 520 : 500)
     }
     ctx.textAlign = "left"
   }
@@ -1575,6 +1655,9 @@ export class AutoDashEngine {
     ctx.fillStyle = "rgba(248,250,252,0.7)"
     ctx.font = "italic 13px 'Segoe UI', sans-serif"
     ctx.fillText(spec.desc, px, 430)
+    ctx.fillStyle = "rgba(148,197,255,0.85)"
+    ctx.font = "13px 'Segoe UI', sans-serif"
+    ctx.fillText(`piloto: ${this.cfg.pilotName || "?"} · [N] trocar`, px, 455)
     ctx.textAlign = "left"
 
     // painel de vidro atrás da coluna de specs
@@ -1662,7 +1745,12 @@ export class AutoDashEngine {
     ctx.fillText(`${Math.floor(this.score).toLocaleString("pt-BR")} pontos`, W / 2, 210)
     ctx.font = "16px 'Segoe UI', sans-serif"
     ctx.fillStyle = "rgba(248,250,252,0.7)"
-    ctx.fillText(`${this.km.toFixed(1)} km percorridos`, W / 2, 240)
+    ctx.fillText(`${this.km.toFixed(1)} km percorridos, ${this.cfg.pilotName || "PILOTO"}`, W / 2, 240)
+    if (this.newRecord) {
+      ctx.fillStyle = "#fde047"
+      ctx.font = "900 24px 'Segoe UI', sans-serif"
+      ctx.fillText("★ NOVO RECORDE! ★", W / 2, 272)
+    }
 
     ctx.fillStyle = "rgba(253,224,71,0.9)"
     ctx.font = "bold 15px 'Segoe UI', sans-serif"
@@ -1682,23 +1770,23 @@ export class AutoDashEngine {
   private renderNameEntry() {
     const ctx = this.ctx
     this.dim(0.7)
+    this.glass(W / 2 - 230, 140, 460, 270, 20)
     ctx.textAlign = "center"
     ctx.fillStyle = "#fde047"
-    ctx.font = "900 44px 'Segoe UI', sans-serif"
-    ctx.fillText("★ NOVO RECORDE! ★", W / 2, 170)
-    ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 28px 'Segoe UI', sans-serif"
-    ctx.fillText(`${this.pendingScore ? this.pendingScore.score.toLocaleString("pt-BR") : 0} pontos`, W / 2, 220)
-    ctx.font = "16px 'Segoe UI', sans-serif"
-    ctx.fillStyle = "rgba(248,250,252,0.75)"
-    ctx.fillText("digite seu nome:", W / 2, 280)
+    ctx.font = "900 38px 'Segoe UI', sans-serif"
+    ctx.fillText("QUEM TÁ PILOTANDO?", W / 2, 200)
+    ctx.font = "14px 'Segoe UI', sans-serif"
+    ctx.fillStyle = "rgba(248,250,252,0.7)"
+    ctx.fillText("seu nome fica salvo neste navegador e assina seus recordes", W / 2, 232)
     const cursor = Math.floor(performance.now() / 400) % 2 === 0 ? "▌" : " "
     ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 34px 'Consolas', monospace"
-    ctx.fillText(this.nameBuf + cursor, W / 2, 330)
-    ctx.fillStyle = "rgba(248,250,252,0.5)"
-    ctx.font = "14px 'Segoe UI', sans-serif"
-    ctx.fillText("[ENTER] salvar", W / 2, 380)
+    ctx.font = "bold 36px 'Consolas', monospace"
+    ctx.fillText((this.nameBuf || "") + cursor, W / 2, 305)
+    ctx.fillStyle = "rgba(255,255,255,0.25)"
+    ctx.fillRect(W / 2 - 150, 320, 300, 2)
+    ctx.fillStyle = "#fde047"
+    ctx.font = "bold 16px 'Segoe UI', sans-serif"
+    ctx.fillText("[ENTER] pra garagem", W / 2, 372)
     ctx.textAlign = "left"
   }
 
@@ -1710,12 +1798,10 @@ export class AutoDashEngine {
 
     if (this.state === "nameentry") {
       if (k === "enter") {
-        if (this.pendingScore) {
-          this.pendingScore.name = this.nameBuf.trim() || "PILOTO"
-          this.scores = saveScore(this.pendingScore)
-          this.pendingScore = null
-        }
-        this.state = "gameover"
+        this.cfg.pilotName = (this.nameBuf.trim() || "PILOTO").slice(0, 12)
+        saveConfig(this.cfg)
+        this.state = "garage"
+        this.audio.ui()
       } else if (k === "backspace") this.nameBuf = this.nameBuf.slice(0, -1)
       else if (/^[a-z0-9 _-]$/i.test(e.key) && this.nameBuf.length < 12) this.nameBuf += e.key.toUpperCase()
       return
@@ -1727,7 +1813,7 @@ export class AutoDashEngine {
 
     switch (this.state) {
       case "menu":
-        if (k === "enter") { this.state = "garage"; this.audio.ui() }
+        if (k === "enter") { this.enterFromMenu() }
         break
       case "garage": {
         const custom = this.cfg.customs[this.cfg.carIdx]
@@ -1738,6 +1824,7 @@ export class AutoDashEngine {
         if (k === "b") { custom.neon = (custom.neon + 1) % NEONS.length; this.audio.ui() }
         if (k === "t") { this.cfg.transmission = this.cfg.transmission === "auto" ? "manual" : "auto"; this.audio.ui() }
         if (k === "y") { this.cfg.steering = this.cfg.steering === "mouse" ? "keyboard" : "mouse"; this.audio.ui() }
+        if (k === "n") { this.nameBuf = this.cfg.pilotName; this.state = "nameentry"; this.audio.ui() }
         if (["c", "v", "b", "t", "y"].includes(k) || k.startsWith("arrow")) saveConfig(this.cfg)
         if (k === "enter") startAndSave(this)
         if (k === "escape") this.state = "menu"
@@ -1749,6 +1836,7 @@ export class AutoDashEngine {
         if (k === "q") this.tryShift(-1)
         if (k === "e") this.tryShift(1)
         if (k === "n") this.toNeutral()
+        if (k === "f") this.flashBeam()
         break
       case "paused":
         if (k === "escape" || k === "p" || k === "enter") this.state = "racing"
@@ -1765,6 +1853,29 @@ export class AutoDashEngine {
     function startAndSave(self: AutoDashEngine) {
       saveConfig(self.cfg)
       self.startRace()
+    }
+  }
+
+  private enterFromMenu() {
+    this.audio.ui()
+    if (!this.cfg.pilotName) {
+      this.nameBuf = ""
+      this.state = "nameentry"
+    } else {
+      this.state = "garage"
+    }
+  }
+
+  /** Farol alto: pisca e pede passagem pra quem está na sua faixa. */
+  private flashBeam() {
+    if (this.state !== "racing" || this.beamCdT > 0) return
+    this.beamCdT = 2.2
+    this.beamT = 0.55
+    this.audio.flash()
+    const playerZ = this.position + PLAYER_Z
+    for (const t of this.traffic) {
+      const d = this.wrapDz(t.z, playerZ)
+      if (d > 200 && d < 7000 && Math.abs(t.offset - this.playerX) < 0.35) t.yieldT = 1.4
     }
   }
 
@@ -1790,7 +1901,7 @@ export class AutoDashEngine {
     this.audio.ensure()
     if (e.button === 0) {
       if (this.state === "racing" || this.state === "countdown") this.mouseGas = true
-      else if (this.state === "menu") { this.state = "garage"; this.audio.ui() }
+      else if (this.state === "menu") this.enterFromMenu()
       else if (this.state === "gameover") this.startRace()
       else if (this.state === "garage") { saveConfig(this.cfg); this.startRace() }
     }

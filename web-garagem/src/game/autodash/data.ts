@@ -79,6 +79,7 @@ export interface GameConfig {
   transmission: "auto" | "manual"
   steering: "keyboard" | "mouse"
   sound: boolean
+  pilotName: string
 }
 
 export interface ScoreEntry {
@@ -97,6 +98,7 @@ export function defaultConfig(): GameConfig {
     transmission: "auto",
     steering: "keyboard",
     sound: true,
+    pilotName: "",
   }
 }
 
