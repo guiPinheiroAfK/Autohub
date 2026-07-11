@@ -16,7 +16,7 @@ const RUMBLE = 3
 
 type GameState = "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
 
-interface Seg { curve: number; y1: number; y2: number }
+interface Seg { curve: number; y1: number; y2: number; sign?: number }
 
 type TrafficKind = "car" | "moto" | "truck" | "bus"
 const KINDS: Record<TrafficKind, { w: number; len: number; h: number; spd: [number, number] }> = {
@@ -36,7 +36,11 @@ interface Traffic {
   color: string
   blinkT: number      // >0: seta ligada antes/durante a troca de faixa
   prevD: number
+  dead?: boolean
 }
+
+const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
+interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
 
 interface Particle { x: number; y: number; vx: number; vy: number; size: number; life: number; maxLife: number; color: string }
 interface Floater { text: string; color: string; y: number; life: number; big: boolean }
@@ -92,6 +96,11 @@ export class AutoDashEngine {
   private nitroMeter = 0
   private nitroOn = false
   private offroadT = 0
+  private steerVel = 0
+  private shield = false
+  private mult2T = 0
+  private level = 0
+  private levelUpT = 0
 
   // corrida
   private score = 0
@@ -107,6 +116,14 @@ export class AutoDashEngine {
 
   // mundo
   private traffic: Traffic[] = []
+  private powerups: Pickup[] = []
+  private puTimer = 6
+  private bgShift = 0
+  private curveWarn = 0
+  private curveWarnDist = 0
+  private curveBeepT = 0
+  private collWarn: Traffic | null = null
+  private collBeepT = 0
   private particles: Particle[] = []
   private floaters: Floater[] = []
   private drops: Drop[] = []
@@ -183,6 +200,16 @@ export class AutoDashEngine {
     }
     addRoad(40, 40, 40, 0, -lastY) // fecha o loop plano
     this.trackLen = this.segments.length * SEG_LEN
+
+    // placas de chevron antes de curvas fechadas
+    for (let i = 46; i < this.segments.length; i++) {
+      const c = this.segments[i].curve
+      if (Math.abs(c) >= 4 && Math.abs(this.segments[i - 1].curve) < 4) {
+        for (let k = 22; k <= 46; k += 8) {
+          this.segments[i - k].sign = c > 0 ? 1 : -1
+        }
+      }
+    }
   }
 
   private segAt(z: number): Seg {
@@ -224,7 +251,7 @@ export class AutoDashEngine {
   }
 
   private updateTraffic(dt: number, playerZ: number, demo: boolean) {
-    const target = 14 + Math.min(14, Math.floor(this.km * 1.3))
+    const target = 14 + Math.min(14, Math.floor(this.km * 1.3)) + this.level * 3
     if (this.traffic.length < target) this.spawnTraffic(DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))
 
     const spec = CARS[this.cfg.carIdx]
@@ -267,7 +294,15 @@ export class AutoDashEngine {
         const halfSum = (k.w + spec.width) / 2 + 0.02
         // colisão
         if (Math.abs(d) < k.len / 2 + 120 && Math.abs(t.offset - this.playerX) < halfSum && !this.crashed) {
-          this.crash()
+          if (this.shield) {
+            this.shield = false
+            t.dead = true
+            this.audio.shieldBreak()
+            this.burst(W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
+            this.floaters.push({ text: "ESCUDO QUEBROU!", color: "#60a5fa", y: H * 0.4, life: 1.3, big: false })
+          } else {
+            this.crash()
+          }
         }
         // near miss: acabou de passar por ele
         if (t.prevD > 0 && d <= 0 && !this.crashed) {
@@ -275,7 +310,7 @@ export class AutoDashEngine {
           if (gap < halfSum + 0.20 && this.speed > spd + 15) {
             this.combo = Math.min(7, this.combo + 1)
             this.comboT = 4
-            const mult = 1 + this.combo
+            const mult = (1 + this.combo) * (this.mult2T > 0 ? 2 : 1)
             const pts = 200 * mult
             this.score += pts
             this.nitroMeter = Math.min(100, this.nitroMeter + 14)
@@ -298,6 +333,7 @@ export class AutoDashEngine {
         t.prevD = 1
       }
     }
+    if (this.traffic.some(t => t.dead)) this.traffic = this.traffic.filter(t => !t.dead)
   }
 
   // ---------- física ----------
@@ -353,6 +389,7 @@ export class AutoDashEngine {
       this.speed = 95
       this.position = (this.position + this.speed * KMH2UPS * dt) % this.trackLen
       this.playerX = Math.sin(this.demoT * 0.3) * 0.2
+      this.bgShift += this.segAt(this.position + PLAYER_Z).curve * this.speed * dt * 0.6
       this.updateTraffic(dt, this.position + PLAYER_Z, true)
       this.audio.engine(0, 0, false, false)
       return
@@ -394,22 +431,26 @@ export class AutoDashEngine {
     const playerZ = this.position + PLAYER_Z
     const seg = this.segAt(playerZ)
 
-    // direção
-    const steerRate = (1.1 + grip * 1.0) * (0.5 + 0.5 * Math.min(1, this.speed / 70))
+    // direção — input suavizado, mais firme em alta velocidade
+    let steerInput = 0
     if (this.cfg.steering === "mouse") {
-      const target = (this.mouseXn * 2 - 1) * 1.25
-      const maxStep = steerRate * 1.6 * dt
-      this.playerX += clamp(target - this.playerX, -maxStep, maxStep)
+      steerInput = clamp(((this.mouseXn * 2 - 1) * 1.25 - this.playerX) * 2.2, -1, 1)
     } else {
-      if (this.keys.has("a") || this.keys.has("arrowleft")) this.playerX -= steerRate * dt
-      if (this.keys.has("d") || this.keys.has("arrowright")) this.playerX += steerRate * dt
+      if (this.keys.has("a") || this.keys.has("arrowleft")) steerInput -= 1
+      if (this.keys.has("d") || this.keys.has("arrowright")) steerInput += 1
     }
+    const speedF = Math.min(1, this.speed / 240)
+    const maxSteer = (0.95 + grip * 0.85) * (1 - 0.38 * speedF) * (0.35 + 0.65 * Math.min(1, this.speed / 55))
+    this.steerVel += (steerInput * maxSteer - this.steerVel) * Math.min(1, dt * 9)
+    if (this.levelUpT > 0) this.steerVel += Math.sin(this.levelUpT * 22) * 0.9 * dt // rabeio da virada de nível
+    this.playerX += this.steerVel * dt
 
-    // força centrífuga — o medo de ir rápido demais
-    const centrif = seg.curve * Math.pow(this.speed / 200, 2) * (2.1 - grip * 1.3)
+    // força centrífuga — curva média se segura no volante; fechada em vmax pede freio
+    const centrif = seg.curve * Math.pow(this.speed / 240, 2.2) * (0.42 - grip * 0.22)
     this.playerX -= centrif * dt
-    const slip = Math.abs(centrif) * (this.speed / 200)
-    this.audio.skid(slip > 0.35 ? slip : 0)
+    const slip = Math.abs(centrif) * speedF
+    this.audio.skid(slip > 0.3 ? slip : 0)
+    this.bgShift += seg.curve * this.speed * dt * 0.6
 
     // fora da pista
     if (Math.abs(this.playerX) > 1.05) {
@@ -469,11 +510,49 @@ export class AutoDashEngine {
     this.km += this.speed * dt / 3600
 
     if (this.goFlashT > 0) this.goFlashT -= dt
+    if (this.mult2T > 0) this.mult2T -= dt
 
     // pontuação e combo
-    const mult = 1 + this.combo
+    const mult = (1 + this.combo) * (this.mult2T > 0 ? 2 : 1)
     this.score += this.speed * dt * 0.35 * mult
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.combo = 0 }
+
+    // a cada 10k pontos o jogo sobe de nível: rabeio comemorativo e trânsito mais bravo
+    const newLevel = Math.floor(this.score / 10000)
+    if (newLevel > this.level) {
+      this.level = newLevel
+      this.levelUpT = 1.5
+      this.audio.levelUp()
+      this.floaters.push({ text: `NÍVEL ${newLevel + 1} — TRÂNSITO MAIS BRAVO!`, color: "#fb923c", y: H * 0.32, life: 2.2, big: true })
+    }
+    if (this.levelUpT > 0) {
+      this.levelUpT -= dt
+      if (Math.random() < 0.6) this.emitSmoke(2, "#e2e8f0")
+    }
+
+    // powerups na pista
+    this.puTimer -= dt
+    if (this.puTimer <= 0) {
+      this.puTimer = 7 + Math.random() * 6
+      this.powerups.push({
+        z: ((this.position + DRAW_DIST * (0.55 + Math.random() * 0.3) * SEG_LEN) % this.trackLen + this.trackLen) % this.trackLen,
+        offset: this.laneCenters[Math.floor(Math.random() * 4)],
+        type: Math.floor(Math.random() * 3),
+        pulse: 0,
+      })
+    }
+    for (const p of this.powerups) {
+      p.pulse += dt * 6
+      const d = this.wrapDz(p.z, playerZ)
+      if (!p.taken && Math.abs(d) < 160 && Math.abs(p.offset - this.playerX) < 0.30) {
+        p.taken = true
+        this.audio.pickup()
+        if (p.type === PU_NITRO) { this.nitroMeter = Math.min(100, this.nitroMeter + 40); this.floaters.push({ text: "+NOS", color: "#38bdf8", y: H * 0.45, life: 1, big: false }) }
+        if (p.type === PU_SHIELD) { this.shield = true; this.floaters.push({ text: "ESCUDO!", color: "#60a5fa", y: H * 0.45, life: 1, big: false }) }
+        if (p.type === PU_X2) { this.mult2T = 8; this.floaters.push({ text: "PONTOS EM DOBRO!", color: "#fde047", y: H * 0.45, life: 1.2, big: false }) }
+      }
+    }
+    this.powerups = this.powerups.filter(p => !p.taken && this.wrapDz(p.z, this.position) > -20 * SEG_LEN)
 
     // fumaça de escape / arrancada
     if (throttle && this.speed < 40 && this.gear >= 1) this.emitSmoke(2, "#cbd5e1")
@@ -491,6 +570,36 @@ export class AutoDashEngine {
     }
 
     this.updateTraffic(dt, playerZ, false)
+
+    // aviso de curva fechada à frente
+    this.curveWarn = 0
+    const lookStart = Math.floor(playerZ / SEG_LEN)
+    for (let n = 25; n < 95; n++) {
+      const s = this.segments[(lookStart + n) % this.segments.length]
+      if (Math.abs(s.curve) >= 4) { this.curveWarn = Math.sign(s.curve); this.curveWarnDist = n; break }
+    }
+    this.curveBeepT -= dt
+    if (this.curveWarn !== 0 && this.curveWarnDist < 70 && this.speed > 170 && this.curveBeepT <= 0) {
+      this.curveBeepT = 1.1
+      this.audio.warn()
+    }
+
+    // aviso de colisão: veículo lento na sua faixa
+    this.collWarn = null
+    let bestD = Infinity
+    for (const t of this.traffic) {
+      const d = this.wrapDz(t.z, playerZ)
+      if (d > 200 && d < 3600 && Math.abs(t.offset - this.playerX) < 0.30 && this.speed > t.speed + 45 && d < bestD) {
+        bestD = d
+        this.collWarn = t
+      }
+    }
+    this.collBeepT -= dt
+    if (this.collWarn && bestD < 2400 && this.collBeepT <= 0) {
+      this.collBeepT = 0.65
+      this.audio.warn()
+    }
+
     this.updateFx(dt)
     this.audio.engine(this.rpm, throttle, nitroActive, true)
   }
@@ -517,18 +626,22 @@ export class AutoDashEngine {
     }
   }
 
+  private burst(x: number, y: number, n: number, colors: string[]) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 260
+      this.particles.push({
+        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 80,
+        size: 4 + Math.random() * 9, life: 0.9, maxLife: 0.9,
+        color: colors[Math.floor(Math.random() * colors.length)],
+      })
+    }
+  }
+
   private crash() {
     this.crashed = true
     this.audio.crash()
     this.shakeT = 0.6
-    for (let i = 0; i < 40; i++) {
-      const a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 260
-      this.particles.push({
-        x: W / 2, y: H - 110, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 80,
-        size: 4 + Math.random() * 9, life: 0.9, maxLife: 0.9,
-        color: Math.random() < 0.5 ? "#fb923c" : "#ef4444",
-      })
-    }
+    this.burst(W / 2, H - 110, 40, ["#fb923c", "#ef4444"])
     const entry: ScoreEntry = { name: "", score: Math.floor(this.score), km: Math.round(this.km * 10) / 10 }
     if (isTop5(entry.score) && entry.score > 500) {
       this.pendingScore = entry
@@ -545,10 +658,15 @@ export class AutoDashEngine {
     this.position = 0
     this.speed = 0
     this.playerX = 0
+    this.steerVel = 0
     this.gear = 0
     this.rpm = RPM_IDLE
     this.score = 0; this.km = 0; this.combo = 0; this.comboT = 0
     this.nitroMeter = 0; this.nitroOn = false
+    this.shield = false; this.mult2T = 0
+    this.level = 0; this.levelUpT = 0
+    this.powerups = []; this.puTimer = 6
+    this.curveWarn = 0; this.collWarn = null
     this.shiftT = 0; this.wheelspinT = 0; this.bogT = 0
     this.crashed = false
     this.raining = false; this.rainRollT = 0
@@ -646,6 +764,7 @@ export class AutoDashEngine {
         ctx.fillRect(sx, sy, 2, 2)
       }
     }
+    this.renderBackdrop(amb)
 
     this.renderRoad(amb, sky.bot)
     this.renderPlayer(amb)
@@ -662,6 +781,13 @@ export class AutoDashEngine {
       ctx.stroke()
     }
     ctx.restore()
+
+    // vinheta — dá peso à imagem
+    const vg = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.38, W / 2, H * 0.55, H * 0.95)
+    vg.addColorStop(0, "rgba(0,0,0,0)")
+    vg.addColorStop(1, "rgba(0,0,0,0.38)")
+    ctx.fillStyle = vg
+    ctx.fillRect(0, 0, W, H)
 
     switch (this.state) {
       case "menu": this.renderMenu(); break
@@ -711,14 +837,20 @@ export class AutoDashEngine {
     let dx = -(this.segments[baseIdx].curve * basePct)
     let maxY = H + 10
 
-    interface SpriteDraw { t: Traffic; x: number; y: number; w: number }
+    interface SpriteDraw { kind: "car" | "pu" | "deco"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; x: number; y: number; w: number }
     const sprites: SpriteDraw[] = []
-    // bucket de tráfego por segmento
+    // buckets de tráfego e powerups por segmento
     const bySeg = new Map<number, Traffic[]>()
     for (const t of this.traffic) {
       const si = Math.floor(t.z / SEG_LEN) % N
       const arr = bySeg.get(si)
       if (arr) arr.push(t); else bySeg.set(si, [t])
+    }
+    const puBySeg = new Map<number, Pickup[]>()
+    for (const p of this.powerups) {
+      const si = Math.floor(p.z / SEG_LEN) % N
+      const arr = puBySeg.get(si)
+      if (arr) arr.push(p); else puBySeg.set(si, [p])
     }
 
     for (let n = 0; n < DRAW_DIST; n++) {
@@ -779,8 +911,29 @@ export class AutoDashEngine {
           const sx = sx1 + (sx2 - sx1) * pct
           const sy = sy1 + (sy2 - sy1) * pct
           const sw = sw1 + (sw2 - sw1) * pct
-          sprites.push({ t, x: sx + sw * t.offset, y: sy, w: sw * KINDS[t.kind].w })
+          sprites.push({ kind: "car", t, x: sx + sw * t.offset, y: sy, w: sw * KINDS[t.kind].w })
         }
+      }
+      const pusHere = puBySeg.get(idx)
+      if (pusHere) {
+        for (const p of pusHere) {
+          const pct = (p.z - z1) / SEG_LEN
+          const sx = sx1 + (sx2 - sx1) * pct
+          const sy = sy1 + (sy2 - sy1) * pct
+          const sw = sw1 + (sw2 - sw1) * pct
+          sprites.push({ kind: "pu", p, x: sx + sw * p.offset, y: sy, w: sw * 0.10 })
+        }
+      }
+      // decoração de beira de estrada e placas
+      if (seg.sign) {
+        sprites.push({ kind: "deco", deco: 3, dir: seg.sign, x: sx1 - sw1 * 1.35 * seg.sign, y: sy1, w: sw1 * 0.16 })
+      } else if (idx % 4 === 0) {
+        const side = idx % 8 === 0 ? -1 : 1
+        sprites.push({ kind: "deco", deco: 0, x: sx1 + sw1 * side * (1.55 + ((idx * 7) % 5) * 0.14), y: sy1, w: sw1 * 0.22 })
+      } else if (idx % 10 === 5) {
+        sprites.push({ kind: "deco", deco: 1, x: sx1 - sw1 * 1.28, y: sy1, w: sw1 * 0.05 })
+      } else if (idx % 51 === 17) {
+        sprites.push({ kind: "deco", deco: 2, x: sx1 + sw1 * 1.75, y: sy1, w: sw1 * 0.55 })
       }
     }
 
@@ -798,7 +951,166 @@ export class AutoDashEngine {
     // desenha do fundo pro primeiro plano
     for (let i = sprites.length - 1; i >= 0; i--) {
       const s = sprites[i]
-      this.drawTraffic(s.t, s.x, s.y, s.w, amb)
+      if (s.kind === "car") this.drawTraffic(s.t!, s.x, s.y, s.w, amb)
+      else if (s.kind === "pu") this.drawPickup(s.p!, s.x, s.y, s.w, amb)
+      else this.drawDeco(s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
+    }
+  }
+
+  private renderBackdrop(amb: number) {
+    const ctx = this.ctx
+    const hz = H * 0.5
+    // sol / lua
+    if (amb > 0.62) {
+      const sg = ctx.createRadialGradient(W * 0.78, hz - 105, 8, W * 0.78, hz - 105, 70)
+      sg.addColorStop(0, "rgba(255,240,190,0.9)")
+      sg.addColorStop(0.4, "rgba(255,220,130,0.35)")
+      sg.addColorStop(1, "rgba(255,220,130,0)")
+      ctx.fillStyle = sg
+      ctx.beginPath(); ctx.arc(W * 0.78, hz - 105, 70, 0, Math.PI * 2); ctx.fill()
+    } else {
+      ctx.fillStyle = "rgba(226,232,240,0.85)"
+      ctx.beginPath(); ctx.arc(W * 0.24, hz - 120, 22, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = "rgba(148,163,184,0.5)"
+      ctx.beginPath(); ctx.arc(W * 0.24 - 7, hz - 126, 5, 0, Math.PI * 2); ctx.fill()
+      ctx.beginPath(); ctx.arc(W * 0.24 + 6, hz - 114, 3.5, 0, Math.PI * 2); ctx.fill()
+    }
+    // montanhas em parallax (2 camadas)
+    const ridge = (col: string, amp: number, base: number, shift: number, step: number) => {
+      ctx.fillStyle = col
+      ctx.beginPath()
+      ctx.moveTo(-20, base + 4)
+      for (let x = -20; x <= W + 20; x += step) {
+        const k = x + shift
+        const yy = base - Math.abs(Math.sin(k * 0.012) * 0.6 + Math.sin(k * 0.031) * 0.4) * amp
+        ctx.lineTo(x, yy)
+      }
+      ctx.lineTo(W + 20, base + 4)
+      ctx.closePath()
+      ctx.fill()
+    }
+    ridge(shade("#2b3c56", amb), 72, hz + 2, this.bgShift * 0.18, 16)
+    ridge(shade("#1e2c40", amb), 46, hz + 3, this.bgShift * 0.42, 12)
+    // skyline com janelas acesas à noite
+    const wrap = W + 90
+    for (let i = 0; i < 24; i++) {
+      const bw = 20 + ((i * 37) % 28)
+      const bh = 22 + ((i * 53) % 48)
+      let bx = (((i * 67 - this.bgShift * 0.7) % wrap) + wrap) % wrap - 45
+      ctx.fillStyle = shade("#131b2a", Math.max(0.35, amb))
+      ctx.fillRect(bx, hz - bh + 4, bw, bh)
+      if (amb < 0.6) {
+        ctx.fillStyle = "rgba(253,224,71,0.45)"
+        for (let wy = hz - bh + 9; wy < hz - 3; wy += 9) {
+          ctx.fillRect(bx + 3 + ((i + wy) % 3) * 5, wy, 3, 4)
+        }
+      }
+    }
+  }
+
+  private drawPickup(p: Pickup, x: number, y: number, w: number, amb: number) {
+    if (w < 2.5) return
+    const ctx = this.ctx
+    const r = w * (1 + Math.sin(p.pulse) * 0.12)
+    const c = p.type === PU_NITRO ? "#38bdf8" : p.type === PU_SHIELD ? "#60a5fa" : "#fde047"
+    const cy = y - r * 1.4
+    const halo = ctx.createRadialGradient(x, cy, 2, x, cy, r * 2.4)
+    halo.addColorStop(0, c + "66")
+    halo.addColorStop(1, c + "00")
+    ctx.fillStyle = halo
+    ctx.beginPath(); ctx.arc(x, cy, r * 2.4, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = shade("#0f172a", Math.max(0.6, amb))
+    ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.fill()
+    ctx.strokeStyle = c
+    ctx.lineWidth = Math.max(1.5, r * 0.14)
+    ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.stroke()
+    ctx.fillStyle = c
+    if (p.type === PU_NITRO) {
+      ctx.beginPath()
+      ctx.moveTo(x + r * 0.18, cy - r * 0.55)
+      ctx.lineTo(x - r * 0.42, cy + r * 0.12)
+      ctx.lineTo(x - r * 0.05, cy + r * 0.12)
+      ctx.lineTo(x - r * 0.18, cy + r * 0.55)
+      ctx.lineTo(x + r * 0.42, cy - r * 0.12)
+      ctx.lineTo(x + r * 0.05, cy - r * 0.12)
+      ctx.closePath(); ctx.fill()
+    } else if (p.type === PU_SHIELD) {
+      ctx.beginPath()
+      ctx.moveTo(x, cy - r * 0.5)
+      ctx.lineTo(x + r * 0.45, cy - r * 0.25)
+      ctx.lineTo(x + r * 0.45, cy + r * 0.1)
+      ctx.lineTo(x, cy + r * 0.55)
+      ctx.lineTo(x - r * 0.45, cy + r * 0.1)
+      ctx.lineTo(x - r * 0.45, cy - r * 0.25)
+      ctx.closePath(); ctx.fill()
+    } else {
+      ctx.font = `bold ${Math.max(8, r * 0.9)}px 'Segoe UI', sans-serif`
+      ctx.textAlign = "center"
+      ctx.fillText("2X", x, cy + r * 0.32)
+      ctx.textAlign = "left"
+    }
+  }
+
+  private drawDeco(kind: number, dir: number, x: number, y: number, w: number, amb: number) {
+    if (w < 1.5) return
+    const ctx = this.ctx
+    if (kind === 0) { // árvore
+      const h = w * 2.4
+      ctx.fillStyle = shade("#4a3524", amb)
+      ctx.fillRect(x - w * 0.07, y - h * 0.32, w * 0.14, h * 0.32)
+      ctx.fillStyle = shade("#14532d", amb)
+      ctx.beginPath()
+      ctx.moveTo(x, y - h); ctx.lineTo(x + w * 0.5, y - h * 0.28); ctx.lineTo(x - w * 0.5, y - h * 0.28)
+      ctx.closePath(); ctx.fill()
+      ctx.fillStyle = shade("#166534", amb)
+      ctx.beginPath()
+      ctx.moveTo(x, y - h * 0.78); ctx.lineTo(x + w * 0.38, y - h * 0.22); ctx.lineTo(x - w * 0.38, y - h * 0.22)
+      ctx.closePath(); ctx.fill()
+    } else if (kind === 1) { // poste
+      const h = w * 11
+      ctx.fillStyle = shade("#475569", amb)
+      ctx.fillRect(x - w * 0.4, y - h, w * 0.8, h)
+      ctx.fillRect(x - w * 0.4, y - h, w * 3.4, w * 0.8)
+      if (amb < 0.62) {
+        const lg = ctx.createRadialGradient(x + w * 3, y - h + w, 1, x + w * 3, y - h + w, w * 5)
+        lg.addColorStop(0, "rgba(255,235,160,0.8)")
+        lg.addColorStop(1, "rgba(255,235,160,0)")
+        ctx.fillStyle = lg
+        ctx.beginPath(); ctx.arc(x + w * 3, y - h + w, w * 5, 0, Math.PI * 2); ctx.fill()
+      }
+    } else if (kind === 2) { // outdoor
+      const h = w * 0.55
+      ctx.fillStyle = shade("#334155", amb)
+      ctx.fillRect(x - w * 0.32, y - h * 1.2, w * 0.08, h * 1.2)
+      ctx.fillRect(x + w * 0.24, y - h * 1.2, w * 0.08, h * 1.2)
+      ctx.fillStyle = shade("#0f172a", Math.max(0.5, amb))
+      ctx.fillRect(x - w / 2, y - h * 2.1, w, h)
+      ctx.strokeStyle = shade("#e0342f", amb + 0.2)
+      ctx.lineWidth = Math.max(1, w * 0.02)
+      ctx.strokeRect(x - w / 2, y - h * 2.1, w, h)
+      if (w > 34) {
+        ctx.fillStyle = shade("#e0342f", amb + 0.25)
+        ctx.font = `900 ${h * 0.42}px 'Segoe UI', sans-serif`
+        ctx.textAlign = "center"
+        ctx.fillText("AUTOHUB", x, y - h * 1.55)
+        ctx.textAlign = "left"
+      }
+    } else { // chevron de curva
+      const h = w * 1.1
+      ctx.fillStyle = shade("#64748b", amb)
+      ctx.fillRect(x - w * 0.05, y - h * 1.7, w * 0.1, h * 0.75)
+      ctx.fillStyle = shade("#facc15", Math.min(1, amb + 0.3))
+      rr(ctx, x - w / 2, y - h * 2.4, w, h * 0.75, w * 0.08)
+      ctx.strokeStyle = shade("#0f172a", 1)
+      ctx.lineWidth = Math.max(1.5, w * 0.09)
+      const cy = y - h * 2.02
+      for (const off of [-w * 0.22, w * 0.08]) {
+        ctx.beginPath()
+        ctx.moveTo(x + off - dir * w * 0.1, cy - h * 0.2)
+        ctx.lineTo(x + off + dir * w * 0.12, cy)
+        ctx.lineTo(x + off - dir * w * 0.1, cy + h * 0.2)
+        ctx.stroke()
+      }
     }
   }
 
@@ -849,6 +1161,20 @@ export class AutoDashEngine {
       const side = t.targetOffset > t.offset ? 1 : -1
       ctx.beginPath(); ctx.arc(x + side * w * 0.52, y - h * 0.28, Math.max(2, w * 0.06), 0, Math.PI * 2); ctx.fill()
     }
+    // alerta de colisão: triângulo vermelho piscando em cima do veículo
+    if (t === this.collWarn && Math.floor(performance.now() / 170) % 2 === 0) {
+      const ty = y - h - Math.max(10, w * 0.4)
+      const s = Math.max(7, w * 0.22)
+      ctx.fillStyle = "#ef4444"
+      ctx.beginPath()
+      ctx.moveTo(x, ty - s); ctx.lineTo(x + s * 0.9, ty + s * 0.6); ctx.lineTo(x - s * 0.9, ty + s * 0.6)
+      ctx.closePath(); ctx.fill()
+      ctx.fillStyle = "#fff"
+      ctx.font = `bold ${s * 1.1}px 'Segoe UI', sans-serif`
+      ctx.textAlign = "center"
+      ctx.fillText("!", x, ty + s * 0.45)
+      ctx.textAlign = "left"
+    }
   }
 
   private renderPlayer(amb: number) {
@@ -856,11 +1182,18 @@ export class AutoDashEngine {
     const ctx = this.ctx
     const spec = CARS[this.cfg.carIdx]
     const custom = this.cfg.customs[this.cfg.carIdx]
-    const steer = this.cfg.steering === "mouse"
-      ? clamp(((this.mouseXn * 2 - 1) * 1.25 - this.playerX) * 2, -1, 1)
-      : (this.keys.has("a") || this.keys.has("arrowleft") ? -1 : 0) + (this.keys.has("d") || this.keys.has("arrowright") ? 1 : 0)
+    const steer = clamp(this.steerVel * 1.1, -1, 1)
     const braking = this.mouseBrake || this.keys.has("s") || this.keys.has("arrowdown")
     const bounce = Math.sin(this.position * 0.03) * Math.min(3, this.speed / 60)
+    if (this.shield) {
+      const pw = spec.width * 640
+      ctx.fillStyle = "rgba(96,165,250,0.14)"
+      ctx.strokeStyle = "rgba(96,165,250,0.65)"
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.ellipse(W / 2, H - 68 + bounce, pw * 0.75, 62, 0, 0, Math.PI * 2)
+      ctx.fill(); ctx.stroke()
+    }
     drawPlayerCar(ctx, W / 2, H - 34 + bounce, spec, custom.paint, custom.stripe, custom.neon, steer, braking, amb, this.nitroOn && this.nitroMeter > 1)
   }
 
@@ -899,12 +1232,31 @@ export class AutoDashEngine {
       ctx.fillRect(240, 50, 52 * clamp(this.comboT / 4, 0, 1), 5)
     }
 
-    // clima/hora
+    // clima/hora + badges
     const sky = this.skyNow()
-    ctx.font = "20px 'Segoe UI', sans-serif"
     ctx.textAlign = "right"
+    ctx.font = "20px 'Segoe UI', sans-serif"
     ctx.fillText(this.raining ? "🌧" : sky.amb < 0.6 ? "🌙" : "☀️", W - 20, 34)
+    ctx.font = "bold 13px 'Segoe UI', sans-serif"
+    let by = 58
+    ctx.fillStyle = "rgba(248,250,252,0.6)"
+    ctx.fillText(`NÍVEL ${this.level + 1}`, W - 20, by); by += 20
+    if (this.shield) { ctx.fillStyle = "#60a5fa"; ctx.fillText("● ESCUDO", W - 20, by); by += 20 }
+    if (this.mult2T > 0) { ctx.fillStyle = "#fde047"; ctx.fillText(`● 2X ${Math.ceil(this.mult2T)}s`, W - 20, by); by += 20 }
     ctx.textAlign = "left"
+
+    // aviso de curva fechada
+    if (this.curveWarn !== 0 && this.speed > 120 && this.state !== "paused") {
+      const urgent = this.curveWarnDist < 55
+      if (!urgent || Math.floor(performance.now() / 180) % 2 === 0) {
+        ctx.textAlign = "center"
+        ctx.fillStyle = urgent ? "#ef4444" : "#facc15"
+        ctx.font = "bold 24px 'Segoe UI', sans-serif"
+        const arrows = this.curveWarn > 0 ? "▶▶" : "◀◀"
+        ctx.fillText(`${arrows}  CURVA ${this.curveWarn > 0 ? "À DIREITA" : "À ESQUERDA"}  ${arrows}`, W / 2, 92)
+        ctx.textAlign = "left"
+      }
+    }
 
     this.renderTacho()
 

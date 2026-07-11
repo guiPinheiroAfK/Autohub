@@ -115,19 +115,20 @@ export class AudioBus {
       this.rainGain.gain.setTargetAtTime(on ? 0.05 : 0, this.ctx.currentTime, 0.5)
   }
 
-  private blip(freq: number, ms: number, vol: number, type: OscillatorType = "sine") {
+  private blip(freq: number, ms: number, vol: number, type: OscillatorType = "sine", delayMs = 0) {
     if (!this.ctx || !this.master || !this.enabled) return
     const ctx = this.ctx
+    const t0 = ctx.currentTime + delayMs / 1000
     const osc = ctx.createOscillator()
     osc.type = type
     osc.frequency.value = freq
     const g = ctx.createGain()
-    g.gain.setValueAtTime(vol, ctx.currentTime)
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + ms / 1000)
+    g.gain.setValueAtTime(vol, t0)
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + ms / 1000)
     osc.connect(g)
     g.connect(this.master)
-    osc.start()
-    osc.stop(ctx.currentTime + ms / 1000)
+    osc.start(t0)
+    osc.stop(t0 + ms / 1000)
   }
 
   private burst(ms: number, vol: number, freq = 1000, type: BiquadFilterType = "lowpass") {
@@ -160,6 +161,10 @@ export class AudioBus {
     this.burst(600, 0.7, 500, "lowpass")
     this.blip(60, 500, 0.5, "sine")
   }
+  pickup() { this.blip(660, 70, 0.22); this.blip(880, 70, 0.22, "sine", 70); this.blip(1180, 140, 0.28, "sine", 140) }
+  warn() { this.blip(980, 80, 0.16, "square"); this.blip(980, 80, 0.12, "square", 150) }
+  levelUp() { this.blip(440, 110, 0.26, "square"); this.blip(554, 110, 0.26, "square", 110); this.blip(659, 110, 0.26, "square", 220); this.blip(880, 300, 0.3, "square", 330) }
+  shieldBreak() { this.blip(700, 80, 0.3); this.blip(500, 80, 0.3, "sine", 80); this.blip(350, 160, 0.3, "sine", 160) }
   semaphoreRed() { this.blip(440, 120, 0.25, "square") }
   semaphoreGreen() { this.blip(880, 300, 0.3, "square") }
   perfectLaunch() { this.blip(660, 90, 0.25); this.blip(880, 90, 0.25); this.blip(1100, 160, 0.3) }
