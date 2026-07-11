@@ -1,0 +1,168 @@
+// AutoDash — áudio 100% sintetizado via WebAudio (sem assets externos).
+
+export class AudioBus {
+  private ctx: AudioContext | null = null
+  private master: GainNode | null = null
+
+  // motor
+  private engOsc1: OscillatorNode | null = null
+  private engOsc2: OscillatorNode | null = null
+  private engGain: GainNode | null = null
+  private engFilter: BiquadFilterNode | null = null
+
+  // loops de ruído (derrapagem / chuva)
+  private skidGain: GainNode | null = null
+  private rainGain: GainNode | null = null
+
+  enabled = true
+
+  /** Precisa ser chamado a partir de um gesto do usuário (clique/tecla). */
+  ensure() {
+    if (this.ctx) {
+      if (this.ctx.state === "suspended") void this.ctx.resume()
+      return
+    }
+    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    if (!AC) return
+    this.ctx = new AC()
+    this.master = this.ctx.createGain()
+    this.master.gain.value = 0.5
+    this.master.connect(this.ctx.destination)
+    this.buildEngine()
+    this.buildLoops()
+  }
+
+  setMuted(muted: boolean) {
+    this.enabled = !muted
+    if (this.master) this.master.gain.value = muted ? 0 : 0.5
+  }
+
+  private noiseBuffer(seconds: number): AudioBuffer {
+    const ctx = this.ctx!
+    const buf = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate)
+    const data = buf.getChannelData(0)
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1
+    return buf
+  }
+
+  private buildEngine() {
+    const ctx = this.ctx!
+    this.engOsc1 = ctx.createOscillator()
+    this.engOsc1.type = "sawtooth"
+    this.engOsc2 = ctx.createOscillator()
+    this.engOsc2.type = "square"
+    this.engFilter = ctx.createBiquadFilter()
+    this.engFilter.type = "lowpass"
+    this.engFilter.frequency.value = 600
+    this.engGain = ctx.createGain()
+    this.engGain.gain.value = 0
+
+    const sub = ctx.createGain()
+    sub.gain.value = 0.5
+    this.engOsc2.connect(sub)
+    sub.connect(this.engFilter)
+    this.engOsc1.connect(this.engFilter)
+    this.engFilter.connect(this.engGain)
+    this.engGain.connect(this.master!)
+    this.engOsc1.start()
+    this.engOsc2.start()
+  }
+
+  private buildLoops() {
+    const ctx = this.ctx!
+    const mkLoop = (filterType: BiquadFilterType, freq: number) => {
+      const src = ctx.createBufferSource()
+      src.buffer = this.noiseBuffer(2)
+      src.loop = true
+      const filter = ctx.createBiquadFilter()
+      filter.type = filterType
+      filter.frequency.value = freq
+      const gain = ctx.createGain()
+      gain.gain.value = 0
+      src.connect(filter)
+      filter.connect(gain)
+      gain.connect(this.master!)
+      src.start()
+      return gain
+    }
+    this.skidGain = mkLoop("bandpass", 900)
+    this.rainGain = mkLoop("highpass", 3000)
+  }
+
+  /** Chamado a cada frame: afina o ronco do motor pelo RPM. */
+  engine(rpm: number, throttle: number, nitro: boolean, running: boolean) {
+    if (!this.ctx || !this.engOsc1 || !this.engOsc2 || !this.engGain || !this.engFilter) return
+    const t = this.ctx.currentTime
+    if (!running) {
+      this.engGain.gain.setTargetAtTime(0, t, 0.1)
+      return
+    }
+    const f = 28 + rpm / 26
+    this.engOsc1.frequency.setTargetAtTime(f, t, 0.03)
+    this.engOsc2.frequency.setTargetAtTime(f / 2, t, 0.03)
+    this.engFilter.frequency.setTargetAtTime(300 + rpm / 4 + (nitro ? 900 : 0), t, 0.05)
+    const vol = 0.05 + throttle * 0.10 + rpm / 80000 + (nitro ? 0.05 : 0)
+    this.engGain.gain.setTargetAtTime(vol, t, 0.05)
+  }
+
+  skid(intensity: number) {
+    if (this.skidGain && this.ctx)
+      this.skidGain.gain.setTargetAtTime(Math.min(0.25, intensity * 0.25), this.ctx.currentTime, 0.08)
+  }
+
+  rain(on: boolean) {
+    if (this.rainGain && this.ctx)
+      this.rainGain.gain.setTargetAtTime(on ? 0.05 : 0, this.ctx.currentTime, 0.5)
+  }
+
+  private blip(freq: number, ms: number, vol: number, type: OscillatorType = "sine") {
+    if (!this.ctx || !this.master || !this.enabled) return
+    const ctx = this.ctx
+    const osc = ctx.createOscillator()
+    osc.type = type
+    osc.frequency.value = freq
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(vol, ctx.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + ms / 1000)
+    osc.connect(g)
+    g.connect(this.master)
+    osc.start()
+    osc.stop(ctx.currentTime + ms / 1000)
+  }
+
+  private burst(ms: number, vol: number, freq = 1000, type: BiquadFilterType = "lowpass") {
+    if (!this.ctx || !this.master || !this.enabled) return
+    const ctx = this.ctx
+    const src = ctx.createBufferSource()
+    src.buffer = this.noiseBuffer(ms / 1000 + 0.05)
+    const filter = ctx.createBiquadFilter()
+    filter.type = type
+    filter.frequency.value = freq
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(vol, ctx.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + ms / 1000)
+    src.connect(filter)
+    filter.connect(g)
+    g.connect(this.master)
+    src.start()
+    src.stop(ctx.currentTime + ms / 1000 + 0.05)
+  }
+
+  ui() { this.blip(880, 70, 0.15) }
+  uiLow() { this.blip(560, 70, 0.15) }
+  shift() { this.burst(90, 0.25, 2200, "bandpass"); this.blip(190, 60, 0.2, "square") }
+  bog() { this.blip(120, 300, 0.25, "sawtooth") }
+  limiter() { this.burst(45, 0.2, 3000, "highpass") }
+  horn() { this.blip(420, 350, 0.12, "square"); this.blip(530, 350, 0.12, "square") }
+  nearMiss() { this.burst(200, 0.3, 1600, "bandpass") }
+  nitro() { this.burst(500, 0.35, 800, "lowpass"); this.blip(300, 400, 0.2, "sawtooth") }
+  crash() {
+    this.burst(600, 0.7, 500, "lowpass")
+    this.blip(60, 500, 0.5, "sine")
+  }
+  semaphoreRed() { this.blip(440, 120, 0.25, "square") }
+  semaphoreGreen() { this.blip(880, 300, 0.3, "square") }
+  perfectLaunch() { this.blip(660, 90, 0.25); this.blip(880, 90, 0.25); this.blip(1100, 160, 0.3) }
+  score() { this.blip(1300, 80, 0.2) }
+  offroad() { this.burst(120, 0.15, 300, "lowpass") }
+}

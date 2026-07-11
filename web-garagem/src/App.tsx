@@ -29,6 +29,7 @@ const MinhaLojaPage     = lazy(() => import("@/pages/MinhaLojaPage"))
 const LojaPage          = lazy(() => import("@/pages/LojaPage"))
 const PitchPage         = lazy(() => import("@/pages/PitchPage"))
 const InfoPage          = lazy(() => import("@/pages/InfoPage"))
+const AutoDashPage      = lazy(() => import("@/pages/AutoDashPage"))
 
 const Spinner = () => (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -66,6 +67,8 @@ export default function App() {
               <Route path="/oauth/callback" element={<S><AuthCallbackPage /></S>} />
               <Route path="/landingpage-pitch" element={<S><PitchPage /></S>} />
               <Route path="/info" element={<S><InfoPage /></S>} />
+              {/* Minigame — tela cheia imersiva, sem header/nav */}
+              <Route path="/autodash" element={<S><AutoDashPage /></S>} />
               <Route path="/convite" element={<Layout />}>
                 <Route index element={<S><ConvitePage /></S>} />
               </Route>
