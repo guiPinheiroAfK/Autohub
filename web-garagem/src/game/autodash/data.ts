@@ -156,7 +156,13 @@ function writeCache(scores: ScoreEntry[]) {
 }
 
 function localMerge(entry: ScoreEntry): ScoreEntry[] {
-  const scores = [...readCache(), entry].sort((a, b) => b.score - a.score).slice(0, 10)
+  // espelha a regra do servidor: uma entrada por piloto, só a melhor
+  const best = new Map<string, ScoreEntry>()
+  for (const s of [...readCache(), entry]) {
+    const cur = best.get(s.name)
+    if (!cur || s.score > cur.score) best.set(s.name, s)
+  }
+  const scores = [...best.values()].sort((a, b) => b.score - a.score).slice(0, 10)
   writeCache(scores)
   return scores
 }

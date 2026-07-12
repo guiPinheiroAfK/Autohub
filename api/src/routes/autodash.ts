@@ -11,9 +11,13 @@ export const autodashRoutes = new Hono()
 const TOP_N = 10
 
 async function topScores() {
+  // uma entrada por piloto: só a melhor corrida de cada nome conta
   return sql`
-    SELECT nome, pontos, km, criado_em
-    FROM autodash_scores
+    SELECT nome, pontos, km, criado_em FROM (
+      SELECT DISTINCT ON (nome) nome, pontos, km, criado_em
+      FROM autodash_scores
+      ORDER BY nome, pontos DESC, criado_em ASC
+    ) melhores
     ORDER BY pontos DESC, criado_em ASC
     LIMIT ${TOP_N}
   `
