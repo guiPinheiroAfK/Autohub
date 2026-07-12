@@ -14,6 +14,12 @@ export class AudioBus {
   private skidGain: GainNode | null = null
   private rainGain: GainNode | null = null
 
+  // música
+  private musicGain: GainNode | null = null
+  private musicTimer: number | null = null
+  private musicNextT = 0
+  private musicStep = 0
+
   enabled = true
 
   /** Precisa ser chamado a partir de um gesto do usuário (clique/tecla). */
@@ -30,11 +36,97 @@ export class AudioBus {
     this.master.connect(this.ctx.destination)
     this.buildEngine()
     this.buildLoops()
+    this.startMusic()
   }
 
   setMuted(muted: boolean) {
     this.enabled = !muted
     if (this.master) this.master.gain.value = muted ? 0 : 0.5
+  }
+
+  // ---------- música synthwave (sequencer com lookahead) ----------
+  private startMusic() {
+    const ctx = this.ctx
+    if (!ctx || this.musicTimer !== null) return
+    this.musicGain = ctx.createGain()
+    this.musicGain.gain.value = 0.06
+    this.musicGain.connect(this.master!)
+    this.musicNextT = ctx.currentTime + 0.1
+    this.musicStep = 0
+
+    const STEP = 60 / 128 / 2 // 128 BPM, colcheias
+    // baixo em Lá menor: A1 A1 C2 A1 · D2 A1 E2 D2 (2 compassos)
+    const BASS = [55, 55, 65.41, 55, 73.42, 55, 82.41, 73.42, 55, 55, 65.41, 55, 98, 82.41, 73.42, 65.41]
+
+    const scheduleStep = (step: number, t: number) => {
+      const g = this.musicGain!
+      // baixo
+      const f = BASS[step % BASS.length]
+      const osc = ctx.createOscillator()
+      osc.type = "sawtooth"
+      osc.frequency.value = f
+      const lp = ctx.createBiquadFilter()
+      lp.type = "lowpass"
+      lp.frequency.setValueAtTime(600, t)
+      lp.frequency.exponentialRampToValueAtTime(180, t + STEP * 0.9)
+      const eg = ctx.createGain()
+      eg.gain.setValueAtTime(0.9, t)
+      eg.gain.exponentialRampToValueAtTime(0.02, t + STEP * 0.95)
+      osc.connect(lp); lp.connect(eg); eg.connect(g)
+      osc.start(t); osc.stop(t + STEP)
+      // bumbo surdo a cada 4 passos
+      if (step % 4 === 0) {
+        const k = ctx.createOscillator()
+        k.type = "sine"
+        k.frequency.setValueAtTime(120, t)
+        k.frequency.exponentialRampToValueAtTime(40, t + 0.12)
+        const kg = ctx.createGain()
+        kg.gain.setValueAtTime(0.8, t)
+        kg.gain.exponentialRampToValueAtTime(0.01, t + 0.14)
+        k.connect(kg); kg.connect(g)
+        k.start(t); k.stop(t + 0.15)
+      }
+      // chimbal nos contratempos
+      if (step % 4 === 2) {
+        const src = ctx.createBufferSource()
+        src.buffer = this.noiseBuffer(0.06)
+        const hp = ctx.createBiquadFilter()
+        hp.type = "highpass"
+        hp.frequency.value = 7000
+        const hg = ctx.createGain()
+        hg.gain.setValueAtTime(0.25, t)
+        hg.gain.exponentialRampToValueAtTime(0.01, t + 0.05)
+        src.connect(hp); hp.connect(hg); hg.connect(g)
+        src.start(t)
+      }
+    }
+
+    this.musicTimer = window.setInterval(() => {
+      if (!this.ctx) return
+      while (this.musicNextT < this.ctx.currentTime + 0.35) {
+        scheduleStep(this.musicStep, this.musicNextT)
+        this.musicStep = (this.musicStep + 1) % 64
+        this.musicNextT += STEP
+      }
+    }, 120)
+  }
+
+  /** Intensidade da música: corrida = mais presente, menus = fundo. */
+  music(intense: boolean) {
+    if (this.musicGain && this.ctx)
+      this.musicGain.gain.setTargetAtTime(intense ? 0.085 : 0.045, this.ctx.currentTime, 0.6)
+  }
+
+  stopMusic() {
+    if (this.musicTimer !== null) { clearInterval(this.musicTimer); this.musicTimer = null }
+    this.musicGain?.disconnect()
+    this.musicGain = null
+  }
+
+  dispose() {
+    this.stopMusic()
+    void this.ctx?.close().catch(() => { /* já fechado */ })
+    this.ctx = null
   }
 
   private noiseBuffer(seconds: number): AudioBuffer {

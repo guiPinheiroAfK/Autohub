@@ -450,6 +450,8 @@ async function migrate() {
       criado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `
+  await sql`ALTER TABLE autodash_rooms ADD COLUMN IF NOT EXISTS rematch_host BOOLEAN NOT NULL DEFAULT false`
+  await sql`ALTER TABLE autodash_rooms ADD COLUMN IF NOT EXISTS rematch_guest BOOLEAN NOT NULL DEFAULT false`
 
   console.log("✔ Migrations concluídas.")
 }

@@ -9,7 +9,7 @@ import {
   type CarSpec, type CarCustom, type GameConfig, type ScoreEntry,
 } from "./data"
 import { AudioBus } from "./audio"
-import { createRoom, joinRoom, pollRoom, postState, type DuelTelemetry } from "./net"
+import { createRoom, joinRoom, pollRoom, postState, rematchRoom, type DuelTelemetry } from "./net"
 
 const W = CANVAS_W, H = CANVAS_H
 const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH
@@ -33,6 +33,7 @@ interface DuelSession {
   iCrashed: boolean
   scoreSent: boolean
   result: "win" | "lose" | null
+  rematch: boolean
   msg: string
 }
 
@@ -212,6 +213,7 @@ export class AutoDashEngine {
   destroy() {
     this.destroyed = true
     cancelAnimationFrame(this.raf)
+    this.audio.dispose()
     this.unbind()
   }
 
@@ -753,7 +755,7 @@ export class AutoDashEngine {
     if (this.mode === "duel" && this.duel) {
       const d = this.duel
       d.iCrashed = true
-      void postState(d.code, d.role, { d: this.km, s: entry.score, v: 0, x: this.playerX, c: true })
+      void postState(d.code, d.role, this.myTelemetry(true))
         .then((r) => { if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() } })
         .catch(() => { /* spectate segue tentando */ })
       if (d.opp?.c) this.duelFinish(this.km > d.oppD)
@@ -781,14 +783,27 @@ export class AutoDashEngine {
       if (d.startAtLocal === null && d.postT <= 0 && !d.busy) {
         d.postT = 1.5
         d.busy = true
-        pollRoom(d.code).then((r) => {
-          if (r.oppName && r.startInMs !== null) {
-            d.oppName = r.oppName
-            d.startAtLocal = performance.now() + r.startInMs
-          }
-        }).catch(() => { /* tenta de novo no próximo tick */ }).finally(() => { d.busy = false })
+        if (d.rematch) {
+          // revanche: mesma sala; quando o rival topar, vem seed nova + largada
+          rematchRoom(d.code, d.role).then((r) => {
+            if (r.startInMs !== null && r.startInMs > 300) {
+              d.seed = r.seed
+              d.startAtLocal = performance.now() + r.startInMs
+              d.opp = null; d.oppD = 0
+              d.result = null; d.iCrashed = false; d.scoreSent = false
+            }
+          }).catch(() => { /* tenta de novo no próximo tick */ }).finally(() => { d.busy = false })
+        } else {
+          pollRoom(d.code).then((r) => {
+            if (r.oppName && r.startInMs !== null) {
+              d.oppName = r.oppName
+              d.startAtLocal = performance.now() + r.startInMs
+            }
+          }).catch(() => { /* tenta de novo no próximo tick */ }).finally(() => { d.busy = false })
+        }
       }
       if (d.startAtLocal !== null && performance.now() >= d.startAtLocal - 3300) {
+        d.rematch = false
         this.startRace(d.seed)
         // compensa a latência do poll: o verde acende no instante combinado,
         // mesmo que este cliente tenha descoberto a largada atrasado
@@ -802,7 +817,7 @@ export class AutoDashEngine {
       if (d.postT <= 0 && !d.busy) {
         d.postT = 1.1
         d.busy = true
-        postState(d.code, d.role, { d: this.km, s: Math.floor(this.score), v: this.speed, x: this.playerX, c: false })
+        postState(d.code, d.role, this.myTelemetry(false))
           .then((r) => {
             if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() }
           })
@@ -824,7 +839,7 @@ export class AutoDashEngine {
       if (d.postT <= 0 && !d.busy) {
         d.postT = 1.3
         d.busy = true
-        postState(d.code, d.role, { d: this.km, s: Math.floor(this.score), v: 0, x: this.playerX, c: true })
+        postState(d.code, d.role, this.myTelemetry(true))
           .then((r) => {
             if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() }
           })
@@ -844,7 +859,7 @@ export class AutoDashEngine {
     this.floaters = []
     this.combo = 0
     // aviso final pro rival: minha corrida acabou (senão ele espera à toa)
-    void postState(d.code, d.role, { d: this.km, s: Math.floor(this.score), v: 0, x: this.playerX, c: true })
+    void postState(d.code, d.role, this.myTelemetry(true))
       .catch(() => { /* melhor esforço */ })
     if (!d.scoreSent && this.score > 300) {
       d.scoreSent = true
@@ -872,8 +887,32 @@ export class AutoDashEngine {
       startAtLocal: startInMs === null ? null : performance.now() + startInMs,
       opp: null, oppD: 0, postT: 0, busy: false,
       lastSeen: performance.now(), iCrashed: false, scoreSent: false,
-      result: null, msg: "",
+      result: null, rematch: false, msg: "",
     }
+  }
+
+  /** Minha telemetria atual (inclui o carro, pro fantasma do rival ser fiel). */
+  private myTelemetry(crashed: boolean): DuelTelemetry {
+    return {
+      d: this.km,
+      s: Math.floor(this.score),
+      v: crashed ? 0 : this.speed,
+      x: this.playerX,
+      c: crashed,
+      car: this.cfg.carIdx,
+      paint: this.cfg.customs[this.cfg.carIdx].paint,
+    }
+  }
+
+  /** Revanche: mesma sala, pista nova — espera o rival topar. */
+  private duelRematch() {
+    const d = this.duel
+    if (!d) { this.startDuelLobby(); return }
+    d.rematch = true
+    d.startAtLocal = null
+    d.postT = 0
+    this.state = "duelwaiting"
+    this.audio.ui()
   }
 
   private duelCreate() {
@@ -1007,6 +1046,7 @@ export class AutoDashEngine {
       this.prevState = this.state
       this.fadeT = 0.22
     }
+    this.audio.music(this.state === "racing" || this.state === "countdown")
     const sky = this.skyNow()
     const amb = sky.amb
 
@@ -1231,7 +1271,7 @@ export class AutoDashEngine {
         const sx = sx1 + (sx2 - sx1) * pct
         const sy = sy1 + (sy2 - sy1) * pct
         const sw = sw1 + (sw2 - sw1) * pct
-        sprites.push({ kind: "ghost", x: sx + sw * ghostX, y: sy, w: sw * 0.26 })
+        sprites.push({ kind: "ghost", x: sx + sw * ghostX, y: sy, w: sw })
       }
       const pusHere = puBySeg.get(idx)
       if (pusHere) {
@@ -1489,28 +1529,28 @@ export class AutoDashEngine {
     }
   }
 
-  /** Carro fantasma do rival: translúcido, com o nome flutuando. */
+  /** Carro fantasma do rival: o carro REAL dele (carroceria+pintura), translúcido. */
   private drawGhost(x: number, y: number, w: number, amb: number) {
-    if (w < 3) return
+    if (w < 24) return
     const ctx = this.ctx
     const d = this.duel
-    const h = w * 0.8
+    const opp = d?.opp
+    const spec = CARS[clamp(Math.floor(opp?.car ?? 0), 0, CARS.length - 1)]
+    const custom: CarCustom = {
+      paint: clamp(Math.floor(opp?.paint ?? 0), 0, PAINTS.length - 1),
+      stripe: 0, neon: 0, wheel: 0,
+      wing: spec.body === "muscle" || spec.body === "ninja" ? 1 : 2,
+    }
+    ctx.save()
     ctx.globalAlpha = 0.55
-    ctx.fillStyle = "rgba(0,0,0,0.3)"
-    ctx.beginPath(); ctx.ellipse(x, y, w * 0.6, w * 0.1, 0, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = shade("#38bdf8", Math.max(0.55, amb))
-    rr(ctx, x - w / 2, y - h, w, h * 0.95, w * 0.16)
-    ctx.fillStyle = shade("#0f172a", Math.max(0.6, amb))
-    rr(ctx, x - w * 0.34, y - h * 0.88, w * 0.68, h * 0.3, w * 0.08)
-    ctx.fillStyle = "rgba(255,60,48,0.8)"
-    rr(ctx, x - w * 0.42, y - h * 0.16, w * 0.22, h * 0.08, 2)
-    rr(ctx, x + w * 0.20, y - h * 0.16, w * 0.22, h * 0.08, 2)
-    ctx.globalAlpha = 1
-    if (w > 10 && d) {
+    drawPlayerCar(ctx, x, y, spec, custom, 0, false, amb, false, w / 640)
+    ctx.restore()
+    const carW = spec.width * w
+    if (carW > 34 && d) {
       ctx.fillStyle = "rgba(56,189,248,0.95)"
-      ctx.font = `bold ${Math.max(9, w * 0.16)}px 'Space Grotesk', sans-serif`
+      ctx.font = `bold ${Math.max(9, carW * 0.14)}px 'Space Grotesk', sans-serif`
       ctx.textAlign = "center"
-      ctx.fillText(d.oppName || "RIVAL", x, y - h - 6)
+      ctx.fillText(d.oppName || "RIVAL", x, y - carW * 0.72)
       ctx.textAlign = "left"
     }
   }
@@ -1764,6 +1804,44 @@ export class AutoDashEngine {
     ctx.fillText("NOS", nx + 1, ny + nh + 18)
 
     if (this.mode === "duel" && this.duel) this.renderDuelBar()
+    this.renderMinimap()
+  }
+
+  /** Minimapa: o traçado dos próximos ~500m, com você no início. */
+  private renderMinimap() {
+    const ctx = this.ctx
+    const bx = W - 122, byy = H - 296, bw = 104, bh = 88
+    this.glass(bx, byy, bw, bh, 10)
+    const N = this.segments.length
+    const start = Math.floor((this.position + PLAYER_Z) / SEG_LEN)
+    let hx = 0, hy = 0, heading = 0
+    const pts: number[] = [0, 0]
+    for (let n = 0; n < 150; n += 3) {
+      const s = this.segments[(start + n) % N]
+      heading += s.curve * 0.05 * 3
+      hx += Math.sin(heading) * 3
+      hy -= Math.cos(heading) * 3
+      pts.push(hx, hy)
+    }
+    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9
+    for (let i = 0; i < pts.length; i += 2) {
+      minX = Math.min(minX, pts[i]); maxX = Math.max(maxX, pts[i])
+      minY = Math.min(minY, pts[i + 1]); maxY = Math.max(maxY, pts[i + 1])
+    }
+    const sc = Math.min((bw - 26) / Math.max(8, maxX - minX), (bh - 26) / Math.max(8, maxY - minY))
+    const ox = bx + bw / 2 - ((minX + maxX) / 2) * sc
+    const oy = byy + bh / 2 - ((minY + maxY) / 2) * sc
+    ctx.strokeStyle = "rgba(248,250,252,0.7)"
+    ctx.lineWidth = 3
+    ctx.lineJoin = "round"
+    ctx.lineCap = "round"
+    ctx.beginPath()
+    ctx.moveTo(ox + pts[0] * sc, oy + pts[1] * sc)
+    for (let i = 2; i < pts.length; i += 2) ctx.lineTo(ox + pts[i] * sc, oy + pts[i + 1] * sc)
+    ctx.stroke()
+    ctx.lineWidth = 1
+    ctx.fillStyle = "#38bdf8"
+    ctx.beginPath(); ctx.arc(ox + pts[0] * sc, oy + pts[1] * sc, 4, 0, Math.PI * 2); ctx.fill()
   }
 
   /** Barra do duelo: você × rival, com delta em metros ao vivo. */
@@ -2191,16 +2269,25 @@ export class AutoDashEngine {
     ctx.textAlign = "center"
     if (!d) { this.state = "duellobby"; return }
     if (d.startAtLocal === null) {
-      ctx.fillStyle = "rgba(248,250,252,0.8)"
-      ctx.font = "16px 'Space Grotesk', sans-serif"
-      ctx.fillText(d.code === "...." ? "criando sala..." : "manda esse código pro seu rival:", W / 2, 170)
-      ctx.fillStyle = "#fde047"
-      ctx.font = "900 84px 'Consolas', monospace"
-      if (d.code !== "....") ctx.fillText(d.code, W / 2, 268)
       const dots = ".".repeat(1 + (Math.floor(performance.now() / 400) % 3))
-      ctx.fillStyle = "rgba(248,250,252,0.6)"
-      ctx.font = "16px 'Space Grotesk', sans-serif"
-      ctx.fillText(`esperando oponente${dots}`, W / 2, 330)
+      if (d.rematch) {
+        ctx.fillStyle = "#fde047"
+        ctx.font = "900 40px 'Space Grotesk', sans-serif"
+        ctx.fillText("⚔ REVANCHE!", W / 2, 220)
+        ctx.fillStyle = "rgba(248,250,252,0.75)"
+        ctx.font = "16px 'Space Grotesk', sans-serif"
+        ctx.fillText(`esperando ${d.oppName || "o rival"} topar${dots}`, W / 2, 268)
+      } else {
+        ctx.fillStyle = "rgba(248,250,252,0.8)"
+        ctx.font = "16px 'Space Grotesk', sans-serif"
+        ctx.fillText(d.code === "...." ? "criando sala..." : "manda esse código pro seu rival:", W / 2, 170)
+        ctx.fillStyle = "#fde047"
+        ctx.font = "900 84px 'Consolas', monospace"
+        if (d.code !== "....") ctx.fillText(d.code, W / 2, 268)
+        ctx.fillStyle = "rgba(248,250,252,0.6)"
+        ctx.font = "16px 'Space Grotesk', sans-serif"
+        ctx.fillText(`esperando oponente${dots}`, W / 2, 330)
+      }
       ctx.textAlign = "left"
       this.pill("cancelar  [ESC]", W / 2 - 100, 370, 200, () => this.toMenu(), { h: 28 })
     } else {
@@ -2265,15 +2352,24 @@ export class AutoDashEngine {
       }
     }
     ctx.textAlign = "left"
-    this.pill("REVANCHE (nova sala)", W / 2 - 240, 340, 240, () => this.startDuelLobby(), { primary: true, h: 40, font: 15 })
+    this.pill("⚔ REVANCHE  [ENTER]", W / 2 - 240, 340, 240, () => this.duelRematch(), { primary: true, h: 40, font: 15 })
     this.pill("MENU", W / 2 + 20, 340, 220, () => this.toMenu(), { h: 40, font: 15 })
   }
 
   // ---------- input ----------
+  private audioInit = false
+  private ensureAudio() {
+    this.audio.ensure()
+    if (!this.audioInit) {
+      this.audioInit = true
+      this.audio.setMuted(!this.cfg.sound)
+    }
+  }
+
   private onKeyDown = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase()
     if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault()
-    this.audio.ensure()
+    this.ensureAudio()
 
     if (this.state === "nameentry") {
       if (k === "enter") {
@@ -2292,7 +2388,11 @@ export class AutoDashEngine {
 
     this.keys.add(k)
     if (k === " ") this.nitroOn = true
-    if (k === "m" && (this.state === "racing" || this.state === "countdown")) return // M = menu só em telas paradas
+    // [M] alterna o som (menos em pause/game over, onde M = menu)
+    if (k === "m" && ["racing", "countdown", "menu", "garage", "duellobby"].includes(this.state)) {
+      this.toggleMute()
+      return
+    }
 
     switch (this.state) {
       case "menu":
@@ -2306,7 +2406,7 @@ export class AutoDashEngine {
         if (k === "escape") this.toMenu()
         break
       case "duelresult":
-        if (k === "enter") this.startDuelLobby()
+        if (k === "enter") this.duelRematch()
         if (k === "m" || k === "escape") this.toMenu()
         break
       case "garage": {
@@ -2357,6 +2457,16 @@ export class AutoDashEngine {
       saveConfig(self.cfg)
       self.startRace()
     }
+  }
+
+  private toggleMute() {
+    this.cfg.sound = !this.cfg.sound
+    saveConfig(this.cfg)
+    this.audio.setMuted(!this.cfg.sound)
+    this.floaters.push({
+      text: this.cfg.sound ? "🔊 som ligado" : "🔇 som desligado",
+      color: "#94a3b8", y: H * 0.52, life: 1, big: false,
+    })
   }
 
   private enterFromMenu(dest: "garage" | "duellobby" = "garage") {
@@ -2413,7 +2523,7 @@ export class AutoDashEngine {
   }
 
   private onMouseDown = (e: MouseEvent) => {
-    this.audio.ensure()
+    this.ensureAudio()
     if (e.button === 0) {
       if (this.state === "racing" || this.state === "countdown") {
         this.mouseGas = true
