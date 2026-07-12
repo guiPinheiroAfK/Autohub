@@ -437,6 +437,20 @@ async function migrate() {
   `
   await sql`CREATE INDEX IF NOT EXISTS idx_autodash_pontos ON autodash_scores(pontos DESC)`
 
+  // ── v7: salas de duelo online do AutoDash ────────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS autodash_rooms (
+      code        TEXT PRIMARY KEY,
+      seed        INT NOT NULL,
+      host_name   TEXT NOT NULL,
+      guest_name  TEXT,
+      start_at    TIMESTAMPTZ,
+      host_state  JSONB,
+      guest_state JSONB,
+      criado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `
+
   console.log("✔ Migrations concluídas.")
 }
 

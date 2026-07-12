@@ -9,12 +9,43 @@ import {
   type CarSpec, type CarCustom, type GameConfig, type ScoreEntry,
 } from "./data"
 import { AudioBus } from "./audio"
+import { createRoom, joinRoom, pollRoom, postState, type DuelTelemetry } from "./net"
 
 const W = CANVAS_W, H = CANVAS_H
 const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH
 const RUMBLE = 3
 
-type GameState = "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
+type GameState =
+  | "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
+  | "duellobby" | "duelcode" | "duelwaiting" | "duelspectate" | "duelresult"
+
+interface DuelSession {
+  code: string
+  seed: number
+  role: "host" | "guest"
+  oppName: string
+  startAtLocal: number | null // performance.now() do sinal verde
+  opp: DuelTelemetry | null
+  oppD: number                // km do rival, extrapolado entre polls
+  postT: number
+  busy: boolean
+  lastSeen: number
+  iCrashed: boolean
+  scoreSent: boolean
+  result: "win" | "lose" | null
+  msg: string
+}
+
+// RNG determinístico — no duelo os dois recebem a mesma pista via seed
+function mulberry32(seed: number) {
+  let a = seed >>> 0
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
 
 interface Seg { curve: number; y1: number; y2: number; sign?: number }
 
@@ -144,6 +175,12 @@ export class AutoDashEngine {
   private mousePx = { x: -1, y: -1 }
   private uiRegions: { x: number; y: number; w: number; h: number; act: () => void }[] = []
   private nameBuf = ""
+  private afterName: "garage" | "duellobby" = "garage"
+  private mode: "solo" | "duel" = "solo"
+  private duel: DuelSession | null = null
+  private codeBuf = ""
+  private prevState: GameState = "menu"
+  private fadeT = 0
   private newRecord = false
   private beamT = 0
   private beamCdT = 0
@@ -179,7 +216,8 @@ export class AutoDashEngine {
   }
 
   // ---------- pista ----------
-  private buildTrack() {
+  private buildTrack(seed = Math.floor(Math.random() * 2 ** 31)) {
+    const rnd = mulberry32(seed)
     this.segments = []
     let lastY = 0
     const seg = (curve: number, y: number) => { this.segments.push({ curve, y1: lastY, y2: y }); lastY = y }
@@ -191,23 +229,23 @@ export class AutoDashEngine {
       for (let n = 0; n < hold; n++, i++) seg(curve, easeIO(y0, y0 + dy, i / total))
       for (let n = 0; n < leave; n++, i++) seg(curve * (1 - n / leave), easeIO(y0, y0 + dy, i / total))
     }
-    const r = (lo: number, hi: number) => lo + Math.random() * (hi - lo)
+    const r = (lo: number, hi: number) => lo + rnd() * (hi - lo)
     const ri = (lo: number, hi: number) => Math.floor(r(lo, hi + 1))
 
     addRoad(30, 80, 30, 0, 0) // reta de largada
     while (this.segments.length < 4000) {
-      const roll = Math.random()
+      const roll = rnd()
       const hill = r(-1, 1) * r(600, 2600)
       if (roll < 0.10) addRoad(30, ri(110, 220), 30, 0, r(-1, 1) * r(400, 1600)) // retão pra esticar as marchas
       else if (roll < 0.30) addRoad(ri(20, 40), ri(30, 70), ri(20, 40), 0, hill)
       else if (roll < 0.62) {
-        const c = (Math.random() < 0.5 ? -1 : 1) * r(2, 5)
+        const c = (rnd() < 0.5 ? -1 : 1) * r(2, 5)
         addRoad(ri(25, 45), ri(30, 70), ri(25, 45), c, hill * 0.6)
       } else if (roll < 0.86) {
-        const c = (Math.random() < 0.5 ? -1 : 1) * r(2.5, 4.5)
+        const c = (rnd() < 0.5 ? -1 : 1) * r(2.5, 4.5)
         addRoad(25, 40, 25, c, hill * 0.4)
         addRoad(25, 40, 25, -c, -hill * 0.4)
-      } else addRoad(ri(15, 25), ri(20, 40), ri(15, 25), (Math.random() < 0.5 ? -1 : 1) * r(4.5, 6), 0)
+      } else addRoad(ri(15, 25), ri(20, 40), ri(15, 25), (rnd() < 0.5 ? -1 : 1) * r(4.5, 6), 0)
     }
     addRoad(40, 40, 40, 0, -lastY) // fecha o loop plano
     this.trackLen = this.segments.length * SEG_LEN
@@ -430,7 +468,9 @@ export class AutoDashEngine {
   private update(dt: number) {
     const spec = CARS[this.cfg.carIdx]
 
-    if (this.state === "menu" || this.state === "garage") {
+    this.duelNet(dt)
+
+    if (["menu", "garage", "duellobby", "duelcode", "duelwaiting", "duelresult"].includes(this.state)) {
       // demo: câmera passeia pela pista
       this.demoT += dt
       this.speed = 95
@@ -438,10 +478,11 @@ export class AutoDashEngine {
       this.playerX = Math.sin(this.demoT * 0.3) * 0.2
       this.bgShift += this.segAt(this.position + PLAYER_Z).curve * this.speed * dt * 0.6
       this.updateTraffic(dt, this.position + PLAYER_Z, true)
+      this.updateFx(dt) // floaters/partículas sobrando da corrida ainda precisam morrer
       this.audio.engine(0, 0, false, false)
       return
     }
-    if (this.state === "paused" || this.state === "gameover" || this.state === "nameentry") {
+    if (this.state === "paused" || this.state === "gameover" || this.state === "nameentry" || this.state === "duelspectate") {
       this.updateFx(dt)
       this.audio.engine(0, 0, false, false)
       this.audio.skid(0)
@@ -703,10 +744,23 @@ export class AutoDashEngine {
     }
     this.newRecord = entry.score > 300 && (this.scores.length === 0 || entry.score > this.scores[0].score)
     if (entry.score > 300) {
+      if (this.duel) this.duel.scoreSent = true
       void submitScore(entry).then((scores) => {
         if (!this.destroyed && scores.length) this.scores = scores
       })
     }
+
+    if (this.mode === "duel" && this.duel) {
+      const d = this.duel
+      d.iCrashed = true
+      void postState(d.code, d.role, { d: this.km, s: entry.score, v: 0, x: this.playerX, c: true })
+        .then((r) => { if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() } })
+        .catch(() => { /* spectate segue tentando */ })
+      if (d.opp?.c) this.duelFinish(this.km > d.oppD)
+      else this.state = "duelspectate"
+      return
+    }
+
     this.state = "gameover"
   }
 
@@ -715,8 +769,146 @@ export class AutoDashEngine {
     if (!this.destroyed && scores.length) this.scores = scores
   }
 
-  private startRace() {
-    this.buildTrack()
+  // ---------- duelo online ----------
+  private duelNet(dt: number) {
+    const d = this.duel
+    if (!d || this.mode !== "duel") return
+    d.postT -= dt
+    // extrapola a distância do rival entre polls
+    if (d.opp && !d.opp.c && !d.result) d.oppD += (d.opp.v / 3600) * dt
+
+    if (this.state === "duelwaiting") {
+      if (d.startAtLocal === null && d.postT <= 0 && !d.busy) {
+        d.postT = 1.5
+        d.busy = true
+        pollRoom(d.code).then((r) => {
+          if (r.oppName && r.startInMs !== null) {
+            d.oppName = r.oppName
+            d.startAtLocal = performance.now() + r.startInMs
+          }
+        }).catch(() => { /* tenta de novo no próximo tick */ }).finally(() => { d.busy = false })
+      }
+      if (d.startAtLocal !== null && performance.now() >= d.startAtLocal - 3300) {
+        this.startRace(d.seed)
+        // compensa a latência do poll: o verde acende no instante combinado,
+        // mesmo que este cliente tenha descoberto a largada atrasado
+        const remaining = (d.startAtLocal - performance.now()) / 1000
+        this.countT = clamp(3.3 - remaining, 0, 3.2)
+      }
+      return
+    }
+
+    if (this.state === "racing" || this.state === "countdown") {
+      if (d.postT <= 0 && !d.busy) {
+        d.postT = 1.1
+        d.busy = true
+        postState(d.code, d.role, { d: this.km, s: Math.floor(this.score), v: this.speed, x: this.playerX, c: false })
+          .then((r) => {
+            if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() }
+          })
+          .catch(() => { /* rede piscou */ })
+          .finally(() => { d.busy = false })
+      }
+      // rival bateu e você já passou a marca dele: vitória na hora
+      if (this.state === "racing" && d.opp?.c && this.km > d.oppD + 0.005) {
+        this.duelFinish(true, "seu rival bateu antes da sua marca")
+      }
+      // rival sumiu da corrida
+      if (d.opp && performance.now() - d.lastSeen > 20000) {
+        this.duelFinish(true, "seu rival caiu da conexão")
+      }
+      return
+    }
+
+    if (this.state === "duelspectate") {
+      if (d.postT <= 0 && !d.busy) {
+        d.postT = 1.3
+        d.busy = true
+        postState(d.code, d.role, { d: this.km, s: Math.floor(this.score), v: 0, x: this.playerX, c: true })
+          .then((r) => {
+            if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() }
+          })
+          .catch(() => { /* segue tentando */ })
+          .finally(() => { d.busy = false })
+      }
+      if (d.opp?.c) this.duelFinish(this.km > d.oppD)
+      else if (performance.now() - d.lastSeen > 20000) this.duelFinish(true, "seu rival caiu da conexão")
+    }
+  }
+
+  private duelFinish(win: boolean, msg = "") {
+    const d = this.duel
+    if (!d || d.result) return
+    d.result = win ? "win" : "lose"
+    d.msg = msg
+    this.floaters = []
+    this.combo = 0
+    // aviso final pro rival: minha corrida acabou (senão ele espera à toa)
+    void postState(d.code, d.role, { d: this.km, s: Math.floor(this.score), v: 0, x: this.playerX, c: true })
+      .catch(() => { /* melhor esforço */ })
+    if (!d.scoreSent && this.score > 300) {
+      d.scoreSent = true
+      void submitScore({
+        name: (this.cfg.pilotName || "PILOTO").trim(),
+        score: Math.floor(this.score),
+        km: Math.round(this.km * 10) / 10,
+      }).then((scores) => { if (!this.destroyed && scores.length) this.scores = scores })
+    }
+    this.state = "duelresult"
+    if (win) this.audio.levelUp(); else this.audio.bog()
+  }
+
+  private startDuelLobby() {
+    this.mode = "duel"
+    this.duel = null
+    this.codeBuf = ""
+    this.state = "duellobby"
+    this.audio.ui()
+  }
+
+  private newDuelSession(code: string, seed: number, role: "host" | "guest", oppName = "", startInMs: number | null = null): DuelSession {
+    return {
+      code, seed, role, oppName,
+      startAtLocal: startInMs === null ? null : performance.now() + startInMs,
+      opp: null, oppD: 0, postT: 0, busy: false,
+      lastSeen: performance.now(), iCrashed: false, scoreSent: false,
+      result: null, msg: "",
+    }
+  }
+
+  private duelCreate() {
+    const nome = this.cfg.pilotName || "PILOTO"
+    this.state = "duelwaiting"
+    this.duel = this.newDuelSession("....", 0, "host")
+    createRoom(nome).then((r) => {
+      if (this.destroyed || this.state !== "duelwaiting") return
+      this.duel = this.newDuelSession(r.code, r.seed, "host")
+    }).catch((e: Error) => {
+      this.state = "duellobby"
+      this.duel = null
+      this.floaters.push({ text: e.message || "erro ao criar sala", color: "#ef4444", y: H * 0.6, life: 2, big: false })
+    })
+  }
+
+  private duelJoin() {
+    const code = this.codeBuf.trim().toUpperCase()
+    if (code.length !== 4) {
+      this.floaters.push({ text: "código tem 4 letras", color: "#ef4444", y: H * 0.68, life: 1.5, big: false })
+      return
+    }
+    const nome = this.cfg.pilotName || "PILOTO"
+    joinRoom(code, nome).then((r) => {
+      if (this.destroyed) return
+      this.duel = this.newDuelSession(code, r.seed, "guest", r.oppName, r.startInMs)
+      this.state = "duelwaiting"
+      this.audio.ui()
+    }).catch((e: Error) => {
+      this.floaters.push({ text: e.message || "não rolou entrar", color: "#ef4444", y: H * 0.68, life: 2, big: false })
+    })
+  }
+
+  private startRace(seed?: number) {
+    this.buildTrack(seed)
     this.seedTraffic(14)
     this.position = 0
     this.speed = 0
@@ -737,7 +929,8 @@ export class AutoDashEngine {
     this.audio.rain(false)
     this.particles = []; this.floaters = []
     this.countT = 0
-    this.greenAt = 2.4 + 0.7 + Math.random() * 0.9
+    // no duelo o verde é fixo pra manter os dois relógios alinhados
+    this.greenAt = this.mode === "duel" ? 3.3 : 2.4 + 0.7 + Math.random() * 0.9
     this.greenFired = false
     this.state = "countdown"
   }
@@ -810,6 +1003,10 @@ export class AutoDashEngine {
   private render() {
     const ctx = this.ctx
     this.uiRegions = []
+    if (this.state !== this.prevState) {
+      this.prevState = this.state
+      this.fadeT = 0.22
+    }
     const sky = this.skyNow()
     const amb = sky.amb
 
@@ -875,19 +1072,31 @@ export class AutoDashEngine {
       case "paused": this.renderHud(); this.renderPause(); break
       case "gameover": this.renderGameOver(); break
       case "nameentry": this.renderNameEntry(); break
+      case "duellobby": this.renderDuelLobby(); break
+      case "duelcode": this.renderDuelCode(); break
+      case "duelwaiting": this.renderDuelWaiting(); break
+      case "duelspectate": this.renderDuelSpectate(); break
+      case "duelresult": this.renderDuelResult(); break
     }
 
     // floaters por cima de tudo
     const ctx2 = this.ctx
     for (const f of this.floaters) {
       ctx2.globalAlpha = clamp(f.life / 0.4, 0, 1)
-      ctx2.font = `bold ${f.big ? 34 : 20}px 'Segoe UI', sans-serif`
+      ctx2.font = `bold ${f.big ? 34 : 20}px 'Space Grotesk', 'Segoe UI', sans-serif`
       ctx2.fillStyle = f.color
       ctx2.textAlign = "center"
       ctx2.fillText(f.text, W / 2, f.y)
       ctx2.globalAlpha = 1
     }
     ctx2.textAlign = "left"
+
+    // fade suave na troca de tela
+    if (this.fadeT > 0) {
+      this.fadeT -= 1 / 60
+      ctx2.fillStyle = `rgba(2,6,23,${clamp(this.fadeT / 0.22, 0, 1) * 0.65})`
+      ctx2.fillRect(0, 0, W, H)
+    }
   }
 
   private renderRoad(amb: number, fogColor: string) {
@@ -917,7 +1126,7 @@ export class AutoDashEngine {
     let dx = -(this.segments[baseIdx].curve * basePct)
     let maxY = H + 10
 
-    interface SpriteDraw { kind: "car" | "pu" | "deco"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; x: number; y: number; w: number }
+    interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; x: number; y: number; w: number }
     const sprites: SpriteDraw[] = []
     // buckets de tráfego e powerups por segmento
     const bySeg = new Map<number, Traffic[]>()
@@ -935,6 +1144,15 @@ export class AutoDashEngine {
     // bordas da pista acumuladas para o passe de brilho do asfalto
     const edgeL: number[] = []
     const edgeR: number[] = []
+
+    // fantasma do rival no duelo (mesma pista via seed)
+    let ghostIdx = -1, ghostZ = 0, ghostX = 0
+    const d = this.duel
+    if (this.mode === "duel" && d?.opp && (this.state === "racing" || this.state === "countdown" || this.state === "duelspectate" || this.state === "paused")) {
+      ghostZ = ((d.oppD * KMH2UPS * 3600) % this.trackLen + this.trackLen) % this.trackLen
+      ghostIdx = Math.floor(ghostZ / SEG_LEN) % N
+      ghostX = clamp(d.opp.x, -1.2, 1.2)
+    }
 
     for (let n = 0; n < DRAW_DIST; n++) {
       const idx = (baseIdx + n) % N
@@ -1007,6 +1225,13 @@ export class AutoDashEngine {
           const sw = sw1 + (sw2 - sw1) * pct
           sprites.push({ kind: "car", t, x: sx + sw * t.offset, y: sy, w: sw * KINDS[t.kind].w })
         }
+      }
+      if (idx === ghostIdx) {
+        const pct = (ghostZ - z1) / SEG_LEN
+        const sx = sx1 + (sx2 - sx1) * pct
+        const sy = sy1 + (sy2 - sy1) * pct
+        const sw = sw1 + (sw2 - sw1) * pct
+        sprites.push({ kind: "ghost", x: sx + sw * ghostX, y: sy, w: sw * 0.26 })
       }
       const pusHere = puBySeg.get(idx)
       if (pusHere) {
@@ -1082,6 +1307,7 @@ export class AutoDashEngine {
       const s = sprites[i]
       if (s.kind === "car") this.drawTraffic(s.t!, s.x, s.y, s.w, amb)
       else if (s.kind === "pu") this.drawPickup(s.p!, s.x, s.y, s.w, amb)
+      else if (s.kind === "ghost") this.drawGhost(s.x, s.y, s.w, amb)
       else this.drawDeco(s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
     }
 
@@ -1193,7 +1419,7 @@ export class AutoDashEngine {
       ctx.lineTo(x - r * 0.45, cy - r * 0.25)
       ctx.closePath(); ctx.fill()
     } else {
-      ctx.font = `bold ${Math.max(8, r * 0.9)}px 'Segoe UI', sans-serif`
+      ctx.font = `bold ${Math.max(8, r * 0.9)}px 'Space Grotesk', 'Segoe UI', sans-serif`
       ctx.textAlign = "center"
       ctx.fillText("2X", x, cy + r * 0.32)
       ctx.textAlign = "left"
@@ -1239,7 +1465,7 @@ export class AutoDashEngine {
       ctx.strokeRect(x - w / 2, y - h * 2.1, w, h)
       if (w > 34) {
         ctx.fillStyle = shade("#e0342f", amb + 0.25)
-        ctx.font = `900 ${h * 0.42}px 'Segoe UI', sans-serif`
+        ctx.font = `900 ${h * 0.42}px 'Space Grotesk', 'Segoe UI', sans-serif`
         ctx.textAlign = "center"
         ctx.fillText("AUTOHUB", x, y - h * 1.55)
         ctx.textAlign = "left"
@@ -1260,6 +1486,32 @@ export class AutoDashEngine {
         ctx.lineTo(x + off - dir * w * 0.1, cy + h * 0.2)
         ctx.stroke()
       }
+    }
+  }
+
+  /** Carro fantasma do rival: translúcido, com o nome flutuando. */
+  private drawGhost(x: number, y: number, w: number, amb: number) {
+    if (w < 3) return
+    const ctx = this.ctx
+    const d = this.duel
+    const h = w * 0.8
+    ctx.globalAlpha = 0.55
+    ctx.fillStyle = "rgba(0,0,0,0.3)"
+    ctx.beginPath(); ctx.ellipse(x, y, w * 0.6, w * 0.1, 0, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = shade("#38bdf8", Math.max(0.55, amb))
+    rr(ctx, x - w / 2, y - h, w, h * 0.95, w * 0.16)
+    ctx.fillStyle = shade("#0f172a", Math.max(0.6, amb))
+    rr(ctx, x - w * 0.34, y - h * 0.88, w * 0.68, h * 0.3, w * 0.08)
+    ctx.fillStyle = "rgba(255,60,48,0.8)"
+    rr(ctx, x - w * 0.42, y - h * 0.16, w * 0.22, h * 0.08, 2)
+    rr(ctx, x + w * 0.20, y - h * 0.16, w * 0.22, h * 0.08, 2)
+    ctx.globalAlpha = 1
+    if (w > 10 && d) {
+      ctx.fillStyle = "rgba(56,189,248,0.95)"
+      ctx.font = `bold ${Math.max(9, w * 0.16)}px 'Space Grotesk', sans-serif`
+      ctx.textAlign = "center"
+      ctx.fillText(d.oppName || "RIVAL", x, y - h - 6)
+      ctx.textAlign = "left"
     }
   }
 
@@ -1338,7 +1590,7 @@ export class AutoDashEngine {
       ctx.moveTo(x, ty - s); ctx.lineTo(x + s * 0.9, ty + s * 0.6); ctx.lineTo(x - s * 0.9, ty + s * 0.6)
       ctx.closePath(); ctx.fill()
       ctx.fillStyle = "#fff"
-      ctx.font = `bold ${s * 1.1}px 'Segoe UI', sans-serif`
+      ctx.font = `bold ${s * 1.1}px 'Space Grotesk', 'Segoe UI', sans-serif`
       ctx.textAlign = "center"
       ctx.fillText("!", x, ty + s * 0.45)
       ctx.textAlign = "left"
@@ -1426,7 +1678,7 @@ export class AutoDashEngine {
     ctx.lineWidth = 1
     ctx.beginPath(); ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2); ctx.stroke()
     ctx.fillStyle = opts.primary ? "#1c1917" : "#f8fafc"
-    ctx.font = `bold ${opts.font ?? 13}px 'Segoe UI', sans-serif`
+    ctx.font = `bold ${opts.font ?? 13}px 'Space Grotesk', 'Segoe UI', sans-serif`
     ctx.textAlign = "center"
     ctx.fillText(label, x + w / 2, y + h / 2 + (opts.font ?? 13) * 0.36)
     ctx.textAlign = "left"
@@ -1441,7 +1693,7 @@ export class AutoDashEngine {
     ctx.fillStyle = hov ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.10)"
     rr(ctx, x, y, s, s, 12)
     ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 22px 'Segoe UI', sans-serif"
+    ctx.font = "bold 22px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.textAlign = "center"
     ctx.fillText(dir < 0 ? "◀" : "▶", x + s / 2, y + s / 2 + 8)
     ctx.textAlign = "left"
@@ -1453,9 +1705,9 @@ export class AutoDashEngine {
     // placar
     this.glass(14, 12, 210, 62)
     ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 24px 'Segoe UI', sans-serif"
+    ctx.font = "bold 24px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(`${Math.floor(this.score).toLocaleString("pt-BR")}`, 28, 40)
-    ctx.font = "13px 'Segoe UI', sans-serif"
+    ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillStyle = "rgba(248,250,252,0.65)"
     const best = this.scores[0]
     ctx.fillText(`recorde ${best ? best.score.toLocaleString("pt-BR") : 0}  ·  ${this.km.toFixed(1)} km`, 28, 62)
@@ -1463,7 +1715,7 @@ export class AutoDashEngine {
     // combo
     if (this.combo > 0) {
       ctx.fillStyle = "#fde047"
-      ctx.font = "bold 26px 'Segoe UI', sans-serif"
+      ctx.font = "bold 26px 'Space Grotesk', 'Segoe UI', sans-serif"
       ctx.fillText(`x${1 + this.combo}`, 240, 42)
       ctx.fillStyle = "rgba(253,224,71,0.35)"
       ctx.fillRect(240, 50, 52, 5)
@@ -1474,9 +1726,9 @@ export class AutoDashEngine {
     // clima/hora + badges
     const sky = this.skyNow()
     ctx.textAlign = "right"
-    ctx.font = "20px 'Segoe UI', sans-serif"
+    ctx.font = "20px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(this.raining ? "🌧" : sky.amb < 0.6 ? "🌙" : "☀️", W - 20, 34)
-    ctx.font = "bold 13px 'Segoe UI', sans-serif"
+    ctx.font = "bold 13px 'Space Grotesk', 'Segoe UI', sans-serif"
     let by = 58
     ctx.fillStyle = "rgba(248,250,252,0.6)"
     ctx.fillText(`NÍVEL ${this.level + 1}`, W - 20, by); by += 20
@@ -1490,7 +1742,7 @@ export class AutoDashEngine {
       if (!urgent || Math.floor(performance.now() / 180) % 2 === 0) {
         ctx.textAlign = "center"
         ctx.fillStyle = urgent ? "#ef4444" : "#facc15"
-        ctx.font = "bold 24px 'Segoe UI', sans-serif"
+        ctx.font = "bold 24px 'Space Grotesk', 'Segoe UI', sans-serif"
         const arrows = this.curveWarn > 0 ? "▶▶" : "◀◀"
         ctx.fillText(`${arrows}  CURVA ${this.curveWarn > 0 ? "À DIREITA" : "À ESQUERDA"}  ${arrows}`, W / 2, 92)
         ctx.textAlign = "left"
@@ -1508,8 +1760,39 @@ export class AutoDashEngine {
     ctx.fillStyle = this.nitroOn && this.nitroMeter > 1 ? "#fb923c" : "#38bdf8"
     if (nfill > 2) rr(ctx, nx, ny + nh - nfill, 22, nfill, 8)
     ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 11px 'Segoe UI', sans-serif"
+    ctx.font = "bold 11px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("NOS", nx + 1, ny + nh + 18)
+
+    if (this.mode === "duel" && this.duel) this.renderDuelBar()
+  }
+
+  /** Barra do duelo: você × rival, com delta em metros ao vivo. */
+  private renderDuelBar() {
+    const ctx = this.ctx
+    const d = this.duel!
+    const bw = 380, bx = W / 2 - bw / 2, byy = this.state === "countdown" ? 128 : 10
+    this.glass(bx, byy, bw, 46, 12)
+    const myName = (this.cfg.pilotName || "VOCÊ").slice(0, 10)
+    const oppName = (d.oppName || "RIVAL").slice(0, 10)
+    const deltaM = Math.round((this.km - d.oppD) * 1000)
+    ctx.font = "bold 13px 'Space Grotesk', sans-serif"
+    ctx.fillStyle = "#38bdf8"
+    ctx.fillText(myName, bx + 14, byy + 19)
+    ctx.font = "11px 'Space Grotesk', sans-serif"
+    ctx.fillStyle = "rgba(248,250,252,0.8)"
+    ctx.fillText(`${this.km.toFixed(2)} km`, bx + 14, byy + 36)
+    ctx.textAlign = "right"
+    ctx.font = "bold 13px 'Space Grotesk', sans-serif"
+    ctx.fillStyle = d.opp?.c ? "rgba(239,68,68,0.9)" : "#f472b6"
+    ctx.fillText(d.opp?.c ? `${oppName} 💥` : oppName, bx + bw - 14, byy + 19)
+    ctx.font = "11px 'Space Grotesk', sans-serif"
+    ctx.fillStyle = "rgba(248,250,252,0.8)"
+    ctx.fillText(d.opp ? `${d.oppD.toFixed(2)} km` : "conectando...", bx + bw - 14, byy + 36)
+    ctx.textAlign = "center"
+    ctx.font = "bold 15px 'Space Grotesk', sans-serif"
+    ctx.fillStyle = deltaM >= 0 ? "#4ade80" : "#ef4444"
+    ctx.fillText(deltaM >= 0 ? `+${deltaM}m` : `${deltaM}m`, bx + bw / 2, byy + 29)
+    ctx.textAlign = "left"
   }
 
   private renderTacho() {
@@ -1541,7 +1824,7 @@ export class AutoDashEngine {
     ctx.shadowBlur = 0
     // ticks
     ctx.fillStyle = "rgba(248,250,252,0.7)"
-    ctx.font = "10px 'Segoe UI', sans-serif"
+    ctx.font = "10px 'Space Grotesk', 'Segoe UI', sans-serif"
     for (let i = 0; i <= 8; i++) {
       const a = a0 + (a1 - a0) * (i / 8)
       const tx = cx + Math.cos(a) * (r - 16), ty = cy + Math.sin(a) * (r - 16)
@@ -1560,26 +1843,26 @@ export class AutoDashEngine {
     ctx.beginPath(); ctx.arc(cx, cy, 22, 0, Math.PI * 2); ctx.fill()
     // marcha
     ctx.fillStyle = this.shiftT > 0 ? "#fde047" : "#f8fafc"
-    ctx.font = "bold 28px 'Segoe UI', sans-serif"
+    ctx.font = "bold 28px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.textAlign = "center"
     ctx.fillText(this.gear === 0 ? "N" : String(this.gear), cx, cy + 10)
     // velocidade
     ctx.fillStyle = "#f8fafc"
-    ctx.font = "italic 900 23px 'Segoe UI', sans-serif"
+    ctx.font = "italic 900 23px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(String(Math.round(this.speed)), cx, cy + r - 8)
-    ctx.font = "10px 'Segoe UI', sans-serif"
+    ctx.font = "10px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillStyle = "rgba(248,250,252,0.6)"
     ctx.fillText("km/h", cx, cy + r + 6)
     ctx.textAlign = "left"
     // modo de câmbio
     ctx.fillStyle = "rgba(248,250,252,0.5)"
-    ctx.font = "bold 10px 'Segoe UI', sans-serif"
+    ctx.font = "bold 10px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(this.cfg.transmission === "auto" ? "AUTO" : "SEQ", cx - 16, cy - r - 20)
 
     if (this.goFlashT > 0) {
       ctx.globalAlpha = clamp(this.goFlashT, 0, 1)
       ctx.fillStyle = "#4ade80"
-      ctx.font = "900 54px 'Segoe UI', sans-serif"
+      ctx.font = "900 54px 'Space Grotesk', 'Segoe UI', sans-serif"
       ctx.textAlign = "center"
       ctx.fillText("GO!", W / 2, H * 0.3)
       ctx.textAlign = "left"
@@ -1605,13 +1888,13 @@ export class AutoDashEngine {
     if (this.greenFired) {
       ctx.fillStyle = "#4ade80"
       for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(cx - 44 + i * 44, top + 27, 16, 0, Math.PI * 2); ctx.fill() }
-      ctx.font = "bold 30px 'Segoe UI', sans-serif"
+      ctx.font = "bold 30px 'Space Grotesk', 'Segoe UI', sans-serif"
       ctx.textAlign = "center"
       ctx.fillText("GO!", cx, top + 100)
       ctx.textAlign = "left"
     } else if (this.countT > 0.5) {
       ctx.fillStyle = "rgba(248,250,252,0.85)"
-      ctx.font = "bold 15px 'Segoe UI', sans-serif"
+      ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
       ctx.textAlign = "center"
       ctx.fillText("segura o giro na faixa verde e solta no verde!", cx, top + 82)
       const zx = cx - 90
@@ -1642,11 +1925,11 @@ export class AutoDashEngine {
     ctx.shadowColor = "rgba(224,52,47,0.6)"
     ctx.shadowBlur = 34
     ctx.fillStyle = tg
-    ctx.font = "italic 900 78px 'Segoe UI', sans-serif"
+    ctx.font = "italic 900 78px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("AUTODASH", W / 2, 180)
     ctx.shadowBlur = 0
     ctx.fillStyle = "rgba(255,255,255,0.25)"
-    ctx.font = "italic 900 78px 'Segoe UI', sans-serif"
+    ctx.font = "italic 900 78px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.save()
     ctx.scale(1, -0.28)
     ctx.globalAlpha = 0.18
@@ -1654,13 +1937,14 @@ export class AutoDashEngine {
     ctx.restore()
     ctx.globalAlpha = 1
     ctx.fillStyle = "rgba(248,250,252,0.85)"
-    ctx.font = "18px 'Segoe UI', sans-serif"
+    ctx.font = "18px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("costure o trânsito · respeite o câmbio · sobreviva", W / 2, 214)
     ctx.textAlign = "left"
-    this.pill("BORA CORRER  [ENTER]", W / 2 - 150, 292, 300, () => this.enterFromMenu(), { primary: true, h: 46, font: 18 })
+    this.pill("BORA CORRER  [ENTER]", W / 2 - 150, 286, 300, () => this.enterFromMenu("garage"), { primary: true, h: 46, font: 18 })
+    this.pill("⚔ DUELO ONLINE  [D]", W / 2 - 150, 342, 300, () => this.enterFromMenu("duellobby"), { h: 38, font: 15 })
     ctx.textAlign = "center"
     ctx.fillStyle = "rgba(248,250,252,0.6)"
-    ctx.font = "14px 'Segoe UI', sans-serif"
+    ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("🖱 esq acelera · dir freia · scroll troca marcha · botão do meio = neutro", W / 2, 440)
     ctx.fillText("⌨ A/D ou ←→ dirigem · W/S gás/freio · Q/E marchas · ESPAÇO nitro · F farol alto", W / 2, 464)
     if (this.cfg.pilotName) {
@@ -1684,10 +1968,10 @@ export class AutoDashEngine {
 
     ctx.textAlign = "center"
     ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 30px 'Segoe UI', sans-serif"
+    ctx.font = "bold 30px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("GARAGEM", W / 2, 44)
     ctx.fillStyle = "rgba(248,250,252,0.55)"
-    ctx.font = "14px 'Segoe UI', sans-serif"
+    ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(`${this.cfg.carIdx + 1} / ${CARS.length}`, 240, 78)
     ctx.textAlign = "left"
 
@@ -1707,15 +1991,16 @@ export class AutoDashEngine {
 
     ctx.textAlign = "center"
     ctx.fillStyle = PAINTS[custom.paint]
-    ctx.font = "bold 25px 'Segoe UI', sans-serif"
+    ctx.font = "bold 25px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(spec.name, px, 392)
     ctx.fillStyle = "rgba(248,250,252,0.7)"
-    ctx.font = "italic 13px 'Segoe UI', sans-serif"
+    ctx.font = "italic 13px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(spec.desc, px, 414)
     ctx.textAlign = "left"
 
     this.pill(`piloto: ${this.cfg.pilotName || "?"} · trocar [N]`, 120, 430, 240, () => {
       this.nameBuf = this.cfg.pilotName
+      this.afterName = "garage"
       this.state = "nameentry"
       this.audio.ui()
     })
@@ -1726,7 +2011,7 @@ export class AutoDashEngine {
     const sx = 510
     const stat = (label: string, frac: number, x: number, y: number, invert = false) => {
       ctx.fillStyle = "rgba(248,250,252,0.75)"
-      ctx.font = "11px 'Segoe UI', sans-serif"
+      ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
       ctx.fillText(label, x, y - 4)
       ctx.fillStyle = "rgba(148,163,184,0.25)"
       rr(ctx, x, y, 190, 9, 5)
@@ -1740,7 +2025,7 @@ export class AutoDashEngine {
 
     // pintura e rodas — chips clicáveis
     ctx.fillStyle = "rgba(248,250,252,0.75)"
-    ctx.font = "bold 11px 'Segoe UI', sans-serif"
+    ctx.font = "bold 11px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("PINTURA [C]", sx, 176)
     for (let i = 0; i < PAINTS.length; i++) {
       const cxp = sx + 10 + i * 26, cyp = 196
@@ -1776,9 +2061,9 @@ export class AutoDashEngine {
 
     // leaderboard global
     ctx.fillStyle = "rgba(253,224,71,0.9)"
-    ctx.font = "bold 12px 'Segoe UI', sans-serif"
+    ctx.font = "bold 12px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("🌐 TOP 10 GLOBAL", sx, 348)
-    ctx.font = "11px 'Segoe UI', sans-serif"
+    ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillStyle = "rgba(248,250,252,0.7)"
     if (this.scores.length === 0) ctx.fillText("— ainda sem recordes, seja o primeiro —", sx, 368)
     this.scores.slice(0, 10).forEach((s, i) => {
@@ -1792,7 +2077,7 @@ export class AutoDashEngine {
     this.dim()
     ctx.textAlign = "center"
     ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 46px 'Segoe UI', sans-serif"
+    ctx.font = "bold 46px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("PAUSADO", W / 2, H / 2 - 60)
     ctx.textAlign = "left"
     this.pill("CONTINUAR  [ESC]", W / 2 - 115, H / 2 - 20, 230, () => { this.state = "racing" }, { primary: true, h: 38, font: 15 })
@@ -1805,24 +2090,24 @@ export class AutoDashEngine {
     this.dim(0.6)
     ctx.textAlign = "center"
     ctx.fillStyle = "#ef4444"
-    ctx.font = "900 56px 'Segoe UI', sans-serif"
+    ctx.font = "900 56px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("BATEU!", W / 2, 150)
     ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 30px 'Segoe UI', sans-serif"
+    ctx.font = "bold 30px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(`${Math.floor(this.score).toLocaleString("pt-BR")} pontos`, W / 2, 210)
-    ctx.font = "16px 'Segoe UI', sans-serif"
+    ctx.font = "16px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillStyle = "rgba(248,250,252,0.7)"
     ctx.fillText(`${this.km.toFixed(1)} km percorridos, ${this.cfg.pilotName || "PILOTO"}`, W / 2, 240)
     if (this.newRecord) {
       ctx.fillStyle = "#fde047"
-      ctx.font = "900 24px 'Segoe UI', sans-serif"
+      ctx.font = "900 24px 'Space Grotesk', 'Segoe UI', sans-serif"
       ctx.fillText("★ NOVO RECORDE! ★", W / 2, 272)
     }
 
     ctx.fillStyle = "rgba(253,224,71,0.9)"
-    ctx.font = "bold 15px 'Segoe UI', sans-serif"
+    ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("— 🌐 TOP 10 GLOBAL —", W / 2, 300)
-    ctx.font = "13px 'Segoe UI', sans-serif"
+    ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
     this.scores.slice(0, 10).forEach((s, i) => {
       ctx.fillStyle = s.name === this.cfg.pilotName ? "rgba(253,224,71,0.95)" : "rgba(248,250,252,0.8)"
       ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, W / 2, 322 + i * 16)
@@ -1840,9 +2125,9 @@ export class AutoDashEngine {
     this.glass(W / 2 - 230, 140, 460, 270, 20)
     ctx.textAlign = "center"
     ctx.fillStyle = "#fde047"
-    ctx.font = "900 38px 'Segoe UI', sans-serif"
+    ctx.font = "900 38px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("QUEM TÁ PILOTANDO?", W / 2, 200)
-    ctx.font = "14px 'Segoe UI', sans-serif"
+    ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillStyle = "rgba(248,250,252,0.7)"
     ctx.fillText("seu nome fica salvo neste navegador e assina seus recordes", W / 2, 232)
     const cursor = Math.floor(performance.now() / 400) % 2 === 0 ? "▌" : " "
@@ -1852,12 +2137,136 @@ export class AutoDashEngine {
     ctx.fillStyle = "rgba(255,255,255,0.25)"
     ctx.fillRect(W / 2 - 150, 320, 300, 2)
     ctx.textAlign = "left"
-    this.pill("PRA GARAGEM  [ENTER]", W / 2 - 115, 352, 230, () => {
-      this.cfg.pilotName = (this.nameBuf.trim() || "PILOTO").slice(0, 12)
-      saveConfig(this.cfg)
-      this.state = "garage"
-      this.audio.ui()
-    }, { primary: true, h: 36, font: 14 })
+    this.pill("CONFIRMAR  [ENTER]", W / 2 - 115, 352, 230, () => this.confirmName(), { primary: true, h: 36, font: 14 })
+  }
+
+  // ---------- telas do duelo ----------
+  private toMenu() {
+    this.mode = "solo"
+    this.duel = null
+    this.floaters = []
+    this.state = "menu"
+  }
+
+  private renderDuelLobby() {
+    const ctx = this.ctx
+    this.dim(0.62)
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#38bdf8"
+    ctx.font = "900 44px 'Space Grotesk', sans-serif"
+    ctx.fillText("DUELO ONLINE", W / 2, 150)
+    ctx.fillStyle = "rgba(248,250,252,0.75)"
+    ctx.font = "15px 'Space Grotesk', sans-serif"
+    ctx.fillText("dois pilotos, mesma pista, largada junta.", W / 2, 186)
+    ctx.fillText("quem for mais longe sem bater, leva.", W / 2, 208)
+    ctx.textAlign = "left"
+    this.pill("CRIAR SALA", W / 2 - 150, 260, 300, () => this.duelCreate(), { primary: true, h: 44, font: 17 })
+    this.pill("TENHO UM CÓDIGO", W / 2 - 150, 316, 300, () => { this.codeBuf = ""; this.state = "duelcode"; this.audio.ui() }, { h: 38, font: 15 })
+    this.pill("← voltar  [ESC]", W / 2 - 150, 368, 300, () => this.toMenu(), { h: 30 })
+  }
+
+  private renderDuelCode() {
+    const ctx = this.ctx
+    this.dim(0.7)
+    this.glass(W / 2 - 210, 150, 420, 250, 20)
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#38bdf8"
+    ctx.font = "900 30px 'Space Grotesk', sans-serif"
+    ctx.fillText("CÓDIGO DA SALA", W / 2, 204)
+    const cursor = Math.floor(performance.now() / 400) % 2 === 0 ? "▌" : " "
+    ctx.fillStyle = "#f8fafc"
+    ctx.font = "bold 44px 'Consolas', monospace"
+    ctx.fillText(this.codeBuf + cursor, W / 2, 282)
+    ctx.fillStyle = "rgba(255,255,255,0.25)"
+    ctx.fillRect(W / 2 - 90, 296, 180, 2)
+    ctx.textAlign = "left"
+    this.pill("ENTRAR  [ENTER]", W / 2 - 110, 330, 220, () => this.duelJoin(), { primary: true, h: 34, font: 14 })
+    this.pill("← voltar", W / 2 - 110, 372, 220, () => { this.state = "duellobby" }, { h: 26 })
+  }
+
+  private renderDuelWaiting() {
+    const ctx = this.ctx
+    const d = this.duel
+    this.dim(0.66)
+    ctx.textAlign = "center"
+    if (!d) { this.state = "duellobby"; return }
+    if (d.startAtLocal === null) {
+      ctx.fillStyle = "rgba(248,250,252,0.8)"
+      ctx.font = "16px 'Space Grotesk', sans-serif"
+      ctx.fillText(d.code === "...." ? "criando sala..." : "manda esse código pro seu rival:", W / 2, 170)
+      ctx.fillStyle = "#fde047"
+      ctx.font = "900 84px 'Consolas', monospace"
+      if (d.code !== "....") ctx.fillText(d.code, W / 2, 268)
+      const dots = ".".repeat(1 + (Math.floor(performance.now() / 400) % 3))
+      ctx.fillStyle = "rgba(248,250,252,0.6)"
+      ctx.font = "16px 'Space Grotesk', sans-serif"
+      ctx.fillText(`esperando oponente${dots}`, W / 2, 330)
+      ctx.textAlign = "left"
+      this.pill("cancelar  [ESC]", W / 2 - 100, 370, 200, () => this.toMenu(), { h: 28 })
+    } else {
+      const secs = Math.max(0, (d.startAtLocal - performance.now()) / 1000)
+      ctx.fillStyle = "#4ade80"
+      ctx.font = "900 40px 'Space Grotesk', sans-serif"
+      ctx.fillText(`${d.oppName} ENTROU!`, W / 2, 220)
+      ctx.fillStyle = "#f8fafc"
+      ctx.font = "bold 64px 'Space Grotesk', sans-serif"
+      ctx.fillText(secs.toFixed(1), W / 2, 300)
+      ctx.fillStyle = "rgba(248,250,252,0.7)"
+      ctx.font = "15px 'Space Grotesk', sans-serif"
+      ctx.fillText("prepara o dedo no acelerador...", W / 2, 340)
+      ctx.textAlign = "left"
+    }
+  }
+
+  private renderDuelSpectate() {
+    const ctx = this.ctx
+    const d = this.duel
+    this.dim(0.55)
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#ef4444"
+    ctx.font = "900 44px 'Space Grotesk', sans-serif"
+    ctx.fillText("VOCÊ BATEU!", W / 2, 170)
+    ctx.fillStyle = "#f8fafc"
+    ctx.font = "bold 22px 'Space Grotesk', sans-serif"
+    ctx.fillText(`sua marca: ${this.km.toFixed(2)} km · ${Math.floor(this.score).toLocaleString("pt-BR")} pts`, W / 2, 220)
+    if (d) {
+      const dots = ".".repeat(1 + (Math.floor(performance.now() / 400) % 3))
+      ctx.fillStyle = "#f472b6"
+      ctx.font = "bold 26px 'Space Grotesk', sans-serif"
+      ctx.fillText(`${d.oppName || "RIVAL"} ainda está correndo${dots}`, W / 2, 290)
+      ctx.fillStyle = "rgba(248,250,252,0.85)"
+      ctx.font = "bold 34px 'Space Grotesk', sans-serif"
+      ctx.fillText(`${d.oppD.toFixed(2)} km`, W / 2, 336)
+      const lead = this.km - d.oppD
+      ctx.font = "15px 'Space Grotesk', sans-serif"
+      ctx.fillStyle = lead > 0 ? "#4ade80" : "#ef4444"
+      ctx.fillText(lead > 0 ? `ele ainda precisa de ${Math.round(lead * 1000)}m pra te passar` : "ele já passou a sua marca...", W / 2, 372)
+    }
+    ctx.textAlign = "left"
+  }
+
+  private renderDuelResult() {
+    const ctx = this.ctx
+    const d = this.duel
+    this.dim(0.66)
+    ctx.textAlign = "center"
+    const win = d?.result === "win"
+    ctx.fillStyle = win ? "#4ade80" : "#ef4444"
+    ctx.font = "900 72px 'Space Grotesk', sans-serif"
+    ctx.fillText(win ? "VITÓRIA!" : "DERROTA", W / 2, 190)
+    if (d) {
+      ctx.fillStyle = "#f8fafc"
+      ctx.font = "bold 22px 'Space Grotesk', sans-serif"
+      ctx.fillText(`você: ${this.km.toFixed(2)} km   ·   ${d.oppName || "rival"}: ${d.oppD.toFixed(2)} km`, W / 2, 250)
+      if (d.msg) {
+        ctx.fillStyle = "rgba(248,250,252,0.6)"
+        ctx.font = "14px 'Space Grotesk', sans-serif"
+        ctx.fillText(d.msg, W / 2, 284)
+      }
+    }
+    ctx.textAlign = "left"
+    this.pill("REVANCHE (nova sala)", W / 2 - 240, 340, 240, () => this.startDuelLobby(), { primary: true, h: 40, font: 15 })
+    this.pill("MENU", W / 2 + 20, 340, 220, () => this.toMenu(), { h: 40, font: 15 })
   }
 
   // ---------- input ----------
@@ -1868,12 +2277,16 @@ export class AutoDashEngine {
 
     if (this.state === "nameentry") {
       if (k === "enter") {
-        this.cfg.pilotName = (this.nameBuf.trim() || "PILOTO").slice(0, 12)
-        saveConfig(this.cfg)
-        this.state = "garage"
-        this.audio.ui()
+        this.confirmName()
       } else if (k === "backspace") this.nameBuf = this.nameBuf.slice(0, -1)
       else if (/^[a-z0-9 _-]$/i.test(e.key) && this.nameBuf.length < 12) this.nameBuf += e.key.toUpperCase()
+      return
+    }
+    if (this.state === "duelcode") {
+      if (k === "enter") this.duelJoin()
+      else if (k === "escape") this.state = "duellobby"
+      else if (k === "backspace") this.codeBuf = this.codeBuf.slice(0, -1)
+      else if (/^[a-z0-9]$/i.test(e.key) && this.codeBuf.length < 4) this.codeBuf += e.key.toUpperCase()
       return
     }
 
@@ -1883,7 +2296,18 @@ export class AutoDashEngine {
 
     switch (this.state) {
       case "menu":
-        if (k === "enter") { this.enterFromMenu() }
+        if (k === "enter") this.enterFromMenu("garage")
+        if (k === "d") this.enterFromMenu("duellobby")
+        break
+      case "duellobby":
+        if (k === "escape") this.toMenu()
+        break
+      case "duelwaiting":
+        if (k === "escape") this.toMenu()
+        break
+      case "duelresult":
+        if (k === "enter") this.startDuelLobby()
+        if (k === "m" || k === "escape") this.toMenu()
         break
       case "garage": {
         const custom = this.cfg.customs[this.cfg.carIdx]
@@ -1896,7 +2320,7 @@ export class AutoDashEngine {
         if (k === "g") { custom.wing = (custom.wing + 1) % WINGS.length; this.audio.ui() }
         if (k === "t") { this.cfg.transmission = this.cfg.transmission === "auto" ? "manual" : "auto"; this.audio.ui() }
         if (k === "y") { this.cfg.steering = this.cfg.steering === "mouse" ? "keyboard" : "mouse"; this.audio.ui() }
-        if (k === "n") { this.nameBuf = this.cfg.pilotName; this.state = "nameentry"; this.audio.ui() }
+        if (k === "n") { this.nameBuf = this.cfg.pilotName; this.afterName = "garage"; this.state = "nameentry"; this.audio.ui() }
         if (["c", "v", "b", "r", "g", "t", "y"].includes(k) || k.startsWith("arrow")) saveConfig(this.cfg)
         if (k === "enter") startAndSave(this)
         if (k === "escape") this.state = "menu"
@@ -1904,7 +2328,14 @@ export class AutoDashEngine {
       }
       case "racing":
       case "countdown":
-        if (k === "escape" || k === "p") { this.state = "paused"; this.audio.uiLow() }
+        if (k === "escape" || k === "p") {
+          if (this.mode === "duel") {
+            this.floaters.push({ text: "sem pause no duelo! 😅", color: "#f472b6", y: H * 0.4, life: 1.2, big: false })
+          } else {
+            this.state = "paused"
+            this.audio.uiLow()
+          }
+        }
         if (k === "q") this.tryShift(-1)
         if (k === "e") this.tryShift(1)
         if (k === "n") this.toNeutral()
@@ -1928,14 +2359,26 @@ export class AutoDashEngine {
     }
   }
 
-  private enterFromMenu() {
+  private enterFromMenu(dest: "garage" | "duellobby" = "garage") {
     this.audio.ui()
     if (!this.cfg.pilotName) {
       this.nameBuf = ""
+      this.afterName = dest
       this.state = "nameentry"
+    } else if (dest === "duellobby") {
+      this.startDuelLobby()
     } else {
       this.state = "garage"
     }
+  }
+
+  private confirmName() {
+    this.cfg.pilotName = (this.nameBuf.trim() || "PILOTO").slice(0, 12)
+    saveConfig(this.cfg)
+    this.audio.ui()
+    if (this.afterName === "duellobby") this.startDuelLobby()
+    else this.state = "garage"
+    this.afterName = "garage"
   }
 
   /** Farol alto: pisca e pede passagem pra quem está na sua faixa. */
@@ -2010,7 +2453,7 @@ export class AutoDashEngine {
     this.tryShift(e.deltaY < 0 ? 1 : -1)
   }
   private onCtx = (e: Event) => e.preventDefault()
-  private onBlur = () => { if (this.state === "racing") this.state = "paused" }
+  private onBlur = () => { if (this.state === "racing" && this.mode !== "duel") this.state = "paused" }
 
   private bind() {
     window.addEventListener("keydown", this.onKeyDown)
@@ -2238,7 +2681,7 @@ function drawPlayerCar(
   ctx.fillStyle = shade("#e2e8f0", Math.max(0.55, amb))
   rr(ctx, -w * 0.14, -h * 0.16, w * 0.28, h * 0.09, 2)
   ctx.fillStyle = "#0f172a"
-  ctx.font = `bold ${Math.max(6, h * 0.06)}px 'Segoe UI', sans-serif`
+  ctx.font = `bold ${Math.max(6, h * 0.06)}px 'Space Grotesk', 'Segoe UI', sans-serif`
   ctx.textAlign = "center"
   ctx.fillText("AUTOHUB", 0, -h * 0.093)
   ctx.textAlign = "left"
