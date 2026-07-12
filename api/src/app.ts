@@ -16,6 +16,7 @@ import { lojasPublicoRoutes, lojasRoutes } from "./routes/lojas.ts"
 import { eventosPublicoRoutes, eventosRoutes } from "./routes/eventos-calendario.ts"
 import { googleAuthRoutes } from "./routes/auth-google.ts"
 import { comentariosPublicoRoutes, comentariosAuthRoutes } from "./routes/comentarios.ts"
+import { autodashRoutes } from "./routes/autodash.ts"
 import { sql } from "./db/client.ts"
 import { isAdmin } from "./lib/admin.ts"
 import type { AppEnv } from "./types.ts"
@@ -45,6 +46,7 @@ app.route("/api", publicoRoutes)
 app.route("/api", marketplacePublicoRoutes)
 app.route("/api", lojasPublicoRoutes)
 app.route("/api", eventosPublicoRoutes)
+app.route("/api", autodashRoutes)
 
 // Comentários: GET público montado antes do grupo protegido para evitar
 // que o authMiddleware em * capture e retorne 401 no GET sem token

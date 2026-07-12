@@ -424,6 +424,33 @@ async function migrate() {
   `
   await sql`CREATE INDEX IF NOT EXISTS idx_curtidas_veiculo ON curtidas(veiculo_id)`
 
+  // ── v6: leaderboard global do AutoDash (minigame) ────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS autodash_scores (
+      id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      nome       TEXT NOT NULL,
+      pontos     INT NOT NULL CHECK (pontos > 0),
+      km         NUMERIC(8,1) NOT NULL DEFAULT 0,
+      usuario_id TEXT REFERENCES usuarios(id) ON DELETE SET NULL,
+      criado_em  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_autodash_pontos ON autodash_scores(pontos DESC)`
+
+  // ── v7: salas de duelo online do AutoDash ────────────────────────────────────
+  await sql`
+    CREATE TABLE IF NOT EXISTS autodash_rooms (
+      code        TEXT PRIMARY KEY,
+      seed        INT NOT NULL,
+      host_name   TEXT NOT NULL,
+      guest_name  TEXT,
+      start_at    TIMESTAMPTZ,
+      host_state  JSONB,
+      guest_state JSONB,
+      criado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `
+
   console.log("✔ Migrations concluídas.")
 }
 
