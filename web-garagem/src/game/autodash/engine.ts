@@ -163,26 +163,8 @@ export class AutoDashEngine {
   private clouds = Array.from({ length: 6 }, (_, i) => ({
     x: (i * 173) % W, y: 26 + (i * 61) % 130, s: 34 + (i * 37) % 44,
   }))
-  // sprites cacheados (gradiente por frame é caro; drawImage é barato)
-  private cloudSprite: HTMLCanvasElement | null = null
+  // vinheta cacheada (gradiente por frame é caro; drawImage é barato)
   private vignetteSprite: HTMLCanvasElement | null = null
-
-  private cloudTex(): HTMLCanvasElement {
-    if (this.cloudSprite) return this.cloudSprite
-    const cv = document.createElement("canvas")
-    cv.width = 256; cv.height = 96
-    const c = cv.getContext("2d")!
-    const g = c.createRadialGradient(128, 48, 4, 128, 48, 46)
-    g.addColorStop(0, "rgba(255,255,255,1)")
-    g.addColorStop(1, "rgba(255,255,255,0)")
-    c.fillStyle = g
-    c.save()
-    c.translate(128, 48); c.scale(2.6, 1); c.translate(-128, -48)
-    c.beginPath(); c.arc(128, 48, 46, 0, Math.PI * 2); c.fill()
-    c.restore()
-    this.cloudSprite = cv
-    return cv
-  }
 
   private vignetteTex(): HTMLCanvasElement {
     if (this.vignetteSprite) return this.vignetteSprite
@@ -1252,34 +1234,25 @@ export class AutoDashEngine {
       }
 
       const alt = Math.floor(idx / RUMBLE) % 2 === 0
-      const stripH = sy1 - sy2
 
       // grama: listras sutis por cima do gradiente de base
-      if (stripH >= 2) {
-        ctx.fillStyle = alt ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)"
-        ctx.fillRect(-10, sy2, W + 20, stripH)
-      }
-      if (stripH < 2.5) {
-        // fatia comprimida no horizonte: cor única pra não virar moiré
-        ctx.fillStyle = roadD
-        poly(ctx, sx1 - sw1 * 1.11, sy1, sx1 + sw1 * 1.11, sy1, sx2 + sw2 * 1.11, sy2, sx2 - sw2 * 1.11, sy2)
-      } else {
-        // zebra só nas laterais — nunca embaixo do asfalto
-        ctx.fillStyle = alt ? rumbA : rumbB
-        poly(ctx, sx1 - sw1 * 1.11, sy1, sx1 - sw1 * 0.97, sy1, sx2 - sw2 * 0.97, sy2, sx2 - sw2 * 1.11, sy2)
-        poly(ctx, sx1 + sw1 * 0.97, sy1, sx1 + sw1 * 1.11, sy1, sx2 + sw2 * 1.11, sy2, sx2 + sw2 * 0.97, sy2)
-        // asfalto
-        ctx.fillStyle = alt ? roadL : roadD
-        poly(ctx, sx1 - sw1, sy1, sx1 + sw1, sy1, sx2 + sw2, sy2, sx2 - sw2, sy2)
-        // linhas de faixa
-        if (alt && sw1 > 26) {
-          ctx.fillStyle = laneC
-          for (let l = 1; l < 4; l++) {
-            const lx = -1 + (2 * l) / 4
-            poly(ctx,
-              sx1 + sw1 * lx - sw1 * 0.012, sy1, sx1 + sw1 * lx + sw1 * 0.012, sy1,
-              sx2 + sw2 * lx + sw2 * 0.012, sy2, sx2 + sw2 * lx - sw2 * 0.012, sy2)
-          }
+      ctx.fillStyle = alt ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)"
+      ctx.fillRect(-10, sy2, W + 20, sy1 - sy2 + 1)
+      // zebra só nas laterais — nunca embaixo do asfalto (era daí que vazava o vermelho)
+      ctx.fillStyle = alt ? rumbA : rumbB
+      poly(ctx, sx1 - sw1 * 1.11, sy1, sx1 - sw1 * 0.97, sy1, sx2 - sw2 * 0.97, sy2, sx2 - sw2 * 1.11, sy2)
+      poly(ctx, sx1 + sw1 * 0.97, sy1, sx1 + sw1 * 1.11, sy1, sx2 + sw2 * 1.11, sy2, sx2 + sw2 * 0.97, sy2)
+      // asfalto
+      ctx.fillStyle = alt ? roadL : roadD
+      poly(ctx, sx1 - sw1, sy1, sx1 + sw1, sy1, sx2 + sw2, sy2, sx2 - sw2, sy2)
+      // linhas de faixa
+      if (alt) {
+        ctx.fillStyle = laneC
+        for (let l = 1; l < 4; l++) {
+          const lx = -1 + (2 * l) / 4
+          poly(ctx,
+            sx1 + sw1 * lx - sw1 * 0.012, sy1, sx1 + sw1 * lx + sw1 * 0.012, sy1,
+            sx2 + sw2 * lx + sw2 * 0.012, sy2, sx2 + sw2 * lx - sw2 * 0.012, sy2)
         }
       }
       edgeL.push(sx1 - sw1 * 1.11, sy1, sx2 - sw2 * 1.11, sy2)
@@ -1395,16 +1368,17 @@ export class AutoDashEngine {
   private renderBackdrop(amb: number) {
     const ctx = this.ctx
     const hz = H * 0.5
-    // nuvens macias em parallax (sprite cacheado)
+    // nuvens macias em parallax
     const ca = Math.max(0.05, amb * 0.35)
     const wrapC = W + 220
-    const cloudTex = this.cloudTex()
-    ctx.globalAlpha = ca
     for (const cl of this.clouds) {
       const x = (((cl.x - this.bgShift * 0.05 - this.km * 160) % wrapC) + wrapC) % wrapC - 110
-      ctx.drawImage(cloudTex, x - cl.s * 1.7, cl.y - cl.s * 0.55, cl.s * 3.4, cl.s * 1.1)
+      const cg = ctx.createRadialGradient(x, cl.y, 4, x, cl.y, cl.s)
+      cg.addColorStop(0, `rgba(255,255,255,${ca})`)
+      cg.addColorStop(1, "rgba(255,255,255,0)")
+      ctx.fillStyle = cg
+      ctx.beginPath(); ctx.ellipse(x, cl.y, cl.s * 1.7, cl.s * 0.55, 0, 0, Math.PI * 2); ctx.fill()
     }
-    ctx.globalAlpha = 1
     // sol / lua
     if (amb > 0.62) {
       const sg = ctx.createRadialGradient(W * 0.78, hz - 105, 8, W * 0.78, hz - 105, 70)
