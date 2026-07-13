@@ -1221,42 +1221,45 @@ export class AutoDashEngine {
       const s1 = CAM_DEPTH / dz1 * (H / 2)
       const s2 = CAM_DEPTH / dz2 * (H / 2)
       const sx1 = W / 2 + (x1 - camX) * s1 * (W / H)
-      // y inteiro: bordas horizontais exatas, sem fresta de anti-aliasing entre fatias
-      const sy1 = Math.round(H / 2 - (seg.y1 - camY) * s1 / (H / 2) * (H / 2))
+      const sy1 = H / 2 - (seg.y1 - camY) * s1 / (H / 2) * (H / 2)
       const sw1 = ROAD_WIDTH * s1 * (W / H)
       const sx2 = W / 2 + (x2 - camX) * s2 * (W / H)
-      const sy2 = Math.round(H / 2 - (seg.y2 - camY) * s2 / (H / 2) * (H / 2))
+      const sy2 = H / 2 - (seg.y2 - camY) * s2 / (H / 2) * (H / 2)
       const sw2 = ROAD_WIDTH * s2 * (W / H)
 
+      // visibilidade testada em float: fatias subpixel do horizonte continuam
+      // emitindo sprites (senão o trânsito distante some e "pipoca" perto)
       if (sy2 >= maxY) {
-        // segmento escondido pelo morro, mas sprites dele ainda podem aparecer? não — pula
+        // segmento escondido pelo morro — aí sim, pula tudo
         continue
       }
+      // arredondado SÓ pra pintar: bordas exatas, sem fresta de anti-aliasing
+      const ry1 = Math.round(sy1), ry2 = Math.round(sy2)
 
       const alt = Math.floor(idx / RUMBLE) % 2 === 0
 
       // grama: listras sutis por cima do gradiente de base
       ctx.fillStyle = alt ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)"
-      ctx.fillRect(-10, sy2, W + 20, sy1 - sy2 + 1)
+      ctx.fillRect(-10, ry2, W + 20, ry1 - ry2 + 1)
       // zebra só nas laterais — nunca embaixo do asfalto (era daí que vazava o vermelho)
       ctx.fillStyle = alt ? rumbA : rumbB
-      poly(ctx, sx1 - sw1 * 1.11, sy1, sx1 - sw1 * 0.97, sy1, sx2 - sw2 * 0.97, sy2, sx2 - sw2 * 1.11, sy2)
-      poly(ctx, sx1 + sw1 * 0.97, sy1, sx1 + sw1 * 1.11, sy1, sx2 + sw2 * 1.11, sy2, sx2 + sw2 * 0.97, sy2)
+      poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 0.97, ry1, sx2 - sw2 * 0.97, ry2, sx2 - sw2 * 1.11, ry2)
+      poly(ctx, sx1 + sw1 * 0.97, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 0.97, ry2)
       // asfalto
       ctx.fillStyle = alt ? roadL : roadD
-      poly(ctx, sx1 - sw1, sy1, sx1 + sw1, sy1, sx2 + sw2, sy2, sx2 - sw2, sy2)
+      poly(ctx, sx1 - sw1, ry1, sx1 + sw1, ry1, sx2 + sw2, ry2, sx2 - sw2, ry2)
       // linhas de faixa
       if (alt) {
         ctx.fillStyle = laneC
         for (let l = 1; l < 4; l++) {
           const lx = -1 + (2 * l) / 4
           poly(ctx,
-            sx1 + sw1 * lx - sw1 * 0.012, sy1, sx1 + sw1 * lx + sw1 * 0.012, sy1,
-            sx2 + sw2 * lx + sw2 * 0.012, sy2, sx2 + sw2 * lx - sw2 * 0.012, sy2)
+            sx1 + sw1 * lx - sw1 * 0.012, ry1, sx1 + sw1 * lx + sw1 * 0.012, ry1,
+            sx2 + sw2 * lx + sw2 * 0.012, ry2, sx2 + sw2 * lx - sw2 * 0.012, ry2)
         }
       }
-      edgeL.push(sx1 - sw1 * 1.11, sy1, sx2 - sw2 * 1.11, sy2)
-      edgeR.push(sx1 + sw1 * 1.11, sy1, sx2 + sw2 * 1.11, sy2)
+      edgeL.push(sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2)
+      edgeR.push(sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2)
       maxY = sy2
 
       // sprites deste segmento
@@ -1833,7 +1836,9 @@ export class AutoDashEngine {
     ctx.moveTo(ox, oy)
     for (let n = 0; n < 160; n += 2) {
       const s = this.segments[(start + n) % N]
-      heading += s.curve * 0.03 * 2
+      // ângulo suave e travado a ~60°: o traçado sempre progride pra cima,
+      // curvas viram inclinação (GPS), nunca cambalhota
+      heading = clamp(heading + s.curve * 0.011 * 2, -1.05, 1.05)
       hx += Math.sin(heading) * 1.0
       hy -= Math.cos(heading) * 1.0
       ctx.lineTo(ox + hx, oy + hy)
