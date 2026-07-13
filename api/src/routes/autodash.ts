@@ -138,18 +138,21 @@ autodashRoutes.post("/autodash/room/:code/state", async (c) => {
     v: Number(st.v) || 0,          // km/h
     x: Number(st.x) || 0,          // posição lateral (-1..1)
     c: Boolean(st.c),              // bateu?
+    car: Math.min(3, Math.max(0, Math.floor(Number(st.car)) || 0)),   // carroceria
+    paint: Math.min(9, Math.max(0, Math.floor(Number(st.paint)) || 0)), // pintura
     t: Date.now(),                 // carimbo pra detectar rival sumido
   }
 
+  // postar estado também limpa minha flag de revanche que tenha sobrado
   const [room] = role === "host"
     ? await sql`
-        UPDATE autodash_rooms SET host_state = ${JSON.stringify(safe)}::jsonb
+        UPDATE autodash_rooms SET host_state = ${JSON.stringify(safe)}::jsonb, rematch_host = false
         WHERE code = ${code}
         RETURNING guest_state AS opp, guest_name AS opp_name,
                   EXTRACT(EPOCH FROM (start_at - now())) * 1000 AS start_in_ms
       `
     : await sql`
-        UPDATE autodash_rooms SET guest_state = ${JSON.stringify(safe)}::jsonb
+        UPDATE autodash_rooms SET guest_state = ${JSON.stringify(safe)}::jsonb, rematch_guest = false
         WHERE code = ${code}
         RETURNING host_state AS opp, host_name AS opp_name,
                   EXTRACT(EPOCH FROM (start_at - now())) * 1000 AS start_in_ms
@@ -158,6 +161,38 @@ autodashRoutes.post("/autodash/room/:code/state", async (c) => {
   return c.json({
     opp: room.opp ?? null,
     oppName: room.opp_name ?? null,
+    startInMs: room.start_in_ms === null ? null : Math.round(Number(room.start_in_ms)),
+  })
+})
+
+// POST /api/autodash/room/:code/rematch — topa revanche; quando os dois
+// toparem, a mesma sala ganha pista nova e largada agendada
+autodashRoutes.post("/autodash/room/:code/rematch", async (c) => {
+  const code = c.req.param("code").toUpperCase()
+  const body = await c.req.json().catch(() => null)
+  const role = body?.role === "host" ? "host" : body?.role === "guest" ? "guest" : null
+  if (!role) return c.json({ error: "Payload inválido" }, 400)
+
+  if (role === "host") await sql`UPDATE autodash_rooms SET rematch_host = true WHERE code = ${code}`
+  else await sql`UPDATE autodash_rooms SET rematch_guest = true WHERE code = ${code}`
+
+  // os dois toparam? agenda a nova corrida (o WHERE garante que só um UPDATE vence)
+  await sql`
+    UPDATE autodash_rooms
+    SET seed = floor(random() * 2147483647)::int,
+        start_at = now() + interval '5 seconds',
+        host_state = NULL, guest_state = NULL,
+        rematch_host = false, rematch_guest = false
+    WHERE code = ${code} AND rematch_host AND rematch_guest
+  `
+
+  const [room] = await sql`
+    SELECT seed, EXTRACT(EPOCH FROM (start_at - now())) * 1000 AS start_in_ms
+    FROM autodash_rooms WHERE code = ${code}
+  `
+  if (!room) return c.json({ error: "Sala não encontrada" }, 404)
+  return c.json({
+    seed: room.seed,
     startInMs: room.start_in_ms === null ? null : Math.round(Number(room.start_in_ms)),
   })
 })

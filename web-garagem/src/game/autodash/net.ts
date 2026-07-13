@@ -6,8 +6,12 @@ export interface DuelTelemetry {
   v: number  // km/h
   x: number  // posição lateral (-1..1)
   c: boolean // bateu?
+  car?: number   // índice da carroceria (pro fantasma fiel)
+  paint?: number // pintura
   t?: number // carimbo do servidor
 }
+
+export interface RematchStatus { seed: number; startInMs: number | null }
 
 export interface RoomCreated { code: string; seed: number; role: "host" }
 export interface RoomJoined { seed: number; role: "guest"; oppName: string; startInMs: number }
@@ -52,5 +56,13 @@ export function postState(code: string, role: "host" | "guest", st: DuelTelemetr
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ role, st }),
+  })
+}
+
+export function rematchRoom(code: string, role: "host" | "guest"): Promise<RematchStatus> {
+  return req(`/api/autodash/room/${encodeURIComponent(code)}/rematch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role }),
   })
 }
