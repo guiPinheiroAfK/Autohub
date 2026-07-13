@@ -1231,16 +1231,6 @@ export class AutoDashEngine {
       // asfalto
       ctx.fillStyle = alt ? roadL : roadD
       poly(ctx, sx1 - sw1, sy1, sx1 + sw1, sy1, sx2 + sw2, sy2, sx2 - sw2, sy2)
-      // trilhas de pneu escurecidas em cada faixa
-      if (n < 150) {
-        ctx.fillStyle = "rgba(0,0,0,0.05)"
-        for (let l = 0; l < 4; l++) {
-          const lc = -1 + (2 * l + 1) / 4
-          poly(ctx,
-            sx1 + sw1 * (lc - 0.085), sy1, sx1 + sw1 * (lc + 0.085), sy1,
-            sx2 + sw2 * (lc + 0.085), sy2, sx2 + sw2 * (lc - 0.085), sy2)
-        }
-      }
       // linhas de faixa
       if (alt) {
         ctx.fillStyle = laneC
@@ -1807,41 +1797,44 @@ export class AutoDashEngine {
     this.renderMinimap()
   }
 
-  /** Minimapa: o traçado dos próximos ~500m, com você no início. */
+  /** Minimapa estilo GPS: você fixo embaixo, o traçado à frente sobe reto — sem girar. */
   private renderMinimap() {
     const ctx = this.ctx
     const bx = W - 122, byy = H - 296, bw = 104, bh = 88
     this.glass(bx, byy, bw, bh, 10)
+    ctx.save()
+    ctx.beginPath()
+    ctx.roundRect(bx + 3, byy + 3, bw - 6, bh - 6, 8)
+    ctx.clip()
+
     const N = this.segments.length
     const start = Math.floor((this.position + PLAYER_Z) / SEG_LEN)
+    const ox = bx + bw / 2, oy = byy + bh - 14
     let hx = 0, hy = 0, heading = 0
-    const pts: number[] = [0, 0]
-    for (let n = 0; n < 150; n += 3) {
-      const s = this.segments[(start + n) % N]
-      heading += s.curve * 0.05 * 3
-      hx += Math.sin(heading) * 3
-      hy -= Math.cos(heading) * 3
-      pts.push(hx, hy)
-    }
-    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9
-    for (let i = 0; i < pts.length; i += 2) {
-      minX = Math.min(minX, pts[i]); maxX = Math.max(maxX, pts[i])
-      minY = Math.min(minY, pts[i + 1]); maxY = Math.max(maxY, pts[i + 1])
-    }
-    const sc = Math.min((bw - 26) / Math.max(8, maxX - minX), (bh - 26) / Math.max(8, maxY - minY))
-    const ox = bx + bw / 2 - ((minX + maxX) / 2) * sc
-    const oy = byy + bh / 2 - ((minY + maxY) / 2) * sc
-    ctx.strokeStyle = "rgba(248,250,252,0.7)"
-    ctx.lineWidth = 3
+    ctx.strokeStyle = "rgba(248,250,252,0.75)"
+    ctx.lineWidth = 4
     ctx.lineJoin = "round"
     ctx.lineCap = "round"
     ctx.beginPath()
-    ctx.moveTo(ox + pts[0] * sc, oy + pts[1] * sc)
-    for (let i = 2; i < pts.length; i += 2) ctx.lineTo(ox + pts[i] * sc, oy + pts[i + 1] * sc)
+    ctx.moveTo(ox, oy)
+    for (let n = 0; n < 160; n += 2) {
+      const s = this.segments[(start + n) % N]
+      heading += s.curve * 0.03 * 2
+      hx += Math.sin(heading) * 1.0
+      hy -= Math.cos(heading) * 1.0
+      ctx.lineTo(ox + hx, oy + hy)
+    }
     ctx.stroke()
     ctx.lineWidth = 1
+    // você (seta fixa apontando pra frente)
     ctx.fillStyle = "#38bdf8"
-    ctx.beginPath(); ctx.arc(ox + pts[0] * sc, oy + pts[1] * sc, 4, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(ox, oy - 7)
+    ctx.lineTo(ox + 5, oy + 4)
+    ctx.lineTo(ox - 5, oy + 4)
+    ctx.closePath()
+    ctx.fill()
+    ctx.restore()
   }
 
   /** Barra do duelo: você × rival, com delta em metros ao vivo. */
