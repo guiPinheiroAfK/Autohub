@@ -2300,59 +2300,98 @@ export class AutoDashEngine {
    */
   private drawBridge(x: number, y: number, w: number, amb: number) {
     const ctx = this.ctx
-    const conc = shade("#8b95a8", amb)
-    const dark = shade("#5b657d", amb * 0.85)
-    const ph = w * 1.55, deckH = w * 0.3
+    // paleta em camadas: topo claro, face frontal média, sombra por baixo —
+    // é o que dá volume. Antes era tudo o mesmo cinza chapado.
+    const top = shade("#a7b0c0", amb)
+    const face = shade("#8b95a8", amb * 0.92)
+    const dark = shade("#5b657d", amb * 0.8)
+    const deep = shade("#3c4459", amb * 0.7)
+    const ph = w * 1.62, deckH = w * 0.26
     const deckY = y - ph - deckH
-    // pilares SÓ fora da pista (a pista vai de -w a +w; pilar mais interno a 1.55w)
+    const L = x - w * 3.6, R = x + w * 3.6
+
+    // sombra do viaduto projetada na pista (elipse achatada) — ancora ele no chão
+    ctx.fillStyle = `rgba(0,0,0,${0.22 + (1 - amb) * 0.14})`
+    ctx.beginPath(); ctx.ellipse(x, y + w * 0.04, w * 3.5, w * 0.16, 0, 0, Math.PI * 2); ctx.fill()
+
+    // pilares: base alargada, fuste e capitel (SÓ fora da pista, que vai de -w a +w)
+    for (const px of [x - w * 3.05, x - w * 1.66, x + w * 1.42, x + w * 2.81]) {
+      const pw = w * 0.26
+      ctx.fillStyle = face
+      ctx.fillRect(px, y - ph, pw, ph)
+      ctx.fillStyle = dark // lateral sombreada do fuste
+      ctx.fillRect(px + pw * 0.66, y - ph, pw * 0.34, ph)
+      ctx.fillStyle = dark // base
+      ctx.fillRect(px - pw * 0.22, y - w * 0.1, pw * 1.44, w * 0.1)
+      ctx.fillStyle = top // capitel
+      ctx.fillRect(px - pw * 0.3, y - ph - w * 0.09, pw * 1.6, w * 0.09)
+    }
+
+    // vigas longitudinais sob o tabuleiro (a "estrutura" que segura o vão)
+    ctx.fillStyle = deep
+    ctx.fillRect(L, deckY + deckH, R - L, w * 0.11)
     ctx.fillStyle = dark
-    ctx.fillRect(x - w * 3.1, y - ph, w * 0.24, ph)
-    ctx.fillRect(x - w * 1.62, y - ph, w * 0.24, ph)
-    ctx.fillRect(x + w * 1.38, y - ph, w * 0.24, ph)
-    ctx.fillRect(x + w * 2.86, y - ph, w * 0.24, ph)
-    // tabuleiro largo (extrapola as bordas quando perto = passar por baixo)
-    ctx.fillStyle = conc
-    ctx.fillRect(x - w * 3.6, deckY, w * 7.2, deckH)
+    for (let i = 0; i <= 12; i++) { // transversinas
+      const bx = L + (R - L) * (i / 12)
+      ctx.fillRect(bx - w * 0.02, deckY + deckH, w * 0.04, w * 0.11)
+    }
+
+    // tabuleiro: face frontal + fio claro no topo (espessura legível)
+    ctx.fillStyle = face
+    ctx.fillRect(L, deckY, R - L, deckH)
+    ctx.fillStyle = top
+    ctx.fillRect(L, deckY, R - L, deckH * 0.3)
+
+    // guarda-corpo com balaústres, em cima do tabuleiro
+    const railY = deckY - w * 0.16
     ctx.fillStyle = dark
-    ctx.fillRect(x - w * 3.6, deckY - w * 0.07, w * 7.2, w * 0.07)
+    ctx.fillRect(L, railY, R - L, w * 0.05)
+    if (w > 8) {
+      for (let i = 0; i <= 26; i++) {
+        const bx = L + (R - L) * (i / 26)
+        ctx.fillRect(bx - w * 0.012, railY, w * 0.024, w * 0.16)
+      }
+    }
+
     // ALÇA DE DESCIDA à direita: rampa saindo do tabuleiro até o nível da via —
-    // o "motivo" do viaduto: os carros descem por aqui e entram na sua estrada
-    ctx.fillStyle = conc
+    // o "motivo" do viaduto. Agora com espessura, guard-rail e faixa de borda.
+    const rampTopY = deckY + deckH * 0.35
+    const r1x = x + w * 2.25, r2x = x + w * 3.15, r3x = x + w * 4.75, r4x = x + w * 3.85
+    ctx.fillStyle = face
     ctx.beginPath()
-    ctx.moveTo(x + w * 2.2, deckY + deckH * 0.4)
-    ctx.lineTo(x + w * 3.1, deckY + deckH * 0.4)
-    ctx.lineTo(x + w * 4.6, y)
-    ctx.lineTo(x + w * 3.7, y)
+    ctx.moveTo(r1x, rampTopY); ctx.lineTo(r2x, rampTopY)
+    ctx.lineTo(r3x, y); ctx.lineTo(r4x, y)
     ctx.closePath(); ctx.fill()
-    // guard-rail da rampa
-    ctx.strokeStyle = dark
-    ctx.lineWidth = Math.max(1, w * 0.05)
+    ctx.fillStyle = deep // espessura da laje da rampa
     ctx.beginPath()
-    ctx.moveTo(x + w * 2.2, deckY + deckH * 0.3)
-    ctx.lineTo(x + w * 3.7, y - w * 0.06)
+    ctx.moveTo(r4x, y); ctx.lineTo(r3x, y)
+    ctx.lineTo(r3x + w * 0.06, y + w * 0.09); ctx.lineTo(r4x + w * 0.06, y + w * 0.09)
+    ctx.closePath(); ctx.fill()
+    ctx.strokeStyle = top // guard-rail da alça
+    ctx.lineWidth = Math.max(1, w * 0.045)
+    ctx.beginPath()
+    ctx.moveTo(r1x, rampTopY - w * 0.12); ctx.lineTo(r4x, y - w * 0.12)
     ctx.stroke()
+
     // CARROS DE VERDADE em cima do viaduto e descendo a alça — mesmo desenho do
-    // trânsito (carroceria, vidro, lanternas), não retângulo. É o que dá a
-    // sensação de trânsito real cruzando por cima e entrando na sua via.
+    // trânsito (carroceria, vidro, lanternas). É o que dá a sensação de trânsito
+    // real cruzando por cima e entrando na sua via.
     if (w > 10) {
-      const carW = w * 0.42
+      const carW = w * 0.4
       const fake = (color: string): Traffic => ({
         z: 0, offset: 0, targetOffset: 0, speed: 90, kind: "car",
         role: "civilian", color, blinkT: 0, prevD: 1,
       })
-      const railY = deckY - w * 0.07
-      // dois cruzando o tabuleiro, em sentidos opostos
       const t1 = (performance.now() / 3400) % 1
       const t2 = (performance.now() / 4100 + 0.5) % 1
-      this.drawTraffic(fake("#e2e8f0"), x - w * 3.2 + w * 6.4 * t1, railY, carW, amb * 0.9)
-      this.drawTraffic(fake("#64748b"), x + w * 3.2 - w * 6.4 * t2, railY, carW, amb * 0.9)
-      // e um DESCENDO a alça, do tabuleiro até o nível da via
+      this.drawTraffic(fake("#e2e8f0"), L + (R - L) * t1, deckY + deckH * 0.1, carW, amb * 0.9)
+      this.drawTraffic(fake("#64748b"), R - (R - L) * t2, deckY + deckH * 0.1, carW, amb * 0.9)
       const p = (performance.now() / 2800) % 1
       this.drawTraffic(
         fake("#eab308"),
-        x + w * (2.65 + 1.55 * p),
-        deckY + deckH * 0.4 + (y - deckY - deckH * 0.4) * p,
-        carW * (0.9 + 0.25 * p), amb * 0.95,
+        r1x + (r4x - r1x) * p,
+        rampTopY + (y - rampTopY) * p,
+        carW * (0.9 + 0.3 * p), amb * 0.95,
       )
     }
   }
@@ -3450,17 +3489,9 @@ export class AutoDashEngine {
         if (k === "e") this.tryShift(1)
         if (k === "n") this.toNeutral()
         if (k === "f") this.flashBeam()
-        // DEBUG (testes): O = solta perseguição policial · L = pula um nível (trânsito mais denso)
-        if (k === "o") this.spawnPoliceChase()
-        if (k === "l") { this.level++; this.floaters.push({ text: `DEBUG: nível ${this.level + 1}`, color: "#fbbf24", y: H * 0.4, life: 1.2, big: false }) }
-        // DEBUG (features novas, remover após validação):
-        // B ponte · V viaduto · J obstáculos · K mão dupla · I blitz (60) · U radar (90)
-        if (k === "b") this.spawnEvent("bridge")
-        if (k === "v") this.spawnEvent("viaduct")
-        if (k === "j") this.spawnEvent("obstacles")
-        if (k === "k") this.spawnEvent("wrongway")
-        if (k === "i") this.spawnEvent("blitz")
-        if (k === "u") this.spawnEvent("speedtrap")
+        // (as teclas de debug de playtest — O perseguição, L nível, B/V/J/K/I/U
+        // eventos — foram removidas: tudo isso agora é sorteado pelo próprio
+        // jogo em updateEventSpawner)
         break
       case "paused":
         if (k === "escape" || k === "p" || k === "enter") this.state = "racing"
