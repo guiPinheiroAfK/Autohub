@@ -63,6 +63,14 @@ interface Seg { curve: number; y1: number; y2: number; sign?: number }
 // Tipos e IAs do tráfego migraram pra ./traffic/ (types.ts + driver.ts).
 // O engine só cuida da colisão/pontuação/render/reciclagem.
 
+// Obstáculo físico na pista (cones, barreiras). Cone é perdoável (tranco);
+// barreira é parede. Base do futuro modo corrida.
+interface Obstacle { z: number; offset: number; kind: "cone" | "barrier"; w: number; len: number; prevD?: number; dead?: boolean }
+// Zona de evento no traçado: ponte (visual), contramão (spawna oncoming),
+// blitz (checa velocidade ao cruzar a linha).
+interface Zone { type: "bridge" | "wrongway" | "blitz"; z: number; end: number; spawnT: number; checked?: boolean }
+interface RoadSign { z: number; type: "limit90" | "wrongway" }
+
 const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
 
@@ -141,6 +149,9 @@ export class AutoDashEngine {
 
   // mundo
   private traffic: Traffic[] = []
+  private obstacles: Obstacle[] = []
+  private zones: Zone[] = []
+  private roadSigns: RoadSign[] = []
   private powerups: Pickup[] = []
   private puTimer = 6
   private bgShift = 0
@@ -320,6 +331,45 @@ export class AutoDashEngine {
     })
   }
 
+  /**
+   * DEBUG (remover após validação): materializa cada feature nova à frente do
+   * jogador pra playtest — B ponte · J obstáculos · K contramão · I blitz.
+   */
+  private debugSpawn(kind: "bridge" | "obstacles" | "wrongway" | "blitz") {
+    const at = (d: number) => ((this.position + d) % this.trackLen + this.trackLen) % this.trackLen
+    const note = (text: string) => this.floaters.push({ text, color: "#fbbf24", y: H * 0.38, life: 1.6, big: false })
+    if (kind === "bridge") {
+      this.zones.push({ type: "bridge", z: at(7000), end: at(7400), spawnT: 0 })
+      note("🌉 ponte à frente (debug)")
+    } else if (kind === "obstacles") {
+      // funil de cones fechando a faixa da direita + barreira nas 2 da direita
+      for (let i = 0; i < 5; i++) this.obstacles.push({ z: at(5000 + i * 300), offset: 0.85 - i * 0.06, kind: "cone", w: 0.10, len: 90 })
+      this.obstacles.push({ z: at(6900), offset: 0.5, kind: "barrier", w: 0.55, len: 140 })
+      note("🚧 obstáculos à frente (debug)")
+    } else if (kind === "wrongway") {
+      const z = at(8000)
+      this.zones.push({ type: "wrongway", z, end: at(8000 + 22000), spawnT: 0 })
+      this.roadSigns.push({ z: at(4500), type: "wrongway" }, { z: at(7200), type: "wrongway" })
+      note("⛔ CONTRAMÃO à frente!")
+    } else {
+      // blitz: placa de limite, funil de cones, barreira fechando as 2 faixas
+      // da esquerda e viaturas paradas — furar acima de 95 = perseguição
+      const z = at(9000)
+      this.zones.push({ type: "blitz", z, end: at(9000 + 2400), spawnT: 0 })
+      this.roadSigns.push({ z: at(3500), type: "limit90" }, { z: at(6500), type: "limit90" })
+      for (let i = 0; i < 6; i++) this.obstacles.push({ z: at(7000 + i * 300), offset: -0.95 + i * 0.09, kind: "cone", w: 0.10, len: 90 })
+      this.obstacles.push({ z, offset: -0.5, kind: "barrier", w: 0.6, len: 140 })
+      for (let i = 0; i < 2; i++) {
+        this.traffic.push({
+          z: at(9400 + i * 550), offset: -0.5, targetOffset: -0.5, speed: 0,
+          kind: "police", role: "police", parked: true,
+          color: "#1d4ed8", blinkT: 0, prevD: 1,
+        })
+      }
+      note("👮 BLITZ à frente — limite 90!")
+    }
+  }
+
   /** DEBUG: solta 3 viaturas atrás do jogador pra testar a IA de perseguição (PoliceDriver). */
   private spawnPoliceChase() {
     const lanes = [-0.5, 0, 0.5]
@@ -366,7 +416,8 @@ export class AutoDashEngine {
     for (const t of this.traffic) {
       const k = KINDS[t.kind]
       // a IA do papel do veículo decide faixa/velocidade e o move
-      const spd = DRIVERS[t.role].drive(t, world, dt)
+      // (estacionado não tem IA — cenografia de blitz)
+      const spd = t.parked ? 0 : DRIVERS[t.role].drive(t, world, dt)
 
       const d = this.wrapDz(t.z, playerZ)
       if (!demo) {
@@ -377,8 +428,12 @@ export class AutoDashEngine {
         // contra tudo; policeHitT vale só contra viatura. Se o encostão desse
         // imunidade geral, ser jogado em cima do trânsito faria você atravessar
         // os carros — e é justamente aí que a perseguição tem que doer.
-        const hit = Math.abs(d) < k.len / 2 + 40 && Math.abs(t.offset - this.playerX) < halfSum && !this.crashed
-        if (hit && t.role === "police") {
+        // janela em Z OU cruzamento no frame (varredura): na contramão a
+        // velocidade de fechamento passa de 600 unidades/frame e o veículo
+        // atravessaria a janela entre dois frames sem nunca "estar" nela
+        const swept = t.prevD > 0 && d <= 0 && t.prevD < 1200
+        const hit = (Math.abs(d) < k.len / 2 + 40 || swept) && Math.abs(t.offset - this.playerX) < halfSum && !this.crashed
+        if (hit && t.role === "police" && !t.parked) {
           // Encostão de viatura NÃO mata: empurra pro lado. O engine só desenha
           // o que está à frente, então uma viatura atrás é invisível — morrer
           // por ela seria injusto. Ela te espreme até te jogar fora da pista,
@@ -440,7 +495,12 @@ export class AutoDashEngine {
       // deixou pra trás a jogava lá na frente numa faixa aleatória, e ela caía
       // de volta em cima de você — era isso que parecia "pulo" depois de
       // ultrapassar. Quem perde a perseguição some pelo despiste, ali embaixo.
-      if (t.role !== "police") {
+      // Estacionados (blitz) e contramão também não reciclam: cenografia que
+      // ficou pra trás simplesmente some.
+      if (t.parked || t.role === "oncoming") {
+        const rel = this.wrapDz(t.z, this.position)
+        if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 140) * SEG_LEN) t.dead = true
+      } else if (t.role !== "police") {
         const rel = this.wrapDz(t.z, this.position)
         if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 80) * SEG_LEN) {
           t.z = ((this.position + (DRAW_DIST * 0.55 + Math.random() * DRAW_DIST * 0.4) * SEG_LEN) % this.trackLen + this.trackLen) % this.trackLen
@@ -460,7 +520,7 @@ export class AutoDashEngine {
       let hasPolice = false
       let anyBackoff = false
       for (const t of this.traffic) {
-        if (t.role !== "police") continue
+        if (t.role !== "police" || t.parked) continue // estacionada não é perseguição
         hasPolice = true
         if (t.backoffT && t.backoffT > 0) anyBackoff = true
         nearestPolice = Math.min(nearestPolice, Math.abs(this.wrapDz(t.z, playerZ)))
@@ -488,6 +548,88 @@ export class AutoDashEngine {
     }
 
     if (this.traffic.some(t => t.dead)) this.traffic = this.traffic.filter(t => !t.dead)
+  }
+
+  /** Zonas de evento: contramão spawnando oncoming, blitz checando velocidade. */
+  private updateZones(dt: number, playerZ: number) {
+    for (const zn of this.zones) {
+      if (zn.type === "wrongway") {
+        const toStart = this.wrapDz(zn.z, playerZ) // >0: início à frente
+        const toEnd = this.wrapDz(zn.end, playerZ)
+        // ativa um pouco antes (você vê os carros vindo) e morre no fim da zona
+        if (toStart < 9000 && toEnd > 0) {
+          zn.spawnT -= dt
+          if (zn.spawnT <= 0) {
+            zn.spawnT = 0.9 + Math.random() * 0.9
+            // nasce no horizonte visível — clampado pra DENTRO da zona (o
+            // horizonte pode estar além do fim dela, e aí nada nascia)
+            let z = ((playerZ + DRAW_DIST * SEG_LEN * 0.85) % this.trackLen + this.trackLen) % this.trackLen
+            if (this.wrapDz(zn.end, z) < 0) z = ((zn.end - 400) % this.trackLen + this.trackLen) % this.trackLen
+            if (this.wrapDz(z, zn.z) > 0 && this.wrapDz(zn.end, z) > 0) {
+              const kind: TrafficKind = Math.random() < 0.72 ? "car" : "truck"
+              this.traffic.push({
+                z, offset: -0.75, targetOffset: -0.75,
+                speed: -(70 + Math.random() * 45), // negativa: vem contra você
+                kind, role: "oncoming",
+                color: TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)],
+                blinkT: 0, prevD: 1,
+              })
+            }
+          }
+        }
+      } else if (zn.type === "blitz" && !zn.checked) {
+        // cruzou a linha da blitz: ou passou devagar, ou furou e vira caçada
+        if (this.wrapDz(playerZ, zn.z) > 0 && this.wrapDz(playerZ, zn.z) < 4000) {
+          zn.checked = true
+          if (this.speed > 95) {
+            this.floaters.push({ text: "FUROU A BLITZ! 🚨", color: "#ef4444", y: H * 0.32, life: 2.2, big: true })
+            this.audio.horn()
+            this.spawnPoliceChase()
+          } else {
+            this.floaters.push({ text: "passou na blitz ✅", color: "#4ade80", y: H * 0.4, life: 1.4, big: false })
+          }
+        }
+      }
+    }
+  }
+
+  /** Colisão e limpeza dos obstáculos físicos (cones perdoam, barreira não). */
+  private updateObstacles(playerZ: number) {
+    const spec = CARS[this.cfg.carIdx]
+    for (const o of this.obstacles) {
+      const d = this.wrapDz(o.z, playerZ)
+      if (d < -35 * SEG_LEN) { o.dead = true; continue }
+      const halfSum = (o.w + spec.width) / 2 * 0.85
+      // obstáculo é ESTÁTICO: a velocidade de fechamento é a do jogador — acima
+      // de ~45 km/h a janela em Z é pulada entre frames. A varredura (cruzou o
+      // ponto neste frame?) é obrigatória aqui, não otimização.
+      const prev = o.prevD ?? 1
+      o.prevD = d
+      const swept = prev > 0 && d <= 0 && prev < 1200
+      if ((Math.abs(d) < o.len / 2 + 40 || swept) && Math.abs(o.offset - this.playerX) < halfSum && !this.crashed && this.immuneT <= 0) {
+        if (o.kind === "cone") {
+          // cone é perdoável: tranco, perde velocidade e combo — não mata
+          o.dead = true
+          this.speed *= 0.78
+          this.combo = 0
+          this.shakeT = Math.max(this.shakeT, 0.3)
+          this.immuneT = Math.max(this.immuneT, 0.25)
+          this.audio.offroad()
+          this.burst(W / 2, H - 110, 10, ["#fb923c", "#fde68a"])
+          this.floaters.push({ text: "CONE! 🚧", color: "#fb923c", y: H * 0.44, life: 0.9, big: false })
+        } else if (this.shield) {
+          this.shield = false
+          this.immuneT = 2.0
+          o.dead = true
+          this.audio.shieldBreak()
+          this.burst(W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
+          this.floaters.push({ text: "ESCUDO QUEBROU!", color: "#60a5fa", y: H * 0.4, life: 1.3, big: false })
+        } else {
+          this.crash()
+        }
+      }
+    }
+    if (this.obstacles.some(o => o.dead)) this.obstacles = this.obstacles.filter(o => !o.dead)
   }
 
   // ---------- física ----------
@@ -750,6 +892,8 @@ export class AutoDashEngine {
     }
 
     this.updateTraffic(dt, playerZ, false)
+    this.updateZones(dt, playerZ)
+    this.updateObstacles(playerZ)
 
     // aviso de curva fechada à frente
     this.curveWarn = 0
@@ -1044,6 +1188,7 @@ export class AutoDashEngine {
     this.shield = false; this.immuneT = 0; this.policeHitT = 0; this.policeEscapeT = 0; this.policeChaseT = 0; this.mult2T = 0
     this.level = 0; this.levelUpT = 0
     this.powerups = []; this.puTimer = 6
+    this.obstacles = []; this.zones = []; this.roadSigns = []
     this.curveWarn = 0; this.collWarn = null
     this.newRecord = false; this.beamT = 0; this.beamCdT = 0; this.pitchY = 0
     this.shiftT = 0; this.wheelspinT = 0; this.bogT = 0
@@ -1251,9 +1396,23 @@ export class AutoDashEngine {
     // "escondido por morro" — aí sim o segmento some inteiro.
     let roadStarted = false
 
-    interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; x: number; y: number; w: number; dz?: number }
+    interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: string; x: number; y: number; w: number; dz?: number }
     const sprites: SpriteDraw[] = []
-    // buckets de tráfego e powerups por segmento
+    // buckets de tráfego, obstáculos, placas e powerups por segmento
+    const obsBySeg = new Map<number, Obstacle[]>()
+    for (const o of this.obstacles) {
+      const si = Math.floor(o.z / SEG_LEN) % N
+      const arr = obsBySeg.get(si)
+      if (arr) arr.push(o); else obsBySeg.set(si, [o])
+    }
+    const signBySeg = new Map<number, RoadSign[]>()
+    for (const s of this.roadSigns) {
+      const si = Math.floor(s.z / SEG_LEN) % N
+      const arr = signBySeg.get(si)
+      if (arr) arr.push(s); else signBySeg.set(si, [s])
+    }
+    const bridgeSegs = new Set<number>()
+    for (const zn of this.zones) if (zn.type === "bridge") bridgeSegs.add(Math.floor(zn.z / SEG_LEN) % N)
     const bySeg = new Map<number, Traffic[]>()
     for (const t of this.traffic) {
       const si = Math.floor(t.z / SEG_LEN) % N
@@ -1380,6 +1539,25 @@ export class AutoDashEngine {
           sprites.push({ kind: "pu", p, x: sx + sw * p.offset, y: sy, w: sw * 0.10 })
         }
       }
+      // obstáculos, placas e ponte deste segmento
+      const obsHere = obsBySeg.get(idx)
+      if (obsHere) {
+        for (const o of obsHere) {
+          const pct = (o.z - z1) / SEG_LEN
+          const sx = sx1 + (sx2 - sx1) * pct
+          const sy = sy1 + (sy2 - sy1) * pct
+          const sw = sw1 + (sw2 - sw1) * pct
+          sprites.push({ kind: "obs", obs: o, x: sx + sw * o.offset, y: sy, w: sw * o.w })
+        }
+      }
+      const signsHere = signBySeg.get(idx)
+      if (signsHere) {
+        for (const s of signsHere) {
+          // placa na beira direita da pista
+          sprites.push({ kind: "sign", sign: s.type, x: sx1 + sw1 * 1.35, y: sy1, w: sw1 * 0.11 })
+        }
+      }
+      if (bridgeSegs.has(idx)) sprites.push({ kind: "bridge", x: sx1, y: sy1, w: sw1 })
       // decoração de beira de estrada e placas
       if (seg.sign) {
         sprites.push({ kind: "deco", deco: 3, dir: seg.sign, x: sx1 - sw1 * 1.35 * seg.sign, y: sy1, w: sw1 * 0.16 })
@@ -1453,6 +1631,9 @@ export class AutoDashEngine {
       }
       else if (s.kind === "pu") this.drawPickup(s.p!, s.x, s.y, s.w, amb)
       else if (s.kind === "ghost") this.drawGhost(s.x, s.y, s.w, amb)
+      else if (s.kind === "obs") this.drawObstacle(s.obs!, s.x, s.y, s.w, amb)
+      else if (s.kind === "sign") this.drawRoadSign(s.sign!, s.x, s.y, s.w, amb)
+      else if (s.kind === "bridge") this.drawBridge(s.x, s.y, s.w, amb)
       else this.drawDeco(s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
     }
 
@@ -1660,6 +1841,81 @@ export class AutoDashEngine {
     }
   }
 
+  private drawObstacle(o: Obstacle, x: number, y: number, w: number, amb: number) {
+    if (w < 2) return
+    const ctx = this.ctx
+    if (o.kind === "cone") {
+      const h = w * 1.5
+      ctx.fillStyle = "rgba(0,0,0,0.3)"
+      ctx.beginPath(); ctx.ellipse(x, y, w * 0.7, w * 0.16, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = shade("#f97316", amb)
+      ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + w * 0.55, y); ctx.lineTo(x - w * 0.55, y); ctx.closePath(); ctx.fill()
+      ctx.fillStyle = shade("#f8fafc", amb)
+      ctx.fillRect(x - w * 0.3, y - h * 0.48, w * 0.6, h * 0.16)
+    } else {
+      // cavalete zebrado vermelho/branco com pernas
+      const h = w * 0.32
+      ctx.fillStyle = "rgba(0,0,0,0.3)"
+      ctx.beginPath(); ctx.ellipse(x, y, w * 0.55, w * 0.07, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = shade("#475569", amb)
+      ctx.fillRect(x - w * 0.42, y - h * 1.5, w * 0.06, h * 1.5)
+      ctx.fillRect(x + w * 0.36, y - h * 1.5, w * 0.06, h * 1.5)
+      const by = y - h * 2.0
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = shade(i % 2 === 0 ? "#ef4444" : "#f8fafc", amb)
+        ctx.fillRect(x - w / 2 + (w / 6) * i, by, w / 6 + 1, h)
+      }
+    }
+  }
+
+  private drawRoadSign(type: string, x: number, y: number, w: number, amb: number) {
+    if (w < 3) return
+    const ctx = this.ctx
+    const poleH = w * 2.8, r = w * 0.95
+    ctx.fillStyle = shade("#64748b", amb)
+    ctx.fillRect(x - w * 0.06, y - poleH, w * 0.12, poleH)
+    const cy = y - poleH - r * 0.4
+    if (type === "limit90") {
+      // placa de limite: círculo branco, anel vermelho, "90"
+      ctx.fillStyle = shade("#f8fafc", amb)
+      ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = shade("#dc2626", amb)
+      ctx.lineWidth = Math.max(1.5, r * 0.26)
+      ctx.beginPath(); ctx.arc(x, cy, r * 0.82, 0, Math.PI * 2); ctx.stroke()
+      if (r > 6) {
+        ctx.fillStyle = "#0f172a"
+        ctx.font = `bold ${Math.max(7, Math.round(r * 0.85))}px 'Space Grotesk', 'Segoe UI', sans-serif`
+        ctx.textAlign = "center"
+        ctx.fillText("90", x, cy + r * 0.32)
+        ctx.textAlign = "left"
+      }
+    } else {
+      // contramão: proibido (círculo vermelho, barra branca)
+      ctx.fillStyle = shade("#dc2626", amb)
+      ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = shade("#f8fafc", amb)
+      ctx.fillRect(x - r * 0.62, cy - r * 0.17, r * 1.24, r * 0.34)
+    }
+  }
+
+  /** Viaduto de concreto cruzando a pista — puro visual; você passa por baixo. */
+  private drawBridge(x: number, y: number, w: number, amb: number) {
+    const ctx = this.ctx
+    const conc = shade("#8b95a8", amb)
+    const dark = shade("#5b657d", amb * 0.85)
+    const ph = w * 0.95, deckH = w * 0.2
+    // pilares
+    ctx.fillStyle = dark
+    ctx.fillRect(x - w * 1.44, y - ph, w * 0.17, ph)
+    ctx.fillRect(x + w * 1.27, y - ph, w * 0.17, ph)
+    // tabuleiro (extrapola as bordas quando perto = sensação de passar por baixo)
+    ctx.fillStyle = conc
+    ctx.fillRect(x - w * 2.3, y - ph - deckH, w * 4.6, deckH)
+    // guarda-corpo
+    ctx.fillStyle = dark
+    ctx.fillRect(x - w * 2.3, y - ph - deckH - w * 0.055, w * 4.6, w * 0.055)
+  }
+
   private drawTraffic(t: Traffic, x: number, y: number, w: number, amb: number) {
     if (w < 2) return
     const ctx = this.ctx
@@ -1722,8 +1978,10 @@ export class AutoDashEngine {
         ctx.beginPath(); ctx.ellipse(x, barY, w * 1.15, w * 0.62, 0, 0, Math.PI * 2); ctx.fill()
       }
     }
-    // lanternas
-    const tail = amb < 0.62 ? "#ff3b30" : shade("#c81e1e", amb + 0.25)
+    // lanternas (contramão vem DE FRENTE: farol branco, não lanterna vermelha)
+    const tail = t.role === "oncoming"
+      ? (amb < 0.62 ? "#fff7cf" : shade("#e8e4c9", amb + 0.25))
+      : (amb < 0.62 ? "#ff3b30" : shade("#c81e1e", amb + 0.25))
     ctx.fillStyle = tail
     const th = Math.max(2, h * 0.07)
     rr(ctx, bx + w * 0.06, y - th * 2.2, w * 0.22, th, th / 2)
@@ -1818,7 +2076,7 @@ export class AutoDashEngine {
    * ler QUAL faixa e QUÃO PERTO, não fidelidade de traçado.
    */
   private renderRearView() {
-    if (!this.traffic.some(t => t.role === "police")) return
+    if (!this.traffic.some(t => t.role === "police" && !t.parked)) return
     const ctx = this.ctx
     const mw = 288, mh = 86, mx = W / 2 - mw / 2, my = 10
     const playerZ = this.position + PLAYER_Z
@@ -1881,7 +2139,7 @@ export class AutoDashEngine {
     const playerZ = this.position + PLAYER_Z
     const RANGE = 5000
     for (const t of this.traffic) {
-      if (t.role !== "police") continue
+      if (t.role !== "police" || t.parked) continue
       const d = this.wrapDz(t.z, playerZ)
       if (d >= 0 || d < -RANGE) continue // só quem está atrás e dentro do alcance
       const prox = 1 - -d / RANGE // 0 = longe, 1 = colada
@@ -2070,7 +2328,7 @@ export class AutoDashEngine {
 
     // viaturas em perseguição: pontos vermelhos pulsantes (somem quando despista).
     // à frente ficam no traçado; atrás, logo abaixo da seta (te seguindo)
-    const police = this.traffic.filter(t => t.role === "police")
+    const police = this.traffic.filter(t => t.role === "police" && !t.parked)
     if (police.length) {
       const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 140)
       const playerZ = this.position + PLAYER_Z
@@ -2705,6 +2963,11 @@ export class AutoDashEngine {
         // DEBUG (testes): O = solta perseguição policial · L = pula um nível (trânsito mais denso)
         if (k === "o") this.spawnPoliceChase()
         if (k === "l") { this.level++; this.floaters.push({ text: `DEBUG: nível ${this.level + 1}`, color: "#fbbf24", y: H * 0.4, life: 1.2, big: false }) }
+        // DEBUG (features novas, remover após validação): B ponte · J obstáculos · K contramão · I blitz
+        if (k === "b") this.debugSpawn("bridge")
+        if (k === "j") this.debugSpawn("obstacles")
+        if (k === "k") this.debugSpawn("wrongway")
+        if (k === "i") this.debugSpawn("blitz")
         break
       case "paused":
         if (k === "escape" || k === "p" || k === "enter") this.state = "racing"

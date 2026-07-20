@@ -275,8 +275,21 @@ export class PoliceDriver extends Driver {
   }
 }
 
+/**
+ * Contramão: vem no sentido oposto (speed negativa), reto na faixa dele.
+ * Sem troca de faixa nem freio — o perigo é justamente a velocidade de
+ * fechamento; quem desvia é você.
+ */
+export class OncomingDriver extends Driver {
+  drive(self: Traffic, world: WorldView, dt: number): number {
+    self.z = ((self.z + self.speed * KMH2UPS * dt) % world.trackLen + world.trackLen) % world.trackLen
+    return self.speed
+  }
+}
+
 // Registro papel -> IA. Instâncias únicas compartilhadas (drivers são stateless).
 export const DRIVERS: Record<TrafficRole, Driver> = {
   civilian: new CivilianDriver(),
   police: new PoliceDriver(),
+  oncoming: new OncomingDriver(),
 }

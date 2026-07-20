@@ -6,8 +6,9 @@ export type TrafficKind = "car" | "moto" | "truck" | "bus" | "police"
 
 // Papel do veículo: define QUAL IA dirige ele (ver DRIVERS em ./driver.ts).
 //  - civilian: trânsito comum, respeita os outros e o jogador
-//  - police:   perseguição — agressivo de propósito (feature futura)
-export type TrafficRole = "civilian" | "police"
+//  - police:   perseguição — agressivo de propósito
+//  - oncoming: contramão — vem no sentido oposto, reto na faixa (speed negativa)
+export type TrafficRole = "civilian" | "police" | "oncoming"
 
 // w = meia-largura na fração da pista (-1..1) · len = comprimento em unidades Z
 // h = altura visual (sprite) · spd = faixa de velocidade de cruzeiro [min, max] km/h
@@ -37,6 +38,7 @@ export interface Traffic {
   wasAhead?: boolean   // viatura já esteve à frente do jogador (pra detectar a ultrapassagem)
   beaten?: boolean     // jogador a ultrapassou: desiste da caçada e recua até o despiste
   engaged?: boolean    // já colou no jogador uma vez: daqui em diante é física pura (sem mola)
+  parked?: boolean     // estacionado (blitz): sem IA, sem reciclagem, colisão normal
 }
 
 // Visão read-only do mundo que uma IA precisa pra decidir. O engine constrói
