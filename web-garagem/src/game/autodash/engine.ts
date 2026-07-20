@@ -203,6 +203,14 @@ export class AutoDashEngine {
   private beamCdT = 0
   private pitchY = 0
 
+  // touch (celular) — nil na maioria dos campos até buildTouchControls() rodar
+  private isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0
+  private touchThrottle = false
+  private touchBrake = false
+  private touchSteerLeft = false
+  private touchSteerRight = false
+  private touchControlsEl: HTMLDivElement | null = null
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
     canvas.width = W
@@ -210,9 +218,13 @@ export class AutoDashEngine {
     const ctx = canvas.getContext("2d")
     if (!ctx) throw new Error("canvas 2d indisponível")
     this.ctx = ctx
+    // sem isso, arrastar o dedo pra dirigir também rola/zoom a página por
+    // baixo do jogo
+    this.canvas.style.touchAction = "none"
     this.buildTrack()
     this.seedTraffic(14)
     this.bind()
+    if (this.isTouch) this.buildTouchControls()
     void this.refreshScores()
     this.lastT = performance.now()
     const loop = (t: number) => {
@@ -231,6 +243,7 @@ export class AutoDashEngine {
     cancelAnimationFrame(this.raf)
     this.audio.dispose()
     this.unbind()
+    this.touchControlsEl?.remove()
   }
 
   // ---------- pista ----------
@@ -507,8 +520,8 @@ export class AutoDashEngine {
       return
     }
 
-    const throttle = this.mouseGas || this.keys.has("w") || this.keys.has("arrowup") ? 1 : 0
-    const braking = this.mouseBrake || this.keys.has("s") || this.keys.has("arrowdown")
+    const throttle = this.mouseGas || this.touchThrottle || this.keys.has("w") || this.keys.has("arrowup") ? 1 : 0
+    const braking = this.mouseBrake || this.touchBrake || this.keys.has("s") || this.keys.has("arrowdown")
 
     if (this.state === "countdown") {
       this.countT += dt
@@ -542,8 +555,8 @@ export class AutoDashEngine {
     if (this.cfg.steering === "mouse") {
       steerInput = clamp(((this.mouseXn * 2 - 1) * 1.25 - this.playerX) * 2.2, -1, 1)
     } else {
-      if (this.keys.has("a") || this.keys.has("arrowleft")) steerInput -= 1
-      if (this.keys.has("d") || this.keys.has("arrowright")) steerInput += 1
+      if (this.keys.has("a") || this.keys.has("arrowleft") || this.touchSteerLeft) steerInput -= 1
+      if (this.keys.has("d") || this.keys.has("arrowright") || this.touchSteerRight) steerInput += 1
     }
     const speedF = Math.min(1, this.speed / 240)
     const maxSteer = (0.95 + grip * 0.85) * (1 - 0.38 * speedF) * (0.35 + 0.65 * Math.min(1, this.speed / 55))
@@ -1650,7 +1663,7 @@ export class AutoDashEngine {
     const spec = CARS[this.cfg.carIdx]
     const custom = this.cfg.customs[this.cfg.carIdx]
     const steer = clamp(this.steerVel * 1.1, -1, 1)
-    const braking = this.mouseBrake || this.keys.has("s") || this.keys.has("arrowdown")
+    const braking = this.mouseBrake || this.touchBrake || this.keys.has("s") || this.keys.has("arrowdown")
     const bounce = Math.sin(this.position * 0.03) * Math.min(3, this.speed / 60) + this.pitchY
     if (this.shield) {
       const pw = spec.width * 640
@@ -1798,8 +1811,10 @@ export class AutoDashEngine {
 
     this.renderTacho()
 
-    // nitro
-    const nx = 22, ny = H - 160, nh = 120
+    // nitro — no celular sobe um pouco pra não ficar embaixo do botão de
+    // direção touch (ainda encosta um pouco; ajuste fino pendente de ver
+    // numa tela de verdade)
+    const nx = 22, ny = this.isTouch ? H - 230 : H - 160, nh = 120
     this.glass(nx - 6, ny - 8, 34, nh + 34, 10)
     ctx.fillStyle = "rgba(148,163,184,0.3)"
     rr(ctx, nx, ny, 22, nh, 8)
@@ -1887,7 +1902,11 @@ export class AutoDashEngine {
 
   private renderTacho() {
     const ctx = this.ctx
-    const cx = W - 108, cy = H - 92, r = 74
+    // no celular, menor e um pouco mais alto — reduz (não elimina) a
+    // sobreposição com os botões de gás/freio/marcha do canto direito
+    const cx = this.isTouch ? W - 96 : W - 108
+    const cy = this.isTouch ? H - 110 : H - 92
+    const r = this.isTouch ? 60 : 74
     const bg = ctx.createRadialGradient(cx, cy - 26, 8, cx, cy, r + 16)
     bg.addColorStop(0, "rgba(38,50,72,0.9)")
     bg.addColorStop(1, "rgba(4,8,20,0.9)")
@@ -2580,12 +2599,148 @@ export class AutoDashEngine {
   private onCtx = (e: Event) => e.preventDefault()
   private onBlur = () => { if (this.state === "racing" && this.mode !== "duel") this.state = "paused" }
 
+  // toque no canvas: espelha o mousedown/mousemove pra navegação de menu (tap
+  // num botão do garagem/pause/resultado) — duplicado em vez de refatorado
+  // pra não arriscar quebrar o caminho de mouse, que já funciona.
+  private onTouchStart = (e: TouchEvent) => {
+    const touch = e.touches[0]
+    if (!touch) return
+    this.ensureAudio()
+    const rect = this.canvas.getBoundingClientRect()
+    this.mousePx.x = ((touch.clientX - rect.left) / rect.width) * W
+    this.mousePx.y = ((touch.clientY - rect.top) / rect.height) * H
+    if (this.state === "racing" || this.state === "countdown") {
+      this.mouseGas = true
+    } else {
+      const hit = this.regionAt(this.mousePx.x, this.mousePx.y)
+      if (hit) hit.act()
+      else if (this.state === "menu") this.enterFromMenu()
+    }
+  }
+  private onTouchEnd = () => { this.mouseGas = false }
+  private onTouchMove = (e: TouchEvent) => {
+    const touch = e.touches[0]
+    if (!touch) return
+    e.preventDefault()
+    const rect = this.canvas.getBoundingClientRect()
+    this.mouseXn = clamp((touch.clientX - rect.left) / rect.width, 0, 1)
+    this.mousePx.x = ((touch.clientX - rect.left) / rect.width) * W
+    this.mousePx.y = ((touch.clientY - rect.top) / rect.height) * H
+  }
+
+  /**
+   * Botões de toque pro celular (acelerador/freio/direção/marcha/nitro).
+   * DOM de verdade por cima do canvas — não desenhado nele — porque cada
+   * botão precisa responder a um dedo independente (segurar gás E virar ao
+   * mesmo tempo), e elementos HTML resolvem multi-touch de graça; um único
+   * canvas com touches[] manual seria bem mais frágil pra isso.
+   *
+   * O wrapper usa a MESMA fórmula de tamanho do canvas (width: min(100vw,
+   * 177.8vh), aspect-ratio 16/9) só que via position:fixed — fica alinhado
+   * pixel a pixel com o jogo sem precisar recalcular nada em resize/rotação,
+   * e os botões são posicionados em % desse retângulo (não em px fixos).
+   */
+  private buildTouchControls() {
+    const wrap = document.createElement("div")
+    wrap.style.position = "fixed"
+    wrap.style.inset = "0"
+    wrap.style.margin = "auto"
+    wrap.style.width = "min(100vw, 177.8vh)"
+    wrap.style.aspectRatio = "16 / 9"
+    wrap.style.pointerEvents = "none"
+    wrap.style.zIndex = "50"
+    wrap.style.touchAction = "none"
+    document.body.appendChild(wrap)
+    this.touchControlsEl = wrap
+
+    // % de largura e % de altura calculados a partir do MESMO valor em
+    // "unidades de canvas" (960x540) dão o mesmo tamanho físico na tela,
+    // mesmo a base de cálculo (960 vs 540) sendo diferente — é assim que um
+    // botão fica quadrado de verdade em vez de esticado.
+    const pctW = (px: number) => `${(px / W) * 100}%`
+    const pctH = (px: number) => `${(px / H) * 100}%`
+
+    const makeButton = (label: string, left: number, top: number, w: number, h: number) => {
+      const btn = document.createElement("div")
+      btn.textContent = label
+      btn.style.position = "absolute"
+      btn.style.left = pctW(left)
+      btn.style.top = pctH(top)
+      btn.style.width = pctW(w)
+      btn.style.height = pctH(h)
+      btn.style.display = "flex"
+      btn.style.alignItems = "center"
+      btn.style.justifyContent = "center"
+      btn.style.borderRadius = "999px"
+      btn.style.background = "rgba(15,15,20,0.4)"
+      btn.style.border = "1px solid rgba(255,255,255,0.18)"
+      btn.style.color = "#f8fafc"
+      btn.style.fontFamily = "'Space Grotesk', 'Segoe UI', sans-serif"
+      btn.style.fontWeight = "900"
+      btn.style.fontSize = `${Math.min(w, h) * 0.42}px`
+      btn.style.userSelect = "none"
+      btn.style.pointerEvents = "auto"
+      btn.style.touchAction = "none"
+      wrap.appendChild(btn)
+      return btn
+    }
+
+    // segura pra manter o estado ligado (gás/freio/direção) — funciona pra
+    // touch e mouse igual, PointerEvent unifica os dois e cada botão recebe
+    // seu próprio dedo independente dos outros
+    const bindHold = (btn: HTMLDivElement, onChange: (pressed: boolean) => void) => {
+      const press = (e: PointerEvent) => {
+        e.preventDefault()
+        btn.style.background = "rgba(15,15,20,0.08)"
+        onChange(true)
+      }
+      const release = () => {
+        btn.style.background = "rgba(15,15,20,0.4)"
+        onChange(false)
+      }
+      btn.addEventListener("pointerdown", press)
+      btn.addEventListener("pointerup", release)
+      btn.addEventListener("pointercancel", release)
+      btn.addEventListener("pointerleave", release)
+    }
+
+    const EDGE = 16, GAP = 10
+    const STEER = 76, GAS = 88, BRAKE = 76, GEAR_W = 64, GEAR_H = 44, NITRO_W = 60, NITRO_H = 44
+
+    // direção — canto inferior esquerdo
+    const steerLeft = makeButton("◀", EDGE, H - EDGE - STEER, STEER, STEER)
+    const steerRight = makeButton("▶", EDGE + STEER + GAP, H - EDGE - STEER, STEER, STEER)
+    bindHold(steerLeft, (p) => { this.touchSteerLeft = p })
+    bindHold(steerRight, (p) => { this.touchSteerRight = p })
+
+    // pedais — canto inferior direito
+    const gas = makeButton("GÁS", W - EDGE - GAS, H - EDGE - GAS, GAS, GAS)
+    const brake = makeButton("FREIO", W - EDGE - GAS - GAP - BRAKE, H - EDGE - BRAKE, BRAKE, BRAKE)
+    bindHold(gas, (p) => { this.touchThrottle = p })
+    bindHold(brake, (p) => { this.touchBrake = p })
+
+    // marcha + nitro — fileira logo acima dos pedais
+    const rowTop = H - EDGE - GAS - GAP - GEAR_H
+    const gearUp = makeButton("▲", W - EDGE - GEAR_W, rowTop, GEAR_W, GEAR_H)
+    const gearDown = makeButton("▼", W - EDGE - GEAR_W - GAP - GEAR_W, rowTop, GEAR_W, GEAR_H)
+    const nitro = makeButton("NOS", W - EDGE - GEAR_W - GAP - GEAR_W - GAP - NITRO_W, rowTop, NITRO_W, NITRO_H)
+    gearUp.style.fontSize = "22px"
+    gearDown.style.fontSize = "22px"
+    gearUp.addEventListener("pointerdown", (e) => { e.preventDefault(); this.tryShift(1) })
+    gearDown.addEventListener("pointerdown", (e) => { e.preventDefault(); this.tryShift(-1) })
+    bindHold(nitro, (p) => { this.nitroOn = p })
+  }
+
   private bind() {
     window.addEventListener("keydown", this.onKeyDown)
     window.addEventListener("keyup", this.onKeyUp)
     window.addEventListener("blur", this.onBlur)
     this.canvas.addEventListener("mousedown", this.onMouseDown)
     window.addEventListener("mouseup", this.onMouseUp)
+    this.canvas.addEventListener("touchstart", this.onTouchStart, { passive: false })
+    this.canvas.addEventListener("touchmove", this.onTouchMove, { passive: false })
+    this.canvas.addEventListener("touchend", this.onTouchEnd)
+    this.canvas.addEventListener("touchcancel", this.onTouchEnd)
     this.canvas.addEventListener("mousemove", this.onMouseMove)
     this.canvas.addEventListener("wheel", this.onWheel, { passive: false })
     this.canvas.addEventListener("contextmenu", this.onCtx)
@@ -2599,6 +2754,10 @@ export class AutoDashEngine {
     this.canvas.removeEventListener("mousemove", this.onMouseMove)
     this.canvas.removeEventListener("wheel", this.onWheel)
     this.canvas.removeEventListener("contextmenu", this.onCtx)
+    this.canvas.removeEventListener("touchstart", this.onTouchStart)
+    this.canvas.removeEventListener("touchmove", this.onTouchMove)
+    this.canvas.removeEventListener("touchend", this.onTouchEnd)
+    this.canvas.removeEventListener("touchcancel", this.onTouchEnd)
   }
 }
 
