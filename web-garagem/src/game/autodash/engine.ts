@@ -466,7 +466,7 @@ export class AutoDashEngine {
       }
       if (hasPolice) {
         // recuo pós-encostão não conta como fuga: elas aliviaram, você não escapou
-        if (nearestPolice > 6000 && !anyBackoff) {
+        if (nearestPolice > 10000 && !anyBackoff) {
           this.policeEscapeT += dt
           if (this.policeEscapeT >= 3) {
             for (const t of this.traffic) if (t.role === "police") t.dead = true

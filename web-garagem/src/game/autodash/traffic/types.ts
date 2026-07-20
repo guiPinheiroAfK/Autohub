@@ -34,6 +34,8 @@ export interface Traffic {
   dead?: boolean       // marcado pra remoção (ex.: destruído pelo escudo)
   yieldT?: number      // >0: levou farol alto, tenta abrir caminho
   backoffT?: number    // >0: viatura acabou de dar encostão, alivia e abre distância
+  wasAhead?: boolean   // viatura já esteve à frente do jogador (pra detectar a ultrapassagem)
+  beaten?: boolean     // jogador a ultrapassou: desiste da caçada e recua até o despiste
 }
 
 // Visão read-only do mundo que uma IA precisa pra decidir. O engine constrói

@@ -222,20 +222,25 @@ export class PoliceDriver extends Driver {
       if (want !== null) { self.targetOffset = want; self.blinkT = 0.55 }
     }
 
-    // Alvo de velocidade: a viatura corre no PRÓPRIO limite, nunca copiando a
-    // sua. Antes era playerSpeed+35, o que tornava a fuga matematicamente
-    // impossível — ela sempre estava 35 km/h acima de você. Sem rubber-band:
-    // se você é mais rápido que o teto dela, você vai embora e ponto. Ela te
-    // pega pelo trânsito te segurando e pela quantidade, não por cópia.
-    // Alvo de velocidade. TOP é um teto ABSOLUTO em todos os casos: é ele que
-    // garante que quem corre mais que 215 simplesmente vai embora e não é
-    // alcançado nunca — sem isso vira rubber-band e a fuga fica impossível.
+    // Alvo de velocidade. TOP é teto ABSOLUTO em todos os casos: é ele que
+    // garante que quem corre mais que 215 simplesmente vai embora — sem isso
+    // vira rubber-band e a fuga fica impossível.
     const atras = -gap // >0 quando a viatura está atrás de você
+    // detecta a ultrapassagem: ela esteve à sua frente e agora está atrás
+    if (gap > 150) self.wasAhead = true
+    if (self.wasAhead && atras > 150) self.beaten = true
+
     let target: number
-    if (atras > 0) {
-      // aproximação por trás: a folga encolhe com a distância, então ela chega
-      // desacelerando e encosta, em vez de vir no talo e passar reto
-      target = Math.min(PoliceDriver.TOP, world.playerSpeed + clamp(atras / 70, 4, 60))
+    if (self.beaten) {
+      // JÁ FOI ULTRAPASSADA: desiste da caçada e recua de vez. Ela vem com tudo
+      // UMA vez, por trás; ultrapassou, acabou. Sem isso ela ficava oscilando
+      // na zona logo atrás do jogador (que o render não cobre), pipocando na
+      // tela a cada re-encostada. Recuando, o despiste limpa a perseguição.
+      target = Math.min(PoliceDriver.TOP, Math.max(0, world.playerSpeed - 40))
+    } else if (atras > 0) {
+      // primeira aproximação por trás: vem com tudo, e a folga encolhe com a
+      // distância pra ela chegar desacelerando e encostar em vez de passar reto
+      target = Math.min(PoliceDriver.TOP, world.playerSpeed + clamp(atras / 60, 4, 85))
     } else {
       // ficou À FRENTE de você: ALIVIA e deixa você passar — o lugar dela é te
       // prensando por trás/do lado, nunca de parede na frente. Espelhar sua
