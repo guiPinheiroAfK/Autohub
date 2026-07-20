@@ -189,6 +189,8 @@ export class PoliceDriver extends Driver {
   private static readonly DECEL = 170
   // distância em Z abaixo da qual a viatura NÃO entra na faixa do jogador
   private static readonly CLOSE = 1500
+  // dentro disso ela está "engatada": emparelha pra prensar em vez de passar reto
+  private static readonly ENGAGE = 2500
 
   drive(self: Traffic, world: WorldView, dt: number): number {
     const gap = world.wrapDz(self.z, world.playerZ) // >0: viatura à frente do jogador
@@ -222,15 +224,34 @@ export class PoliceDriver extends Driver {
       if (want !== null) { self.targetOffset = want; self.blinkT = 0.55 }
     }
 
-    // alvo de velocidade: cola no jogador (à frente alivia, atrás persegue), sob o teto
-    let target = gap > 0 ? Math.max(0, world.playerSpeed - 25) : Math.min(PoliceDriver.TOP, world.playerSpeed + 35)
+    // Alvo de velocidade: a viatura corre no PRÓPRIO limite, nunca copiando a
+    // sua. Antes era playerSpeed+35, o que tornava a fuga matematicamente
+    // impossível — ela sempre estava 35 km/h acima de você. Sem rubber-band:
+    // se você é mais rápido que o teto dela, você vai embora e ponto. Ela te
+    // pega pelo trânsito te segurando e pela quantidade, não por cópia.
+    // Alvo de velocidade. TOP é um teto ABSOLUTO em todos os casos: é ele que
+    // garante que quem corre mais que 215 simplesmente vai embora e não é
+    // alcançado nunca — sem isso vira rubber-band e a fuga fica impossível.
+    const atras = -gap // >0 quando a viatura está atrás de você
+    let target: number
+    if (atras > 0) {
+      // aproximação: a folga encolhe com a distância, então ela chega
+      // desacelerando e emparelha, em vez de vir no talo e passar reto
+      target = Math.min(PoliceDriver.TOP, world.playerSpeed + clamp(atras / 60, 8, 85))
+    } else if (Math.abs(gap) < PoliceDriver.ENGAGE) {
+      // já passou de você mas ainda está colada: emparelha pra prensar
+      target = Math.min(PoliceDriver.TOP, world.playerSpeed)
+    } else {
+      // ficou pra trás na sua esteira: corre no próprio limite e perde você
+      target = PoliceDriver.TOP
+    }
     // acabou de dar um encostão: RECUA e abre distância antes de voltar pra cima.
-    // Sem isso ela fica moendo o jogador em loop assim que a imunidade expira.
+    // Sem isso ela fica moendo o jogador em loop assim que o cooldown expira.
+    // Único ponto onde a velocidade do jogador entra, e de propósito: é um
+    // desengate deliberado e curto, não perseguição.
     if (self.backoffT && self.backoffT > 0) {
       self.backoffT -= dt
-      // recuo contido: abre alguns milhares de unidades, o bastante pra parar o
-      // pinball sem cair no limiar de despiste (senão elas se auto-desistem)
-      target = Math.max(0, world.playerSpeed - 22)
+      target = Math.min(target, Math.max(0, world.playerSpeed - 35))
     }
     // respeita o trânsito: não mira acelerar pra dentro de um carro
     target = this.antiOverlap(self, world, ahead, target)

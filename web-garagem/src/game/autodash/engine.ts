@@ -323,13 +323,14 @@ export class AutoDashEngine {
   private spawnPoliceChase() {
     const lanes = [-0.5, 0, 0.5]
     for (let i = 0; i < 3; i++) {
-      // à FRENTE (o engine só renderiza o que está à frente), escalonadas e
-      // visíveis; o PoliceDriver faz elas grudarem/recuarem até o jogador
-      const ahead = 4000 + i * 2000 // ~20 a 40 segmentos à frente
-      const z = ((this.position + ahead) % this.trackLen + this.trackLen) % this.trackLen
+      // ATRÁS, escalonadas: elas vêm te alcançar. Só dá pra fazer isso agora que
+      // (a) o campo próximo desenha quem está atrás e (b) a polícia não passa
+      // pelo reciclador — antes elas eram invisíveis e ainda eram teleportadas.
+      const behind = 2500 + i * 1200
+      const z = ((this.position - behind) % this.trackLen + this.trackLen) % this.trackLen
       this.traffic.push({
         z, offset: lanes[i], targetOffset: lanes[i],
-        speed: this.speed, kind: "police", role: "police",
+        speed: Math.max(this.speed, 150), kind: "police", role: "police",
         color: "#1d4ed8", blinkT: 0, prevD: 1,
       })
     }
@@ -433,15 +434,21 @@ export class AutoDashEngine {
       }
       t.prevD = d
 
-      // recicla quem ficou muito longe
-      const rel = this.wrapDz(t.z, this.position)
-      if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 80) * SEG_LEN) {
-        t.z = ((this.position + (DRAW_DIST * 0.55 + Math.random() * DRAW_DIST * 0.4) * SEG_LEN) % this.trackLen + this.trackLen) % this.trackLen
-        const lane = this.laneCenters[Math.floor(Math.random() * 4)]
-        t.offset = lane; t.targetOffset = lane
-        const kk = KINDS[t.kind]
-        t.speed = t.role === "police" ? 235 : kk.spd[0] + Math.random() * (kk.spd[1] - kk.spd[0])
-        t.prevD = 1
+      // Recicla quem ficou muito longe — MAS a polícia é ENTIDADE, não população
+      // de cenário: ela nunca é teleportada. Reciclar uma viatura que você
+      // deixou pra trás a jogava lá na frente numa faixa aleatória, e ela caía
+      // de volta em cima de você — era isso que parecia "pulo" depois de
+      // ultrapassar. Quem perde a perseguição some pelo despiste, ali embaixo.
+      if (t.role !== "police") {
+        const rel = this.wrapDz(t.z, this.position)
+        if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 80) * SEG_LEN) {
+          t.z = ((this.position + (DRAW_DIST * 0.55 + Math.random() * DRAW_DIST * 0.4) * SEG_LEN) % this.trackLen + this.trackLen) % this.trackLen
+          const lane = this.laneCenters[Math.floor(Math.random() * 4)]
+          t.offset = lane; t.targetOffset = lane
+          const kk = KINDS[t.kind]
+          t.speed = kk.spd[0] + Math.random() * (kk.spd[1] - kk.spd[0])
+          t.prevD = 1
+        }
       }
     }
     // despiste da polícia (protótipo do sistema tipo "estrelas" do GTA): se o
