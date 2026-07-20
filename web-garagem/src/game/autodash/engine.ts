@@ -141,7 +141,8 @@ export class AutoDashEngine {
   private curveBeepT = 0
   private collWarn: Traffic | null = null
   private collBeepT = 0
-  private immuneT = 0 // invulnerabilidade pós-escudo (segundos restantes)
+  private immuneT = 0 // invulnerabilidade pós-escudo — vale contra TUDO
+  private policeHitT = 0 // cooldown pós-encostão — vale SÓ contra viatura
   private policeEscapeT = 0 // tempo mantendo distância da polícia (protótipo do "despiste")
   private particles: Particle[] = []
   private floaters: Floater[] = []
@@ -339,6 +340,7 @@ export class AutoDashEngine {
     const target = 14 + Math.min(14, Math.floor(this.km * 1.3)) + this.level * 3
     if (this.traffic.length < target) this.spawnTraffic(DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))
     if (this.immuneT > 0) this.immuneT -= dt
+    if (this.policeHitT > 0) this.policeHitT -= dt
 
     const spec = CARS[this.cfg.carIdx]
     // visão read-only do mundo que as IAs consomem (ver ./traffic/driver.ts)
@@ -361,13 +363,17 @@ export class AutoDashEngine {
         // soma das meia-larguras (casa com os sprites), com margem de perdão de
         // arcade: um tico mais estreita que o teórico pra matar "bati no nada"
         const halfSum = (k.w + spec.width) / 2 * 0.85
-        // colisão
-        if (Math.abs(d) < k.len / 2 + 40 && Math.abs(t.offset - this.playerX) < halfSum && !this.crashed && this.immuneT <= 0) {
-          if (t.role === "police") {
-            // Encostão de viatura NÃO mata: empurra pro lado. O engine só desenha
-            // o que está à frente, então uma viatura atrás é invisível — morrer
-            // por ela seria injusto. Ela te espreme até te jogar fora da pista,
-            // e É ISSO que prende. Não consome escudo (não é batida letal).
+        // colisão. Dois cooldowns SEPARADOS de propósito: immuneT (escudo) vale
+        // contra tudo; policeHitT vale só contra viatura. Se o encostão desse
+        // imunidade geral, ser jogado em cima do trânsito faria você atravessar
+        // os carros — e é justamente aí que a perseguição tem que doer.
+        const hit = Math.abs(d) < k.len / 2 + 40 && Math.abs(t.offset - this.playerX) < halfSum && !this.crashed
+        if (hit && t.role === "police") {
+          // Encostão de viatura NÃO mata: empurra pro lado. O engine só desenha
+          // o que está à frente, então uma viatura atrás é invisível — morrer
+          // por ela seria injusto. Ela te espreme até te jogar fora da pista,
+          // e É ISSO que prende. Não consome escudo (não é batida letal).
+          if (this.immuneT <= 0 && this.policeHitT <= 0) {
             const dir = Math.sign(this.playerX - t.offset) || (Math.random() < 0.5 ? -1 : 1)
             this.playerX += dir * 0.16
             this.steerVel += dir * 1.4
@@ -376,9 +382,9 @@ export class AutoDashEngine {
             this.combo = 0
             // janela de recuperação: sem isso vira pinball, um encostão atrás do
             // outro sem o jogador conseguir voltar pra pista
-            this.immuneT = 1.2
+            this.policeHitT = 1.2
             // TODAS as viaturas recuam (não só a que bateu), senão a de trás
-            // emenda o combo assim que a imunidade expira
+            // emenda o combo assim que o cooldown expira
             for (const o of this.traffic) if (o.role === "police") o.backoffT = 1.3
             // acabou de levar encostão: obviamente não despistou ninguém
             this.policeEscapeT = 0
@@ -386,7 +392,9 @@ export class AutoDashEngine {
             this.burst(W / 2 + dir * 60, H - 110, 14, ["#60a5fa", "#e2e8f0"])
             this.floaters.push({ text: "ENCOSTÃO! 🚔", color: "#60a5fa", y: H * 0.42, life: 1, big: false })
             if (Math.abs(this.playerX) > 1.05) this.crash(true) // te jogaram pra fora = preso
-          } else if (this.shield) {
+          }
+        } else if (hit && this.immuneT <= 0) {
+          if (this.shield) {
             this.shield = false
             this.immuneT = 2.0
             t.dead = true
@@ -1013,7 +1021,7 @@ export class AutoDashEngine {
     this.rpm = RPM_IDLE
     this.score = 0; this.km = 0; this.combo = 0; this.comboT = 0
     this.nitroMeter = 0; this.nitroOn = false
-    this.shield = false; this.immuneT = 0; this.policeEscapeT = 0; this.mult2T = 0
+    this.shield = false; this.immuneT = 0; this.policeHitT = 0; this.policeEscapeT = 0; this.mult2T = 0
     this.level = 0; this.levelUpT = 0
     this.powerups = []; this.puTimer = 6
     this.curveWarn = 0; this.collWarn = null
@@ -1139,6 +1147,7 @@ export class AutoDashEngine {
 
     this.renderRoad(amb, sky.bot)
     this.renderPlayer(amb)
+    this.renderRearThreat()
     this.renderParticles()
 
     if (this.raining) {
@@ -1701,7 +1710,8 @@ export class AutoDashEngine {
       ctx.ellipse(W / 2, H - 68 + bounce, pw * 0.75, 62, 0, 0, Math.PI * 2)
       ctx.fill(); ctx.stroke()
     }
-    const immuneBlink = this.immuneT > 0 && Math.floor(this.immuneT * 8) % 2 === 0
+    const blinkT = Math.max(this.immuneT, this.policeHitT)
+    const immuneBlink = blinkT > 0 && Math.floor(blinkT * 8) % 2 === 0
     if (immuneBlink) ctx.globalAlpha = 0.35
     drawPlayerCar(ctx, W / 2, H - 34 + bounce, spec, custom, steer, braking, amb, this.nitroOn && this.nitroMeter > 1)
     if (immuneBlink) ctx.globalAlpha = 1
@@ -1721,6 +1731,36 @@ export class AutoDashEngine {
         ctx.lineTo(x + side * 6, y + len)
       }
       ctx.stroke()
+    }
+  }
+
+  /**
+   * Aviso de ameaça vindo de trás. A projeção só desenha o que está À FRENTE,
+   * então uma viatura te alcançando por trás é invisível até ultrapassar — do
+   * nada ela "aparece" colada. Isso desenha setas na base da tela na posição
+   * lateral dela, crescendo e pulsando mais rápido conforme encosta, pra dar
+   * leitura de onde ela vem antes de sentir o encostão.
+   */
+  private renderRearThreat() {
+    if (this.state !== "racing" && this.state !== "countdown") return
+    const ctx = this.ctx
+    const playerZ = this.position + PLAYER_Z
+    const RANGE = 5000
+    for (const t of this.traffic) {
+      if (t.role !== "police") continue
+      const d = this.wrapDz(t.z, playerZ)
+      if (d >= 0 || d < -RANGE) continue // só quem está atrás e dentro do alcance
+      const prox = 1 - -d / RANGE // 0 = longe, 1 = colada
+      const x = clamp(W / 2 + (t.offset - this.playerX) * (W * 0.34), 24, W - 24)
+      const pulse = 0.55 + 0.45 * Math.sin(performance.now() / (80 + (1 - prox) * 240))
+      const s = 12 + 18 * prox
+      ctx.fillStyle = `rgba(239,68,68,${(0.2 + 0.7 * prox) * pulse})`
+      ctx.beginPath()
+      ctx.moveTo(x, H - 4)
+      ctx.lineTo(x - s * 0.6, H - 4 - s)
+      ctx.lineTo(x + s * 0.6, H - 4 - s)
+      ctx.closePath()
+      ctx.fill()
     }
   }
 
