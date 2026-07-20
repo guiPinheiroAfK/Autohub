@@ -16,14 +16,14 @@ import { DRIVERS } from "./traffic/driver"
 const W = CANVAS_W, H = CANVAS_H
 const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH
 const RUMBLE = 3
-// Veículos só COMEÇAM a ser desenhados a ~PLAYER_Z da câmera: mais perto que
-// isso o segmento projeta abaixo da tela e o laço já o descarta (sy2 >= maxY).
-// Quem vem DE TRÁS, portanto, não cresce gradualmente — materializa nesse
-// limiar já em tamanho cheio (~220px). É isso que lê como "teleporte".
-// Esta faixa curta de fade suaviza a aparição. Ela é estreita de propósito:
-// nada que você ainda precise enxergar pra desviar fica translúcido.
-const FADE_IN_START = PLAYER_Z * 1.02
-const FADE_IN_LEN = PLAYER_Z * 0.35
+// Veículo mais perto que isso não tem nem o topo do sprite dentro da tela
+// (a base projeta muito abaixo da borda) — não vale emitir.
+const NEAR_SPRITE_MIN = 300
+// Fade curtíssimo logo acima do mínimo, só pra tirar o degrau do primeiro pixel.
+// A entrada de verdade é geométrica: o carro SOBE pela borda de baixo conforme
+// se aproxima, então não precisa (nem deve) ficar translúcido em cena.
+const FADE_IN_START = NEAR_SPRITE_MIN
+const FADE_IN_LEN = 90
 
 type GameState =
   | "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
@@ -1234,6 +1234,10 @@ export class AutoDashEngine {
     let x = 0
     let dx = -(this.segments[baseIdx].curve * basePct)
     let maxY = H + 10
+    // false enquanto estamos no campo próximo (asfalto ainda abaixo da tela).
+    // Depois do primeiro segmento pintado, sy2 >= maxY passa a significar
+    // "escondido por morro" — aí sim o segmento some inteiro.
+    let roadStarted = false
 
     interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; x: number; y: number; w: number; dz?: number }
     const sprites: SpriteDraw[] = []
@@ -1286,14 +1290,23 @@ export class AutoDashEngine {
 
       // visibilidade testada em float: fatias subpixel do horizonte continuam
       // emitindo sprites (senão o trânsito distante some e "pipoca" perto)
-      if (sy2 >= maxY) {
-        // segmento escondido pelo morro — aí sim, pula tudo
-        continue
-      }
+      //
+      // CAMPO PRÓXIMO: a câmera fica PLAYER_Z atrás do jogador, então existe uma
+      // faixa entre as duas onde o veículo está na frente da câmera (projetável)
+      // mas o asfalto já cai abaixo da tela. Antes o laço pulava o segmento
+      // inteiro e o carro sumia junto — era por isso que quem vinha de trás
+      // "teleportava": só existia depois de já ter ultrapassado o jogador.
+      // O sprite é alto e entra pela borda de baixo, então aqui a gente pula só
+      // o ASFALTO e continua emitindo os veículos.
+      const nearField = !roadStarted && sy2 >= maxY
+      if (sy2 >= maxY && roadStarted) continue // escondido por morro: some tudo mesmo
+      if (nearField && dz1 < NEAR_SPRITE_MIN) continue // tão perto que nem o topo aparece
+
       // arredondado SÓ pra pintar: bordas exatas, sem fresta de anti-aliasing
       const ry1 = Math.round(sy1), ry2 = Math.round(sy2)
 
       const alt = Math.floor(idx / RUMBLE) % 2 === 0
+      if (!nearField) {
 
       // grama: listras sutis por cima do gradiente de base
       ctx.fillStyle = alt ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)"
@@ -1318,6 +1331,8 @@ export class AutoDashEngine {
       edgeL.push(sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2)
       edgeR.push(sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2)
       maxY = sy2
+      roadStarted = true
+      } // fim do asfalto (pulado no campo próximo)
 
       // sprites deste segmento
       const carsHere = bySeg.get(idx)
@@ -1332,6 +1347,10 @@ export class AutoDashEngine {
           sprites.push({ kind: "car", t, x: sx + sw * t.offset, y: sy, w: sw * KINDS[t.kind].w, dz: dz1 + SEG_LEN * pct })
         }
       }
+      // do campo próximo só saem VEÍCULOS: cenário e pickups ali ficariam
+      // gigantes e sem leitura, e não é informação que o jogador precise
+      if (nearField) continue
+
       if (idx === ghostIdx) {
         const pct = (ghostZ - z1) / SEG_LEN
         const sx = sx1 + (sx2 - sx1) * pct
@@ -1667,6 +1686,29 @@ export class AutoDashEngine {
     if (t.kind === "moto") {
       ctx.fillStyle = shade("#111827", Math.max(0.5, amb))
       ctx.beginPath(); ctx.arc(x, by + h * 0.28, w * 0.34, 0, Math.PI * 2); ctx.fill() // capacete
+    }
+    if (t.role === "police") {
+      // faixa branca na lateral + giroflex no teto alternando vermelho/azul
+      ctx.fillStyle = `rgba(241,245,249,${0.55 + amb * 0.35})`
+      rr(ctx, bx, by + h * 0.52, w, h * 0.16, 0)
+      const barW = w * 0.62, barH = Math.max(2, h * 0.13)
+      const barX = x - barW / 2, barY = by - barH * 0.7
+      ctx.fillStyle = shade("#0f172a", Math.max(0.5, amb))
+      rr(ctx, barX, barY, barW, barH, barH * 0.35)
+      // pisca em fases opostas: metade vermelha, metade azul, alternando
+      const on = Math.floor(performance.now() / 110) % 2 === 0
+      const L = on ? "#ef4444" : "#1e293b", R = on ? "#1e293b" : "#3b82f6"
+      ctx.fillStyle = L; rr(ctx, barX, barY, barW / 2, barH, barH * 0.35)
+      ctx.fillStyle = R; rr(ctx, barX + barW / 2, barY, barW / 2, barH, barH * 0.35)
+      // halo: à noite o giroflex lava a pista em volta
+      if (w > 5) {
+        const glow = ctx.createRadialGradient(x, barY, barH * 0.4, x, barY, w * 1.15)
+        const c = on ? "239,68,68" : "59,130,246"
+        glow.addColorStop(0, `rgba(${c},${0.22 + (1 - amb) * 0.4})`)
+        glow.addColorStop(1, `rgba(${c},0)`)
+        ctx.fillStyle = glow
+        ctx.beginPath(); ctx.ellipse(x, barY, w * 1.15, w * 0.62, 0, 0, Math.PI * 2); ctx.fill()
+      }
     }
     // lanternas
     const tail = amb < 0.62 ? "#ff3b30" : shade("#c81e1e", amb + 0.25)
