@@ -193,6 +193,21 @@ export class AutoDashEngine {
     this.vignetteSprite = cv
     return cv
   }
+  // halo warm das luminárias da ponte, cacheado pelo mesmo motivo da vinheta
+  private glowSprite: HTMLCanvasElement | null = null
+  private glowTex(): HTMLCanvasElement {
+    if (this.glowSprite) return this.glowSprite
+    const cv = document.createElement("canvas")
+    cv.width = 64; cv.height = 64
+    const c = cv.getContext("2d")!
+    const g = c.createRadialGradient(32, 32, 2, 32, 32, 32)
+    g.addColorStop(0, "rgba(255,233,168,0.4)")
+    g.addColorStop(1, "rgba(255,233,168,0)")
+    c.fillStyle = g
+    c.fillRect(0, 0, 64, 64)
+    this.glowSprite = cv
+    return cv
+  }
   private raining = false
   private rainT = 0
   private rainRollT = 0
@@ -1651,12 +1666,17 @@ export class AutoDashEngine {
         ctx.fillStyle = shade(alt ? "#9aa4b5" : "#7e8899", amb)
         poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 0.97, ry1, sx2 - sw2 * 0.97, ry2, sx2 - sw2 * 1.11, ry2)
         poly(ctx, sx1 + sw1 * 0.97, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 0.97, ry2)
-        ctx.fillStyle = shade("#d7dce6", amb)
-        poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 1.075, ry1, sx2 - sw2 * 1.075, ry2, sx2 - sw2 * 1.11, ry2)
-        poly(ctx, sx1 + sw1 * 1.075, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 1.075, ry2)
-        // ENGENHARIA: tirantes verticais (os cabos que seguram o tabuleiro),
-        // subindo do guarda-corpo — altura acompanha a escala do segmento
-        if (alt) {
+        // friso do corrimão só quando tem largura de tela (subpixel = shimmer)
+        if (sw1 > 6) {
+          ctx.fillStyle = shade("#d7dce6", amb)
+          poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 1.075, ry1, sx2 - sw2 * 1.075, ry2, sx2 - sw2 * 1.11, ry2)
+          poly(ctx, sx1 + sw1 * 1.075, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 1.075, ry2)
+        }
+        // Detalhes SÓ quando o segmento tem tamanho de tela pra isso — desenhar
+        // tirante/poste subpixel no horizonte era o "mistura tudo" (mesma
+        // classe do antigo bleed da zebra) e pagava caro à toa.
+        // ENGENHARIA: tirantes verticais (os cabos que seguram o tabuleiro)
+        if (alt && sw1 > 10) {
           const hang = sw1 * 0.5
           ctx.strokeStyle = shade("#b23a30", amb)
           ctx.lineWidth = Math.max(1, sw1 * 0.012)
@@ -1665,9 +1685,9 @@ export class AutoDashEngine {
           ctx.moveTo(sx1 + sw1 * 1.05, ry1); ctx.lineTo(sx1 + sw1 * 1.05, ry1 - hang)
           ctx.stroke()
         }
-        // ILUMINAÇÃO: postes com luminária warm de tempos em tempos; à noite
-        // a luz "acende" com halo
-        if (idx % 6 === 0) {
+        // ILUMINAÇÃO: postes warm; à noite acendem com halo (sprite CACHEADO —
+        // criar gradiente radial por poste por frame derrubava o FPS)
+        if (idx % 6 === 0 && sw1 > 12) {
           const lh = sw1 * 0.32
           ctx.fillStyle = shade("#64748b", amb)
           ctx.fillRect(sx1 - sw1 * 1.09, ry1 - lh, Math.max(1, sw1 * 0.015), lh)
@@ -1676,15 +1696,10 @@ export class AutoDashEngine {
           ctx.fillStyle = lit ? "#ffe9a8" : shade("#e2e8f0", amb)
           ctx.beginPath(); ctx.arc(sx1 - sw1 * 1.08, ry1 - lh, Math.max(1, sw1 * 0.022), 0, Math.PI * 2); ctx.fill()
           ctx.beginPath(); ctx.arc(sx1 + sw1 * 1.08, ry1 - lh, Math.max(1, sw1 * 0.022), 0, Math.PI * 2); ctx.fill()
-          if (lit && sw1 > 30) {
-            const g = ctx.createRadialGradient(sx1 - sw1 * 1.08, ry1 - lh, 1, sx1 - sw1 * 1.08, ry1 - lh, sw1 * 0.3)
-            g.addColorStop(0, "rgba(255,233,168,0.35)"); g.addColorStop(1, "rgba(255,233,168,0)")
-            ctx.fillStyle = g
-            ctx.beginPath(); ctx.arc(sx1 - sw1 * 1.08, ry1 - lh, sw1 * 0.3, 0, Math.PI * 2); ctx.fill()
-            const g2 = ctx.createRadialGradient(sx1 + sw1 * 1.08, ry1 - lh, 1, sx1 + sw1 * 1.08, ry1 - lh, sw1 * 0.3)
-            g2.addColorStop(0, "rgba(255,233,168,0.35)"); g2.addColorStop(1, "rgba(255,233,168,0)")
-            ctx.fillStyle = g2
-            ctx.beginPath(); ctx.arc(sx1 + sw1 * 1.08, ry1 - lh, sw1 * 0.3, 0, Math.PI * 2); ctx.fill()
+          if (lit && sw1 > 26) {
+            const gs = this.glowTex(), gw = sw1 * 0.6
+            ctx.drawImage(gs, sx1 - sw1 * 1.08 - gw / 2, ry1 - lh - gw / 2, gw, gw)
+            ctx.drawImage(gs, sx1 + sw1 * 1.08 - gw / 2, ry1 - lh - gw / 2, gw, gw)
           }
         }
       } else {
