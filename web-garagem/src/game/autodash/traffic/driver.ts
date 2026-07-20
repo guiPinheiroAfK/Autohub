@@ -187,24 +187,39 @@ export class PoliceDriver extends Driver {
   // quando o jogador segue acelerando ela não recupera. Freia bem mais rápido.
   private static readonly ACCEL = 55
   private static readonly DECEL = 170
+  // distância em Z abaixo da qual a viatura NÃO entra na faixa do jogador
+  private static readonly CLOSE = 1500
 
   drive(self: Traffic, world: WorldView, dt: number): number {
     const gap = world.wrapDz(self.z, world.playerZ) // >0: viatura à frente do jogador
     const ahead = this.nearestAhead(self, world)
 
-    // decisão de faixa: mira no jogador, mas se tiver carro travando na frente,
-    // contorna pra qualquer lado livre (agressiva, sem se importar de cortar você)
+    // REGRA DE OURO: a viatura só entra na faixa do jogador quando está LONGE em
+    // Z. Colada, ela segura a linha — senão o movimento lateral vira um "pulo"
+    // em cima de você, impossível de desviar. Ela ameaça fechando a distância,
+    // não teleportando de lado.
+    const canEnterPlayerLane = Math.abs(gap) > PoliceDriver.CLOSE
+
     if (self.blinkT <= 0 && self.targetOffset === self.offset) {
-      if (ahead && ahead.speed < world.playerSpeed - 10) {
-        // trânsito travando: dá a volta
-        const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
-        this.tryLaneChange(self, world, sides, 800, 0.3, false)
-      } else if (Math.abs(self.offset - world.playerX) > 0.1 && Math.abs(gap) > 1500) {
-        // caminho livre: mira na faixa do jogador (não se joga de lado no mesmo Z)
+      let want: number | null = null
+      if (ahead && ahead.speed < self.speed - 10) {
+        // trânsito travando ELA (não o jogador): contorna pro lado livre
+        for (const side of Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]) {
+          const lane = self.offset + side
+          if (lane < -0.9 || lane > 0.9) continue
+          if (!this.laneFree(self, world, lane, 800)) continue
+          if (!canEnterPlayerLane && Math.abs(world.playerX - lane) < 0.3) continue
+          want = lane; break
+        }
+      } else if (canEnterPlayerLane && Math.abs(self.offset - world.playerX) > 0.1) {
+        // aproximação de longe: alinha na faixa do jogador pra fechar o cerco
         const dir = Math.sign(world.playerX - self.offset)
         const lane = clamp(self.offset + dir * 0.5, -0.75, 0.75)
-        if (this.laneFree(self, world, lane, 300)) { self.targetOffset = lane; self.blinkT = 0.2 }
+        if (this.laneFree(self, world, lane, 300)) want = lane
       }
+      // blink > 0.3 dá um instante de seta antes de sair da faixa (telegrafa o
+      // movimento em vez de pular de lado no mesmo frame)
+      if (want !== null) { self.targetOffset = want; self.blinkT = 0.55 }
     }
 
     // alvo de velocidade: cola no jogador (à frente alivia, atrás persegue), sob o teto
