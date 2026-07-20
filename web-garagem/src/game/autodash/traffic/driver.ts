@@ -227,10 +227,13 @@ export class PoliceDriver extends Driver {
     // vira rubber-band e a fuga fica impossível.
     const atras = -gap // >0 quando a viatura está atrás de você
     // marcos da perseguição, por entidade:
-    // engaged = colou em você uma vez · wasAhead/beaten = você a ultrapassou
+    // engaged = já te ACERTOU um encostão · wasAhead/beaten = você a ultrapassou
     // (limiares folgados: durante o encostão o gap oscila em ±150 e disparava
     // wasAhead/beaten espúrios — a viatura "desistia" no meio da prensada)
-    if (Math.abs(gap) < 600) self.engaged = true
+    // Engajar só no CONTATO (backoffT é setado pelo engine no encostão), não por
+    // proximidade: chegar perto e não conseguir bater não conta — ela insiste
+    // na caçada até acertar você pelo menos uma vez.
+    if (self.backoffT && self.backoffT > 0) self.engaged = true
     if (gap > 400) self.wasAhead = true
     if (self.wasAhead && atras > 400) self.beaten = true
 

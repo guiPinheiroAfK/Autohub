@@ -152,6 +152,7 @@ export class AutoDashEngine {
   private immuneT = 0 // invulnerabilidade pós-escudo — vale contra TUDO
   private policeHitT = 0 // cooldown pós-encostão — vale SÓ contra viatura
   private policeEscapeT = 0 // tempo mantendo distância da polícia (protótipo do "despiste")
+  private policeChaseT = 0 // duração da perseguição atual — despiste só vale após o aquecimento
   private particles: Particle[] = []
   private floaters: Floater[] = []
   private drops: Drop[] = []
@@ -465,8 +466,11 @@ export class AutoDashEngine {
         nearestPolice = Math.min(nearestPolice, Math.abs(this.wrapDz(t.z, playerZ)))
       }
       if (hasPolice) {
-        // recuo pós-encostão não conta como fuga: elas aliviaram, você não escapou
-        if (nearestPolice > 10000 && !anyBackoff) {
+        this.policeChaseT += dt
+        // aquecimento: nos primeiros segundos a caçada não pode ser despistada —
+        // elas acabaram de chegar, insistem. Recuo pós-encostão também não conta
+        // como fuga: elas aliviaram, você não escapou.
+        if (nearestPolice > 10000 && !anyBackoff && this.policeChaseT > 6) {
           this.policeEscapeT += dt
           if (this.policeEscapeT >= 3) {
             for (const t of this.traffic) if (t.role === "police") t.dead = true
@@ -479,6 +483,7 @@ export class AutoDashEngine {
         }
       } else {
         this.policeEscapeT = 0
+        this.policeChaseT = 0
       }
     }
 
@@ -1036,7 +1041,7 @@ export class AutoDashEngine {
     this.rpm = RPM_IDLE
     this.score = 0; this.km = 0; this.combo = 0; this.comboT = 0
     this.nitroMeter = 0; this.nitroOn = false
-    this.shield = false; this.immuneT = 0; this.policeHitT = 0; this.policeEscapeT = 0; this.mult2T = 0
+    this.shield = false; this.immuneT = 0; this.policeHitT = 0; this.policeEscapeT = 0; this.policeChaseT = 0; this.mult2T = 0
     this.level = 0; this.levelUpT = 0
     this.powerups = []; this.puTimer = 6
     this.curveWarn = 0; this.collWarn = null
