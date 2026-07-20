@@ -76,7 +76,7 @@ interface Obstacle { z: number; offset: number; kind: "cone" | "barrier"; w: num
 //  speedtrap — radar (placa 90): trânsito reduz, polícia observando; passar
 //              rápido demais = perseguição (o evento da conversa original)
 interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap"; z: number; end: number; spawnT: number; checked?: boolean }
-interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway"; label?: string }
+interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn"; label?: string }
 
 const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
@@ -360,6 +360,11 @@ export class AutoDashEngine {
         s.y1 += AMP * Math.sin(Math.PI * i / nSegs)
         s.y2 += AMP * Math.sin(Math.PI * (i + 1) / nSegs)
       }
+      // placas de aviso antes da cabeceira
+      this.roadSigns.push(
+        { z: at(2500), type: "bridgewarn", label: "PONTE" },
+        { z: at(4500), type: "bridgewarn", label: "PONTE" },
+      )
       note("🌉 ponte à frente (debug)")
     } else if (kind === "viaduct") {
       // viaduto grandão cruzando por cima + carros saindo dele e entrando na
@@ -1549,6 +1554,7 @@ export class AutoDashEngine {
     const bridgeSpan = new Set<number>()
     const towerSegs = new Set<number>()
     const wrongwaySpan = new Set<number>()
+    const wrongwayRamp = new Map<number, number>()
     for (const zn of this.zones) {
       if (zn.type === "viaduct") viaductSegs.add(Math.floor(zn.z / SEG_LEN) % N)
       else if (zn.type === "bridge") {
@@ -1561,6 +1567,13 @@ export class AutoDashEngine {
         const a = Math.floor(zn.z / SEG_LEN) % N
         const len = ((Math.floor(zn.end / SEG_LEN) - Math.floor(zn.z / SEG_LEN)) % N + N) % N
         for (let i = 0; i <= len; i++) wrongwaySpan.add((a + i) % N)
+        // CONTEXTO da mão dupla: bifurcações à esquerda nas duas pontas — a rua
+        // pra onde os carros da contramão VÃO (cabeceira) e a de onde eles VÊM
+        // (fim da zona). f cresce com a distância da junção = via divergindo.
+        for (let i = 0; i <= 14; i++) {
+          wrongwayRamp.set(((a - i) % N + N) % N, i / 14)
+          wrongwayRamp.set((a + len + i) % N, i / 14)
+        }
       }
     }
     const bySeg = new Map<number, Traffic[]>()
@@ -1634,14 +1647,45 @@ export class AutoDashEngine {
         // vão da ponte: água no lugar da grama, guarda-corpo no lugar da zebra
         ctx.fillStyle = shade(alt ? "#14425f" : "#123c57", amb)
         ctx.fillRect(-10, ry2, W + 20, ry1 - ry2 + 1)
+        // guarda-corpo (mureta) com friso claro no topo — o "corrimão"
         ctx.fillStyle = shade(alt ? "#9aa4b5" : "#7e8899", amb)
         poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 0.97, ry1, sx2 - sw2 * 0.97, ry2, sx2 - sw2 * 1.11, ry2)
         poly(ctx, sx1 + sw1 * 0.97, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 0.97, ry2)
-        // cabo de suspensão: postes curtinhos no topo do guarda-corpo
+        ctx.fillStyle = shade("#d7dce6", amb)
+        poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 1.075, ry1, sx2 - sw2 * 1.075, ry2, sx2 - sw2 * 1.11, ry2)
+        poly(ctx, sx1 + sw1 * 1.075, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 1.075, ry2)
+        // ENGENHARIA: tirantes verticais (os cabos que seguram o tabuleiro),
+        // subindo do guarda-corpo — altura acompanha a escala do segmento
         if (alt) {
-          ctx.fillStyle = shade("#b23a30", amb)
-          ctx.fillRect(sx1 - sw1 * 1.06, ry1 - sw1 * 0.055, Math.max(1, sw1 * 0.02), sw1 * 0.055)
-          ctx.fillRect(sx1 + sw1 * 1.04, ry1 - sw1 * 0.055, Math.max(1, sw1 * 0.02), sw1 * 0.055)
+          const hang = sw1 * 0.5
+          ctx.strokeStyle = shade("#b23a30", amb)
+          ctx.lineWidth = Math.max(1, sw1 * 0.012)
+          ctx.beginPath()
+          ctx.moveTo(sx1 - sw1 * 1.05, ry1); ctx.lineTo(sx1 - sw1 * 1.05, ry1 - hang)
+          ctx.moveTo(sx1 + sw1 * 1.05, ry1); ctx.lineTo(sx1 + sw1 * 1.05, ry1 - hang)
+          ctx.stroke()
+        }
+        // ILUMINAÇÃO: postes com luminária warm de tempos em tempos; à noite
+        // a luz "acende" com halo
+        if (idx % 6 === 0) {
+          const lh = sw1 * 0.32
+          ctx.fillStyle = shade("#64748b", amb)
+          ctx.fillRect(sx1 - sw1 * 1.09, ry1 - lh, Math.max(1, sw1 * 0.015), lh)
+          ctx.fillRect(sx1 + sw1 * 1.075, ry1 - lh, Math.max(1, sw1 * 0.015), lh)
+          const lit = amb < 0.7
+          ctx.fillStyle = lit ? "#ffe9a8" : shade("#e2e8f0", amb)
+          ctx.beginPath(); ctx.arc(sx1 - sw1 * 1.08, ry1 - lh, Math.max(1, sw1 * 0.022), 0, Math.PI * 2); ctx.fill()
+          ctx.beginPath(); ctx.arc(sx1 + sw1 * 1.08, ry1 - lh, Math.max(1, sw1 * 0.022), 0, Math.PI * 2); ctx.fill()
+          if (lit && sw1 > 30) {
+            const g = ctx.createRadialGradient(sx1 - sw1 * 1.08, ry1 - lh, 1, sx1 - sw1 * 1.08, ry1 - lh, sw1 * 0.3)
+            g.addColorStop(0, "rgba(255,233,168,0.35)"); g.addColorStop(1, "rgba(255,233,168,0)")
+            ctx.fillStyle = g
+            ctx.beginPath(); ctx.arc(sx1 - sw1 * 1.08, ry1 - lh, sw1 * 0.3, 0, Math.PI * 2); ctx.fill()
+            const g2 = ctx.createRadialGradient(sx1 + sw1 * 1.08, ry1 - lh, 1, sx1 + sw1 * 1.08, ry1 - lh, sw1 * 0.3)
+            g2.addColorStop(0, "rgba(255,233,168,0.35)"); g2.addColorStop(1, "rgba(255,233,168,0)")
+            ctx.fillStyle = g2
+            ctx.beginPath(); ctx.arc(sx1 + sw1 * 1.08, ry1 - lh, sw1 * 0.3, 0, Math.PI * 2); ctx.fill()
+          }
         }
       } else {
       // grama: listras sutis por cima do gradiente de base
@@ -1655,6 +1699,14 @@ export class AutoDashEngine {
       // asfalto
       ctx.fillStyle = alt ? roadL : roadD
       poly(ctx, sx1 - sw1, ry1, sx1 + sw1, ry1, sx2 + sw2, ry2, sx2 - sw2, ry2)
+      // bifurcação da mão dupla: braço de asfalto divergindo à esquerda
+      const rampF1 = wrongwayRamp.get(idx)
+      if (rampF1 !== undefined) {
+        const rampF2 = wrongwayRamp.get((idx + 1) % N) ?? rampF1
+        poly(ctx,
+          sx1 - sw1 * (0.97 + 2.0 * rampF1), ry1, sx1 - sw1 * 0.97, ry1,
+          sx2 - sw2 * 0.97, ry2, sx2 - sw2 * (0.97 + 2.0 * rampF2), ry2)
+      }
       // linhas de faixa
       if (alt) {
         ctx.fillStyle = laneC
@@ -2065,6 +2117,19 @@ export class AutoDashEngine {
         ctx.fillText(sign.type === "limit90" ? "90" : "60", x, cy + r * 0.32)
         ctx.textAlign = "left"
       }
+    } else if (sign.type === "bridgewarn") {
+      // aviso de ponte: losango amarelo com o vão desenhado
+      ctx.fillStyle = shade("#fbbf24", amb)
+      ctx.beginPath()
+      ctx.moveTo(x, cy - r * 1.05); ctx.lineTo(x + r * 1.05, cy)
+      ctx.lineTo(x, cy + r * 1.05); ctx.lineTo(x - r * 1.05, cy)
+      ctx.closePath(); ctx.fill()
+      if (r > 5) {
+        ctx.fillStyle = "#0f172a"
+        ctx.fillRect(x - r * 0.55, cy - r * 0.06, r * 1.1, r * 0.14) // tabuleiro
+        ctx.fillRect(x - r * 0.38, cy + r * 0.08, r * 0.1, r * 0.3)  // pilares
+        ctx.fillRect(x + r * 0.28, cy + r * 0.08, r * 0.1, r * 0.3)
+      }
     } else {
       // mão dupla/contramão: proibido (círculo vermelho, barra branca)
       ctx.fillStyle = shade("#dc2626", amb)
@@ -2086,35 +2151,54 @@ export class AutoDashEngine {
   }
 
   /**
-   * Viaduto cruzando por cima — grandão: pilares altos, tabuleiro com
-   * guard-rail e carrinhos passando lá em cima. Você passa por baixo; os
-   * carros que "saem" dele entram na sua via pela direita (merge no spawn).
+   * Viaduto cruzando por cima — largo, com o vão central LIVRE (nenhum pilar
+   * sobre a pista) e uma alça de descida à direita: é DALI que os carros saem
+   * e fazem merge na sua via. Contexto > enfeite.
    */
   private drawBridge(x: number, y: number, w: number, amb: number) {
     const ctx = this.ctx
     const conc = shade("#8b95a8", amb)
     const dark = shade("#5b657d", amb * 0.85)
     const ph = w * 1.55, deckH = w * 0.3
-    // pilares (dois vãos: bordas e centro)
+    const deckY = y - ph - deckH
+    // pilares SÓ fora da pista (a pista vai de -w a +w; pilar mais interno a 1.55w)
     ctx.fillStyle = dark
-    ctx.fillRect(x - w * 1.7, y - ph, w * 0.22, ph)
-    ctx.fillRect(x - w * 0.11, y - ph, w * 0.22, ph)
-    ctx.fillRect(x + w * 1.48, y - ph, w * 0.22, ph)
-    // tabuleiro (extrapola as bordas quando perto = sensação de passar por baixo)
+    ctx.fillRect(x - w * 3.1, y - ph, w * 0.24, ph)
+    ctx.fillRect(x - w * 1.62, y - ph, w * 0.24, ph)
+    ctx.fillRect(x + w * 1.38, y - ph, w * 0.24, ph)
+    ctx.fillRect(x + w * 2.86, y - ph, w * 0.24, ph)
+    // tabuleiro largo (extrapola as bordas quando perto = passar por baixo)
     ctx.fillStyle = conc
-    ctx.fillRect(x - w * 2.6, y - ph - deckH, w * 5.2, deckH)
-    // guard-rail em cima do tabuleiro
+    ctx.fillRect(x - w * 3.6, deckY, w * 7.2, deckH)
     ctx.fillStyle = dark
-    ctx.fillRect(x - w * 2.6, y - ph - deckH - w * 0.07, w * 5.2, w * 0.07)
-    // carrinhos cruzando lá em cima (silhuetas)
-    if (w > 14) {
+    ctx.fillRect(x - w * 3.6, deckY - w * 0.07, w * 7.2, w * 0.07)
+    // ALÇA DE DESCIDA à direita: rampa saindo do tabuleiro até o nível da via —
+    // o "motivo" do viaduto: os carros descem por aqui e entram na sua estrada
+    ctx.fillStyle = conc
+    ctx.beginPath()
+    ctx.moveTo(x + w * 2.2, deckY + deckH * 0.4)
+    ctx.lineTo(x + w * 3.1, deckY + deckH * 0.4)
+    ctx.lineTo(x + w * 4.6, y)
+    ctx.lineTo(x + w * 3.7, y)
+    ctx.closePath(); ctx.fill()
+    // guard-rail da rampa
+    ctx.strokeStyle = dark
+    ctx.lineWidth = Math.max(1, w * 0.05)
+    ctx.beginPath()
+    ctx.moveTo(x + w * 2.2, deckY + deckH * 0.3)
+    ctx.lineTo(x + w * 3.7, y - w * 0.06)
+    ctx.stroke()
+    // carrinhos: um cruzando o vão e um DESCENDO a rampa (o contexto em movimento)
+    if (w > 12) {
       const cw = w * 0.34, chh = w * 0.13
-      const roll = (performance.now() / 26) % (w * 6.4)
-      const carX = x - w * 2.5 + roll - w * 0.6
+      const roll = (performance.now() / 26) % (w * 8)
       ctx.fillStyle = shade("#64748b", amb)
-      rr(ctx, carX, y - ph - deckH - w * 0.07 - chh, cw, chh, chh * 0.35)
+      rr(ctx, x - w * 3.4 + roll, deckY - w * 0.07 - chh, cw, chh, chh * 0.35)
+      // na rampa: interpola do topo da alça até a base
+      const p = (performance.now() / 2600) % 1
+      const rx = x + w * (2.65 + 1.5 * p), ry = deckY + deckH * 0.4 + (y - deckY - deckH * 0.4) * p
       ctx.fillStyle = shade("#eab308", amb)
-      rr(ctx, x + w * 2.1 - roll * 0.7, y - ph - deckH - w * 0.07 - chh, cw * 0.8, chh, chh * 0.35)
+      rr(ctx, rx, ry - chh, cw * 0.8, chh, chh * 0.35)
     }
   }
 
@@ -2551,6 +2635,31 @@ export class AutoDashEngine {
     }
     ctx.stroke()
     ctx.lineWidth = 1
+
+    // travessia d'água: o trecho de ponte aparece em azul no GPS (halo = lago)
+    const bset = new Set<number>()
+    for (const zn of this.zones) {
+      if (zn.type !== "bridge") continue
+      const a = Math.floor(zn.z / SEG_LEN) % N
+      const len = ((Math.floor(zn.end / SEG_LEN) - Math.floor(zn.z / SEG_LEN)) % N + N) % N
+      for (let i = 0; i <= len; i++) bset.add((a + i) % N)
+    }
+    if (bset.size) {
+      for (const pass of [{ w: 9, c: "rgba(56,189,248,0.22)" }, { w: 4, c: "rgba(56,189,248,0.95)" }]) {
+        ctx.lineWidth = pass.w
+        ctx.strokeStyle = pass.c
+        ctx.beginPath()
+        let drawing = false
+        for (let k2 = 1; k2 < pts.length; k2++) {
+          if (bset.has((start + k2 * 2) % N)) {
+            if (!drawing) { ctx.moveTo(pts[k2 - 1].x, pts[k2 - 1].y); drawing = true }
+            ctx.lineTo(pts[k2].x, pts[k2].y)
+          } else drawing = false
+        }
+        ctx.stroke()
+      }
+      ctx.lineWidth = 1
+    }
 
     // viaturas em perseguição: pontos vermelhos pulsantes (somem quando despista).
     // à frente ficam no traçado; atrás, logo abaixo da seta (te seguindo)
