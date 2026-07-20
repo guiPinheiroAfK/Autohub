@@ -63,12 +63,17 @@ export abstract class Driver {
   protected applyMovement(self: Traffic, world: WorldView, spd: number, dt: number) {
     if (self.blinkT > 0) self.blinkT -= dt
     if (self.targetOffset !== self.offset && self.blinkT <= 0.3) {
-      // aborta a troca se alguém surgiu na faixa destino enquanto se movia
+      // aborta a troca se alguém surgiu na faixa destino enquanto se movia —
+      // incluindo O JOGADOR (senão o carro finaliza o merge em cima de você)
       let blocked = false
       for (const o of world.traffic) {
         if (o === self) continue
         const dz = Math.abs(world.wrapDz(o.z, self.z))
         if (dz < 500 && Math.abs(o.offset - self.targetOffset) < 0.25) { blocked = true; break }
+      }
+      if (!blocked && !world.demo && self.role !== "police") {
+        const pDz = Math.abs(world.wrapDz(world.playerZ, self.z))
+        if (pDz < 800 && Math.abs(world.playerX - self.targetOffset) < 0.3) blocked = true
       }
       if (blocked) {
         self.targetOffset = self.offset
@@ -104,7 +109,10 @@ export abstract class Driver {
     const gap = world.wrapDz(ahead.z, self.z)
     const safe = (KINDS[self.kind].len + KINDS[ahead.kind].len) / 2 + 80
     if (gap < safe) spd = Math.min(spd, ahead.speed)
-    if (gap < safe * 0.6) spd = Math.min(spd, Math.max(0, ahead.speed - 25))
+    // muito colado: freia FORTE e cedo — em frenagem coletiva (blitz/radar) o
+    // da frente desacelera abaixo do próprio cruise e o de trás entrava nele
+    if (gap < safe * 0.75) spd = Math.min(spd, Math.max(0, ahead.speed - 35))
+    if (gap < safe * 0.45) spd = Math.min(spd, Math.max(0, ahead.speed - 70))
     return spd
   }
 }

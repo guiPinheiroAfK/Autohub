@@ -347,18 +347,29 @@ export class AutoDashEngine {
     const at = (d: number) => ((this.position + d) % this.trackLen + this.trackLen) % this.trackLen
     const note = (text: string) => this.floaters.push({ text, color: "#fbbf24", y: H * 0.38, life: 1.6, big: false })
     if (kind === "bridge") {
-      // ponte suspensa (Golden Gate): você dirige EM CIMA — água, guarda-corpo
-      // e torres vermelhas pelo caminho
-      this.zones.push({ type: "bridge", z: at(6000), end: at(6000 + 16000), spawnT: 0 })
+      // ponte suspensa (Golden Gate): você dirige EM CIMA — e ela SOBE: rampa,
+      // vão alto entre as torres, descida. Água, guarda-corpo, torres vermelhas.
+      const LEN = 32000, AMP = 1500
+      const z = at(6000)
+      this.zones.push({ type: "bridge", z, end: at(6000 + LEN), spawnT: 0 })
+      // perfil de elevação sobreposto ao traçado (seno: 0 nas pontas, pico no
+      // meio — mantém a continuidade y2->y1 entre segmentos vizinhos)
+      const a = Math.floor(z / SEG_LEN), nSegs = Math.floor(LEN / SEG_LEN), N = this.segments.length
+      for (let i = 0; i < nSegs; i++) {
+        const s = this.segments[(a + i) % N]
+        s.y1 += AMP * Math.sin(Math.PI * i / nSegs)
+        s.y2 += AMP * Math.sin(Math.PI * (i + 1) / nSegs)
+      }
       note("🌉 ponte à frente (debug)")
     } else if (kind === "viaduct") {
       // viaduto grandão cruzando por cima + carros saindo dele e entrando na
-      // sua via (merge pela direita, com seta)
-      const z = at(7000)
-      this.zones.push({ type: "viaduct", z, end: at(7400), spawnT: 0 })
+      // sua via (merge pela direita, com seta). Longe o bastante pra você ver
+      // ele crescer no horizonte em vez de nascer em cima
+      const z = at(14000)
+      this.zones.push({ type: "viaduct", z, end: at(14400), spawnT: 0 })
       for (let i = 0; i < 2; i++) {
         this.traffic.push({
-          z: at(8200 + i * 700), offset: 1.25, targetOffset: 0.75,
+          z: at(15200 + i * 700), offset: 1.25, targetOffset: 0.75,
           speed: 88 + Math.random() * 18, kind: "car", role: "civilian",
           color: TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)],
           blinkT: 0.9, prevD: 1,
@@ -366,19 +377,36 @@ export class AutoDashEngine {
       }
       note("🛣️ viaduto à frente — carros entrando!")
     } else if (kind === "obstacles") {
-      // funil de cones fechando a faixa da direita + barreira nas 2 da direita
-      for (let i = 0; i < 5; i++) this.obstacles.push({ z: at(5000 + i * 300), offset: 0.85 - i * 0.06, kind: "cone", w: 0.10, len: 90 })
-      this.obstacles.push({ z: at(6900), offset: 0.5, kind: "barrier", w: 0.55, len: 140 })
+      // padrão, lado e distância sorteados a cada spawn
+      const base = 4200 + Math.floor(Math.random() * 3500)
+      const side = Math.random() < 0.5 ? 1 : -1 // 1 = direita, -1 = esquerda
+      const roll = Math.random()
+      if (roll < 0.4) {
+        // funil de cones fechando uma borda + barreira nas 2 faixas desse lado
+        for (let i = 0; i < 5; i++) this.obstacles.push({ z: at(base + i * 300), offset: side * (0.85 - i * 0.06), kind: "cone", w: 0.10, len: 90 })
+        this.obstacles.push({ z: at(base + 1900), offset: side * 0.5, kind: "barrier", w: 0.55, len: 140 })
+      } else if (roll < 0.72) {
+        // slalom: cones alternando de lado pelo meio da pista
+        for (let i = 0; i < 6; i++) this.obstacles.push({ z: at(base + i * 650), offset: (i % 2 === 0 ? 1 : -1) * (0.2 + Math.random() * 0.25), kind: "cone", w: 0.10, len: 90 })
+      } else {
+        // obra: barreira numa faixa do meio + cones sinalizando antes
+        const lane = side * 0.25
+        for (let i = 0; i < 3; i++) this.obstacles.push({ z: at(base + i * 350), offset: lane, kind: "cone", w: 0.10, len: 90 })
+        this.obstacles.push({ z: at(base + 1400), offset: lane, kind: "barrier", w: 0.3, len: 140 })
+      }
       note("🚧 obstáculos à frente (debug)")
     } else if (kind === "wrongway") {
       // MÃO DUPLA: as 2 faixas da esquerda viram contramão por um trecho longo;
       // placas avisam a extensão e o trânsito do seu lado se espreme na direita
+      const LEN = 160000
       const z = at(9000)
-      this.zones.push({ type: "wrongway", z, end: at(9000 + 160000), spawnT: 0 })
+      this.zones.push({ type: "wrongway", z, end: at(9000 + LEN), spawnT: 0 })
+      // aviso antes + placas repetidas ao longo do trecho inteiro
       this.roadSigns.push(
         { z: at(4000), type: "wrongway", label: "2 km" },
         { z: at(7000), type: "wrongway", label: "2 km" },
       )
+      for (let d = 12000; d < LEN; d += 18000) this.roadSigns.push({ z: at(9000 + d), type: "wrongway" })
       note("⛔ MÃO DUPLA à frente — 2 km!")
     } else if (kind === "blitz") {
       // blitz: aqui é 60! placas, funil de cones, barreira nas 2 faixas da
@@ -626,13 +654,24 @@ export class AutoDashEngine {
             }
           }
           // o trânsito do SEU sentido se adapta: quem está na esquerda dentro
-          // da zona corre pras faixas da direita (e fica lá)
+          // da zona migra pra uma faixa da direita LIVRE (checando os outros e
+          // o jogador — mandar às cegas fazia eles se jogarem em cima de tudo).
+          // Sem vaga? Freia e espera abrir.
           for (const t of this.traffic) {
             if (t.role !== "civilian" || t.parked) continue
             const d = this.wrapDz(t.z, zn.z)
             if (d > -6000 && this.wrapDz(zn.end, t.z) > 0 && t.targetOffset < 0.1) {
-              t.targetOffset = t.offset < -0.5 ? 0.25 : 0.75
-              t.blinkT = Math.max(t.blinkT, 0.5)
+              let moved = false
+              for (const lane of [0.25, 0.75]) {
+                let clear = true
+                for (const o of this.traffic) {
+                  if (o === t) continue
+                  if (Math.abs(this.wrapDz(o.z, t.z)) < 1100 && (Math.abs(o.offset - lane) < 0.3 || Math.abs(o.targetOffset - lane) < 0.3)) { clear = false; break }
+                }
+                if (clear && Math.abs(this.wrapDz(playerZ, t.z)) < 2200 && Math.abs(this.playerX - lane) < 0.3) clear = false
+                if (clear) { t.targetOffset = lane; t.blinkT = Math.max(t.blinkT, 0.5); moved = true; break }
+              }
+              if (!moved) t.speed = Math.max(55, t.speed - 50 * dt)
             }
           }
         }
@@ -1509,6 +1548,7 @@ export class AutoDashEngine {
     const viaductSegs = new Set<number>()
     const bridgeSpan = new Set<number>()
     const towerSegs = new Set<number>()
+    const wrongwaySpan = new Set<number>()
     for (const zn of this.zones) {
       if (zn.type === "viaduct") viaductSegs.add(Math.floor(zn.z / SEG_LEN) % N)
       else if (zn.type === "bridge") {
@@ -1517,6 +1557,10 @@ export class AutoDashEngine {
         for (let i = 0; i <= len; i++) bridgeSpan.add((a + i) % N)
         towerSegs.add((a + Math.floor(len * 0.22)) % N)
         towerSegs.add((a + Math.floor(len * 0.78)) % N)
+      } else if (zn.type === "wrongway") {
+        const a = Math.floor(zn.z / SEG_LEN) % N
+        const len = ((Math.floor(zn.end / SEG_LEN) - Math.floor(zn.z / SEG_LEN)) % N + N) % N
+        for (let i = 0; i <= len; i++) wrongwaySpan.add((a + i) % N)
       }
     }
     const bySeg = new Map<number, Traffic[]>()
@@ -1616,10 +1660,17 @@ export class AutoDashEngine {
         ctx.fillStyle = laneC
         for (let l = 1; l < 4; l++) {
           const lx = -1 + (2 * l) / 4
+          if (l === 2 && wrongwaySpan.has(idx)) continue // o centro vira a dupla amarela
           poly(ctx,
             sx1 + sw1 * lx - sw1 * 0.012, ry1, sx1 + sw1 * lx + sw1 * 0.012, ry1,
             sx2 + sw2 * lx + sw2 * 0.012, ry2, sx2 + sw2 * lx - sw2 * 0.012, ry2)
         }
+      }
+      // mão dupla: faixa dupla amarela CONTÍNUA no centro (sinalização de contramão)
+      if (wrongwaySpan.has(idx)) {
+        ctx.fillStyle = shade("#eab308", amb)
+        poly(ctx, sx1 - sw1 * 0.042, ry1, sx1 - sw1 * 0.014, ry1, sx2 - sw2 * 0.014, ry2, sx2 - sw2 * 0.042, ry2)
+        poly(ctx, sx1 + sw1 * 0.014, ry1, sx1 + sw1 * 0.042, ry1, sx2 + sw2 * 0.042, ry2, sx2 + sw2 * 0.014, ry2)
       }
       edgeL.push(sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2)
       edgeR.push(sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2)
@@ -2072,15 +2123,23 @@ export class AutoDashEngine {
     const ctx = this.ctx
     const red = shade("#c0392b", amb)
     const dark = shade("#8f2a20", amb * 0.9)
-    const ph = w * 2.1
+    const ph = w * 3.3 // BEM mais alta que o viaduto — escala de ponte suspensa
     // pernas
     ctx.fillStyle = red
-    ctx.fillRect(x - w * 1.28, y - ph, w * 0.2, ph)
-    ctx.fillRect(x + w * 1.08, y - ph, w * 0.2, ph)
-    // travessas (duas, estilo GG)
+    ctx.fillRect(x - w * 1.34, y - ph, w * 0.26, ph)
+    ctx.fillRect(x + w * 1.08, y - ph, w * 0.26, ph)
+    // travessas (três, estilo GG)
     ctx.fillStyle = dark
-    ctx.fillRect(x - w * 1.28, y - ph, w * 2.56, w * 0.14)
-    ctx.fillRect(x - w * 1.28, y - ph * 0.62, w * 2.56, w * 0.12)
+    ctx.fillRect(x - w * 1.34, y - ph, w * 2.68, w * 0.16)
+    ctx.fillRect(x - w * 1.34, y - ph * 0.66, w * 2.68, w * 0.13)
+    ctx.fillRect(x - w * 1.34, y - ph * 0.36, w * 2.68, w * 0.12)
+    // cabos principais descendo das pontas da torre
+    ctx.strokeStyle = red
+    ctx.lineWidth = Math.max(1, w * 0.05)
+    ctx.beginPath()
+    ctx.moveTo(x - w * 1.21, y - ph); ctx.quadraticCurveTo(x - w * 2.6, y - ph * 0.55, x - w * 4.2, y - ph * 0.28)
+    ctx.moveTo(x + w * 1.21, y - ph); ctx.quadraticCurveTo(x + w * 2.6, y - ph * 0.55, x + w * 4.2, y - ph * 0.28)
+    ctx.stroke()
   }
 
   private drawTraffic(t: Traffic, x: number, y: number, w: number, amb: number) {
