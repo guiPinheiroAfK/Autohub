@@ -17,7 +17,7 @@ export const KMH2UPS = 132            // 1 km/h → unidades de mundo por segund
 export const RPM_IDLE = 900
 export const RPM_REDLINE = 7600
 export const RPM_LIMITER = 7900
-export const GEAR_RATIOS = [3.4, 2.35, 1.75, 1.38, 1.12, 0.93]
+export const GEAR_RATIOS = [3.4, 2.35, 1.75, 1.38, 1.12, 0.88] // 6ª mais longa: cap ~265 km/h
 export const RPM_PER_KMH = 30         // rpm = idle + kmh * ratio * RPM_PER_KMH
 
 export type BodyKind = "gt" | "muscle" | "ninja" | "ghost"
@@ -37,22 +37,22 @@ export interface CarSpec {
 export const CARS: CarSpec[] = [
   {
     id: "gt", name: "AUTOHUB GT", body: "gt",
-    power: 46, grip: 0.72, topSpeed: 232, width: 0.26, shiftMs: 220,
+    power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220,
     desc: "Equilibrado. O clássico da casa.",
   },
   {
     id: "muscle", name: "MUSCLE 71", body: "muscle",
-    power: 58, grip: 0.55, topSpeed: 248, width: 0.31, shiftMs: 300,
+    power: 58, grip: 0.55, topSpeed: 260, width: 0.31, shiftMs: 300,
     desc: "Torque bruto e traseira solta. Largo demais pro corredor.",
   },
   {
     id: "ninja", name: "NINJA RS", body: "ninja",
-    power: 40, grip: 0.90, topSpeed: 216, width: 0.20, shiftMs: 180,
+    power: 40, grip: 0.90, topSpeed: 228, width: 0.20, shiftMs: 180,
     desc: "Estreito e grudado no chão. Costura qualquer comboio.",
   },
   {
     id: "ghost", name: "FANTASMA X", body: "ghost",
-    power: 50, grip: 0.78, topSpeed: 244, width: 0.25, shiftMs: 240,
+    power: 50, grip: 0.78, topSpeed: 256, width: 0.25, shiftMs: 240,
     desc: "Final de reta assustador. Exige mão calma.",
   },
 ]
