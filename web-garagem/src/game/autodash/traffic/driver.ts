@@ -189,8 +189,6 @@ export class PoliceDriver extends Driver {
   private static readonly DECEL = 170
   // distância em Z abaixo da qual a viatura NÃO entra na faixa do jogador
   private static readonly CLOSE = 1500
-  // dentro disso ela está "engatada": emparelha pra prensar em vez de passar reto
-  private static readonly ENGAGE = 2500
 
   drive(self: Traffic, world: WorldView, dt: number): number {
     const gap = world.wrapDz(self.z, world.playerZ) // >0: viatura à frente do jogador
@@ -235,15 +233,14 @@ export class PoliceDriver extends Driver {
     const atras = -gap // >0 quando a viatura está atrás de você
     let target: number
     if (atras > 0) {
-      // aproximação: a folga encolhe com a distância, então ela chega
-      // desacelerando e emparelha, em vez de vir no talo e passar reto
-      target = Math.min(PoliceDriver.TOP, world.playerSpeed + clamp(atras / 60, 8, 85))
-    } else if (Math.abs(gap) < PoliceDriver.ENGAGE) {
-      // já passou de você mas ainda está colada: emparelha pra prensar
-      target = Math.min(PoliceDriver.TOP, world.playerSpeed)
+      // aproximação por trás: a folga encolhe com a distância, então ela chega
+      // desacelerando e encosta, em vez de vir no talo e passar reto
+      target = Math.min(PoliceDriver.TOP, world.playerSpeed + clamp(atras / 70, 4, 60))
     } else {
-      // ficou pra trás na sua esteira: corre no próprio limite e perde você
-      target = PoliceDriver.TOP
+      // ficou À FRENTE de você: ALIVIA e deixa você passar — o lugar dela é te
+      // prensando por trás/do lado, nunca de parede na frente. Espelhar sua
+      // velocidade aqui criava um bloqueio impossível de ultrapassar.
+      target = Math.min(PoliceDriver.TOP, Math.max(0, world.playerSpeed - 25))
     }
     // acabou de dar um encostão: RECUA e abre distância antes de voltar pra cima.
     // Sem isso ela fica moendo o jogador em loop assim que o cooldown expira.
