@@ -1753,6 +1753,68 @@ export class AutoDashEngine {
   }
 
   /**
+   * Retrovisor: projeta a pista e o trânsito ATRÁS do jogador. A projeção
+   * principal é forward-only (segmento mais perto que ~PLAYER_Z já cai no teste
+   * sy2 >= maxY), então sem isso quem vem atrás é invisível.
+   *
+   * Só existe quando há viatura na pista — renderizar o mundo de trás todo frame
+   * custaria caro pra informação que, sem perseguição, ninguém usa.
+   *
+   * Perspectiva simplificada de propósito (painel de 288x86): o que importa é
+   * ler QUAL faixa e QUÃO PERTO, não fidelidade de traçado.
+   */
+  private renderRearView() {
+    if (!this.traffic.some(t => t.role === "police")) return
+    const ctx = this.ctx
+    const mw = 288, mh = 86, mx = W / 2 - mw / 2, my = 10
+    const playerZ = this.position + PLAYER_Z
+    const D_MIN = 500, D_MAX = 14000
+    const cx = mx + mw / 2
+    const hy = my + mh * 0.30          // horizonte
+    const by = my + mh                 // base = mais perto de você
+    const fOf = (d: number) => clamp(D_MIN / Math.max(d, D_MIN), 0, 1)
+    const yOf = (f: number) => hy + (by - hy) * f
+    const halfOf = (f: number) => mw * 0.52 * f + 1.5
+
+    this.glass(mx, my, mw, mh, 10)
+    ctx.save()
+    ctx.beginPath(); ctx.roundRect(mx + 2, my + 2, mw - 4, mh - 4, 9); ctx.clip()
+
+    // asfalto: trapézio do horizonte até a base, deslocado pela sua posição na
+    // pista (se você está na faixa da direita, a pista abre pra esquerda)
+    const fN = 1, fF = fOf(D_MAX)
+    const yN = yOf(fN), yF = yOf(fF), hN = halfOf(fN), hF = halfOf(fF)
+    const cN = cx - this.playerX * hN, cF = cx - this.playerX * hF
+    ctx.fillStyle = "#262c3b"
+    ctx.beginPath()
+    ctx.moveTo(cN - hN, yN); ctx.lineTo(cN + hN, yN)
+    ctx.lineTo(cF + hF, yF); ctx.lineTo(cF - hF, yF)
+    ctx.closePath(); ctx.fill()
+
+    // veículos atrás, do mais longe pro mais perto (perto desenha por cima)
+    const atras = this.traffic
+      .map(t => ({ t, d: -this.wrapDz(t.z, playerZ) }))
+      .filter(v => v.d > 0 && v.d <= D_MAX)
+      .sort((a, b) => b.d - a.d)
+    for (const { t, d } of atras) {
+      const f = fOf(d), y = yOf(f), half = halfOf(f)
+      const x = cx + (t.offset - this.playerX) * half
+      const w = Math.max(2, half * KINDS[t.kind].w * 2)
+      const h = Math.max(2, w * 0.62)
+      ctx.fillStyle = t.role === "police" ? "#3b82f6" : shade(t.color, 0.75)
+      rr(ctx, x - w / 2, y - h, w, h, Math.max(1, w * 0.18))
+      if (t.role === "police") {
+        // giroflex: alterna vermelho/azul pra ler de relance
+        const on = Math.floor(performance.now() / 120) % 2 === 0
+        ctx.fillStyle = on ? "#ef4444" : "#e0f2fe"
+        const lh = Math.max(1, h * 0.22)
+        ctx.fillRect(x - w * 0.32, y - h - lh, w * 0.64, lh)
+      }
+    }
+    ctx.restore()
+  }
+
+  /**
    * Aviso de ameaça vindo de trás. A projeção só desenha o que está À FRENTE,
    * então uma viatura te alcançando por trás é invisível até ultrapassar — do
    * nada ela "aparece" colada. Isso desenha setas na base da tela na posição
@@ -1915,6 +1977,7 @@ export class AutoDashEngine {
 
     if (this.mode === "duel" && this.duel) this.renderDuelBar()
     this.renderMinimap()
+    this.renderRearView() // só aparece durante perseguição
   }
 
   /** Minimapa estilo GPS: você fixo embaixo, o traçado à frente sobe reto — sem girar. */
