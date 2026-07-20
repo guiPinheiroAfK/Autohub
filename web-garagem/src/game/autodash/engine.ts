@@ -364,16 +364,23 @@ export class AutoDashEngine {
     if (kind === "bridge") {
       // ponte suspensa (Golden Gate): você dirige EM CIMA — e ela SOBE: rampa,
       // vão alto entre as torres, descida. Água, guarda-corpo, torres vermelhas.
-      const LEN = 32000, AMP = 1500
+      const LEN = 60000, AMP = 1400
       const z = at(6000)
       this.zones.push({ type: "bridge", z, end: at(6000 + LEN), spawnT: 0 })
-      // perfil de elevação sobreposto ao traçado (seno: 0 nas pontas, pico no
-      // meio — mantém a continuidade y2->y1 entre segmentos vizinhos)
+      // O vão é RETO e limpo: substitui o relevo/curva do traçado no trecho por
+      // uma rampa->arco->rampa que interpola do y de entrada ao de saída (assim
+      // emenda sem degrau nas duas pontas) e zera a curva. Antes a ponte herdava
+      // morro e curva da pista e ficava torta.
       const a = Math.floor(z / SEG_LEN), nSegs = Math.floor(LEN / SEG_LEN), N = this.segments.length
+      const yStart = this.segments[a % N].y1
+      const yEnd = this.segments[(a + nSegs) % N].y1
       for (let i = 0; i < nSegs; i++) {
         const s = this.segments[(a + i) % N]
-        s.y1 += AMP * Math.sin(Math.PI * i / nSegs)
-        s.y2 += AMP * Math.sin(Math.PI * (i + 1) / nSegs)
+        const p0 = i / nSegs, p1 = (i + 1) / nSegs
+        s.y1 = yStart + (yEnd - yStart) * p0 + AMP * Math.sin(Math.PI * p0)
+        s.y2 = yStart + (yEnd - yStart) * p1 + AMP * Math.sin(Math.PI * p1)
+        s.curve = 0
+        s.sign = undefined // sem chevron de curva em cima da ponte
       }
       // placas de aviso antes da cabeceira
       this.roadSigns.push(
@@ -418,16 +425,19 @@ export class AutoDashEngine {
     } else if (kind === "wrongway") {
       // MÃO DUPLA: as 2 faixas da esquerda viram contramão por um trecho longo;
       // placas avisam a extensão e o trânsito do seu lado se espreme na direita
-      const LEN = 160000
+      const LEN = 260000
       const z = at(9000)
       this.zones.push({ type: "wrongway", z, end: at(9000 + LEN), spawnT: 0 })
-      // aviso antes + placas repetidas ao longo do trecho inteiro
+      // sinalização escalonada de aproximação (contagem regressiva, como em
+      // rodovia de verdade) + placas repetidas por todo o trecho
       this.roadSigns.push(
-        { z: at(4000), type: "wrongway", label: "2 km" },
-        { z: at(7000), type: "wrongway", label: "2 km" },
+        { z: at(2000), type: "wrongway", label: "3 km" },
+        { z: at(4500), type: "wrongway", label: "2 km" },
+        { z: at(7000), type: "wrongway", label: "1 km" },
+        { z: at(8600), type: "wrongway", label: "AGORA" },
       )
-      for (let d = 12000; d < LEN; d += 18000) this.roadSigns.push({ z: at(9000 + d), type: "wrongway" })
-      note("⛔ MÃO DUPLA à frente — 2 km!")
+      for (let d = 9000; d < LEN; d += 9000) this.roadSigns.push({ z: at(9000 + d), type: "wrongway" })
+      note("⛔ MÃO DUPLA à frente — 3 km!")
     } else if (kind === "blitz") {
       // blitz: aqui é 60! placas, funil de cones, barreira nas 2 faixas da
       // esquerda, viaturas paradas — e TODO o trânsito reduz junto.
@@ -1749,6 +1759,11 @@ export class AutoDashEngine {
       const carsHere = bySeg.get(idx)
       if (carsHere) {
         for (const t of carsHere) {
+          // No campo próximo (entre a câmera e você) só a POLÍCIA aparece: foi
+          // pra ela que isso existe, pra não "teleportar" ao vir de trás. Pro
+          // trânsito comum era regressão — um carro colado atrás na sua faixa
+          // era desenhado com 3x a largura do seu carro, englobando você.
+          if (nearField && t.role !== "police") continue
           const pct = (t.z - z1) / SEG_LEN
           const sx = sx1 + (sx2 - sx1) * pct
           const sy = sy1 + (sy2 - sy1) * pct
