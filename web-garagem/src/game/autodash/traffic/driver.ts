@@ -224,6 +224,14 @@ export class PoliceDriver extends Driver {
 
     // alvo de velocidade: cola no jogador (à frente alivia, atrás persegue), sob o teto
     let target = gap > 0 ? Math.max(0, world.playerSpeed - 25) : Math.min(PoliceDriver.TOP, world.playerSpeed + 35)
+    // acabou de dar um encostão: RECUA e abre distância antes de voltar pra cima.
+    // Sem isso ela fica moendo o jogador em loop assim que a imunidade expira.
+    if (self.backoffT && self.backoffT > 0) {
+      self.backoffT -= dt
+      // recuo contido: abre alguns milhares de unidades, o bastante pra parar o
+      // pinball sem cair no limiar de despiste (senão elas se auto-desistem)
+      target = Math.max(0, world.playerSpeed - 22)
+    }
     // respeita o trânsito: não mira acelerar pra dentro de um carro
     target = this.antiOverlap(self, world, ahead, target)
     // ACELERAÇÃO LIMITADA: rampa self.speed até o alvo — é isso que faz ela não

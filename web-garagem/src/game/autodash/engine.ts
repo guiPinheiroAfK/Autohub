@@ -374,7 +374,14 @@ export class AutoDashEngine {
             this.speed *= 0.9
             this.shakeT = Math.max(this.shakeT, 0.4)
             this.combo = 0
-            this.immuneT = 0.45 // não re-dispara todo frame enquanto está encostada
+            // janela de recuperação: sem isso vira pinball, um encostão atrás do
+            // outro sem o jogador conseguir voltar pra pista
+            this.immuneT = 1.2
+            // TODAS as viaturas recuam (não só a que bateu), senão a de trás
+            // emenda o combo assim que a imunidade expira
+            for (const o of this.traffic) if (o.role === "police") o.backoffT = 1.3
+            // acabou de levar encostão: obviamente não despistou ninguém
+            this.policeEscapeT = 0
             this.audio.crash()
             this.burst(W / 2 + dir * 60, H - 110, 14, ["#60a5fa", "#e2e8f0"])
             this.floaters.push({ text: "ENCOSTÃO! 🚔", color: "#60a5fa", y: H * 0.42, life: 1, big: false })
@@ -427,13 +434,16 @@ export class AutoDashEngine {
     if (!demo) {
       let nearestPolice = Infinity
       let hasPolice = false
+      let anyBackoff = false
       for (const t of this.traffic) {
         if (t.role !== "police") continue
         hasPolice = true
+        if (t.backoffT && t.backoffT > 0) anyBackoff = true
         nearestPolice = Math.min(nearestPolice, Math.abs(this.wrapDz(t.z, playerZ)))
       }
       if (hasPolice) {
-        if (nearestPolice > 6000) {
+        // recuo pós-encostão não conta como fuga: elas aliviaram, você não escapou
+        if (nearestPolice > 6000 && !anyBackoff) {
           this.policeEscapeT += dt
           if (this.policeEscapeT >= 3) {
             for (const t of this.traffic) if (t.role === "police") t.dead = true

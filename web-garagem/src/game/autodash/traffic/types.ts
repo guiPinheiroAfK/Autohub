@@ -33,6 +33,7 @@ export interface Traffic {
   prevD: number        // distância Z ao jogador no frame anterior (near-miss)
   dead?: boolean       // marcado pra remoção (ex.: destruído pelo escudo)
   yieldT?: number      // >0: levou farol alto, tenta abrir caminho
+  backoffT?: number    // >0: viatura acabou de dar encostão, alivia e abre distância
 }
 
 // Visão read-only do mundo que uma IA precisa pra decidir. O engine constrói
