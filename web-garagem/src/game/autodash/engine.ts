@@ -363,7 +363,23 @@ export class AutoDashEngine {
         const halfSum = (k.w + spec.width) / 2 * 0.85
         // colisão
         if (Math.abs(d) < k.len / 2 + 40 && Math.abs(t.offset - this.playerX) < halfSum && !this.crashed && this.immuneT <= 0) {
-          if (this.shield) {
+          if (t.role === "police") {
+            // Encostão de viatura NÃO mata: empurra pro lado. O engine só desenha
+            // o que está à frente, então uma viatura atrás é invisível — morrer
+            // por ela seria injusto. Ela te espreme até te jogar fora da pista,
+            // e É ISSO que prende. Não consome escudo (não é batida letal).
+            const dir = Math.sign(this.playerX - t.offset) || (Math.random() < 0.5 ? -1 : 1)
+            this.playerX += dir * 0.16
+            this.steerVel += dir * 1.4
+            this.speed *= 0.9
+            this.shakeT = Math.max(this.shakeT, 0.4)
+            this.combo = 0
+            this.immuneT = 0.45 // não re-dispara todo frame enquanto está encostada
+            this.audio.crash()
+            this.burst(W / 2 + dir * 60, H - 110, 14, ["#60a5fa", "#e2e8f0"])
+            this.floaters.push({ text: "ENCOSTÃO! 🚔", color: "#60a5fa", y: H * 0.42, life: 1, big: false })
+            if (Math.abs(this.playerX) > 1.05) this.crash(true) // te jogaram pra fora = preso
+          } else if (this.shield) {
             this.shield = false
             this.immuneT = 2.0
             t.dead = true
@@ -371,7 +387,7 @@ export class AutoDashEngine {
             this.burst(W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
             this.floaters.push({ text: "ESCUDO QUEBROU!", color: "#60a5fa", y: H * 0.4, life: 1.3, big: false })
           } else {
-            this.crash(t.role === "police")
+            this.crash()
           }
         }
         // near miss: acabou de passar por ele
