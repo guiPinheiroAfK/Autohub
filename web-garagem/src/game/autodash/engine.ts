@@ -161,6 +161,7 @@ export class AutoDashEngine {
   private roadSigns: RoadSign[] = []
   private powerups: Pickup[] = []
   private puTimer = 6
+  private eventTimer = 12 // s até o próximo evento de mapa sorteado
   private bgShift = 0
   private curveWarn = 0
   private curveWarnDist = 0
@@ -357,11 +358,11 @@ export class AutoDashEngine {
   }
 
   /**
-   * DEBUG (remover após validação): materializa cada feature nova à frente do
-   * jogador pra playtest — B ponte · V viaduto · J obstáculos · K mão dupla ·
-   * I blitz (60) · U radar (90).
+   * Materializa um evento de mapa à frente do jogador. Chamado pelo sorteio
+   * natural (updateEventSpawner) e pelas teclas de debug do playtest
+   * (B ponte · V viaduto · J obstáculos · K mão dupla · I blitz · U radar).
    */
-  private debugSpawn(kind: "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap") {
+  private spawnEvent(kind: "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap") {
     const at = (d: number) => ((this.position + d) % this.trackLen + this.trackLen) % this.trackLen
     const note = (text: string) => this.floaters.push({ text, color: "#fbbf24", y: H * 0.38, life: 1.6, big: false })
     if (kind === "bridge") {
@@ -390,7 +391,7 @@ export class AutoDashEngine {
         { z: at(2500), type: "bridgewarn", label: "PONTE" },
         { z: at(4500), type: "bridgewarn", label: "PONTE" },
       )
-      note("🌉 ponte à frente (debug)")
+      note("🌉 ponte à frente")
     } else if (kind === "viaduct") {
       // viaduto grandão cruzando por cima + carros saindo dele e entrando na
       // sua via (merge pela direita, com seta). Longe o bastante pra você ver
@@ -427,7 +428,7 @@ export class AutoDashEngine {
         for (let i = 0; i < 3; i++) this.obstacles.push({ z: at(base + i * 350), offset: lane, kind: "cone", w: 0.10, len: 90 })
         this.obstacles.push({ z: at(base + 1400), offset: lane, kind: "barrier", w: 0.3, len: 140 })
       }
-      note("🚧 obstáculos à frente (debug)")
+      note("🚧 obstáculos à frente")
     } else if (kind === "wrongway") {
       // MÃO DUPLA: as 2 faixas da esquerda viram contramão por um trecho longo;
       // placas avisam a extensão e o trânsito do seu lado se espreme na direita
@@ -493,7 +494,7 @@ export class AutoDashEngine {
         color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(z, this.position + PLAYER_Z),
       })
     }
-    this.floaters.push({ text: "🚓 PERSEGUIÇÃO! (debug)", color: "#60a5fa", y: H * 0.34, life: 2, big: true })
+    this.floaters.push({ text: "🚓 PERSEGUIÇÃO!", color: "#60a5fa", y: H * 0.34, life: 2, big: true })
     this.audio.horn()
   }
 
@@ -658,6 +659,32 @@ export class AutoDashEngine {
     }
 
     if (this.traffic.some(t => t.dead)) this.traffic = this.traffic.filter(t => !t.dead)
+  }
+
+  /**
+   * Sorteia os eventos de mapa ao longo da corrida — é o que faz ponte, viaduto,
+   * obstáculos, mão dupla, blitz e radar aparecerem SOZINHOS, sem tecla de debug.
+   * Também poda o que já ficou pra trás: zonas/placas se acumulavam pra sempre.
+   */
+  private updateEventSpawner(dt: number, playerZ: number) {
+    // poda o que ficou muito atrás (sem isso os arrays crescem sem limite)
+    const atras = (z: number) => this.wrapDz(z, playerZ) < -60 * SEG_LEN
+    if (this.zones.some(z => atras(z.end))) this.zones = this.zones.filter(z => !atras(z.end))
+    if (this.roadSigns.some(s => atras(s.z))) this.roadSigns = this.roadSigns.filter(s => !atras(s.z))
+
+    this.eventTimer -= dt
+    if (this.eventTimer > 0) return
+
+    // já tem evento rolando à frente? não empilha — espera acabar
+    if (this.zones.some(z => this.wrapDz(z.end, playerZ) > 0)) { this.eventTimer = 5; return }
+    this.eventTimer = 15 + Math.random() * 15
+
+    // blitz e radar só a partir do nível 4 (regra combinada: perseguição não cai
+    // em cima de quem ainda está começando)
+    const pool = this.level >= 3
+      ? (["obstacles", "obstacles", "viaduct", "wrongway", "bridge", "blitz", "speedtrap"] as const)
+      : (["obstacles", "obstacles", "obstacles", "viaduct", "wrongway", "bridge"] as const)
+    this.spawnEvent(pool[Math.floor(Math.random() * pool.length)])
   }
 
   /**
@@ -1022,6 +1049,8 @@ export class AutoDashEngine {
       if (Math.random() < 0.6) this.emitSmoke(2, "#e2e8f0")
     }
 
+    this.updateEventSpawner(dt, playerZ)
+
     // powerups na pista
     this.puTimer -= dt
     if (this.puTimer <= 0) {
@@ -1358,7 +1387,7 @@ export class AutoDashEngine {
     this.shield = false; this.immuneT = 0; this.policeHitT = 0; this.policeEscapeT = 0; this.policeChaseT = 0; this.mult2T = 0
     this.level = 0; this.levelUpT = 0
     this.powerups = []; this.puTimer = 6
-    this.obstacles = []; this.zones = []; this.roadSigns = []
+    this.obstacles = []; this.zones = []; this.roadSigns = []; this.eventTimer = 12
     this.curveWarn = 0; this.collWarn = null
     this.newRecord = false; this.beamT = 0; this.beamCdT = 0; this.pitchY = 0
     this.shiftT = 0; this.wheelspinT = 0; this.bogT = 0
@@ -1688,9 +1717,14 @@ export class AutoDashEngine {
       if (!nearField) {
 
       if (onBridge) {
-        // vão da ponte: água no lugar da grama, guarda-corpo no lugar da zebra
+        // vão da ponte: água no lugar da grama, guarda-corpo no lugar da zebra.
+        // A água vai SÓ nas laterais, nunca sob o tabuleiro — mesmo motivo da
+        // zebra: o fillRect de tela cheia tem altura ry1-ry2+1, e esse +1 faz
+        // cada faixa invadir 1px da anterior. No horizonte, onde o segmento tem
+        // 1-2px, isso empilhava e o mar cobria a pista.
         ctx.fillStyle = shade(alt ? "#14425f" : "#123c57", amb)
-        ctx.fillRect(-10, ry2, W + 20, ry1 - ry2 + 1)
+        poly(ctx, -10, ry1, sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2, -10, ry2)
+        poly(ctx, sx1 + sw1 * 1.11, ry1, W + 10, ry1, W + 10, ry2, sx2 + sw2 * 1.11, ry2)
         // guarda-corpo (mureta) com friso claro no topo — o "corrimão"
         ctx.fillStyle = shade(alt ? "#9aa4b5" : "#7e8899", amb)
         poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 0.97, ry1, sx2 - sw2 * 0.97, ry2, sx2 - sw2 * 1.11, ry2)
@@ -3372,12 +3406,12 @@ export class AutoDashEngine {
         if (k === "l") { this.level++; this.floaters.push({ text: `DEBUG: nível ${this.level + 1}`, color: "#fbbf24", y: H * 0.4, life: 1.2, big: false }) }
         // DEBUG (features novas, remover após validação):
         // B ponte · V viaduto · J obstáculos · K mão dupla · I blitz (60) · U radar (90)
-        if (k === "b") this.debugSpawn("bridge")
-        if (k === "v") this.debugSpawn("viaduct")
-        if (k === "j") this.debugSpawn("obstacles")
-        if (k === "k") this.debugSpawn("wrongway")
-        if (k === "i") this.debugSpawn("blitz")
-        if (k === "u") this.debugSpawn("speedtrap")
+        if (k === "b") this.spawnEvent("bridge")
+        if (k === "v") this.spawnEvent("viaduct")
+        if (k === "j") this.spawnEvent("obstacles")
+        if (k === "k") this.spawnEvent("wrongway")
+        if (k === "i") this.spawnEvent("blitz")
+        if (k === "u") this.spawnEvent("speedtrap")
         break
       case "paused":
         if (k === "escape" || k === "p" || k === "enter") this.state = "racing"
