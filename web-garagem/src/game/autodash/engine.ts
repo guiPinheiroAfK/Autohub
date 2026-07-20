@@ -76,7 +76,7 @@ interface Obstacle { z: number; offset: number; kind: "cone" | "barrier"; w: num
 //  speedtrap — radar (placa 90): trânsito reduz, polícia observando; passar
 //              rápido demais = perseguição (o evento da conversa original)
 interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap"; z: number; end: number; spawnT: number; checked?: boolean }
-interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn"; label?: string }
+interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge"; label?: string }
 
 const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
@@ -365,12 +365,25 @@ export class AutoDashEngine {
   private spawnEvent(kind: "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap") {
     const at = (d: number) => ((this.position + d) % this.trackLen + this.trackLen) % this.trackLen
     const note = (text: string) => this.floaters.push({ text, color: "#fbbf24", y: H * 0.38, life: 1.6, big: false })
+    // O perigo SEMPRE nasce além do horizonte de render (VIEW), e as placas
+    // entram em cena antes dele. Sem isso o obstáculo brota no para-brisa: a
+    // 200 km/h (26.400 u/s) as antigas 4.200 unidades eram 0,16 s de aviso.
+    const VIEW = DRAW_DIST * SEG_LEN            // ~60.000 = o que cabe na tela
+    const START = VIEW * 1.7                    // onde o evento começa
+    // trinca de placas de aproximação, entrando em cena bem antes do perigo
+    const avisos = (type: RoadSign["type"], labels: [string, string, string]) => {
+      this.roadSigns.push(
+        { z: at(START - VIEW * 0.95), type, label: labels[0] },
+        { z: at(START - VIEW * 0.60), type, label: labels[1] },
+        { z: at(START - VIEW * 0.28), type, label: labels[2] },
+      )
+    }
     if (kind === "bridge") {
       // ponte suspensa (Golden Gate): você dirige EM CIMA — e ela SOBE: rampa,
       // vão alto entre as torres, descida. Água, guarda-corpo, torres vermelhas.
       const LEN = 130000, AMP = 1400
-      const z = at(6000)
-      this.zones.push({ type: "bridge", z, end: at(6000 + LEN), spawnT: 0 })
+      const z = at(START)
+      this.zones.push({ type: "bridge", z, end: at(START + LEN), spawnT: 0 })
       // O vão é RETO e limpo: substitui o relevo/curva do traçado no trecho por
       // uma rampa->arco->rampa que interpola do y de entrada ao de saída (assim
       // emenda sem degrau nas duas pontas) e zera a curva. Antes a ponte herdava
@@ -386,22 +399,19 @@ export class AutoDashEngine {
         s.curve = 0
         s.sign = undefined // sem chevron de curva em cima da ponte
       }
-      // placas de aviso antes da cabeceira
-      this.roadSigns.push(
-        { z: at(2500), type: "bridgewarn", label: "PONTE" },
-        { z: at(4500), type: "bridgewarn", label: "PONTE" },
-      )
+      avisos("bridgewarn", ["PONTE 2 km", "PONTE 1 km", "PONTE"])
       note("🌉 ponte à frente")
     } else if (kind === "viaduct") {
       // viaduto grandão cruzando por cima + carros saindo dele e entrando na
       // sua via (merge pela direita, com seta). Longe o bastante pra você ver
       // ele crescer no horizonte em vez de nascer em cima
-      const z = at(14000)
-      this.zones.push({ type: "viaduct", z, end: at(14400), spawnT: 0 })
+      const z = at(START)
+      this.zones.push({ type: "viaduct", z, end: at(START + 400), spawnT: 0 })
+      avisos("merge", ["ACESSO 2 km", "ACESSO 1 km", "ENTRADA"])
       // carros descendo a alça: nascem NA faixa de aceleração (offset ~1.3) e
       // fundem na via ao longo dela, escalonados — trânsito entrando de verdade
-      for (let i = 0; i < 3; i++) {
-        const cz = at(15000 + i * 1600)
+      for (let i = 0; i < 4; i++) {
+        const cz = at(START + 1400 + i * 1700)
         this.traffic.push({
           z: cz, offset: 1.32, targetOffset: 0.75,
           speed: 84 + Math.random() * 22, kind: "car", role: "civilian",
@@ -411,9 +421,10 @@ export class AutoDashEngine {
       }
       note("🛣️ viaduto à frente — carros entrando!")
     } else if (kind === "obstacles") {
-      // padrão, lado e distância sorteados a cada spawn
-      const base = 4200 + Math.floor(Math.random() * 3500)
+      // padrão e lado sorteados; a obra começa além do horizonte e é anunciada
+      const base = START + Math.floor(Math.random() * 3000)
       const side = Math.random() < 0.5 ? 1 : -1 // 1 = direita, -1 = esquerda
+      avisos("works", ["OBRAS 2 km", "OBRAS 1 km", "OBRAS"])
       const roll = Math.random()
       if (roll < 0.4) {
         // funil de cones fechando uma borda + barreira nas 2 faixas desse lado
@@ -433,46 +444,44 @@ export class AutoDashEngine {
       // MÃO DUPLA: as 2 faixas da esquerda viram contramão por um trecho longo;
       // placas avisam a extensão e o trânsito do seu lado se espreme na direita
       const LEN = 260000
-      const z = at(9000)
-      this.zones.push({ type: "wrongway", z, end: at(9000 + LEN), spawnT: 0 })
-      // sinalização escalonada de aproximação (contagem regressiva, como em
-      // rodovia de verdade) + placas repetidas por todo o trecho
-      this.roadSigns.push(
-        { z: at(2000), type: "wrongway", label: "3 km" },
-        { z: at(4500), type: "wrongway", label: "2 km" },
-        { z: at(7000), type: "wrongway", label: "1 km" },
-        { z: at(8600), type: "wrongway", label: "AGORA" },
-      )
-      for (let d = 9000; d < LEN; d += 9000) this.roadSigns.push({ z: at(9000 + d), type: "wrongway" })
-      note("⛔ MÃO DUPLA à frente — 3 km!")
+      const z = at(START)
+      this.zones.push({ type: "wrongway", z, end: at(START + LEN), spawnT: 0 })
+      // contagem regressiva de aproximação, como em rodovia de verdade...
+      avisos("wrongway", ["MÃO DUPLA 2 km", "MÃO DUPLA 1 km", "MÃO DUPLA"])
+      // ...e placas repetidas por todo o trecho, pra você não esquecer
+      for (let d = 9000; d < LEN; d += 9000) this.roadSigns.push({ z: at(START + d), type: "wrongway" })
+      note("⛔ MÃO DUPLA à frente — 2 km!")
     } else if (kind === "blitz") {
       // blitz: aqui é 60! placas, funil de cones, barreira nas 2 faixas da
       // esquerda, viaturas paradas — e TODO o trânsito reduz junto.
       // Furar acima de ~65 = perseguição
-      const z = at(9000)
-      this.zones.push({ type: "blitz", z, end: at(9000 + 2400), spawnT: 0 })
-      this.roadSigns.push({ z: at(3500), type: "limit60" }, { z: at(6500), type: "limit60" })
-      for (let i = 0; i < 6; i++) this.obstacles.push({ z: at(7000 + i * 300), offset: -0.95 + i * 0.09, kind: "cone", w: 0.10, len: 90 })
+      const z = at(START)
+      this.zones.push({ type: "blitz", z, end: at(START + 2400), spawnT: 0 })
+      avisos("limit60", ["BLITZ 2 km", "BLITZ 1 km", "PARE 60"])
+      // funil de cones ANTES da barreira, dentro do campo de visão
+      for (let i = 0; i < 8; i++) this.obstacles.push({ z: at(START - 4000 + i * 500), offset: -0.95 + i * 0.07, kind: "cone", w: 0.10, len: 90 })
       this.obstacles.push({ z, offset: -0.5, kind: "barrier", w: 0.6, len: 140 })
       for (let i = 0; i < 2; i++) {
+        const pz2 = at(START + 400 + i * 550)
         this.traffic.push({
-          z: at(9400 + i * 550), offset: -0.5, targetOffset: -0.5, speed: 0,
+          z: pz2, offset: -0.5, targetOffset: -0.5, speed: 0,
           kind: "police", role: "police", parked: true,
-          color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(at(9400 + i * 550), this.position + PLAYER_Z),
+          color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(pz2, this.position + PLAYER_Z),
         })
       }
       note("👮 BLITZ à frente — reduza pra 60!")
     } else {
       // radar (o evento da placa 90): polícia de tocaia no acostamento, todo o
       // trânsito baixa pra ≤90 — passar voando = eles vão atrás
-      const z = at(9000)
-      this.zones.push({ type: "speedtrap", z, end: at(9000 + 3000), spawnT: 0 })
-      this.roadSigns.push({ z: at(4000), type: "limit90" }, { z: at(7000), type: "limit90" })
+      const z = at(START)
+      this.zones.push({ type: "speedtrap", z, end: at(START + 3000), spawnT: 0 })
+      avisos("limit90", ["RADAR 2 km", "RADAR 1 km", "LIMITE 90"])
       for (let i = 0; i < 2; i++) {
+        const pz2 = at(START - 200 + i * 500)
         this.traffic.push({
-          z: at(8800 + i * 500), offset: 1.18, targetOffset: 1.18, speed: 0,
+          z: pz2, offset: 1.18, targetOffset: 1.18, speed: 0,
           kind: "police", role: "police", parked: true,
-          color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(at(8800 + i * 500), this.position + PLAYER_Z),
+          color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(pz2, this.position + PLAYER_Z),
         })
       }
       note("📸 RADAR à frente — limite 90!")
@@ -2223,6 +2232,34 @@ export class AutoDashEngine {
         ctx.fillText(sign.type === "limit90" ? "90" : "60", x, cy + r * 0.32)
         ctx.textAlign = "left"
       }
+    } else if (sign.type === "works") {
+      // OBRAS: losango laranja com um cone desenhado (aviso de obstáculo)
+      ctx.fillStyle = shade("#f97316", amb)
+      ctx.beginPath()
+      ctx.moveTo(x, cy - r * 1.05); ctx.lineTo(x + r * 1.05, cy)
+      ctx.lineTo(x, cy + r * 1.05); ctx.lineTo(x - r * 1.05, cy)
+      ctx.closePath(); ctx.fill()
+      if (r > 5) {
+        ctx.fillStyle = "#0f172a"
+        ctx.beginPath()
+        ctx.moveTo(x, cy - r * 0.5); ctx.lineTo(x + r * 0.38, cy + r * 0.42)
+        ctx.lineTo(x - r * 0.38, cy + r * 0.42); ctx.closePath(); ctx.fill()
+      }
+    } else if (sign.type === "merge") {
+      // ENTRADA/ACESSO: losango amarelo com duas setas convergindo
+      ctx.fillStyle = shade("#fbbf24", amb)
+      ctx.beginPath()
+      ctx.moveTo(x, cy - r * 1.05); ctx.lineTo(x + r * 1.05, cy)
+      ctx.lineTo(x, cy + r * 1.05); ctx.lineTo(x - r * 1.05, cy)
+      ctx.closePath(); ctx.fill()
+      if (r > 5) {
+        ctx.strokeStyle = "#0f172a"
+        ctx.lineWidth = Math.max(1.2, r * 0.16)
+        ctx.beginPath()
+        ctx.moveTo(x - r * 0.1, cy + r * 0.5); ctx.lineTo(x - r * 0.1, cy - r * 0.5)
+        ctx.moveTo(x + r * 0.52, cy + r * 0.5); ctx.lineTo(x + r * 0.05, cy - r * 0.1)
+        ctx.stroke()
+      }
     } else if (sign.type === "bridgewarn") {
       // aviso de ponte: losango amarelo com o vão desenhado
       ctx.fillStyle = shade("#fbbf24", amb)
@@ -2294,17 +2331,29 @@ export class AutoDashEngine {
     ctx.moveTo(x + w * 2.2, deckY + deckH * 0.3)
     ctx.lineTo(x + w * 3.7, y - w * 0.06)
     ctx.stroke()
-    // carrinhos: um cruzando o vão e um DESCENDO a rampa (o contexto em movimento)
-    if (w > 12) {
-      const cw = w * 0.34, chh = w * 0.13
-      const roll = (performance.now() / 26) % (w * 8)
-      ctx.fillStyle = shade("#64748b", amb)
-      rr(ctx, x - w * 3.4 + roll, deckY - w * 0.07 - chh, cw, chh, chh * 0.35)
-      // na rampa: interpola do topo da alça até a base
-      const p = (performance.now() / 2600) % 1
-      const rx = x + w * (2.65 + 1.5 * p), ry = deckY + deckH * 0.4 + (y - deckY - deckH * 0.4) * p
-      ctx.fillStyle = shade("#eab308", amb)
-      rr(ctx, rx, ry - chh, cw * 0.8, chh, chh * 0.35)
+    // CARROS DE VERDADE em cima do viaduto e descendo a alça — mesmo desenho do
+    // trânsito (carroceria, vidro, lanternas), não retângulo. É o que dá a
+    // sensação de trânsito real cruzando por cima e entrando na sua via.
+    if (w > 10) {
+      const carW = w * 0.42
+      const fake = (color: string): Traffic => ({
+        z: 0, offset: 0, targetOffset: 0, speed: 90, kind: "car",
+        role: "civilian", color, blinkT: 0, prevD: 1,
+      })
+      const railY = deckY - w * 0.07
+      // dois cruzando o tabuleiro, em sentidos opostos
+      const t1 = (performance.now() / 3400) % 1
+      const t2 = (performance.now() / 4100 + 0.5) % 1
+      this.drawTraffic(fake("#e2e8f0"), x - w * 3.2 + w * 6.4 * t1, railY, carW, amb * 0.9)
+      this.drawTraffic(fake("#64748b"), x + w * 3.2 - w * 6.4 * t2, railY, carW, amb * 0.9)
+      // e um DESCENDO a alça, do tabuleiro até o nível da via
+      const p = (performance.now() / 2800) % 1
+      this.drawTraffic(
+        fake("#eab308"),
+        x + w * (2.65 + 1.55 * p),
+        deckY + deckH * 0.4 + (y - deckY - deckH * 0.4) * p,
+        carW * (0.9 + 0.25 * p), amb * 0.95,
+      )
     }
   }
 
