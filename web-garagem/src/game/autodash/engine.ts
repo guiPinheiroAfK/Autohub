@@ -330,7 +330,7 @@ export class AutoDashEngine {
       const z = ((this.position - behind) % this.trackLen + this.trackLen) % this.trackLen
       this.traffic.push({
         z, offset: lanes[i], targetOffset: lanes[i],
-        speed: Math.max(this.speed, 150), kind: "police", role: "police",
+        speed: clamp(this.speed, 150, 215), kind: "police", role: "police",
         color: "#1d4ed8", blinkT: 0, prevD: 1,
       })
     }

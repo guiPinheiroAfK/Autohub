@@ -226,26 +226,32 @@ export class PoliceDriver extends Driver {
     // garante que quem corre mais que 215 simplesmente vai embora — sem isso
     // vira rubber-band e a fuga fica impossível.
     const atras = -gap // >0 quando a viatura está atrás de você
-    // detecta a ultrapassagem: ela esteve à sua frente e agora está atrás
-    if (gap > 150) self.wasAhead = true
-    if (self.wasAhead && atras > 150) self.beaten = true
+    // marcos da perseguição, por entidade:
+    // engaged = colou em você uma vez · wasAhead/beaten = você a ultrapassou
+    // (limiares folgados: durante o encostão o gap oscila em ±150 e disparava
+    // wasAhead/beaten espúrios — a viatura "desistia" no meio da prensada)
+    if (Math.abs(gap) < 600) self.engaged = true
+    if (gap > 400) self.wasAhead = true
+    if (self.wasAhead && atras > 400) self.beaten = true
 
     let target: number
     if (self.beaten) {
-      // JÁ FOI ULTRAPASSADA: desiste da caçada e recua de vez. Ela vem com tudo
-      // UMA vez, por trás; ultrapassou, acabou. Sem isso ela ficava oscilando
-      // na zona logo atrás do jogador (que o render não cobre), pipocando na
-      // tela a cada re-encostada. Recuando, o despiste limpa a perseguição.
+      // JÁ FOI ULTRAPASSADA: desiste de vez e recua até o despiste limpar.
       target = Math.min(PoliceDriver.TOP, Math.max(0, world.playerSpeed - 40))
-    } else if (atras > 0) {
-      // primeira aproximação por trás: vem com tudo, e a folga encolhe com a
-      // distância pra ela chegar desacelerando e encostar em vez de passar reto
-      target = Math.min(PoliceDriver.TOP, world.playerSpeed + clamp(atras / 60, 4, 85))
-    } else {
-      // ficou À FRENTE de você: ALIVIA e deixa você passar — o lugar dela é te
-      // prensando por trás/do lado, nunca de parede na frente. Espelhar sua
-      // velocidade aqui criava um bloqueio impossível de ultrapassar.
+    } else if (gap > 300) {
+      // bem à FRENTE de você: alivia e deixa você passar — o lugar dela é
+      // atrás/do lado, nunca de parede na frente
       target = Math.min(PoliceDriver.TOP, Math.max(0, world.playerSpeed - 25))
+    } else if (self.engaged) {
+      // JÁ COLOU UMA VEZ: daqui em diante é a REGRA DA VELOCIDADE, sem mola.
+      // Ela corre no próprio limite, constante. Você mais rápido = vai deixando
+      // pra trás, linear. A folga proporcional que existia aqui era uma mola
+      // (longe acelera, perto afrouxa, contato recua) — a "gangorra" relatada.
+      target = PoliceDriver.TOP
+    } else {
+      // primeira aproximação por trás: vem com tudo, folga encolhendo com a
+      // distância pra chegar desacelerando e encostar em vez de passar reto
+      target = Math.min(PoliceDriver.TOP, world.playerSpeed + clamp(atras / 60, 4, 85))
     }
     // acabou de dar um encostão: RECUA e abre distância antes de voltar pra cima.
     // Sem isso ela fica moendo o jogador em loop assim que o cooldown expira.

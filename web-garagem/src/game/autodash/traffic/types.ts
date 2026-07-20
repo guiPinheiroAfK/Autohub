@@ -36,6 +36,7 @@ export interface Traffic {
   backoffT?: number    // >0: viatura acabou de dar encostão, alivia e abre distância
   wasAhead?: boolean   // viatura já esteve à frente do jogador (pra detectar a ultrapassagem)
   beaten?: boolean     // jogador a ultrapassou: desiste da caçada e recua até o despiste
+  engaged?: boolean    // já colou no jogador uma vez: daqui em diante é física pura (sem mola)
 }
 
 // Visão read-only do mundo que uma IA precisa pra decidir. O engine constrói
