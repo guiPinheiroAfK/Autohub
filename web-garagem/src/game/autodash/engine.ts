@@ -349,7 +349,10 @@ export class AutoDashEngine {
       speed: k.spd[0] + Math.random() * (k.spd[1] - k.spd[0]),
       kind, role: "civilian",
       color: TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)],
-      blinkT: 0, prevD: 1,
+      // prevD REAL (não o sentinela 1): a varredura de colisão compara prevD com
+      // d pra saber se o veículo cruzou você neste frame. Com prevD=1, qualquer
+      // carro atrás na sua faixa parecia "acabou de cruzar" e te matava na hora.
+      blinkT: 0, prevD: this.wrapDz(z, this.position + PLAYER_Z),
     })
   }
 
@@ -364,7 +367,7 @@ export class AutoDashEngine {
     if (kind === "bridge") {
       // ponte suspensa (Golden Gate): você dirige EM CIMA — e ela SOBE: rampa,
       // vão alto entre as torres, descida. Água, guarda-corpo, torres vermelhas.
-      const LEN = 60000, AMP = 1400
+      const LEN = 130000, AMP = 1400
       const z = at(6000)
       this.zones.push({ type: "bridge", z, end: at(6000 + LEN), spawnT: 0 })
       // O vão é RETO e limpo: substitui o relevo/curva do traçado no trecho por
@@ -394,12 +397,15 @@ export class AutoDashEngine {
       // ele crescer no horizonte em vez de nascer em cima
       const z = at(14000)
       this.zones.push({ type: "viaduct", z, end: at(14400), spawnT: 0 })
-      for (let i = 0; i < 2; i++) {
+      // carros descendo a alça: nascem NA faixa de aceleração (offset ~1.3) e
+      // fundem na via ao longo dela, escalonados — trânsito entrando de verdade
+      for (let i = 0; i < 3; i++) {
+        const cz = at(15000 + i * 1600)
         this.traffic.push({
-          z: at(15200 + i * 700), offset: 1.25, targetOffset: 0.75,
-          speed: 88 + Math.random() * 18, kind: "car", role: "civilian",
+          z: cz, offset: 1.32, targetOffset: 0.75,
+          speed: 84 + Math.random() * 22, kind: "car", role: "civilian",
           color: TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)],
-          blinkT: 0.9, prevD: 1,
+          blinkT: 1.1 + i * 0.5, prevD: this.wrapDz(cz, this.position + PLAYER_Z),
         })
       }
       note("🛣️ viaduto à frente — carros entrando!")
@@ -451,7 +457,7 @@ export class AutoDashEngine {
         this.traffic.push({
           z: at(9400 + i * 550), offset: -0.5, targetOffset: -0.5, speed: 0,
           kind: "police", role: "police", parked: true,
-          color: "#1d4ed8", blinkT: 0, prevD: 1,
+          color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(at(9400 + i * 550), this.position + PLAYER_Z),
         })
       }
       note("👮 BLITZ à frente — reduza pra 60!")
@@ -465,7 +471,7 @@ export class AutoDashEngine {
         this.traffic.push({
           z: at(8800 + i * 500), offset: 1.18, targetOffset: 1.18, speed: 0,
           kind: "police", role: "police", parked: true,
-          color: "#1d4ed8", blinkT: 0, prevD: 1,
+          color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(at(8800 + i * 500), this.position + PLAYER_Z),
         })
       }
       note("📸 RADAR à frente — limite 90!")
@@ -484,7 +490,7 @@ export class AutoDashEngine {
       this.traffic.push({
         z, offset: lanes[i], targetOffset: lanes[i],
         speed: clamp(this.speed, 150, 215), kind: "police", role: "police",
-        color: "#1d4ed8", blinkT: 0, prevD: 1,
+        color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(z, this.position + PLAYER_Z),
       })
     }
     this.floaters.push({ text: "🚓 PERSEGUIÇÃO! (debug)", color: "#60a5fa", y: H * 0.34, life: 2, big: true })
@@ -533,7 +539,9 @@ export class AutoDashEngine {
         // janela em Z OU cruzamento no frame (varredura): na contramão a
         // velocidade de fechamento passa de 600 unidades/frame e o veículo
         // atravessaria a janela entre dois frames sem nunca "estar" nela
-        const swept = t.prevD > 0 && d <= 0 && t.prevD < 1200
+        // ...e o salto tem que ser FISICAMENTE plausível pra um frame: sem isso,
+        // um prevD errado (ou um veículo teleportado) vira "cruzou você agora"
+        const swept = t.prevD > 0 && d <= 0 && t.prevD < 1200 && t.prevD - d < 2000
         const hit = (Math.abs(d) < k.len / 2 + 40 || swept) && Math.abs(t.offset - this.playerX) < halfSum && !this.crashed
         if (hit && t.role === "police" && !t.parked) {
           // Encostão de viatura NÃO mata: empurra pro lado. O engine só desenha
@@ -610,7 +618,7 @@ export class AutoDashEngine {
           t.offset = lane; t.targetOffset = lane
           const kk = KINDS[t.kind]
           t.speed = kk.spd[0] + Math.random() * (kk.spd[1] - kk.spd[0])
-          t.prevD = 1
+          t.prevD = this.wrapDz(t.z, playerZ)
         }
       }
     }
@@ -679,7 +687,7 @@ export class AutoDashEngine {
                 speed: -(70 + Math.random() * 45), // negativa: vem contra você
                 kind, role: "oncoming",
                 color: TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)],
-                blinkT: 0, prevD: 1,
+                blinkT: 0, prevD: this.wrapDz(z, playerZ),
               })
             }
           }
@@ -757,9 +765,9 @@ export class AutoDashEngine {
       // obstáculo é ESTÁTICO: a velocidade de fechamento é a do jogador — acima
       // de ~45 km/h a janela em Z é pulada entre frames. A varredura (cruzou o
       // ponto neste frame?) é obrigatória aqui, não otimização.
-      const prev = o.prevD ?? 1
+      const prev = o.prevD ?? d
       o.prevD = d
-      const swept = prev > 0 && d <= 0 && prev < 1200
+      const swept = prev > 0 && d <= 0 && prev < 1200 && prev - d < 2000
       if ((Math.abs(d) < o.len / 2 + 40 || swept) && Math.abs(o.offset - this.playerX) < halfSum && !this.crashed && this.immuneT <= 0) {
         if (o.kind === "cone") {
           // cone é perdoável: tranco, perde velocidade e combo — não mata
@@ -1580,8 +1588,19 @@ export class AutoDashEngine {
     const towerSegs = new Set<number>()
     const wrongwaySpan = new Set<number>()
     const wrongwayRamp = new Map<number, number>()
+    // alça de acesso do viaduto: por segmento, a largura do braço extra à
+    // direita (1 = faixa paralela cheia, 0 = já fundiu na via)
+    const viaductRamp = new Map<number, number>()
     for (const zn of this.zones) {
-      if (zn.type === "viaduct") viaductSegs.add(Math.floor(zn.z / SEG_LEN) % N)
+      if (zn.type === "viaduct") {
+        const a = Math.floor(zn.z / SEG_LEN) % N
+        viaductSegs.add(a)
+        // ALÇA: começa logo depois do cruzamento como faixa paralela cheia e
+        // vai afunilando até fundir na via (a zona vermelha do teu desenho).
+        // É por ela que os carros descem e entram na estrada.
+        const RAMP = 42
+        for (let i = 0; i < RAMP; i++) viaductRamp.set((a + 4 + i) % N, 1 - i / RAMP)
+      }
       else if (zn.type === "bridge") {
         const a = Math.floor(zn.z / SEG_LEN) % N
         const len = ((Math.floor(zn.end / SEG_LEN) - Math.floor(zn.z / SEG_LEN)) % N + N) % N
@@ -1731,6 +1750,29 @@ export class AutoDashEngine {
         poly(ctx,
           sx1 - sw1 * (0.97 + 2.0 * rampF1), ry1, sx1 - sw1 * 0.97, ry1,
           sx2 - sw2 * 0.97, ry2, sx2 - sw2 * (0.97 + 2.0 * rampF2), ry2)
+      }
+      // alça do viaduto: faixa de aceleração à direita, afunilando até fundir
+      const vrF1 = viaductRamp.get(idx)
+      if (vrF1 !== undefined) {
+        const vrF2 = viaductRamp.get((idx + 1) % N) ?? vrF1
+        ctx.fillStyle = alt ? roadL : roadD
+        poly(ctx,
+          sx1 + sw1 * 0.97, ry1, sx1 + sw1 * (0.97 + 0.62 * vrF1), ry1,
+          sx2 + sw2 * (0.97 + 0.62 * vrF2), ry2, sx2 + sw2 * 0.97, ry2)
+        // faixa tracejada separando a alça da via (some no fim, onde funde)
+        if (alt && vrF1 > 0.12) {
+          ctx.fillStyle = laneC
+          poly(ctx,
+            sx1 + sw1 * 0.985, ry1, sx1 + sw1 * 1.0, ry1,
+            sx2 + sw2 * 1.0, ry2, sx2 + sw2 * 0.985, ry2)
+        }
+        // zebrado de convergência no bico do afunilamento
+        if (vrF1 < 0.16 && vrF1 > 0.01) {
+          ctx.fillStyle = shade(alt ? "#e2e8f0" : "#94a3b8", amb)
+          poly(ctx,
+            sx1 + sw1 * 0.97, ry1, sx1 + sw1 * (0.97 + 0.62 * vrF1), ry1,
+            sx2 + sw2 * (0.97 + 0.62 * vrF2), ry2, sx2 + sw2 * 0.97, ry2)
+        }
       }
       // linhas de faixa
       if (alt) {
