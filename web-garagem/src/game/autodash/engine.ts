@@ -16,6 +16,14 @@ import { DRIVERS } from "./traffic/driver"
 const W = CANVAS_W, H = CANVAS_H
 const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH
 const RUMBLE = 3
+// Veículos só COMEÇAM a ser desenhados a ~PLAYER_Z da câmera: mais perto que
+// isso o segmento projeta abaixo da tela e o laço já o descarta (sy2 >= maxY).
+// Quem vem DE TRÁS, portanto, não cresce gradualmente — materializa nesse
+// limiar já em tamanho cheio (~220px). É isso que lê como "teleporte".
+// Esta faixa curta de fade suaviza a aparição. Ela é estreita de propósito:
+// nada que você ainda precise enxergar pra desviar fica translúcido.
+const FADE_IN_START = PLAYER_Z * 1.02
+const FADE_IN_LEN = PLAYER_Z * 0.35
 
 type GameState =
   | "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
@@ -1227,7 +1235,7 @@ export class AutoDashEngine {
     let dx = -(this.segments[baseIdx].curve * basePct)
     let maxY = H + 10
 
-    interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; x: number; y: number; w: number }
+    interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; x: number; y: number; w: number; dz?: number }
     const sprites: SpriteDraw[] = []
     // buckets de tráfego e powerups por segmento
     const bySeg = new Map<number, Traffic[]>()
@@ -1319,7 +1327,9 @@ export class AutoDashEngine {
           const sx = sx1 + (sx2 - sx1) * pct
           const sy = sy1 + (sy2 - sy1) * pct
           const sw = sw1 + (sw2 - sw1) * pct
-          sprites.push({ kind: "car", t, x: sx + sw * t.offset, y: sy, w: sw * KINDS[t.kind].w })
+          // dz vai junto: perto demais da câmera a escala explode (s = CAM_DEPTH/dz)
+          // e o veículo vira um bloco gigante — ver o fade no laço de desenho
+          sprites.push({ kind: "car", t, x: sx + sw * t.offset, y: sy, w: sw * KINDS[t.kind].w, dz: dz1 + SEG_LEN * pct })
         }
       }
       if (idx === ghostIdx) {
@@ -1401,7 +1411,15 @@ export class AutoDashEngine {
     // desenha do fundo pro primeiro plano
     for (let i = sprites.length - 1; i >= 0; i--) {
       const s = sprites[i]
-      if (s.kind === "car") this.drawTraffic(s.t!, s.x, s.y, s.w, amb)
+      if (s.kind === "car") {
+        // materializa com fade no limiar em que o veículo entra em cena, em vez
+        // de pipocar já em tamanho cheio (ver FADE_IN_START)
+        const fade = clamp(((s.dz ?? Infinity) - FADE_IN_START) / FADE_IN_LEN, 0, 1)
+        if (fade <= 0) continue
+        if (fade < 1) ctx.globalAlpha = fade
+        this.drawTraffic(s.t!, s.x, s.y, s.w, amb)
+        if (fade < 1) ctx.globalAlpha = 1
+      }
       else if (s.kind === "pu") this.drawPickup(s.p!, s.x, s.y, s.w, amb)
       else if (s.kind === "ghost") this.drawGhost(s.x, s.y, s.w, amb)
       else this.drawDeco(s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
