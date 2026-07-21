@@ -1262,6 +1262,21 @@ export class AutoDashEngine {
   }
 
   private crash(byPolice = false) {
+    // NA CORRIDA NÃO SE MORRE: bater custa quase toda a velocidade e o tempo
+    // de retomar — que numa disputa por voltas já é punição suficiente. Encerrar
+    // a prova por uma batida tirava o jogador da corrida inteira.
+    if (this.mode === "race" && this.race && !this.race.finished) {
+      this.speed *= 0.1
+      this.steerVel = 0
+      this.wheelspinT = 0.5
+      this.combo = 0
+      this.shakeT = 0.55
+      this.immuneT = Math.max(this.immuneT, 1.3) // respiro pra não bater em cadeia
+      this.audio.crash()
+      this.burst(W / 2, H - 110, 30, ["#fb923c", "#ef4444"])
+      this.floaters.push({ text: "RODOU!", color: "#fb923c", y: H * 0.4, life: 1.3, big: true })
+      return
+    }
     this.crashed = true
     this.crashByPolice = byPolice
     this.audio.crash()
@@ -2717,6 +2732,9 @@ export class AutoDashEngine {
    * ler QUAL faixa e QUÃO PERTO, não fidelidade de traçado.
    */
   private renderRearView() {
+    // na contagem o painel do traçado ocupa o topo — os dois se sobrepunham e
+    // viravam um borrão ilegível. Antes de largar não há o que ver atrás.
+    if (this.state !== "racing") return
     // aparece na perseguição E na corrida (aí serve pra ver quem vem te pegar)
     const naCorrida = this.mode === "race" && !!this.race
     if (!naCorrida && !this.traffic.some(t => t.role === "police" && !t.parked)) return
