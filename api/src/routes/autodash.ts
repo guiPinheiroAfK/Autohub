@@ -196,3 +196,161 @@ autodashRoutes.post("/autodash/room/:code/rematch", async (c) => {
     startInMs: room.start_in_ms === null ? null : Math.round(Number(room.start_in_ms)),
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODO CORRIDA — até 4 pilotos, por voltas, largada dada pelo dono da sala.
+// Separado do duelo de propósito: lá são 2 slots fixos e largada automática.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_PILOTOS = 4
+
+function cleanId(v: unknown) {
+  return String(v ?? "").trim().slice(0, 40)
+}
+function cleanInt(v: unknown, lo: number, hi: number, fallback: number) {
+  const n = Math.floor(Number(v))
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback
+}
+
+/** Lista os pilotos da sala, na ordem em que entraram. */
+async function pilotos(code: string) {
+  return sql`
+    SELECT player_id, nome, car, paint, estado,
+           EXTRACT(EPOCH FROM (now() - visto_em)) AS ha_segundos
+    FROM autodash_race_players
+    WHERE code = ${code}
+    ORDER BY entrou_em ASC
+  `
+}
+
+// POST /api/autodash/race — cria a sala; quem cria é o dono (dá a largada)
+autodashRoutes.post("/autodash/race", async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const nome = cleanName(body?.nome)
+  const playerId = cleanId(body?.playerId)
+  if (!nome || !playerId) return c.json({ error: "Nome e playerId obrigatórios" }, 400)
+  const voltas = cleanInt(body?.voltas, 1, 9, 3)
+
+  await sql`DELETE FROM autodash_race_rooms WHERE criado_em < now() - interval '2 hours'`
+
+  const seed = Math.floor(Math.random() * 2 ** 31)
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = newCode()
+    try {
+      await sql`
+        INSERT INTO autodash_race_rooms (code, seed, voltas, owner_id)
+        VALUES (${code}, ${seed}, ${voltas}, ${playerId})
+      `
+      await sql`
+        INSERT INTO autodash_race_players (code, player_id, nome, car, paint)
+        VALUES (${code}, ${playerId}, ${nome}, ${cleanInt(body?.car, 0, 9, 0)}, ${cleanInt(body?.paint, 0, 99, 0)})
+      `
+      return c.json({ code, seed, voltas, owner: true })
+    } catch { /* código colidiu, tenta outro */ }
+  }
+  return c.json({ error: "Não consegui criar a sala, tenta de novo" }, 500)
+})
+
+// POST /api/autodash/race/:code/join — entra na sala (enquanto não largou)
+autodashRoutes.post("/autodash/race/:code/join", async (c) => {
+  const code = c.req.param("code").toUpperCase()
+  const body = await c.req.json().catch(() => null)
+  const nome = cleanName(body?.nome)
+  const playerId = cleanId(body?.playerId)
+  if (!nome || !playerId) return c.json({ error: "Nome e playerId obrigatórios" }, 400)
+
+  const [room] = await sql`
+    SELECT code, seed, voltas, owner_id, start_at FROM autodash_race_rooms WHERE code = ${code}
+  `
+  if (!room) return c.json({ error: "Sala não encontrada" }, 404)
+  if (room.start_at) return c.json({ error: "Essa corrida já começou" }, 409)
+
+  const [{ n }] = await sql`
+    SELECT COUNT(*)::int AS n FROM autodash_race_players
+    WHERE code = ${code} AND player_id <> ${playerId}
+  `
+  if (n >= MAX_PILOTOS) return c.json({ error: "Sala cheia (4 pilotos)" }, 409)
+
+  // reentrar é idempotente: se cair a conexão, volta pro mesmo lugar
+  await sql`
+    INSERT INTO autodash_race_players (code, player_id, nome, car, paint)
+    VALUES (${code}, ${playerId}, ${nome}, ${cleanInt(body?.car, 0, 9, 0)}, ${cleanInt(body?.paint, 0, 99, 0)})
+    ON CONFLICT (code, player_id) DO UPDATE SET nome = EXCLUDED.nome, visto_em = now()
+  `
+  return c.json({
+    seed: room.seed,
+    voltas: room.voltas,
+    owner: room.owner_id === playerId,
+  })
+})
+
+// GET /api/autodash/race/:code — estado do lobby / da corrida
+autodashRoutes.get("/autodash/race/:code", async (c) => {
+  const code = c.req.param("code").toUpperCase()
+  const [room] = await sql`
+    SELECT seed, voltas, owner_id,
+           EXTRACT(EPOCH FROM (start_at - now())) * 1000 AS start_in_ms
+    FROM autodash_race_rooms WHERE code = ${code}
+  `
+  if (!room) return c.json({ error: "Sala não encontrada" }, 404)
+  return c.json({
+    seed: room.seed,
+    voltas: room.voltas,
+    ownerId: room.owner_id,
+    startInMs: room.start_in_ms === null ? null : Math.round(Number(room.start_in_ms)),
+    pilotos: await pilotos(code),
+  })
+})
+
+// POST /api/autodash/race/:code/start — SÓ o dono dá a largada
+autodashRoutes.post("/autodash/race/:code/start", async (c) => {
+  const code = c.req.param("code").toUpperCase()
+  const body = await c.req.json().catch(() => null)
+  const playerId = cleanId(body?.playerId)
+
+  const [room] = await sql`SELECT owner_id, start_at FROM autodash_race_rooms WHERE code = ${code}`
+  if (!room) return c.json({ error: "Sala não encontrada" }, 404)
+  if (room.owner_id !== playerId) return c.json({ error: "Só o dono da sala dá a largada" }, 403)
+  if (room.start_at) return c.json({ error: "Já largou" }, 409)
+
+  const [updated] = await sql`
+    UPDATE autodash_race_rooms SET start_at = now() + interval '5 seconds'
+    WHERE code = ${code}
+    RETURNING EXTRACT(EPOCH FROM (start_at - now())) * 1000 AS start_in_ms
+  `
+  return c.json({ startInMs: Math.round(Number(updated.start_in_ms)) })
+})
+
+// POST /api/autodash/race/:code/state — telemetria; devolve todos os rivais
+autodashRoutes.post("/autodash/race/:code/state", async (c) => {
+  const code = c.req.param("code").toUpperCase()
+  const body = await c.req.json().catch(() => null)
+  const playerId = cleanId(body?.playerId)
+  if (!playerId) return c.json({ error: "playerId obrigatório" }, 400)
+
+  const st = body?.st ?? {}
+  const safe = {
+    d: Number(st.d) || 0,        // distância total percorrida (pra ordenar)
+    lap: cleanInt(st.lap, 0, 99, 0),
+    z: Number(st.z) || 0,        // posição na volta (pra dead reckoning)
+    v: Number(st.v) || 0,        // km/h
+    x: Number(st.x) || 0,        // faixa (-1..1)
+    c: !!st.c,                   // bateu (respawnando)
+    fin: !!st.fin,               // terminou
+  }
+  await sql`
+    UPDATE autodash_race_players SET estado = ${JSON.stringify(safe)}::jsonb, visto_em = now()
+    WHERE code = ${code} AND player_id = ${playerId}
+  `
+  const [room] = await sql`
+    SELECT voltas, EXTRACT(EPOCH FROM (start_at - now())) * 1000 AS start_in_ms
+    FROM autodash_race_rooms WHERE code = ${code}
+  `
+  if (!room) return c.json({ error: "Sala não encontrada" }, 404)
+  const todos = await pilotos(code)
+  return c.json({
+    voltas: room.voltas,
+    startInMs: room.start_in_ms === null ? null : Math.round(Number(room.start_in_ms)),
+    rivais: todos.filter((p: { player_id: string }) => p.player_id !== playerId),
+  })
+})
