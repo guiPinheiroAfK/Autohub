@@ -78,6 +78,7 @@ export class RaceNet {
   private enviando = false
   private erro: string | null = null
 
+  // @ts-ignore
   constructor(private code: string, private meuId: string) {}
 
   get ultimoErro() { return this.erro }

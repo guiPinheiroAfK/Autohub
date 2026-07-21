@@ -1115,7 +1115,7 @@ export class AutoDashEngine {
 
     // a cada 10k pontos o jogo sobe de nível: rabeio comemorativo e trânsito mais bravo
     const newLevel = Math.floor(this.score / 10000)
-    if (newLevel > this.level) {
+    if (newLevel > this.level && this.mode != "race") {
       this.level = newLevel
       this.levelUpT = 1.5
       this.audio.levelUp()
