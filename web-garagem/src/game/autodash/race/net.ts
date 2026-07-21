@@ -146,7 +146,10 @@ export class RaceNet {
     // guarda como ALVO — quem move o carro é o dead reckoning acima
     r.netD = st.d; r.netZ = st.z; r.netX = st.x
     r.v = st.v; r.lap = st.lap
-    r.crashed = !!st.c; r.finished = !!st.fin
+    r.crashed = !!st.c
+    // carimba a chegada na primeira vez que a rede reporta — é o que ordena o pódio
+    if (st.fin && !r.finished) r.finishT = performance.now()
+    r.finished = !!st.fin
     r.staleFor = Math.max(0, Number(p.ha_segundos) || 0)
   }
 }

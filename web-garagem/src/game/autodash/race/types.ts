@@ -24,6 +24,9 @@ export interface Rival {
   x: number        // faixa (-1..1)
   crashed: boolean
   finished: boolean
+  /** Instante da chegada (performance.now()). Quem termina fica com a MESMA
+   *  distância dos outros, então sem isso o pódio sairia em ordem arbitrária. */
+  finishT?: number
 
   /** Alvo mais recente vindo da rede; o cliente converge suave até ele. */
   netD?: number
@@ -62,15 +65,19 @@ export interface GridRow {
   bot: boolean
   crashed: boolean
   finished: boolean
+  finishT?: number
 }
 
 /**
- * Ordena o grid por distância total. Quem terminou fica na frente (na ordem em
- * que terminou, que a distância acumulada já preserva).
+ * Ordena o grid: quem já terminou vem primeiro, e entre eles vale a ORDEM DE
+ * CHEGADA — não a distância, porque todos que completam a prova terminam com
+ * exatamente a mesma distância e o pódio sairia arbitrário. Quem ainda corre
+ * é ordenado por distância percorrida.
  */
 export function ordenarGrid(rows: GridRow[]): GridRow[] {
   return [...rows].sort((a, b) => {
     if (a.finished !== b.finished) return a.finished ? -1 : 1
+    if (a.finished && b.finished) return (a.finishT ?? 0) - (b.finishT ?? 0)
     return b.d - a.d
   })
 }

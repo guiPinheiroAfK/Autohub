@@ -84,6 +84,6 @@ export class BotRacer {
     r.d += avanco
     r.z += avanco
     if (r.z >= trackLen) { r.z -= trackLen; r.lap++ }
-    if (r.lap >= voltas) { r.finished = true; r.v = 0 }
+    if (r.lap >= voltas && !r.finished) { r.finished = true; r.finishT = performance.now(); r.v = 0 }
   }
 }
