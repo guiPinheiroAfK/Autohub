@@ -12,7 +12,7 @@
 // É isso que torna viável desenhar os rivais SÓLIDOS e deixar que se empurrem.
 
 import { KMH2UPS } from "../data"
-import type { Rival, RaceTelemetry } from "./types"
+import { corPorIndice, type Rival, type RaceTelemetry } from "./types"
 
 const TICK = 0.3 // s entre envios de telemetria (o duelo usa 1s)
 const SUMIR_APOS = 6 // s sem notícia = tira da pista
@@ -137,6 +137,7 @@ export class RaceNet {
     if (!r) {
       r = {
         id: p.player_id, nome: p.nome, car: p.car, paint: p.paint, bot: false,
+        cor: corPorIndice(this.rivais.size), // ordem de chegada na sala = cor distinta
         z: st?.z ?? 0, lap: st?.lap ?? 0, d: st?.d ?? 0, v: st?.v ?? 0, x: st?.x ?? 0,
         crashed: !!st?.c, finished: !!st?.fin, staleFor: 0,
       }

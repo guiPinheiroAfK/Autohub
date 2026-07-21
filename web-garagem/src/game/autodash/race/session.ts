@@ -130,7 +130,14 @@ export class RaceSession {
       if (this.lap >= this.cfg.voltas) { this.finished = true; this.finishT = performance.now(); this.phase = "finished" }
     }
 
-    for (const b of this.bots) b.update(dt, trackLen, this.cfg.voltas, pista)
+    // Bots só andam DEPOIS do verde. Antes eles eram atualizados no countdown
+    // também: ganhavam ~3 s de vantagem (~59.000 unidades a 150 km/h), o que é
+    // mais que a distância de render — o jogador via pista vazia, se achava em
+    // primeiro, e o placar mostrava 4º. Não era bug do placar, era largada
+    // queimada.
+    if (this.phase === "racing" || this.phase === "finished") {
+      for (const b of this.bots) b.update(dt, trackLen, this.cfg.voltas, pista)
+    }
 
     if (this.net) {
       this.net.update(dt, trackLen, (): RaceTelemetry => ({
@@ -154,7 +161,7 @@ export class RaceSession {
     for (const r of this.rivais) {
       rows.push({
         id: r.id, nome: r.nome, lap: r.lap, d: r.d, eu: false, bot: r.bot,
-        crashed: r.crashed, finished: r.finished, finishT: r.finishT,
+        crashed: r.crashed, finished: r.finished, finishT: r.finishT, cor: r.cor,
       })
     }
     return ordenarGrid(rows)

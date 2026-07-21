@@ -14,6 +14,7 @@ import { KINDS, TRAFFIC_COLORS, type Traffic, type TrafficKind, type WorldView }
 import { DRIVERS } from "./traffic/driver"
 import { RaceSession } from "./race/session"
 
+
 const W = CANVAS_W, H = CANVAS_H
 const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH
 const RUMBLE = 3
@@ -1718,6 +1719,7 @@ export class AutoDashEngine {
           offset: r.x, targetOffset: r.x, speed: r.v, kind: "car", role: "civilian",
           color: PAINTS[clamp(Math.floor(r.paint), 0, PAINTS.length - 1)],
           blinkT: 0, prevD: 1,
+          label: r.nome, accent: r.cor,
         }
         const si = Math.floor(fake.z / SEG_LEN) % N
         const arr = bySeg.get(si)
@@ -2570,6 +2572,24 @@ export class AutoDashEngine {
         ctx.fillRect(bx + w * 0.72, y - th * 2.2, w * 0.22, len)
       }
     }
+    // RIVAL da corrida: faixa colorida no teto (mesma cor do minimapa) + nome
+    // em cima. Sem isso todos os carros da pista são iguais e não dá pra saber
+    // quem você está ultrapassando.
+    if (t.accent) {
+      ctx.fillStyle = t.accent
+      rr(ctx, bx + w * 0.2, by + h * 0.04, w * 0.6, Math.max(1.5, h * 0.13), w * 0.05)
+      if (w > 26 && t.label) {
+        const fs = Math.max(9, Math.min(15, w * 0.17))
+        ctx.font = `bold ${fs}px 'Space Grotesk', 'Segoe UI', sans-serif`
+        ctx.textAlign = "center"
+        const tw = ctx.measureText(t.label).width
+        ctx.fillStyle = "rgba(8,13,26,0.6)"
+        rr(ctx, x - tw / 2 - 5, by - fs * 1.75, tw + 10, fs * 1.35, 4)
+        ctx.fillStyle = t.accent
+        ctx.fillText(t.label, x, by - fs * 0.72)
+        ctx.textAlign = "left"
+      }
+    }
     // seta
     if (t.blinkT > 0 && Math.floor(t.blinkT * 6) % 2 === 0) {
       ctx.fillStyle = "#fb923c"
@@ -2685,6 +2705,7 @@ export class AutoDashEngine {
           offset: r.x, targetOffset: r.x, speed: r.v, kind: "car", role: "civilian",
           color: PAINTS[clamp(Math.floor(r.paint), 0, PAINTS.length - 1)],
           blinkT: 0, prevD: 1,
+          label: r.nome, accent: r.cor,
         })
       }
     }
@@ -2952,6 +2973,30 @@ export class AutoDashEngine {
           px = ox; py = clamp(oy - sn * 0.6, oy, byy + bh - 5) // atrás = abaixo da seta
         }
         ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill()
+      }
+    }
+
+    // rivais da corrida: ponto na cor de identificação dele (a MESMA da faixa
+    // no teto do carro), pra bater o que está no mapa com o que está na pista
+    if (this.race && this.mode === "race") {
+      const playerZ2 = this.position + PLAYER_Z
+      for (const rv of this.race.rivais) {
+        if (rv.finished) continue
+        const sn = this.wrapDz(rv.z, playerZ2) / SEG_LEN
+        let px: number, py: number
+        if (sn >= 0) {
+          const p = pts[clamp(Math.round(sn / 2), 0, pts.length - 1)]
+          px = p.x; py = p.y
+        } else {
+          px = ox + (rv.x - this.playerX) * 10
+          py = clamp(oy - sn * 0.6, oy, byy + bh - 5)
+        }
+        // contorno primeiro e maior: assim o miolo colorido fica cheio em vez
+        // de ser comido pelo traço num ponto de poucos pixels
+        ctx.fillStyle = "rgba(8,13,26,0.8)"
+        ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill()
+        ctx.fillStyle = rv.cor
+        ctx.beginPath(); ctx.arc(px, py, 3.8, 0, Math.PI * 2); ctx.fill()
       }
     }
 
@@ -3267,9 +3312,14 @@ export class AutoDashEngine {
     let y = by + 42
     for (let i = 0; i < grid.length; i++) {
       const g = grid[i]
+      // bolinha na cor do rival: mesma do mapa e da faixa no teto dele
+      if (!g.eu && g.cor) {
+        ctx.fillStyle = g.cor
+        ctx.beginPath(); ctx.arc(bx + 17, y - 4, 3.2, 0, Math.PI * 2); ctx.fill()
+      }
       ctx.fillStyle = g.eu ? "#fde047" : g.crashed ? "rgba(248,113,113,0.85)" : "rgba(248,250,252,0.75)"
       ctx.font = `${g.eu ? "bold " : ""}13px 'Space Grotesk', 'Segoe UI', sans-serif`
-      ctx.fillText(`${i + 1}. ${g.nome}${g.finished ? " ✓" : ""}`, bx + 12, y)
+      ctx.fillText(`${i + 1}. ${g.nome}${g.finished ? " ✓" : ""}`, bx + (g.eu ? 12 : 25), y)
       ctx.textAlign = "right"
       ctx.fillText(`v${g.lap + 1}`, bx + bw - 12, y)
       ctx.textAlign = "left"

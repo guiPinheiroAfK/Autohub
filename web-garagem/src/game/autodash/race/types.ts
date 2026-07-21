@@ -8,6 +8,18 @@
 /** Fase da sala, do lobby ao pódio. */
 export type RacePhase = "lobby" | "countdown" | "racing" | "finished"
 
+/** Cores de identificação dos rivais — pista, minimapa e placar usam a MESMA. */
+export const CORES_RIVAL = ["#38bdf8", "#f472b6", "#4ade80", "#fb923c", "#a78bfa"]
+
+/**
+ * Cor por ORDEM DE ENTRADA, não por hash do id: com 5 cores e 3 rivais, o hash
+ * colidia com frequência e dois carros saíam iguais — justamente o que a cor
+ * deveria evitar. Por índice, os 5 primeiros são sempre distintos.
+ */
+export function corPorIndice(i: number): string {
+  return CORES_RIVAL[i % CORES_RIVAL.length]
+}
+
 /** Um adversário na pista — jogador remoto OU bot, indistinguível pro engine. */
 export interface Rival {
   id: string
@@ -15,6 +27,7 @@ export interface Rival {
   car: number      // índice em CARS
   paint: number    // índice em PAINTS
   bot: boolean
+  cor: string      // identificação visual — pista, minimapa e placar usam esta
 
   // estado corrente já interpolado/extrapolado, pronto pra desenhar
   z: number        // posição dentro da volta (unidades de mundo)
@@ -66,6 +79,7 @@ export interface GridRow {
   crashed: boolean
   finished: boolean
   finishT?: number
+  cor?: string
 }
 
 /**

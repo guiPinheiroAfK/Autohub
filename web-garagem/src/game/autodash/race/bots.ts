@@ -6,7 +6,7 @@
 // o jogador vê do rival é posição, velocidade e faixa.
 
 import { KMH2UPS } from "../data"
-import type { Rival } from "./types"
+import { corPorIndice, type Rival } from "./types"
 
 const NOMES = ["KAMI", "L4BT", "TURBO", "DIESEL", "NITRO", "GHOST", "V8", "ZERO"]
 
@@ -36,7 +36,7 @@ export class BotRacer {
   private alvoX: number
   private penalidadeT = 0
 
-  constructor(id: string, nome: string, car: number, paint: number, dificuldade: number) {
+  constructor(id: string, nome: string, car: number, paint: number, dificuldade: number, cor: string) {
     // dificuldade 0..1 → ritmo entre ~150 e ~205 km/h. É o TETO dele em pista
     // limpa; o trânsito segura o resto, igual segura você. Antes era 185-245 e
     // sem freio nenhum, então eles sumiam no horizonte já na primeira reta.
@@ -48,7 +48,7 @@ export class BotRacer {
     }
     this.alvoX = [-0.75, -0.25, 0.25, 0.75][Math.floor(Math.random() * 4)]
     this.rival = {
-      id, nome, car, paint, bot: true,
+      id, nome, car, paint, bot: true, cor,
       z: 0, lap: 0, d: 0, v: 0, x: this.alvoX,
       crashed: false, finished: false, staleFor: 0,
     }
@@ -61,7 +61,7 @@ export class BotRacer {
       const nome = pool.splice(Math.floor(Math.random() * pool.length), 1)[0] ?? `BOT_${i + 1}`
       // espalha a dificuldade em volta do alvo pra ter grid variado
       const d = Math.min(1, Math.max(0, dificuldade + (Math.random() - 0.5) * 0.35))
-      out.push(new BotRacer(`bot_${i}_${Math.random().toString(36).slice(2, 7)}`, nome, i % 4, i % 6, d))
+      out.push(new BotRacer(`bot_${i}_${Math.random().toString(36).slice(2, 7)}`, nome, i % 4, i % 6, d, corPorIndice(i)))
     }
     return out
   }

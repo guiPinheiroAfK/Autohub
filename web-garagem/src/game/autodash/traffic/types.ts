@@ -39,6 +39,8 @@ export interface Traffic {
   beaten?: boolean     // jogador a ultrapassou: desiste da caçada e recua até o despiste
   engaged?: boolean    // já colou no jogador uma vez: daqui em diante é física pura (sem mola)
   parked?: boolean     // estacionado (blitz): sem IA, sem reciclagem, colisão normal
+  label?: string       // nome exibido em cima do carro (rivais do modo corrida)
+  accent?: string      // cor de destaque do rival (teto/faixa), pra distinguir na pista
 }
 
 // Visão read-only do mundo que uma IA precisa pra decidir. O engine constrói
