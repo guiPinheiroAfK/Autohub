@@ -25,3 +25,5 @@ Thumbs.db
 # IDEs
 .idea/
 .vscode/
+# config local do Claude Code (caminhos absolutos da maquina)
+.claude/
