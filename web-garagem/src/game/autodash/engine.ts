@@ -283,7 +283,13 @@ export class AutoDashEngine {
   }
 
   // ---------- pista ----------
-  private buildTrack(seed = Math.floor(Math.random() * 2 ** 31)) {
+  /**
+   * `corrida` gera um traçado de CIRCUITO: mais curto (pra fechar voltas em
+   * tempo razoável), com curvas bem mais bravas e retas de respiro entre elas.
+   * No modo corrida o desafio tem que vir do traçado, não de desviar de carro —
+   * por isso lá o trânsito também é bem mais leve.
+   */
+  private buildTrack(seed = Math.floor(Math.random() * 2 ** 31), corrida = false) {
     const rnd = mulberry32(seed)
     this.segments = []
     let lastY = 0
@@ -300,10 +306,27 @@ export class AutoDashEngine {
     const ri = (lo: number, hi: number) => Math.floor(r(lo, hi + 1))
 
     addRoad(30, 80, 30, 0, 0) // reta de largada
-    while (this.segments.length < 4000) {
+    const alvoSegs = corrida ? 1800 : 4000
+    while (this.segments.length < alvoSegs) {
       const roll = rnd()
       const hill = r(-1, 1) * r(600, 2600)
-      if (roll < 0.10) addRoad(30, ri(110, 220), 30, 0, r(-1, 1) * r(400, 1600)) // retão pra esticar as marchas
+      if (corrida) {
+        // circuito: curvão, esse/chicane e grampo, sempre com reta de respiro
+        // entre eles — é onde o jogador escolhe onde acelerar
+        if (roll < 0.22) addRoad(26, ri(70, 150), 26, 0, r(-1, 1) * r(300, 1200)) // reta
+        else if (roll < 0.50) {
+          const c = (rnd() < 0.5 ? -1 : 1) * r(4.5, 7.5)          // curvão
+          addRoad(ri(18, 30), ri(35, 70), ri(18, 30), c, hill * 0.5)
+        } else if (roll < 0.78) {
+          const c = (rnd() < 0.5 ? -1 : 1) * r(5, 8)               // esse
+          addRoad(16, ri(22, 38), 16, c, hill * 0.3)
+          addRoad(16, ri(22, 38), 16, -c, -hill * 0.3)
+        } else {
+          const c = (rnd() < 0.5 ? -1 : 1) * r(8, 11)              // grampo
+          addRoad(12, ri(26, 44), 12, c, 0)
+          addRoad(20, ri(40, 70), 20, 0, hill * 0.2)               // respiro
+        }
+      } else if (roll < 0.10) addRoad(30, ri(110, 220), 30, 0, r(-1, 1) * r(400, 1600)) // retão pra esticar as marchas
       else if (roll < 0.30) addRoad(ri(20, 40), ri(30, 70), ri(20, 40), 0, hill)
       else if (roll < 0.62) {
         const c = (rnd() < 0.5 ? -1 : 1) * r(2, 5)
@@ -323,6 +346,23 @@ export class AutoDashEngine {
       if (Math.abs(c) >= 4 && Math.abs(this.segments[i - 1].curve) < 4) {
         for (let k = 22; k <= 46; k += 8) {
           this.segments[i - k].sign = c > 0 ? 1 : -1
+        }
+      }
+    }
+
+    // No circuito, cones marcam a parte interna das curvas bravas: viram
+    // referência de traçado (dá pra "raspar" a curva) e punem quem entra torto.
+    if (corrida) {
+      this.obstacles = []
+      for (let i = 60; i < this.segments.length - 30; i++) {
+        const c = this.segments[i].curve
+        if (Math.abs(c) < 5 || Math.abs(this.segments[i - 1].curve) >= 5) continue
+        const lado = c > 0 ? 1 : -1 // interno da curva
+        for (let k = 0; k < 5; k++) {
+          this.obstacles.push({
+            z: ((i + k * 6) * SEG_LEN) % this.trackLen,
+            offset: lado * 0.92, kind: "cone", w: 0.10, len: 90,
+          })
         }
       }
     }
@@ -521,7 +561,11 @@ export class AutoDashEngine {
   }
 
   private updateTraffic(dt: number, playerZ: number, demo: boolean) {
-    const target = 14 + Math.min(14, Math.floor(this.km * 1.3)) + this.level * 3
+    // no circuito o desafio é o traçado, não a quantidade de carro: bem menos
+    // trânsito, e sem escalar com nível (a corrida tem duração fixa em voltas)
+    const target = this.mode === "race"
+      ? 5
+      : 14 + Math.min(14, Math.floor(this.km * 1.3)) + this.level * 3
     if (this.traffic.length < target) this.spawnTraffic(DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))
     if (this.immuneT > 0) this.immuneT -= dt
     if (this.policeHitT > 0) this.policeHitT -= dt
@@ -1431,8 +1475,12 @@ export class AutoDashEngine {
   }
 
   private startRace(seed?: number) {
-    this.buildTrack(seed)
-    this.seedTraffic(14)
+    const corrida = this.mode === "race"
+    // limpa ANTES de construir: no circuito o buildTrack semeia os cones das
+    // curvas, e zerar depois apagaria justamente eles
+    this.obstacles = []; this.zones = []; this.roadSigns = []; this.eventTimer = corrida ? 1e9 : 12
+    this.buildTrack(seed, corrida)
+    this.seedTraffic(corrida ? 5 : 14)
     this.position = 0
     this.speed = 0
     this.playerX = 0
@@ -1444,7 +1492,6 @@ export class AutoDashEngine {
     this.shield = false; this.immuneT = 0; this.policeHitT = 0; this.policeEscapeT = 0; this.policeChaseT = 0; this.mult2T = 0
     this.level = 0; this.levelUpT = 0
     this.powerups = []; this.puTimer = 6
-    this.obstacles = []; this.zones = []; this.roadSigns = []; this.eventTimer = 12
     this.curveWarn = 0; this.collWarn = null
     this.newRecord = false; this.beamT = 0; this.beamCdT = 0; this.pitchY = 0
     this.shiftT = 0; this.wheelspinT = 0; this.bogT = 0
@@ -1589,7 +1636,12 @@ export class AutoDashEngine {
     switch (this.state) {
       case "menu": this.renderMenu(); break
       case "garage": this.renderGarage(); break
-      case "countdown": this.renderHud(); this.renderSemaphore(); break
+      case "countdown":
+        this.renderHud()
+        // na corrida, a contagem serve pra estudar o traçado antes de largar
+        if (this.mode === "race") this.renderTrackPreview()
+        this.renderSemaphore()
+        break
       case "racing": this.renderHud(); if (this.mode === "race") this.renderRaceHud(); break
       case "paused": this.renderHud(); this.renderPause(); break
       case "gameover": this.renderGameOver(); break
@@ -3291,6 +3343,84 @@ export class AutoDashEngine {
     ctx.textAlign = "left"
     this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 230, y + 22, 220, () => this.correrComBots(), { primary: true, h: 42, font: 16 })
     this.pill("MENU  [M]", W / 2 + 10, y + 22, 220, () => this.toMenu(), { h: 42, font: 16 })
+  }
+
+  /**
+   * Traçado do circuito INTEIRO, visto de cima. Percorre todos os segmentos
+   * acumulando a curvatura, normaliza pra caber na caixa e devolve os pontos.
+   * É o que deixa o jogador ler as curvas antes de largar.
+   */
+  private tracadoCompleto(cx: number, cy: number, cw: number, ch: number) {
+    const pts: { x: number; y: number; c: number }[] = []
+    let x = 0, y = 0, h = 0
+    const passo = 3
+    for (let i = 0; i < this.segments.length; i += passo) {
+      const s = this.segments[i]
+      h += s.curve * 0.0125 * passo
+      x += Math.sin(h); y -= Math.cos(h)
+      pts.push({ x, y, c: Math.abs(s.curve) })
+    }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    for (const p of pts) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
+    }
+    const esc = Math.min(cw / Math.max(1, maxX - minX), ch / Math.max(1, maxY - minY))
+    const offX = cx - ((minX + maxX) / 2) * esc
+    const offY = cy - ((minY + maxY) / 2) * esc
+    return pts.map(p => ({ x: offX + p.x * esc, y: offY + p.y * esc, c: p.c }))
+  }
+
+  /** Mapa do circuito na largada: curvas bravas em vermelho, retas em verde. */
+  private renderTrackPreview() {
+    const ctx = this.ctx
+    const bw = 420, bh = 300
+    const bx = W / 2 - bw / 2, by = 96
+    this.glass(bx - 14, by - 14, bw + 28, bh + 66, 14)
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#f8fafc"
+    ctx.font = "bold 20px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText("CONHEÇA O CIRCUITO", W / 2, by + 6)
+
+    const pts = this.tracadoCompleto(W / 2, by + 26 + bh / 2 - 14, bw - 40, bh - 60)
+    // traço grosso escuro por baixo dá contorno e legibilidade
+    ctx.strokeStyle = "rgba(2,6,23,0.75)"
+    ctx.lineWidth = 11; ctx.lineJoin = "round"; ctx.lineCap = "round"
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y)
+    for (const p of pts) ctx.lineTo(p.x, p.y)
+    ctx.closePath(); ctx.stroke()
+    // por cima, colorido por severidade: onde dá pra ir com tudo x onde freia
+    ctx.lineWidth = 6
+    for (let i = 1; i < pts.length; i++) {
+      const sev = clamp(pts[i].c / 8, 0, 1)
+      ctx.strokeStyle = sev > 0.62 ? "#ef4444" : sev > 0.3 ? "#fbbf24" : "#4ade80"
+      ctx.beginPath(); ctx.moveTo(pts[i - 1].x, pts[i - 1].y); ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke()
+    }
+    // largada
+    ctx.fillStyle = "#f8fafc"
+    ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, 6, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = "#0f172a"
+    ctx.font = "bold 10px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText("S", pts[0].x, pts[0].y + 3.5)
+
+    // legenda
+    const ly = by + bh + 22
+    const itens: [string, string][] = [["#4ade80", "acelera"], ["#fbbf24", "atenção"], ["#ef4444", "freia"]]
+    let lx = W / 2 - 150
+    ctx.textAlign = "left"
+    ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
+    for (const [cor, txt] of itens) {
+      ctx.fillStyle = cor
+      ctx.fillRect(lx, ly - 8, 18, 5)
+      ctx.fillStyle = "rgba(248,250,252,0.8)"
+      ctx.fillText(txt, lx + 24, ly - 2)
+      lx += 100
+    }
+    ctx.textAlign = "center"
+    ctx.fillStyle = "rgba(248,250,252,0.6)"
+    ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`${this.race?.cfg.voltas ?? 0} voltas`, W / 2, ly + 20)
+    ctx.textAlign = "left"
   }
 
   /** Placar ao vivo no canto da tela durante a corrida. */
