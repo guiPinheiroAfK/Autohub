@@ -30,7 +30,7 @@ const FADE_IN_LEN = 90
 type GameState =
   | "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
   | "duellobby" | "duelcode" | "duelwaiting" | "duelspectate" | "duelresult"
-  | "racelobby" | "raceresult"
+  | "racelobby" | "racecode" | "racewait" | "raceresult"
 
 interface DuelSession {
   code: string
@@ -230,6 +230,8 @@ export class AutoDashEngine {
   private race: RaceSession | null = null
   private raceVoltas = 3
   private raceBots = 3
+  private raceEndT = 0 // volta de desaceleração após cruzar a linha
+  private raceErro: string | null = null
   private duel: DuelSession | null = null
   private codeBuf = ""
   private prevState: GameState = "menu"
@@ -314,20 +316,21 @@ export class AutoDashEngine {
       const roll = rnd()
       const hill = r(-1, 1) * r(600, 2600)
       if (corrida) {
-        // circuito: curvão, esse/chicane e grampo, sempre com reta de respiro
-        // entre eles — é onde o jogador escolhe onde acelerar
-        if (roll < 0.22) addRoad(26, ri(70, 150), 26, 0, r(-1, 1) * r(300, 1200)) // reta
-        else if (roll < 0.50) {
-          const c = (rnd() < 0.5 ? -1 : 1) * r(4.5, 7.5)          // curvão
-          addRoad(ri(18, 30), ri(35, 70), ri(18, 30), c, hill * 0.5)
-        } else if (roll < 0.78) {
-          const c = (rnd() < 0.5 ? -1 : 1) * r(5, 8)               // esse
-          addRoad(16, ri(22, 38), 16, c, hill * 0.3)
-          addRoad(16, ri(22, 38), 16, -c, -hill * 0.3)
+        // Circuito de VELOCIDADE: retas longas pra esticar marcha e curvas que
+        // dá pra fazer em ritmo. O grampo saiu — fazer um U a 200 km/h não é
+        // corrida, é parede; e a entrada larga das curvas dá tempo de frear.
+        if (roll < 0.42) addRoad(30, ri(120, 240), 30, 0, r(-1, 1) * r(300, 1100)) // retão
+        else if (roll < 0.72) {
+          const c = (rnd() < 0.5 ? -1 : 1) * r(2.5, 4.2)           // curva aberta
+          addRoad(ri(26, 40), ri(40, 80), ri(26, 40), c, hill * 0.45)
+        } else if (roll < 0.92) {
+          const c = (rnd() < 0.5 ? -1 : 1) * r(3, 4.8)             // esse suave
+          addRoad(22, ri(30, 50), 22, c, hill * 0.3)
+          addRoad(22, ri(30, 50), 22, -c, -hill * 0.3)
         } else {
-          const c = (rnd() < 0.5 ? -1 : 1) * r(8, 11)              // grampo
-          addRoad(12, ri(26, 44), 12, c, 0)
-          addRoad(20, ri(40, 70), 20, 0, hill * 0.2)               // respiro
+          const c = (rnd() < 0.5 ? -1 : 1) * r(4.5, 6)             // a mais fechada do traçado
+          addRoad(24, ri(30, 50), 24, c, 0)
+          addRoad(26, ri(60, 110), 26, 0, hill * 0.2)              // respiro longo depois
         }
       } else if (roll < 0.10) addRoad(30, ri(110, 220), 30, 0, r(-1, 1) * r(400, 1600)) // retão pra esticar as marchas
       else if (roll < 0.30) addRoad(ri(20, 40), ri(30, 70), ri(20, 40), 0, hill)
@@ -953,7 +956,14 @@ export class AutoDashEngine {
 
     this.duelNet(dt)
 
-    if (["menu", "garage", "duellobby", "duelcode", "duelwaiting", "duelresult"].includes(this.state)) {
+    // sala de espera: consulta quem entrou e detecta a largada dada pelo dono
+    if (this.state === "racewait" && this.race) {
+      this.race.update(dt, 0, 0, 0, false, this.trackLen)
+      if (this.race.phase === "countdown") { this.raceEndT = 0; this.startRace(this.race.cfg.seed) }
+    }
+
+    if (["menu", "garage", "duellobby", "duelcode", "duelwaiting", "duelresult",
+         "racelobby", "racecode", "racewait", "raceresult"].includes(this.state)) {
       // demo: câmera passeia pela pista
       this.demoT += dt
       this.speed = 95
@@ -1172,7 +1182,21 @@ export class AutoDashEngine {
           this.burst(W / 2 + Math.sign(shove) * 60, H - 110, 12, ["#fde047", "#e2e8f0"])
         }
       }
-      if (r.phase === "finished") { this.state = "raceresult"; this.fadeT = 0.22; return }
+      // Cruzou a linha: PONTO MORTO e desaceleração até parar, como numa volta
+      // de desaceleração de verdade. Cortar direto pro pódio no instante da
+      // chegada tirava o respiro do fim da prova.
+      if (r.phase === "finished") {
+        if (this.raceEndT <= 0) {
+          this.raceEndT = 4.5
+          this.gear = 0
+          this.nitroOn = false
+          this.floaters.push({ text: "🏁 CHEGOU!", color: "#fde047", y: H * 0.3, life: 2.4, big: true })
+          this.floaters.push({ text: `${r.minhaPosicao()}º lugar`, color: "#f8fafc", y: H * 0.38, life: 2.4, big: false })
+        }
+        this.raceEndT -= dt
+        if (this.raceEndT <= 0 || this.speed < 6) { this.state = "raceresult"; this.fadeT = 0.22 }
+        return
+      }
     }
 
     this.updateEventSpawner(dt, playerZ)
@@ -1692,6 +1716,8 @@ export class AutoDashEngine {
       case "duelspectate": this.renderDuelSpectate(); break
       case "duelresult": this.renderDuelResult(); break
       case "racelobby": this.renderRaceLobby(); break
+      case "racecode": this.renderRaceCode(); break
+      case "racewait": this.renderRaceWait(); break
       case "raceresult": this.renderRaceResult(); break
     }
 
@@ -3341,6 +3367,7 @@ export class AutoDashEngine {
   private correrComBots() {
     this.audio.ui()
     this.mode = "race"
+    this.raceEndT = 0
     this.race = RaceSession.soloComBots(this.cfg.pilotName || "VOCÊ", this.raceVoltas, this.raceBots)
     this.startRace(this.race.cfg.seed)
   }
@@ -3374,13 +3401,140 @@ export class AutoDashEngine {
     this.arrowBtn(W / 2 - 148, 228, -1, () => { this.raceBots = Math.max(1, this.raceBots - 1); this.audio.ui() })
     this.arrowBtn(W / 2 + 124, 228, 1, () => { this.raceBots = Math.min(3, this.raceBots + 1); this.audio.ui() })
 
-    this.pill("🏁 CORRER COM BOTS  [ENTER]", W / 2 - 160, 288, 320, () => this.correrComBots(), { primary: true, h: 46, font: 17 })
+    // seletor de CARRO — a escolha vive aqui, não na garagem, porque é aqui
+    // que se monta a corrida
+    const spec = CARS[this.cfg.carIdx]
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#f8fafc"
+    ctx.font = "bold 18px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(spec.name, W / 2, 296)
+    ctx.fillStyle = "rgba(248,250,252,0.55)"
+    ctx.font = "12px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(spec.desc, W / 2, 316)
+    ctx.textAlign = "left"
+    this.arrowBtn(W / 2 - 190, 280, -1, () => {
+      this.cfg.carIdx = (this.cfg.carIdx + CARS.length - 1) % CARS.length; saveConfig(this.cfg); this.audio.ui()
+    })
+    this.arrowBtn(W / 2 + 166, 280, 1, () => {
+      this.cfg.carIdx = (this.cfg.carIdx + 1) % CARS.length; saveConfig(this.cfg); this.audio.ui()
+    })
+    // barrinhas de atributo, pra comparar sem decorar número
+    const barra = (rot: string, frac: number, x: number) => {
+      ctx.fillStyle = "rgba(248,250,252,0.45)"
+      ctx.font = "9px 'Space Grotesk', 'Segoe UI', sans-serif"
+      ctx.fillText(rot, x, 334)
+      ctx.fillStyle = "rgba(255,255,255,0.14)"
+      rr(ctx, x, 340, 92, 6, 3)
+      ctx.fillStyle = "#38bdf8"
+      rr(ctx, x, 340, 92 * clamp(frac, 0.06, 1), 6, 3)
+    }
+    barra("POTÊNCIA", spec.power / 58, W / 2 - 190)
+    barra("ADERÊNCIA", spec.grip / 0.95, W / 2 - 46)
+    barra("VELOCIDADE", spec.topSpeed / 262, W / 2 + 98)
+
+    this.pill("🏁 CORRER COM BOTS  [ENTER]", W / 2 - 160, 366, 320, () => this.correrComBots(), { primary: true, h: 44, font: 16 })
+    this.pill("CRIAR SALA  [H]", W / 2 - 160, 416, 155, () => void this.criarSalaOnline(), { h: 36, font: 13 })
+    this.pill("ENTRAR  [J]", W / 2 + 5, 416, 155, () => this.abrirCodigoSala(), { h: 36, font: 13 })
 
     ctx.textAlign = "center"
     ctx.fillStyle = "rgba(248,250,252,0.5)"
     ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText("sala online com amigos chega na próxima — por ora, bots", W / 2, 358)
-    ctx.fillText("ESC volta pro menu", W / 2, 380)
+    if (this.raceErro) { ctx.fillStyle = "#f87171"; ctx.fillText(this.raceErro, W / 2, 470) }
+    else ctx.fillText("← → trocam o carro · ESC volta pro menu", W / 2, 470)
+    ctx.textAlign = "left"
+  }
+
+  /** Sala online: cria e cai no lobby de espera com o código na tela. */
+  private async criarSalaOnline() {
+    this.audio.ui()
+    this.raceErro = null
+    try {
+      const spec = CARS[this.cfg.carIdx]
+      this.race = await RaceSession.hospedar(
+        this.cfg.pilotName || "PILOTO", this.raceVoltas, this.cfg.carIdx, this.cfg.customs[this.cfg.carIdx].paint,
+      )
+      void spec
+      this.mode = "race"
+      this.state = "racewait"
+      this.fadeT = 0.22
+    } catch (e) { this.raceErro = (e as Error)?.message ?? "não consegui criar a sala" }
+  }
+
+  private abrirCodigoSala() {
+    this.audio.ui()
+    this.raceErro = null
+    this.codeBuf = ""
+    this.state = "racecode"
+    this.fadeT = 0.22
+  }
+
+  private async entrarSalaOnline() {
+    if (this.codeBuf.length < 4) return
+    this.raceErro = null
+    try {
+      this.race = await RaceSession.entrar(
+        this.codeBuf, this.cfg.pilotName || "PILOTO", this.cfg.carIdx, this.cfg.customs[this.cfg.carIdx].paint,
+      )
+      this.mode = "race"
+      this.state = "racewait"
+      this.fadeT = 0.22
+    } catch (e) { this.raceErro = (e as Error)?.message ?? "não consegui entrar"; this.state = "racecode" }
+  }
+
+  /** Digitação do código de 4 letras. */
+  private renderRaceCode() {
+    const ctx = this.ctx
+    this.dim(0.62)
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#f8fafc"
+    ctx.font = "900 34px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText("CÓDIGO DA SALA", W / 2, 180)
+    ctx.font = "900 62px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillStyle = "#fde047"
+    ctx.fillText((this.codeBuf + "____").slice(0, 4).split("").join(" "), W / 2, 260)
+    ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillStyle = this.raceErro ? "#f87171" : "rgba(248,250,252,0.6)"
+    ctx.fillText(this.raceErro ?? "digite as 4 letras · ENTER entra · ESC volta", W / 2, 310)
+    ctx.textAlign = "left"
+  }
+
+  /** Sala de espera: código na tela, quem já entrou e o botão de largada. */
+  private renderRaceWait() {
+    const ctx = this.ctx
+    const r = this.race
+    this.dim(0.62)
+    ctx.textAlign = "center"
+    ctx.fillStyle = "rgba(248,250,252,0.7)"
+    ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText("CÓDIGO DA SALA — passe pros seus amigos", W / 2, 132)
+    ctx.fillStyle = "#fde047"
+    ctx.font = "900 66px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText((r?.cfg.code ?? "----").split("").join(" "), W / 2, 200)
+
+    ctx.font = "bold 14px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillStyle = "rgba(248,250,252,0.6)"
+    ctx.fillText(`PILOTOS (${(r?.lobbyNomes.length ?? 1)}/4)`, W / 2, 248)
+    let y = 280
+    const nomes = r?.lobbyNomes.length ? r.lobbyNomes : [this.cfg.pilotName || "VOCÊ"]
+    for (const n of nomes) {
+      ctx.fillStyle = "#f8fafc"
+      ctx.font = "18px 'Space Grotesk', 'Segoe UI', sans-serif"
+      ctx.fillText(n, W / 2, y); y += 26
+    }
+    ctx.textAlign = "left"
+    if (r?.cfg.souDono) {
+      this.pill("🏁 LARGAR  [ENTER]", W / 2 - 120, y + 12, 240, () => void r.largar(), { primary: true, h: 44, font: 16 })
+    } else {
+      ctx.textAlign = "center"
+      ctx.fillStyle = "rgba(248,250,252,0.6)"
+      ctx.font = "15px 'Space Grotesk', 'Segoe UI', sans-serif"
+      ctx.fillText("esperando o dono da sala largar…", W / 2, y + 32)
+      ctx.textAlign = "left"
+    }
+    ctx.textAlign = "center"
+    ctx.fillStyle = r?.erro ? "#f87171" : "rgba(248,250,252,0.45)"
+    ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(r?.erro ?? "ESC sai da sala", W / 2, H - 40)
     ctx.textAlign = "left"
   }
 
@@ -3901,11 +4055,23 @@ export class AutoDashEngine {
         break
       case "racelobby":
         if (k === "enter") this.correrComBots()
-        if (k === "arrowleft") this.raceVoltas = Math.max(1, this.raceVoltas - 1)
-        if (k === "arrowright") this.raceVoltas = Math.min(9, this.raceVoltas + 1)
-        if (k === "arrowdown") this.raceBots = Math.max(1, this.raceBots - 1)
-        if (k === "arrowup") this.raceBots = Math.min(3, this.raceBots + 1)
+        if (k === "h") void this.criarSalaOnline()
+        if (k === "j") this.abrirCodigoSala()
+        if (k === "arrowleft") { this.cfg.carIdx = (this.cfg.carIdx + CARS.length - 1) % CARS.length; saveConfig(this.cfg); this.audio.ui() }
+        if (k === "arrowright") { this.cfg.carIdx = (this.cfg.carIdx + 1) % CARS.length; saveConfig(this.cfg); this.audio.ui() }
+        if (k === "arrowdown") this.raceVoltas = Math.max(1, this.raceVoltas - 1)
+        if (k === "arrowup") this.raceVoltas = Math.min(9, this.raceVoltas + 1)
         if (k === "escape") this.toMenu()
+        break
+      case "racecode":
+        if (k === "enter") void this.entrarSalaOnline()
+        else if (k === "backspace") this.codeBuf = this.codeBuf.slice(0, -1)
+        else if (k === "escape") { this.state = "racelobby"; this.raceErro = null }
+        else if (/^[a-z0-9]$/i.test(e.key) && this.codeBuf.length < 4) this.codeBuf += e.key.toUpperCase()
+        break
+      case "racewait":
+        if (k === "enter" && this.race?.cfg.souDono) void this.race.largar()
+        if (k === "escape") { this.race = null; this.mode = "solo"; this.state = "racelobby" }
         break
       case "raceresult":
         if (k === "enter") this.correrComBots()
@@ -4339,6 +4505,89 @@ function drawPlayerCar(
     ctx.quadraticCurveTo(bx + w * 1.02, by + h * 0.45, bx + w * 0.97, 0)
     ctx.closePath()
     ctx.fill()
+  } else if (spec.body === "zcoupe") {
+    // cupê 2 lugares: ombros traseiros marcados, vidro largo e baixo
+    ctx.beginPath()
+    ctx.moveTo(bx + w * 0.01, 0)
+    ctx.quadraticCurveTo(bx - w * 0.05, by + h * 0.56, bx + w * 0.06, by + h * 0.34)
+    ctx.quadraticCurveTo(bx + w * 0.15, by + h * 0.02, bx + w * 0.30, roofY + h * 0.04)
+    ctx.lineTo(bx + w * 0.70, roofY + h * 0.04)
+    ctx.quadraticCurveTo(bx + w * 0.85, by + h * 0.02, bx + w * 0.94, by + h * 0.34)
+    ctx.quadraticCurveTo(bx + w * 1.05, by + h * 0.56, bx + w * 0.99, 0)
+    ctx.closePath(); ctx.fill()
+    ctx.fillStyle = dark
+    ctx.beginPath(); ctx.ellipse(bx + w * 0.07, -h * 0.30, w * 0.07, h * 0.24, 0, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.ellipse(bx + w * 0.93, -h * 0.30, w * 0.07, h * 0.24, 0, 0, Math.PI * 2); ctx.fill()
+  } else if (spec.body === "rotor") {
+    // rotativo: tudo arredondado, traseira curta e baixinha
+    ctx.beginPath()
+    ctx.moveTo(bx + w * 0.05, 0)
+    ctx.quadraticCurveTo(bx - w * 0.03, by + h * 0.50, bx + w * 0.14, by + h * 0.20)
+    ctx.quadraticCurveTo(0, roofY - h * 0.02, bx + w * 0.86, by + h * 0.20)
+    ctx.quadraticCurveTo(bx + w * 1.03, by + h * 0.50, bx + w * 0.95, 0)
+    ctx.closePath(); ctx.fill()
+  } else if (spec.body === "apex") {
+    // GT de reta: carroceria larga e o bocão do aerofólio alto
+    ctx.beginPath()
+    ctx.moveTo(bx - w * 0.03, 0)
+    ctx.quadraticCurveTo(bx - w * 0.07, by + h * 0.58, bx + w * 0.05, by + h * 0.36)
+    ctx.quadraticCurveTo(bx + w * 0.17, by + h * 0.04, bx + w * 0.34, roofY + h * 0.05)
+    ctx.lineTo(bx + w * 0.66, roofY + h * 0.05)
+    ctx.quadraticCurveTo(bx + w * 0.83, by + h * 0.04, bx + w * 0.95, by + h * 0.36)
+    ctx.quadraticCurveTo(bx + w * 1.07, by + h * 0.58, bx + w * 1.03, 0)
+    ctx.closePath(); ctx.fill()
+    ctx.fillStyle = dark // difusor
+    rr(ctx, bx + w * 0.22, -h * 0.09, w * 0.56, h * 0.09, w * 0.02)
+  } else if (spec.body === "kaiju") {
+    // caixa-forte: linhas retas, quadrado, traseira reta e larga
+    ctx.beginPath()
+    ctx.moveTo(bx - w * 0.01, 0)
+    ctx.lineTo(bx + w * 0.02, by + h * 0.40)
+    ctx.lineTo(bx + w * 0.14, by + h * 0.08)
+    ctx.lineTo(bx + w * 0.32, roofY + h * 0.03)
+    ctx.lineTo(bx + w * 0.68, roofY + h * 0.03)
+    ctx.lineTo(bx + w * 0.86, by + h * 0.08)
+    ctx.lineTo(bx + w * 0.98, by + h * 0.40)
+    ctx.lineTo(bx + w * 1.01, 0)
+    ctx.closePath(); ctx.fill()
+    ctx.fillStyle = dark
+    rr(ctx, bx + w * 0.02, -h * 0.34, w * 0.10, h * 0.30, w * 0.02)
+    rr(ctx, bx + w * 0.88, -h * 0.34, w * 0.10, h * 0.30, w * 0.02)
+  } else if (spec.body === "sylva") {
+    // esportivo estreito: cabine afilada, quadris discretos
+    ctx.beginPath()
+    ctx.moveTo(bx + w * 0.04, 0)
+    ctx.quadraticCurveTo(bx - w * 0.01, by + h * 0.48, bx + w * 0.11, by + h * 0.24)
+    ctx.quadraticCurveTo(bx + w * 0.20, by + h * 0.01, bx + w * 0.36, roofY + h * 0.03)
+    ctx.lineTo(bx + w * 0.64, roofY + h * 0.03)
+    ctx.quadraticCurveTo(bx + w * 0.80, by + h * 0.01, bx + w * 0.89, by + h * 0.24)
+    ctx.quadraticCurveTo(bx + w * 1.01, by + h * 0.48, bx + w * 0.96, 0)
+    ctx.closePath(); ctx.fill()
+  } else if (spec.body === "roadster") {
+    // conversível pequeno: sem teto, para-brisa baixinho e santantônio
+    ctx.beginPath()
+    ctx.moveTo(bx + w * 0.06, 0)
+    ctx.quadraticCurveTo(bx - w * 0.01, by + h * 0.52, bx + w * 0.13, by + h * 0.30)
+    ctx.quadraticCurveTo(0, by + h * 0.16, bx + w * 0.87, by + h * 0.30)
+    ctx.quadraticCurveTo(bx + w * 1.01, by + h * 0.52, bx + w * 0.94, 0)
+    ctx.closePath(); ctx.fill()
+    ctx.fillStyle = dark // santantônios atrás dos bancos
+    rr(ctx, bx + w * 0.26, by + h * 0.10, w * 0.16, h * 0.20, w * 0.04)
+    rr(ctx, bx + w * 0.58, by + h * 0.10, w * 0.16, h * 0.20, w * 0.04)
+  } else if (spec.body === "alta") {
+    // sedã: teto mais alto e comprido, traseira alta e reta
+    ctx.beginPath()
+    ctx.moveTo(bx + w * 0.01, 0)
+    ctx.quadraticCurveTo(bx - w * 0.04, by + h * 0.54, bx + w * 0.05, by + h * 0.30)
+    ctx.quadraticCurveTo(bx + w * 0.12, by - h * 0.04, bx + w * 0.26, roofY - h * 0.06)
+    ctx.lineTo(bx + w * 0.74, roofY - h * 0.06)
+    ctx.quadraticCurveTo(bx + w * 0.88, by - h * 0.04, bx + w * 0.95, by + h * 0.30)
+    ctx.quadraticCurveTo(bx + w * 1.04, by + h * 0.54, bx + w * 0.99, 0)
+    ctx.closePath(); ctx.fill()
+    // faróis retráteis: os cantos levantados espiando por cima do capô
+    ctx.fillStyle = dark
+    rr(ctx, bx + w * 0.10, roofY - h * 0.16, w * 0.18, h * 0.09, w * 0.02)
+    rr(ctx, bx + w * 0.72, roofY - h * 0.16, w * 0.18, h * 0.09, w * 0.02)
   } else {
     // ghost: cunha facetada, ângulos duros
     ctx.beginPath()
@@ -4385,8 +4634,12 @@ function drawPlayerCar(
     ctx.lineTo(bx + w * 0.32, by + h * 0.18)
     ctx.closePath()
     ctx.fill()
-  } else {
-    const vw = spec.body === "ninja" ? 0.56 : spec.body === "muscle" ? 0.44 : 0.52
+  } else if (spec.body !== "roadster") { // conversível não tem vidro traseiro
+    const vwPorCorpo: Partial<Record<typeof spec.body, number>> = {
+      ninja: 0.56, muscle: 0.44, kaiju: 0.58, alta: 0.60,
+      zcoupe: 0.54, rotor: 0.52, apex: 0.50, sylva: 0.48,
+    }
+    const vw = vwPorCorpo[spec.body] ?? 0.52
     ctx.beginPath()
     ctx.moveTo(-w * vw / 2, by + h * 0.36)
     ctx.quadraticCurveTo(-w * vw * 0.42, by + h * 0.10, -w * vw * 0.30, by + h * 0.10)
