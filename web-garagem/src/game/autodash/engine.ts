@@ -306,7 +306,10 @@ export class AutoDashEngine {
     const ri = (lo: number, hi: number) => Math.floor(r(lo, hi + 1))
 
     addRoad(30, 80, 30, 0, 0) // reta de largada
-    const alvoSegs = corrida ? 1800 : 4000
+    // ~3200 segmentos = volta de ~35 s a 210 km/h. Com 1800 a volta durava 14 s
+    // e o jogador nem percebia que tinha fechado uma — parecia que a corrida
+    // acabava sozinha.
+    const alvoSegs = corrida ? 3200 : 4000
     while (this.segments.length < alvoSegs) {
       const roll = rnd()
       const hill = r(-1, 1) * r(600, 2600)
@@ -340,11 +343,16 @@ export class AutoDashEngine {
     addRoad(40, 40, 40, 0, -lastY) // fecha o loop plano
     this.trackLen = this.segments.length * SEG_LEN
 
-    // placas de chevron antes de curvas fechadas
-    for (let i = 46; i < this.segments.length; i++) {
+    // placas de chevron antes de curvas fechadas. No circuito o limiar é mais
+    // baixo e a fila de placas é mais longa: como as curvas são bem mais bravas,
+    // o jogador precisa ler a curva de longe pra escolher onde frear.
+    const limiar = corrida ? 2.5 : 4
+    const inicioPlacas = corrida ? 70 : 46
+    for (let i = inicioPlacas; i < this.segments.length; i++) {
       const c = this.segments[i].curve
-      if (Math.abs(c) >= 4 && Math.abs(this.segments[i - 1].curve) < 4) {
-        for (let k = 22; k <= 46; k += 8) {
+      if (Math.abs(c) >= limiar && Math.abs(this.segments[i - 1].curve) < limiar) {
+        const ate = corrida ? 70 : 46
+        for (let k = 22; k <= ate; k += 8) {
           this.segments[i - k].sign = c > 0 ? 1 : -1
         }
       }
@@ -1112,6 +1120,7 @@ export class AutoDashEngine {
     // carros (autoridade local — eu me afasto, o cliente dele faz o mesmo)
     if (this.race && this.mode === "race") {
       const r = this.race
+      const voltaAntes = r.lap
       // os bots enxergam o MESMO trânsito que você: sem isso eles atravessavam
       // os carros e nunca eram segurados, então sumiam na frente
       r.update(dt, playerZ, this.speed, this.playerX, this.crashed, this.trackLen, {
@@ -1134,6 +1143,22 @@ export class AutoDashEngine {
           return true
         },
       })
+      // cruzou a linha: anúncio grande, som e tremida — o jogador tem que
+      // SENTIR que fechou uma volta, não descobrir olhando o placar
+      // não anuncia na chegada: ali o lap vira voltas+1 e sairia "VOLTA 4/3"
+      if (r.lap > voltaAntes && !r.finished) {
+        const ultima = r.lap === r.cfg.voltas - 1
+        this.floaters.push({
+          text: ultima ? "ÚLTIMA VOLTA!" : `VOLTA ${r.lap + 1}/${r.cfg.voltas}`,
+          color: ultima ? "#ef4444" : "#fde047", y: H * 0.3, life: 2.2, big: true,
+        })
+        this.floaters.push({
+          text: `${r.minhaPosicao()}º lugar`,
+          color: "#f8fafc", y: H * 0.38, life: 2, big: false,
+        })
+        this.audio.levelUp()
+        this.shakeT = Math.max(this.shakeT, 0.18)
+      }
       if (!this.crashed && this.immuneT <= 0) {
         const spec0 = CARS[this.cfg.carIdx]
         const shove = r.empurrao(playerZ, this.playerX, (0.28 + spec0.width) / 2, this.trackLen)
@@ -1962,6 +1987,18 @@ export class AutoDashEngine {
             sx2 + sw2 * lx + sw2 * 0.012, ry2, sx2 + sw2 * lx - sw2 * 0.012, ry2)
         }
       }
+      // LINHA DE CHEGADA quadriculada: sem uma marca no chão o jogador não tem
+      // como saber que fechou uma volta — a pista é um loop sem referência
+      if (this.mode === "race" && idx < 9) {
+        const quadros = 10
+        for (let q = 0; q < quadros; q++) {
+          const a1 = -1 + (2 * q) / quadros, a2 = -1 + (2 * (q + 1)) / quadros
+          ctx.fillStyle = (q + idx) % 2 === 0 ? "#f8fafc" : "#0f172a"
+          poly(ctx,
+            sx1 + sw1 * a1, ry1, sx1 + sw1 * a2, ry1,
+            sx2 + sw2 * a2, ry2, sx2 + sw2 * a1, ry2)
+        }
+      }
       // mão dupla: faixa dupla amarela CONTÍNUA no centro (sinalização de contramão)
       if (wrongwaySpan.has(idx)) {
         ctx.fillStyle = shade("#eab308", amb)
@@ -2753,6 +2790,16 @@ export class AutoDashEngine {
     ctx.save()
     ctx.beginPath(); ctx.roundRect(mx + 2, my + 2, mw - 4, mh - 4, 9); ctx.clip()
 
+    // FUNDO OPACO: o painel de vidro tem 55% de opacidade, então a cena 3D
+    // atrás (placas de curva, pista, prédios) vazava através e se misturava com
+    // o conteúdo do espelho — virava um borrão ilegível. O retrovisor precisa
+    // ser uma superfície própria, não uma janela.
+    const ceu = ctx.createLinearGradient(0, my, 0, my + mh)
+    ceu.addColorStop(0, "#0b1220")
+    ceu.addColorStop(1, "#131c2e")
+    ctx.fillStyle = ceu
+    ctx.fillRect(mx, my, mw, mh)
+
     // asfalto: trapézio do horizonte até a base, deslocado pela sua posição na
     // pista (se você está na faixa da direita, a pista abre pra esquerda)
     const fN = 1, fF = fOf(D_MAX)
@@ -3447,17 +3494,31 @@ export class AutoDashEngine {
     if (!r) return
     const ctx = this.ctx
     const grid = r.grid()
-    const bw = 208, bh = 30 + grid.length * 22
+    const bw = 208, bh = 56 + grid.length * 22
     const bx = 14, by = 88
     this.glass(bx, by, bw, bh, 10)
-    ctx.fillStyle = "rgba(248,250,252,0.65)"
-    ctx.font = "bold 12px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText(`VOLTA ${Math.min(r.lap + 1, r.cfg.voltas)}/${r.cfg.voltas}`, bx + 12, by + 20)
+
+    // VOLTA e POSIÇÃO em tamanho grande: são as duas informações que o piloto
+    // consulta de relance, não dá pra deixar como linha miúda de cabeçalho
+    const ultima = r.lap === r.cfg.voltas - 1
+    ctx.fillStyle = "rgba(248,250,252,0.5)"
+    ctx.font = "bold 10px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText("VOLTA", bx + 12, by + 18)
+    ctx.fillStyle = ultima ? "#ef4444" : "#f8fafc"
+    ctx.font = "bold 26px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`${Math.min(r.lap + 1, r.cfg.voltas)}`, bx + 12, by + 42)
+    ctx.fillStyle = "rgba(248,250,252,0.55)"
+    ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`/${r.cfg.voltas}`, bx + 34, by + 42)
     ctx.textAlign = "right"
+    ctx.fillStyle = "rgba(248,250,252,0.5)"
+    ctx.font = "bold 10px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText("POSIÇÃO", bx + bw - 12, by + 18)
     ctx.fillStyle = "#fde047"
-    ctx.fillText(`${r.minhaPosicao()}º`, bx + bw - 12, by + 20)
+    ctx.font = "bold 26px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`${r.minhaPosicao()}º`, bx + bw - 12, by + 42)
     ctx.textAlign = "left"
-    let y = by + 42
+    let y = by + 68
     for (let i = 0; i < grid.length; i++) {
       const g = grid[i]
       // bolinha na cor do rival: mesma do mapa e da faixa no teto dele
