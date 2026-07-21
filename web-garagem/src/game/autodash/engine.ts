@@ -12,6 +12,7 @@ import { AudioBus } from "./audio"
 import { createRoom, joinRoom, pollRoom, postState, rematchRoom, type DuelTelemetry } from "./net"
 import { KINDS, TRAFFIC_COLORS, type Traffic, type TrafficKind, type WorldView } from "./traffic/types"
 import { DRIVERS } from "./traffic/driver"
+import { RaceSession } from "./race/session"
 
 const W = CANVAS_W, H = CANVAS_H
 const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH
@@ -28,6 +29,7 @@ const FADE_IN_LEN = 90
 type GameState =
   | "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
   | "duellobby" | "duelcode" | "duelwaiting" | "duelspectate" | "duelresult"
+  | "racelobby" | "raceresult"
 
 interface DuelSession {
   code: string
@@ -223,7 +225,10 @@ export class AutoDashEngine {
   private uiRegions: { x: number; y: number; w: number; h: number; act: () => void }[] = []
   private nameBuf = ""
   private afterName: "garage" | "duellobby" = "garage"
-  private mode: "solo" | "duel" = "solo"
+  private mode: "solo" | "duel" | "race" = "solo"
+  private race: RaceSession | null = null
+  private raceVoltas = 3
+  private raceBots = 3
   private duel: DuelSession | null = null
   private codeBuf = ""
   private prevState: GameState = "menu"
@@ -1058,6 +1063,27 @@ export class AutoDashEngine {
       if (Math.random() < 0.6) this.emitSmoke(2, "#e2e8f0")
     }
 
+    // modo corrida: adianta bots/rede, conta voltas e aplica o empurrão entre
+    // carros (autoridade local — eu me afasto, o cliente dele faz o mesmo)
+    if (this.race && this.mode === "race") {
+      const r = this.race
+      r.update(dt, playerZ, this.speed, this.playerX, this.crashed, this.trackLen)
+      if (!this.crashed && this.immuneT <= 0) {
+        const spec0 = CARS[this.cfg.carIdx]
+        const shove = r.empurrao(playerZ, this.playerX, (0.28 + spec0.width) / 2, this.trackLen)
+        if (shove !== 0) {
+          this.playerX += shove
+          this.steerVel += shove * 8
+          this.speed *= 0.94
+          this.shakeT = Math.max(this.shakeT, 0.3)
+          this.immuneT = 0.5
+          this.audio.crash()
+          this.burst(W / 2 + Math.sign(shove) * 60, H - 110, 12, ["#fde047", "#e2e8f0"])
+        }
+      }
+      if (r.phase === "finished") { this.state = "raceresult"; this.fadeT = 0.22; return }
+    }
+
     this.updateEventSpawner(dt, playerZ)
 
     // powerups na pista
@@ -1542,7 +1568,7 @@ export class AutoDashEngine {
       case "menu": this.renderMenu(); break
       case "garage": this.renderGarage(); break
       case "countdown": this.renderHud(); this.renderSemaphore(); break
-      case "racing": this.renderHud(); break
+      case "racing": this.renderHud(); if (this.mode === "race") this.renderRaceHud(); break
       case "paused": this.renderHud(); this.renderPause(); break
       case "gameover": this.renderGameOver(); break
       case "nameentry": this.renderNameEntry(); break
@@ -1551,6 +1577,8 @@ export class AutoDashEngine {
       case "duelwaiting": this.renderDuelWaiting(); break
       case "duelspectate": this.renderDuelSpectate(); break
       case "duelresult": this.renderDuelResult(); break
+      case "racelobby": this.renderRaceLobby(); break
+      case "raceresult": this.renderRaceResult(); break
     }
 
     // floaters por cima de tudo
@@ -1659,6 +1687,22 @@ export class AutoDashEngine {
       }
     }
     const bySeg = new Map<number, Traffic[]>()
+    // rivais da corrida entram como sprites de trânsito (mesma projeção); o
+    // `role: "oncoming"` NÃO é usado aqui — eles andam no seu sentido
+    if (this.race && this.mode === "race") {
+      for (const r of this.race.rivais) {
+        if (r.finished) continue
+        const fake: Traffic = {
+          z: ((r.z % this.trackLen) + this.trackLen) % this.trackLen,
+          offset: r.x, targetOffset: r.x, speed: r.v, kind: "car", role: "civilian",
+          color: PAINTS[clamp(Math.floor(r.paint), 0, PAINTS.length - 1)],
+          blinkT: 0, prevD: 1,
+        }
+        const si = Math.floor(fake.z / SEG_LEN) % N
+        const arr = bySeg.get(si)
+        if (arr) arr.push(fake); else bySeg.set(si, [fake])
+      }
+    }
     for (const t of this.traffic) {
       const si = Math.floor(t.z / SEG_LEN) % N
       const arr = bySeg.get(si)
@@ -2580,7 +2624,9 @@ export class AutoDashEngine {
    * ler QUAL faixa e QUÃO PERTO, não fidelidade de traçado.
    */
   private renderRearView() {
-    if (!this.traffic.some(t => t.role === "police" && !t.parked)) return
+    // aparece na perseguição E na corrida (aí serve pra ver quem vem te pegar)
+    const naCorrida = this.mode === "race" && !!this.race
+    if (!naCorrida && !this.traffic.some(t => t.role === "police" && !t.parked)) return
     const ctx = this.ctx
     const mw = 288, mh = 86, mx = W / 2 - mw / 2, my = 10
     const playerZ = this.position + PLAYER_Z
@@ -2607,8 +2653,21 @@ export class AutoDashEngine {
     ctx.lineTo(cF + hF, yF); ctx.lineTo(cF - hF, yF)
     ctx.closePath(); ctx.fill()
 
-    // veículos atrás, do mais longe pro mais perto (perto desenha por cima)
-    const atras = this.traffic
+    // veículos atrás, do mais longe pro mais perto (perto desenha por cima).
+    // Na corrida os rivais entram junto — é justamente pra ver quem vem colando.
+    const candidatos: Traffic[] = [...this.traffic]
+    if (this.race && this.mode === "race") {
+      for (const r of this.race.rivais) {
+        if (r.finished) continue
+        candidatos.push({
+          z: ((r.z % this.trackLen) + this.trackLen) % this.trackLen,
+          offset: r.x, targetOffset: r.x, speed: r.v, kind: "car", role: "civilian",
+          color: PAINTS[clamp(Math.floor(r.paint), 0, PAINTS.length - 1)],
+          blinkT: 0, prevD: 1,
+        })
+      }
+    }
+    const atras = candidatos
       .map(t => ({ t, d: -this.wrapDz(t.z, playerZ) }))
       .filter(v => v.d > 0 && v.d <= D_MAX)
       .sort((a, b) => b.d - a.d)
@@ -3069,6 +3128,7 @@ export class AutoDashEngine {
     ctx.textAlign = "left"
     this.pill("BORA CORRER  [ENTER]", W / 2 - 150, 286, 300, () => this.enterFromMenu("garage"), { primary: true, h: 46, font: 18 })
     this.pill("⚔ DUELO ONLINE  [D]", W / 2 - 150, 342, 300, () => this.enterFromMenu("duellobby"), { h: 38, font: 15 })
+    this.pill("🏁 CORRIDA  [C]", W / 2 - 150, 388, 300, () => this.abrirRaceLobby(), { h: 38, font: 15 })
     ctx.textAlign = "center"
     ctx.fillStyle = "rgba(248,250,252,0.6)"
     ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
@@ -3084,6 +3144,116 @@ export class AutoDashEngine {
       ctx.fillText(`recorde: ${best.score.toLocaleString("pt-BR")} — ${best.name}`, W / 2, this.cfg.pilotName ? 520 : 500)
     }
     ctx.textAlign = "left"
+  }
+
+  // ---------- modo corrida ----------
+  private abrirRaceLobby() {
+    this.audio.ui()
+    this.race = null
+    this.fadeT = 0.22
+    this.state = "racelobby"
+  }
+
+  /** Larga uma corrida contra bots — não toca na rede, é o modo de testar sozinho. */
+  private correrComBots() {
+    this.audio.ui()
+    this.mode = "race"
+    this.race = RaceSession.soloComBots(this.cfg.pilotName || "VOCÊ", this.raceVoltas, this.raceBots)
+    this.startRace(this.race.cfg.seed)
+  }
+
+  private renderRaceLobby() {
+    const ctx = this.ctx
+    this.dim(0.6)
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#f8fafc"
+    ctx.font = "900 46px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText("🏁 CORRIDA", W / 2, 108)
+    ctx.font = "16px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillStyle = "rgba(248,250,252,0.7)"
+    ctx.fillText("até 4 pilotos · por voltas · quem cruzar primeiro leva", W / 2, 140)
+    ctx.textAlign = "left"
+
+    // seletor de voltas
+    ctx.textAlign = "center"
+    ctx.fillStyle = "rgba(248,250,252,0.85)"
+    ctx.font = "bold 16px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`VOLTAS: ${this.raceVoltas}`, W / 2, 196)
+    ctx.textAlign = "left"
+    this.arrowBtn(W / 2 - 108, 180, -1, () => { this.raceVoltas = Math.max(1, this.raceVoltas - 1); this.audio.ui() })
+    this.arrowBtn(W / 2 + 84, 180, 1, () => { this.raceVoltas = Math.min(9, this.raceVoltas + 1); this.audio.ui() })
+
+    // seletor de bots
+    ctx.textAlign = "center"
+    ctx.fillStyle = "rgba(248,250,252,0.85)"
+    ctx.fillText(`ADVERSÁRIOS (BOTS): ${this.raceBots}`, W / 2, 244)
+    ctx.textAlign = "left"
+    this.arrowBtn(W / 2 - 148, 228, -1, () => { this.raceBots = Math.max(1, this.raceBots - 1); this.audio.ui() })
+    this.arrowBtn(W / 2 + 124, 228, 1, () => { this.raceBots = Math.min(3, this.raceBots + 1); this.audio.ui() })
+
+    this.pill("🏁 CORRER COM BOTS  [ENTER]", W / 2 - 160, 288, 320, () => this.correrComBots(), { primary: true, h: 46, font: 17 })
+
+    ctx.textAlign = "center"
+    ctx.fillStyle = "rgba(248,250,252,0.5)"
+    ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText("sala online com amigos chega na próxima — por ora, bots", W / 2, 358)
+    ctx.fillText("ESC volta pro menu", W / 2, 380)
+    ctx.textAlign = "left"
+  }
+
+  private renderRaceResult() {
+    const ctx = this.ctx
+    this.dim(0.68)
+    const grid = this.race?.grid() ?? []
+    ctx.textAlign = "center"
+    const eu = grid.findIndex(g => g.eu) + 1
+    ctx.fillStyle = eu === 1 ? "#fde047" : "#f8fafc"
+    ctx.font = "900 52px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(eu === 1 ? "🏆 VITÓRIA!" : `${eu}º LUGAR`, W / 2, 120)
+    ctx.font = "bold 18px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillStyle = "rgba(248,250,252,0.8)"
+    ctx.fillText(`${this.race?.cfg.voltas ?? 0} voltas`, W / 2, 152)
+
+    let y = 200
+    for (let i = 0; i < grid.length; i++) {
+      const g = grid[i]
+      ctx.fillStyle = g.eu ? "#fde047" : "rgba(248,250,252,0.85)"
+      ctx.font = `${g.eu ? "bold " : ""}20px 'Space Grotesk', 'Segoe UI', sans-serif`
+      ctx.fillText(`${i + 1}º  ${g.nome}${g.bot ? "  🤖" : ""}${g.finished ? "" : "  (não terminou)"}`, W / 2, y)
+      y += 30
+    }
+    ctx.textAlign = "left"
+    this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 230, y + 22, 220, () => this.correrComBots(), { primary: true, h: 42, font: 16 })
+    this.pill("MENU  [M]", W / 2 + 10, y + 22, 220, () => this.toMenu(), { h: 42, font: 16 })
+  }
+
+  /** Placar ao vivo no canto da tela durante a corrida. */
+  private renderRaceHud() {
+    const r = this.race
+    if (!r) return
+    const ctx = this.ctx
+    const grid = r.grid()
+    const bw = 208, bh = 30 + grid.length * 22
+    const bx = 14, by = 88
+    this.glass(bx, by, bw, bh, 10)
+    ctx.fillStyle = "rgba(248,250,252,0.65)"
+    ctx.font = "bold 12px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`VOLTA ${Math.min(r.lap + 1, r.cfg.voltas)}/${r.cfg.voltas}`, bx + 12, by + 20)
+    ctx.textAlign = "right"
+    ctx.fillStyle = "#fde047"
+    ctx.fillText(`${r.minhaPosicao()}º`, bx + bw - 12, by + 20)
+    ctx.textAlign = "left"
+    let y = by + 42
+    for (let i = 0; i < grid.length; i++) {
+      const g = grid[i]
+      ctx.fillStyle = g.eu ? "#fde047" : g.crashed ? "rgba(248,113,113,0.85)" : "rgba(248,250,252,0.75)"
+      ctx.font = `${g.eu ? "bold " : ""}13px 'Space Grotesk', 'Segoe UI', sans-serif`
+      ctx.fillText(`${i + 1}. ${g.nome}${g.finished ? " ✓" : ""}`, bx + 12, y)
+      ctx.textAlign = "right"
+      ctx.fillText(`v${g.lap + 1}`, bx + bw - 12, y)
+      ctx.textAlign = "left"
+      y += 22
+    }
   }
 
   private renderGarage() {
@@ -3447,6 +3617,19 @@ export class AutoDashEngine {
       case "menu":
         if (k === "enter") this.enterFromMenu("garage")
         if (k === "d") this.enterFromMenu("duellobby")
+        if (k === "c") this.abrirRaceLobby()
+        break
+      case "racelobby":
+        if (k === "enter") this.correrComBots()
+        if (k === "arrowleft") this.raceVoltas = Math.max(1, this.raceVoltas - 1)
+        if (k === "arrowright") this.raceVoltas = Math.min(9, this.raceVoltas + 1)
+        if (k === "arrowdown") this.raceBots = Math.max(1, this.raceBots - 1)
+        if (k === "arrowup") this.raceBots = Math.min(3, this.raceBots + 1)
+        if (k === "escape") this.toMenu()
+        break
+      case "raceresult":
+        if (k === "enter") this.correrComBots()
+        if (k === "m" || k === "escape") this.toMenu()
         break
       case "duellobby":
         if (k === "escape") this.toMenu()
