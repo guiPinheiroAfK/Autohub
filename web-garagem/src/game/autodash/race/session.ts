@@ -6,7 +6,7 @@
 // centenas de linhas dentro de engine.ts, que já é grande demais.
 
 import { KMH2UPS } from "../data"
-import { BotRacer } from "./bots"
+import { BotRacer, type PistaInfo } from "./bots"
 import { RaceNet, criarSala, entrarSala, darLargada, meuPlayerId, verLobby } from "./net"
 import { ordenarGrid, type GridRow, type RaceConfig, type RacePhase, type Rival, type RaceTelemetry } from "./types"
 
@@ -106,7 +106,7 @@ export class RaceSession {
    * Um tick da sessão.
    * `meuZ` é a posição do jogador na volta e `meuV` a velocidade em km/h.
    */
-  update(dt: number, meuZ: number, meuV: number, meuX: number, bateu: boolean, trackLen: number) {
+  update(dt: number, meuZ: number, meuV: number, meuX: number, bateu: boolean, trackLen: number, pista?: PistaInfo) {
     if (this.phase === "lobby") {
       this.lobbyT -= dt
       if (this.lobbyT <= 0 && !this.offline) { this.lobbyT = 1.2; void this.puxarLobby() }
@@ -130,7 +130,7 @@ export class RaceSession {
       if (this.lap >= this.cfg.voltas) { this.finished = true; this.finishT = performance.now(); this.phase = "finished" }
     }
 
-    for (const b of this.bots) b.update(dt, trackLen, this.cfg.voltas)
+    for (const b of this.bots) b.update(dt, trackLen, this.cfg.voltas, pista)
 
     if (this.net) {
       this.net.update(dt, trackLen, (): RaceTelemetry => ({

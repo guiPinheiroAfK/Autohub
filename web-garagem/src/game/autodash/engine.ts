@@ -1067,7 +1067,28 @@ export class AutoDashEngine {
     // carros (autoridade local — eu me afasto, o cliente dele faz o mesmo)
     if (this.race && this.mode === "race") {
       const r = this.race
-      r.update(dt, playerZ, this.speed, this.playerX, this.crashed, this.trackLen)
+      // os bots enxergam o MESMO trânsito que você: sem isso eles atravessavam
+      // os carros e nunca eram segurados, então sumiam na frente
+      r.update(dt, playerZ, this.speed, this.playerX, this.crashed, this.trackLen, {
+        aFrente: (z, x, alcance) => {
+          let melhor: { dz: number; v: number } | null = null
+          for (const t of this.traffic) {
+            if (t.role === "oncoming") continue
+            const dz = this.wrapDz(t.z, z)
+            if (dz <= 0 || dz > alcance) continue
+            if (Math.abs(t.offset - x) > 0.32) continue
+            if (!melhor || dz < melhor.dz) melhor = { dz, v: t.speed }
+          }
+          return melhor
+        },
+        faixaLivre: (z, x, alcance) => {
+          for (const t of this.traffic) {
+            if (Math.abs(this.wrapDz(t.z, z)) > alcance) continue
+            if (Math.abs(t.offset - x) < 0.3 || Math.abs(t.targetOffset - x) < 0.3) return false
+          }
+          return true
+        },
+      })
       if (!this.crashed && this.immuneT <= 0) {
         const spec0 = CARS[this.cfg.carIdx]
         const shove = r.empurrao(playerZ, this.playerX, (0.28 + spec0.width) / 2, this.trackLen)
