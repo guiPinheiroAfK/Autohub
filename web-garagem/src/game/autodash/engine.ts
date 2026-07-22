@@ -3654,28 +3654,78 @@ export class AutoDashEngine {
 
   private renderRaceResult() {
     const ctx = this.ctx
-    this.dim(0.68)
-    const grid = this.race?.grid() ?? []
-    ctx.textAlign = "center"
+    const r = this.race
+    const grid = r?.grid() ?? []
     const eu = grid.findIndex(g => g.eu) + 1
-    ctx.fillStyle = eu === 1 ? "#fde047" : "#f8fafc"
-    ctx.font = "900 52px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText(eu === 1 ? "🏆 VITÓRIA!" : `${eu}º LUGAR`, W / 2, 120)
-    ctx.font = "bold 18px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillStyle = "rgba(248,250,252,0.8)"
-    ctx.fillText(`${this.race?.cfg.voltas ?? 0} voltas`, W / 2, 152)
+    const venceu = eu === 1
+    const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(2).padStart(5, "0")}`
 
-    let y = 200
+    // fundo: gradiente escuro roxo + holofote atrás do carro
+    const bg = ctx.createLinearGradient(0, 0, 0, H)
+    bg.addColorStop(0, "rgba(8,4,20,0.92)")
+    bg.addColorStop(1, "rgba(24,10,40,0.92)")
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H)
+    const cor = venceu ? "#fde047" : "#38bdf8"
+    const spot = ctx.createRadialGradient(W / 2, H * 0.66, 20, W / 2, H * 0.66, W * 0.42)
+    spot.addColorStop(0, cor + "33"); spot.addColorStop(1, cor + "00")
+    ctx.fillStyle = spot; ctx.fillRect(0, 0, W, H)
+
+    // título
+    ctx.textAlign = "center"
+    ctx.fillStyle = cor
+    ctx.font = "900 60px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.shadowColor = cor; ctx.shadowBlur = venceu ? 28 : 12
+    ctx.fillText(venceu ? "VITÓRIA!" : `${eu}º LUGAR`, W / 2, 96)
+    ctx.shadowBlur = 0
+
+    // teu carro no holofote, girando de leve
+    const spec = CARS[this.cfg.carIdx]
+    const custom = this.cfg.customs[this.cfg.carIdx]
+    ctx.save()
+    ctx.translate(W / 2, H * 0.6)
+    ctx.rotate(Math.sin(performance.now() / 900) * 0.06)
+    // neon sob o carro na cor da colocação
+    const und = ctx.createRadialGradient(0, 30, 6, 0, 30, 150)
+    und.addColorStop(0, cor + "88"); und.addColorStop(1, cor + "00")
+    ctx.fillStyle = und
+    ctx.beginPath(); ctx.ellipse(0, 30, 150, 34, 0, 0, Math.PI * 2); ctx.fill()
+    drawPlayerCar(ctx, 0, 0, spec, custom, 0, false, 1, false, 1.7)
+    ctx.restore()
+
+    // tempo total + melhor volta
+    if (r) {
+      const melhor = r.lapTimes.length ? Math.min(...r.lapTimes) : 0
+      ctx.fillStyle = "rgba(248,250,252,0.55)"
+      ctx.font = "bold 11px 'Space Grotesk', 'Segoe UI', sans-serif"
+      ctx.fillText("TEMPO TOTAL", W * 0.36, 150)
+      ctx.fillText("MELHOR VOLTA", W * 0.64, 150)
+      ctx.fillStyle = "#f8fafc"
+      ctx.font = "bold 26px 'Space Grotesk', 'Segoe UI', sans-serif"
+      ctx.fillText(fmt(r.raceClock), W * 0.36, 180)
+      ctx.fillStyle = "#4ade80"
+      ctx.fillText(melhor ? fmt(melhor) : "—", W * 0.64, 180)
+    }
+
+    // grid final, colunas nas laterais
+    let y = 232
     for (let i = 0; i < grid.length; i++) {
       const g = grid[i]
+      const gx = W * 0.5 - 150
+      ctx.textAlign = "left"
+      if (g.eu) { ctx.fillStyle = "rgba(253,224,71,0.14)"; rr(ctx, gx - 10, y - 17, 300, 24, 6) }
+      ctx.fillStyle = i === 0 ? "#fde047" : "rgba(248,250,252,0.5)"
+      ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
+      ctx.fillText(`${i + 1}º`, gx, y)
+      if (!g.eu && g.cor) { ctx.fillStyle = g.cor; ctx.beginPath(); ctx.arc(gx + 34, y - 5, 3.5, 0, Math.PI * 2); ctx.fill() }
       ctx.fillStyle = g.eu ? "#fde047" : "rgba(248,250,252,0.85)"
-      ctx.font = `${g.eu ? "bold " : ""}20px 'Space Grotesk', 'Segoe UI', sans-serif`
-      ctx.fillText(`${i + 1}º  ${g.nome}${g.bot ? "  🤖" : ""}${g.finished ? "" : "  (não terminou)"}`, W / 2, y)
-      y += 30
+      ctx.font = `${g.eu ? "bold " : ""}16px 'Space Grotesk', 'Segoe UI', sans-serif`
+      ctx.fillText(`${g.nome}${g.bot ? " 🤖" : ""}`, gx + 46, y)
+      if (!g.finished) { ctx.fillStyle = "rgba(248,113,113,0.7)"; ctx.font = "12px 'Space Grotesk', 'Segoe UI', sans-serif"; ctx.textAlign = "right"; ctx.fillText("DNF", gx + 290, y) }
+      y += 27
     }
     ctx.textAlign = "left"
-    this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 230, y + 22, 220, () => this.correrComBots(), { primary: true, h: 42, font: 16 })
-    this.pill("MENU  [M]", W / 2 + 10, y + 22, 220, () => this.toMenu(), { h: 42, font: 16 })
+    this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 230, H - 56, 220, () => this.correrComBots(), { primary: true, h: 42, font: 16 })
+    this.pill("MENU  [M]", W / 2 + 10, H - 56, 220, () => this.toMenu(), { h: 42, font: 16 })
   }
 
   /**

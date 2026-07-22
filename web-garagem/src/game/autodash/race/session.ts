@@ -27,6 +27,10 @@ export class RaceSession {
   dist = 0
   finished = false
   finishT: number | undefined
+  /** Cronômetro da corrida (s) e tempo de cada volta fechada — pro pódio. */
+  raceClock = 0
+  lapTimes: number[] = []
+  private ultimaVoltaEm = 0
   private zAnterior = 0
   private meuNome: string
 
@@ -122,9 +126,14 @@ export class RaceSession {
 
     // volta fecha quando o z do jogador dá a volta no traçado
     if (this.phase === "racing" && !this.finished) {
+      this.raceClock += dt
       let avanco = meuZ - this.zAnterior
-      if (avanco < -trackLen / 2) { avanco += trackLen; this.lap++ } // cruzou a linha
-      else if (avanco < 0) avanco = 0
+      if (avanco < -trackLen / 2) { // cruzou a linha
+        avanco += trackLen
+        this.lap++
+        this.lapTimes.push(this.raceClock - this.ultimaVoltaEm)
+        this.ultimaVoltaEm = this.raceClock
+      } else if (avanco < 0) avanco = 0
       this.dist += avanco
       this.zAnterior = meuZ
       if (this.lap >= this.cfg.voltas) { this.finished = true; this.finishT = performance.now(); this.phase = "finished" }
