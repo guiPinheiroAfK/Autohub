@@ -4323,6 +4323,10 @@ export class AutoDashEngine {
     } else if (dest === "duellobby") {
       this.startDuelLobby()
     } else {
+      // garage é a porta do SOLO — reseta o modo, senão uma corrida anterior
+      // deixava mode="race" e o "bora correr" virava circuito
+      this.mode = "solo"
+      this.race = null
       this.state = "garage"
     }
   }
@@ -4332,7 +4336,7 @@ export class AutoDashEngine {
     saveConfig(this.cfg)
     this.audio.ui()
     if (this.afterName === "duellobby") this.startDuelLobby()
-    else this.state = "garage"
+    else { this.mode = "solo"; this.race = null; this.state = "garage" }
     this.afterName = "garage"
   }
 
