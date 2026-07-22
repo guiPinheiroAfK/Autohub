@@ -2142,6 +2142,16 @@ export class AutoDashEngine {
       if (onBridge) continue
       if (seg.sign) {
         sprites.push({ kind: "deco", deco: 3, dir: seg.sign, x: sx1 - sw1 * 1.35 * seg.sign, y: sy1, w: sw1 * 0.16 })
+      } else if (this.mode === "race") {
+        // beira neon: postes de luz colorida ritmados dos dois lados + pilonas
+        // de neon de vez em quando — o feeling do fundo trazido pra pista.
+        // `dir` carrega o índice de cor do neon (0..4).
+        if (idx % 5 === 0) {
+          const lado = idx % 10 === 0 ? -1 : 1
+          sprites.push({ kind: "deco", deco: 4, dir: (idx / 5) % 5, x: sx1 + sw1 * lado * 1.18, y: sy1, w: sw1 * 0.9 })
+        }
+        if (idx % 23 === 7) sprites.push({ kind: "deco", deco: 5, dir: (idx * 7) % 5, x: sx1 + sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
+        if (idx % 23 === 18) sprites.push({ kind: "deco", deco: 5, dir: (idx * 3) % 5, x: sx1 - sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
       } else if (idx % 4 === 0) {
         const side = idx % 8 === 0 ? -1 : 1
         sprites.push({ kind: "deco", deco: 0, x: sx1 + sw1 * side * (1.55 + ((idx * 7) % 5) * 0.14), y: sy1, w: sw1 * 0.22 })
@@ -2382,6 +2392,44 @@ export class AutoDashEngine {
   private drawDeco(kind: number, dir: number, x: number, y: number, w: number, amb: number) {
     if (w < 1.5) return
     const ctx = this.ctx
+    const NEON = ["#ff2d95", "#22d3ee", "#a855f7", "#facc15", "#38bdf8"]
+    if (kind === 4) { // poste de luz NEON (corrida)
+      const cor = NEON[((dir % 5) + 5) % 5]
+      const h = w * 2.6
+      ctx.fillStyle = shade("#1a2033", Math.max(0.4, amb))
+      ctx.fillRect(x - w * 0.045, y - h, w * 0.09, h) // mastro
+      // tubo de neon acendendo o mastro inteiro (a coluna colorida)
+      ctx.fillStyle = cor
+      ctx.fillRect(x - w * 0.02, y - h, w * 0.04, h)
+      // luminária no topo
+      rr(ctx, x - w * 0.16, y - h - w * 0.06, w * 0.32, w * 0.14, w * 0.04)
+      // halo grande e forte
+      const g = ctx.createRadialGradient(x, y - h, 2, x, y - h, w * 1.9)
+      g.addColorStop(0, cor + "dd"); g.addColorStop(0.4, cor + "66"); g.addColorStop(1, cor + "00")
+      ctx.fillStyle = g
+      ctx.beginPath(); ctx.arc(x, y - h, w * 1.9, 0, Math.PI * 2); ctx.fill()
+      // reflexo no chão
+      ctx.fillStyle = cor + "44"
+      ctx.beginPath(); ctx.ellipse(x, y, w * 0.7, w * 0.16, 0, 0, Math.PI * 2); ctx.fill()
+      return
+    }
+    if (kind === 5) { // pilona/letreiro de neon vertical (corrida)
+      const cor = NEON[((dir % 5) + 5) % 5]
+      const h = w * 3.2
+      ctx.fillStyle = shade("#0d1120", Math.max(0.4, amb))
+      ctx.fillRect(x - w * 0.09, y - h, w * 0.18, h)
+      const on = Math.floor(performance.now() / 500 + dir) % 4 !== 0
+      if (on) {
+        ctx.strokeStyle = cor
+        ctx.lineWidth = Math.max(1.5, w * 0.06)
+        ctx.strokeRect(x - w * 0.06, y - h + w * 0.15, w * 0.12, h - w * 0.3)
+        const g = ctx.createRadialGradient(x, y - h * 0.5, 2, x, y - h * 0.5, w * 1.4)
+        g.addColorStop(0, cor + "66"); g.addColorStop(1, cor + "00")
+        ctx.fillStyle = g
+        ctx.beginPath(); ctx.ellipse(x, y - h * 0.5, w * 1.4, h * 0.5, 0, 0, Math.PI * 2); ctx.fill()
+      }
+      return
+    }
     if (kind === 0) { // árvore
       const h = w * 2.4
       ctx.fillStyle = shade("#4a3524", amb)
