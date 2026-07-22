@@ -259,6 +259,9 @@ export class AutoDashEngine {
     // sem isso, arrastar o dedo pra dirigir também rola/zoom a página por
     // baixo do jogo
     this.canvas.style.touchAction = "none"
+    // toque longo no celular abria o menu "Salvar/Copiar imagem" por cima do
+    // jogo — é o callout de imagem. Desliga seleção, callout e realce de toque.
+    this.noCallout(this.canvas)
     this.buildTrack()
     this.seedTraffic(14)
     this.bind()
@@ -4287,6 +4290,19 @@ export class AutoDashEngine {
    * pixel a pixel com o jogo sem precisar recalcular nada em resize/rotação,
    * e os botões são posicionados em % desse retângulo (não em px fixos).
    */
+  /** Mata seleção/callout/realce de toque — no celular o toque longo abria o
+   *  menu "Salvar imagem" por cima do jogo. Vale pro canvas e pra cada botão. */
+  private noCallout(el: HTMLElement) {
+    const s = el.style as CSSStyleDeclaration & Record<string, string>
+    s.userSelect = "none"
+    s.webkitUserSelect = "none"
+    s.webkitTouchCallout = "none"
+    s.webkitTapHighlightColor = "transparent"
+    el.setAttribute("draggable", "false")
+    el.addEventListener("contextmenu", (e) => e.preventDefault())
+    el.addEventListener("dragstart", (e) => e.preventDefault())
+  }
+
   private buildTouchControls() {
     const wrap = document.createElement("div")
     wrap.style.position = "fixed"
@@ -4297,85 +4313,102 @@ export class AutoDashEngine {
     wrap.style.pointerEvents = "none"
     wrap.style.zIndex = "50"
     wrap.style.touchAction = "none"
+    this.noCallout(wrap)
     document.body.appendChild(wrap)
     this.touchControlsEl = wrap
 
-    // % de largura e % de altura calculados a partir do MESMO valor em
-    // "unidades de canvas" (960x540) dão o mesmo tamanho físico na tela,
-    // mesmo a base de cálculo (960 vs 540) sendo diferente — é assim que um
-    // botão fica quadrado de verdade em vez de esticado.
+    // % de largura e % de altura a partir do MESMO valor em unidades de canvas
+    // (960x540) dão o mesmo tamanho físico na tela — é assim que um botão fica
+    // redondo de verdade em vez de esticado.
     const pctW = (px: number) => `${(px / W) * 100}%`
     const pctH = (px: number) => `${(px / H) * 100}%`
 
-    const makeButton = (label: string, left: number, top: number, w: number, h: number) => {
+    // Estilo Brawl Stars: botão redondo, escuro translúcido, anel colorido por
+    // função; ao apertar enche da cor e encolhe um tico (feedback físico).
+    const makeButton = (label: string, left: number, top: number, size: number, accent: string) => {
       const btn = document.createElement("div")
       btn.textContent = label
       btn.style.position = "absolute"
       btn.style.left = pctW(left)
       btn.style.top = pctH(top)
-      btn.style.width = pctW(w)
-      btn.style.height = pctH(h)
+      btn.style.width = pctW(size)
+      btn.style.height = pctH(size)
       btn.style.display = "flex"
       btn.style.alignItems = "center"
       btn.style.justifyContent = "center"
       btn.style.borderRadius = "999px"
-      btn.style.background = "rgba(15,15,20,0.4)"
-      btn.style.border = "1px solid rgba(255,255,255,0.18)"
-      btn.style.color = "#f8fafc"
+      btn.style.background = "rgba(10,12,20,0.42)"
+      btn.style.border = `2.5px solid ${accent}66`
+      btn.style.boxShadow = "0 4px 14px rgba(0,0,0,0.45), inset 0 2px 3px rgba(255,255,255,0.12)"
+      btn.style.color = accent
       btn.style.fontFamily = "'Space Grotesk', 'Segoe UI', sans-serif"
       btn.style.fontWeight = "900"
-      btn.style.fontSize = `${Math.min(w, h) * 0.42}px`
-      btn.style.userSelect = "none"
+      btn.style.fontSize = `${size * 0.34}px`
+      btn.style.letterSpacing = "0.5px"
       btn.style.pointerEvents = "auto"
       btn.style.touchAction = "none"
+      btn.style.transition = "transform .07s ease, background .07s ease, border-color .07s ease"
+      this.noCallout(btn)
+      btn.dataset.accent = accent
       wrap.appendChild(btn)
       return btn
     }
+    const setPressed = (btn: HTMLDivElement, on: boolean) => {
+      const accent = btn.dataset.accent!
+      btn.style.background = on ? `${accent}dd` : "rgba(10,12,20,0.42)"
+      btn.style.borderColor = on ? accent : `${accent}66`
+      btn.style.color = on ? "#0a0c14" : accent
+      btn.style.transform = on ? "scale(0.9)" : "scale(1)"
+    }
 
-    // segura pra manter o estado ligado (gás/freio/direção) — funciona pra
-    // touch e mouse igual, PointerEvent unifica os dois e cada botão recebe
-    // seu próprio dedo independente dos outros
+    // segura pra manter o estado ligado (gás/freio/direção). PointerEvent
+    // unifica touch e mouse, e cada botão captura o próprio dedo — pointerup
+    // ainda chega mesmo se o dedo escorregar pra fora (setPointerCapture).
     const bindHold = (btn: HTMLDivElement, onChange: (pressed: boolean) => void) => {
       const press = (e: PointerEvent) => {
         e.preventDefault()
-        btn.style.background = "rgba(15,15,20,0.08)"
-        onChange(true)
+        try { btn.setPointerCapture(e.pointerId) } catch { /* nem todo browser */ }
+        setPressed(btn, true); onChange(true)
       }
-      const release = () => {
-        btn.style.background = "rgba(15,15,20,0.4)"
-        onChange(false)
-      }
+      const release = () => { setPressed(btn, false); onChange(false) }
       btn.addEventListener("pointerdown", press)
       btn.addEventListener("pointerup", release)
       btn.addEventListener("pointercancel", release)
-      btn.addEventListener("pointerleave", release)
+    }
+    const bindTap = (btn: HTMLDivElement, onTap: () => void) => {
+      btn.addEventListener("pointerdown", (e) => {
+        e.preventDefault(); setPressed(btn, true); onTap()
+      })
+      const up = () => setPressed(btn, false)
+      btn.addEventListener("pointerup", up)
+      btn.addEventListener("pointercancel", up)
     }
 
-    const EDGE = 16, GAP = 10
-    const STEER = 76, GAS = 88, BRAKE = 76, GEAR_W = 64, GEAR_H = 44, NITRO_W = 60, NITRO_H = 44
-
-    // direção — canto inferior esquerdo
-    const steerLeft = makeButton("◀", EDGE, H - EDGE - STEER, STEER, STEER)
-    const steerRight = makeButton("▶", EDGE + STEER + GAP, H - EDGE - STEER, STEER, STEER)
+    const EDGE = 22
+    // direção — canto inferior esquerdo, dois botões grandes e separados
+    const ST = 96, SGAP = 16
+    const steerLeft = makeButton("◀", EDGE, H - EDGE - ST, ST, "#e2e8f0")
+    const steerRight = makeButton("▶", EDGE + ST + SGAP, H - EDGE - ST, ST, "#e2e8f0")
     bindHold(steerLeft, (p) => { this.touchSteerLeft = p })
     bindHold(steerRight, (p) => { this.touchSteerRight = p })
 
-    // pedais — canto inferior direito
-    const gas = makeButton("GÁS", W - EDGE - GAS, H - EDGE - GAS, GAS, GAS)
-    const brake = makeButton("FREIO", W - EDGE - GAS - GAP - BRAKE, H - EDGE - BRAKE, BRAKE, BRAKE)
+    // ação — canto inferior direito, em leque (gás grande no canto)
+    const GAS = 108, BR = 84, NI = 72, GE = 54
+    const gas = makeButton("GÁS", W - EDGE - GAS, H - EDGE - GAS, GAS, "#22c55e")
+    const brake = makeButton("FREIO", W - EDGE - GAS - 16 - BR, H - EDGE - BR, BR, "#ef4444")
+    gas.style.fontSize = "26px"; brake.style.fontSize = "17px"
     bindHold(gas, (p) => { this.touchThrottle = p })
     bindHold(brake, (p) => { this.touchBrake = p })
 
-    // marcha + nitro — fileira logo acima dos pedais
-    const rowTop = H - EDGE - GAS - GAP - GEAR_H
-    const gearUp = makeButton("▲", W - EDGE - GEAR_W, rowTop, GEAR_W, GEAR_H)
-    const gearDown = makeButton("▼", W - EDGE - GEAR_W - GAP - GEAR_W, rowTop, GEAR_W, GEAR_H)
-    const nitro = makeButton("NOS", W - EDGE - GEAR_W - GAP - GEAR_W - GAP - NITRO_W, rowTop, NITRO_W, NITRO_H)
-    gearUp.style.fontSize = "22px"
-    gearDown.style.fontSize = "22px"
-    gearUp.addEventListener("pointerdown", (e) => { e.preventDefault(); this.tryShift(1) })
-    gearDown.addEventListener("pointerdown", (e) => { e.preventDefault(); this.tryShift(-1) })
+    // nitro logo acima dos pedais; marchas menores num arco mais pra cima/esquerda
+    const nitro = makeButton("NOS", W - EDGE - NI, H - EDGE - GAS - 16 - NI, NI, "#38bdf8")
+    const upRowY = H - EDGE - GAS - 16 - NI + (NI - GE) / 2
+    const gearUp = makeButton("▲", W - EDGE - NI - 14 - GE, upRowY, GE, "#fbbf24")
+    const gearDown = makeButton("▼", W - EDGE - NI - 14 - GE - 12 - GE, upRowY, GE, "#fbbf24")
+    gearUp.style.fontSize = "24px"; gearDown.style.fontSize = "24px"
     bindHold(nitro, (p) => { this.nitroOn = p })
+    bindTap(gearUp, () => this.tryShift(1))
+    bindTap(gearDown, () => this.tryShift(-1))
   }
 
   private bind() {
