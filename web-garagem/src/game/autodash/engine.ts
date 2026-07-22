@@ -28,9 +28,9 @@ const FADE_IN_START = NEAR_SPRITE_MIN
 const FADE_IN_LEN = 90
 
 type GameState =
-  | "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
-  | "duellobby" | "duelcode" | "duelwaiting" | "duelspectate" | "duelresult"
-  | "racelobby" | "racecode" | "racewait" | "raceresult"
+    | "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
+    | "duellobby" | "duelcode" | "duelwaiting" | "duelspectate" | "duelresult"
+    | "racelobby" | "racecode" | "racewait" | "raceresult"
 
 interface DuelSession {
   code: string
@@ -434,9 +434,9 @@ export class AutoDashEngine {
     // trinca de placas de aproximação, entrando em cena bem antes do perigo
     const avisos = (type: RoadSign["type"], labels: [string, string, string]) => {
       this.roadSigns.push(
-        { z: at(START - VIEW * 0.95), type, label: labels[0] },
-        { z: at(START - VIEW * 0.60), type, label: labels[1] },
-        { z: at(START - VIEW * 0.28), type, label: labels[2] },
+          { z: at(START - VIEW * 0.95), type, label: labels[0] },
+          { z: at(START - VIEW * 0.60), type, label: labels[1] },
+          { z: at(START - VIEW * 0.28), type, label: labels[2] },
       )
     }
     if (kind === "bridge") {
@@ -579,8 +579,8 @@ export class AutoDashEngine {
     // no circuito o desafio é o traçado, não a quantidade de carro: bem menos
     // trânsito, e sem escalar com nível (a corrida tem duração fixa em voltas)
     const target = this.mode === "race"
-      ? 5
-      : 14 + Math.min(14, Math.floor(this.km * 1.3)) + this.level * 3
+        ? 5
+        : 14 + Math.min(14, Math.floor(this.km * 1.3)) + this.level * 3
     if (this.traffic.length < target) this.spawnTraffic(DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))
     if (this.immuneT > 0) this.immuneT -= dt
     if (this.policeHitT > 0) this.policeHitT -= dt
@@ -756,8 +756,8 @@ export class AutoDashEngine {
     // blitz e radar só a partir do nível 4 (regra combinada: perseguição não cai
     // em cima de quem ainda está começando)
     const pool = this.level >= 3
-      ? (["obstacles", "obstacles", "viaduct", "wrongway", "bridge", "blitz", "speedtrap"] as const)
-      : (["obstacles", "obstacles", "obstacles", "viaduct", "wrongway", "bridge"] as const)
+        ? (["obstacles", "obstacles", "viaduct", "wrongway", "bridge", "blitz", "speedtrap"] as const)
+        : (["obstacles", "obstacles", "obstacles", "viaduct", "wrongway", "bridge"] as const)
     this.spawnEvent(pool[Math.floor(Math.random() * pool.length)])
   }
 
@@ -981,7 +981,7 @@ export class AutoDashEngine {
     }
 
     if (["menu", "garage", "duellobby", "duelcode", "duelwaiting", "duelresult",
-         "racelobby", "racecode", "racewait", "raceresult"].includes(this.state)) {
+      "racelobby", "racecode", "racewait", "raceresult"].includes(this.state)) {
       // demo: câmera passeia pela pista
       this.demoT += dt
       this.speed = 95
@@ -1377,8 +1377,8 @@ export class AutoDashEngine {
       const d = this.duel
       d.iCrashed = true
       void postState(d.code, d.role, this.myTelemetry(true))
-        .then((r) => { if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() } })
-        .catch(() => { /* spectate segue tentando */ })
+          .then((r) => { if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() } })
+          .catch(() => { /* spectate segue tentando */ })
       if (d.opp?.c) this.duelFinish(this.km > d.oppD)
       else this.state = "duelspectate"
       return
@@ -1439,11 +1439,11 @@ export class AutoDashEngine {
         d.postT = 1.1
         d.busy = true
         postState(d.code, d.role, this.myTelemetry(false))
-          .then((r) => {
-            if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() }
-          })
-          .catch(() => { /* rede piscou */ })
-          .finally(() => { d.busy = false })
+            .then((r) => {
+              if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() }
+            })
+            .catch(() => { /* rede piscou */ })
+            .finally(() => { d.busy = false })
       }
       // rival bateu e você já passou a marca dele: vitória na hora
       if (this.state === "racing" && d.opp?.c && this.km > d.oppD + 0.005) {
@@ -1461,11 +1461,11 @@ export class AutoDashEngine {
         d.postT = 1.3
         d.busy = true
         postState(d.code, d.role, this.myTelemetry(true))
-          .then((r) => {
-            if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() }
-          })
-          .catch(() => { /* segue tentando */ })
-          .finally(() => { d.busy = false })
+            .then((r) => {
+              if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() }
+            })
+            .catch(() => { /* segue tentando */ })
+            .finally(() => { d.busy = false })
       }
       if (d.opp?.c) this.duelFinish(this.km > d.oppD)
       else if (performance.now() - d.lastSeen > 20000) this.duelFinish(true, "seu rival caiu da conexão")
@@ -1481,7 +1481,7 @@ export class AutoDashEngine {
     this.combo = 0
     // aviso final pro rival: minha corrida acabou (senão ele espera à toa)
     void postState(d.code, d.role, this.myTelemetry(true))
-      .catch(() => { /* melhor esforço */ })
+        .catch(() => { /* melhor esforço */ })
     if (!d.scoreSent && this.score > 300) {
       d.scoreSent = true
       void submitScore({
@@ -1952,131 +1952,131 @@ export class AutoDashEngine {
       const onBridge = bridgeSpan.has(idx)
       if (!nearField) {
 
-      if (onBridge) {
-        // vão da ponte: água no lugar da grama, guarda-corpo no lugar da zebra.
-        // A água vai SÓ nas laterais, nunca sob o tabuleiro — mesmo motivo da
-        // zebra: o fillRect de tela cheia tem altura ry1-ry2+1, e esse +1 faz
-        // cada faixa invadir 1px da anterior. No horizonte, onde o segmento tem
-        // 1-2px, isso empilhava e o mar cobria a pista.
-        ctx.fillStyle = shade(alt ? "#14425f" : "#123c57", amb)
-        poly(ctx, -10, ry1, sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2, -10, ry2)
-        poly(ctx, sx1 + sw1 * 1.11, ry1, W + 10, ry1, W + 10, ry2, sx2 + sw2 * 1.11, ry2)
-        // guarda-corpo (mureta) com friso claro no topo — o "corrimão"
-        ctx.fillStyle = shade(alt ? "#9aa4b5" : "#7e8899", amb)
-        poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 0.97, ry1, sx2 - sw2 * 0.97, ry2, sx2 - sw2 * 1.11, ry2)
-        poly(ctx, sx1 + sw1 * 0.97, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 0.97, ry2)
-        // friso do corrimão só quando tem largura de tela (subpixel = shimmer)
-        if (sw1 > 6) {
-          ctx.fillStyle = shade("#d7dce6", amb)
-          poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 1.075, ry1, sx2 - sw2 * 1.075, ry2, sx2 - sw2 * 1.11, ry2)
-          poly(ctx, sx1 + sw1 * 1.075, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 1.075, ry2)
+        if (onBridge) {
+          // vão da ponte: água no lugar da grama, guarda-corpo no lugar da zebra.
+          // A água vai SÓ nas laterais, nunca sob o tabuleiro — mesmo motivo da
+          // zebra: o fillRect de tela cheia tem altura ry1-ry2+1, e esse +1 faz
+          // cada faixa invadir 1px da anterior. No horizonte, onde o segmento tem
+          // 1-2px, isso empilhava e o mar cobria a pista.
+          ctx.fillStyle = shade(alt ? "#14425f" : "#123c57", amb)
+          poly(ctx, -10, ry1, sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2, -10, ry2)
+          poly(ctx, sx1 + sw1 * 1.11, ry1, W + 10, ry1, W + 10, ry2, sx2 + sw2 * 1.11, ry2)
+          // guarda-corpo (mureta) com friso claro no topo — o "corrimão"
+          ctx.fillStyle = shade(alt ? "#9aa4b5" : "#7e8899", amb)
+          poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 0.97, ry1, sx2 - sw2 * 0.97, ry2, sx2 - sw2 * 1.11, ry2)
+          poly(ctx, sx1 + sw1 * 0.97, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 0.97, ry2)
+          // friso do corrimão só quando tem largura de tela (subpixel = shimmer)
+          if (sw1 > 6) {
+            ctx.fillStyle = shade("#d7dce6", amb)
+            poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 1.075, ry1, sx2 - sw2 * 1.075, ry2, sx2 - sw2 * 1.11, ry2)
+            poly(ctx, sx1 + sw1 * 1.075, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 1.075, ry2)
+          }
+          // Detalhes SÓ quando o segmento tem tamanho de tela pra isso — desenhar
+          // tirante/poste subpixel no horizonte era o "mistura tudo" (mesma
+          // classe do antigo bleed da zebra) e pagava caro à toa.
+          // ENGENHARIA: tirantes verticais (os cabos que seguram o tabuleiro)
+          if (alt && sw1 > 10) {
+            const hang = sw1 * 0.5
+            ctx.strokeStyle = shade("#b23a30", amb)
+            ctx.lineWidth = Math.max(1, sw1 * 0.012)
+            ctx.beginPath()
+            ctx.moveTo(sx1 - sw1 * 1.05, ry1); ctx.lineTo(sx1 - sw1 * 1.05, ry1 - hang)
+            ctx.moveTo(sx1 + sw1 * 1.05, ry1); ctx.lineTo(sx1 + sw1 * 1.05, ry1 - hang)
+            ctx.stroke()
+          }
+          // ILUMINAÇÃO: postes warm; à noite acendem com halo (sprite CACHEADO —
+          // criar gradiente radial por poste por frame derrubava o FPS)
+          if (idx % 6 === 0 && sw1 > 12) {
+            const lh = sw1 * 0.32
+            ctx.fillStyle = shade("#64748b", amb)
+            ctx.fillRect(sx1 - sw1 * 1.09, ry1 - lh, Math.max(1, sw1 * 0.015), lh)
+            ctx.fillRect(sx1 + sw1 * 1.075, ry1 - lh, Math.max(1, sw1 * 0.015), lh)
+            const lit = amb < 0.7
+            ctx.fillStyle = lit ? "#ffe9a8" : shade("#e2e8f0", amb)
+            ctx.beginPath(); ctx.arc(sx1 - sw1 * 1.08, ry1 - lh, Math.max(1, sw1 * 0.022), 0, Math.PI * 2); ctx.fill()
+            ctx.beginPath(); ctx.arc(sx1 + sw1 * 1.08, ry1 - lh, Math.max(1, sw1 * 0.022), 0, Math.PI * 2); ctx.fill()
+            if (lit && sw1 > 26) {
+              const gs = this.glowTex(), gw = sw1 * 0.6
+              ctx.drawImage(gs, sx1 - sw1 * 1.08 - gw / 2, ry1 - lh - gw / 2, gw, gw)
+              ctx.drawImage(gs, sx1 + sw1 * 1.08 - gw / 2, ry1 - lh - gw / 2, gw, gw)
+            }
+          }
+        } else {
+          // grama: listras sutis por cima do gradiente de base
+          ctx.fillStyle = alt ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)"
+          ctx.fillRect(-10, ry2, W + 20, ry1 - ry2 + 1)
+          // zebra só nas laterais — nunca embaixo do asfalto (era daí que vazava o vermelho)
+          ctx.fillStyle = alt ? rumbA : rumbB
+          poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 0.97, ry1, sx2 - sw2 * 0.97, ry2, sx2 - sw2 * 1.11, ry2)
+          poly(ctx, sx1 + sw1 * 0.97, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 0.97, ry2)
         }
-        // Detalhes SÓ quando o segmento tem tamanho de tela pra isso — desenhar
-        // tirante/poste subpixel no horizonte era o "mistura tudo" (mesma
-        // classe do antigo bleed da zebra) e pagava caro à toa.
-        // ENGENHARIA: tirantes verticais (os cabos que seguram o tabuleiro)
-        if (alt && sw1 > 10) {
-          const hang = sw1 * 0.5
-          ctx.strokeStyle = shade("#b23a30", amb)
-          ctx.lineWidth = Math.max(1, sw1 * 0.012)
-          ctx.beginPath()
-          ctx.moveTo(sx1 - sw1 * 1.05, ry1); ctx.lineTo(sx1 - sw1 * 1.05, ry1 - hang)
-          ctx.moveTo(sx1 + sw1 * 1.05, ry1); ctx.lineTo(sx1 + sw1 * 1.05, ry1 - hang)
-          ctx.stroke()
+        // asfalto
+        ctx.fillStyle = alt ? roadL : roadD
+        poly(ctx, sx1 - sw1, ry1, sx1 + sw1, ry1, sx2 + sw2, ry2, sx2 - sw2, ry2)
+        // bifurcação da mão dupla: braço de asfalto divergindo à esquerda
+        const rampF1 = wrongwayRamp.get(idx)
+        if (rampF1 !== undefined) {
+          const rampF2 = wrongwayRamp.get((idx + 1) % N) ?? rampF1
+          poly(ctx,
+              sx1 - sw1 * (0.97 + 2.0 * rampF1), ry1, sx1 - sw1 * 0.97, ry1,
+              sx2 - sw2 * 0.97, ry2, sx2 - sw2 * (0.97 + 2.0 * rampF2), ry2)
         }
-        // ILUMINAÇÃO: postes warm; à noite acendem com halo (sprite CACHEADO —
-        // criar gradiente radial por poste por frame derrubava o FPS)
-        if (idx % 6 === 0 && sw1 > 12) {
-          const lh = sw1 * 0.32
-          ctx.fillStyle = shade("#64748b", amb)
-          ctx.fillRect(sx1 - sw1 * 1.09, ry1 - lh, Math.max(1, sw1 * 0.015), lh)
-          ctx.fillRect(sx1 + sw1 * 1.075, ry1 - lh, Math.max(1, sw1 * 0.015), lh)
-          const lit = amb < 0.7
-          ctx.fillStyle = lit ? "#ffe9a8" : shade("#e2e8f0", amb)
-          ctx.beginPath(); ctx.arc(sx1 - sw1 * 1.08, ry1 - lh, Math.max(1, sw1 * 0.022), 0, Math.PI * 2); ctx.fill()
-          ctx.beginPath(); ctx.arc(sx1 + sw1 * 1.08, ry1 - lh, Math.max(1, sw1 * 0.022), 0, Math.PI * 2); ctx.fill()
-          if (lit && sw1 > 26) {
-            const gs = this.glowTex(), gw = sw1 * 0.6
-            ctx.drawImage(gs, sx1 - sw1 * 1.08 - gw / 2, ry1 - lh - gw / 2, gw, gw)
-            ctx.drawImage(gs, sx1 + sw1 * 1.08 - gw / 2, ry1 - lh - gw / 2, gw, gw)
+        // alça do viaduto: faixa de aceleração à direita, afunilando até fundir
+        const vrF1 = viaductRamp.get(idx)
+        if (vrF1 !== undefined) {
+          const vrF2 = viaductRamp.get((idx + 1) % N) ?? vrF1
+          ctx.fillStyle = alt ? roadL : roadD
+          poly(ctx,
+              sx1 + sw1 * 0.97, ry1, sx1 + sw1 * (0.97 + 0.62 * vrF1), ry1,
+              sx2 + sw2 * (0.97 + 0.62 * vrF2), ry2, sx2 + sw2 * 0.97, ry2)
+          // faixa tracejada separando a alça da via (some no fim, onde funde)
+          if (alt && vrF1 > 0.12) {
+            ctx.fillStyle = laneC
+            poly(ctx,
+                sx1 + sw1 * 0.985, ry1, sx1 + sw1 * 1.0, ry1,
+                sx2 + sw2 * 1.0, ry2, sx2 + sw2 * 0.985, ry2)
+          }
+          // zebrado de convergência no bico do afunilamento
+          if (vrF1 < 0.16 && vrF1 > 0.01) {
+            ctx.fillStyle = shade(alt ? "#e2e8f0" : "#94a3b8", amb)
+            poly(ctx,
+                sx1 + sw1 * 0.97, ry1, sx1 + sw1 * (0.97 + 0.62 * vrF1), ry1,
+                sx2 + sw2 * (0.97 + 0.62 * vrF2), ry2, sx2 + sw2 * 0.97, ry2)
           }
         }
-      } else {
-      // grama: listras sutis por cima do gradiente de base
-      ctx.fillStyle = alt ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)"
-      ctx.fillRect(-10, ry2, W + 20, ry1 - ry2 + 1)
-      // zebra só nas laterais — nunca embaixo do asfalto (era daí que vazava o vermelho)
-      ctx.fillStyle = alt ? rumbA : rumbB
-      poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 0.97, ry1, sx2 - sw2 * 0.97, ry2, sx2 - sw2 * 1.11, ry2)
-      poly(ctx, sx1 + sw1 * 0.97, ry1, sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2, sx2 + sw2 * 0.97, ry2)
-      }
-      // asfalto
-      ctx.fillStyle = alt ? roadL : roadD
-      poly(ctx, sx1 - sw1, ry1, sx1 + sw1, ry1, sx2 + sw2, ry2, sx2 - sw2, ry2)
-      // bifurcação da mão dupla: braço de asfalto divergindo à esquerda
-      const rampF1 = wrongwayRamp.get(idx)
-      if (rampF1 !== undefined) {
-        const rampF2 = wrongwayRamp.get((idx + 1) % N) ?? rampF1
-        poly(ctx,
-          sx1 - sw1 * (0.97 + 2.0 * rampF1), ry1, sx1 - sw1 * 0.97, ry1,
-          sx2 - sw2 * 0.97, ry2, sx2 - sw2 * (0.97 + 2.0 * rampF2), ry2)
-      }
-      // alça do viaduto: faixa de aceleração à direita, afunilando até fundir
-      const vrF1 = viaductRamp.get(idx)
-      if (vrF1 !== undefined) {
-        const vrF2 = viaductRamp.get((idx + 1) % N) ?? vrF1
-        ctx.fillStyle = alt ? roadL : roadD
-        poly(ctx,
-          sx1 + sw1 * 0.97, ry1, sx1 + sw1 * (0.97 + 0.62 * vrF1), ry1,
-          sx2 + sw2 * (0.97 + 0.62 * vrF2), ry2, sx2 + sw2 * 0.97, ry2)
-        // faixa tracejada separando a alça da via (some no fim, onde funde)
-        if (alt && vrF1 > 0.12) {
+        // linhas de faixa
+        if (alt) {
           ctx.fillStyle = laneC
-          poly(ctx,
-            sx1 + sw1 * 0.985, ry1, sx1 + sw1 * 1.0, ry1,
-            sx2 + sw2 * 1.0, ry2, sx2 + sw2 * 0.985, ry2)
+          for (let l = 1; l < 4; l++) {
+            const lx = -1 + (2 * l) / 4
+            if (l === 2 && wrongwaySpan.has(idx)) continue // o centro vira a dupla amarela
+            poly(ctx,
+                sx1 + sw1 * lx - sw1 * 0.012, ry1, sx1 + sw1 * lx + sw1 * 0.012, ry1,
+                sx2 + sw2 * lx + sw2 * 0.012, ry2, sx2 + sw2 * lx - sw2 * 0.012, ry2)
+          }
         }
-        // zebrado de convergência no bico do afunilamento
-        if (vrF1 < 0.16 && vrF1 > 0.01) {
-          ctx.fillStyle = shade(alt ? "#e2e8f0" : "#94a3b8", amb)
-          poly(ctx,
-            sx1 + sw1 * 0.97, ry1, sx1 + sw1 * (0.97 + 0.62 * vrF1), ry1,
-            sx2 + sw2 * (0.97 + 0.62 * vrF2), ry2, sx2 + sw2 * 0.97, ry2)
+        // LINHA DE CHEGADA quadriculada: sem uma marca no chão o jogador não tem
+        // como saber que fechou uma volta — a pista é um loop sem referência
+        if (this.mode === "race" && idx < 9) {
+          const quadros = 10
+          for (let q = 0; q < quadros; q++) {
+            const a1 = -1 + (2 * q) / quadros, a2 = -1 + (2 * (q + 1)) / quadros
+            ctx.fillStyle = (q + idx) % 2 === 0 ? "#f8fafc" : "#0f172a"
+            poly(ctx,
+                sx1 + sw1 * a1, ry1, sx1 + sw1 * a2, ry1,
+                sx2 + sw2 * a2, ry2, sx2 + sw2 * a1, ry2)
+          }
         }
-      }
-      // linhas de faixa
-      if (alt) {
-        ctx.fillStyle = laneC
-        for (let l = 1; l < 4; l++) {
-          const lx = -1 + (2 * l) / 4
-          if (l === 2 && wrongwaySpan.has(idx)) continue // o centro vira a dupla amarela
-          poly(ctx,
-            sx1 + sw1 * lx - sw1 * 0.012, ry1, sx1 + sw1 * lx + sw1 * 0.012, ry1,
-            sx2 + sw2 * lx + sw2 * 0.012, ry2, sx2 + sw2 * lx - sw2 * 0.012, ry2)
+        // mão dupla: faixa dupla amarela CONTÍNUA no centro (sinalização de contramão)
+        if (wrongwaySpan.has(idx)) {
+          ctx.fillStyle = shade("#eab308", amb)
+          poly(ctx, sx1 - sw1 * 0.042, ry1, sx1 - sw1 * 0.014, ry1, sx2 - sw2 * 0.014, ry2, sx2 - sw2 * 0.042, ry2)
+          poly(ctx, sx1 + sw1 * 0.014, ry1, sx1 + sw1 * 0.042, ry1, sx2 + sw2 * 0.042, ry2, sx2 + sw2 * 0.014, ry2)
         }
-      }
-      // LINHA DE CHEGADA quadriculada: sem uma marca no chão o jogador não tem
-      // como saber que fechou uma volta — a pista é um loop sem referência
-      if (this.mode === "race" && idx < 9) {
-        const quadros = 10
-        for (let q = 0; q < quadros; q++) {
-          const a1 = -1 + (2 * q) / quadros, a2 = -1 + (2 * (q + 1)) / quadros
-          ctx.fillStyle = (q + idx) % 2 === 0 ? "#f8fafc" : "#0f172a"
-          poly(ctx,
-            sx1 + sw1 * a1, ry1, sx1 + sw1 * a2, ry1,
-            sx2 + sw2 * a2, ry2, sx2 + sw2 * a1, ry2)
-        }
-      }
-      // mão dupla: faixa dupla amarela CONTÍNUA no centro (sinalização de contramão)
-      if (wrongwaySpan.has(idx)) {
-        ctx.fillStyle = shade("#eab308", amb)
-        poly(ctx, sx1 - sw1 * 0.042, ry1, sx1 - sw1 * 0.014, ry1, sx2 - sw2 * 0.014, ry2, sx2 - sw2 * 0.042, ry2)
-        poly(ctx, sx1 + sw1 * 0.014, ry1, sx1 + sw1 * 0.042, ry1, sx2 + sw2 * 0.042, ry2, sx2 + sw2 * 0.014, ry2)
-      }
-      edgeL.push(sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2)
-      edgeR.push(sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2)
-      maxY = sy2
-      roadStarted = true
+        edgeL.push(sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2)
+        edgeR.push(sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2)
+        maxY = sy2
+        roadStarted = true
       } // fim do asfalto (pulado no campo próximo)
 
       // sprites deste segmento
@@ -2143,15 +2143,21 @@ export class AutoDashEngine {
       if (seg.sign) {
         sprites.push({ kind: "deco", deco: 3, dir: seg.sign, x: sx1 - sw1 * 1.35 * seg.sign, y: sy1, w: sw1 * 0.16 })
       } else if (this.mode === "race") {
-        // beira neon: postes de luz colorida ritmados dos dois lados + pilonas
-        // de neon de vez em quando — o feeling do fundo trazido pra pista.
-        // `dir` carrega o índice de cor do neon (0..4).
-        if (idx % 5 === 0) {
-          const lado = idx % 10 === 0 ? -1 : 1
-          sprites.push({ kind: "deco", deco: 4, dir: (idx / 5) % 5, x: sx1 + sw1 * lado * 1.18, y: sy1, w: sw1 * 0.9 })
+        if (idx % 7 === 0) {
+          const lado = (idx % 8 < 4) ? -1 : 1
+          sprites.push({ kind: "deco", deco: 6, dir: idx, x: sx1 + sw1 * lado * 2.0, y: sy1, w: sw1 })
         }
-        if (idx % 23 === 7) sprites.push({ kind: "deco", deco: 5, dir: (idx * 7) % 5, x: sx1 + sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
-        if (idx % 23 === 18) sprites.push({ kind: "deco", deco: 5, dir: (idx * 3) % 5, x: sx1 - sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
+        // rua de Tokyo (Shibuya/Kabukicho): parede contínua de fachadas coladas
+        // na beira dos dois lados, a cada 2 segmentos. `dir` carrega o índice
+        // de cor do letreiro (0..5) + a fase do blade sign piscando.
+        if (idx % 2 === 0) {
+          sprites.push({ kind: "deco", deco: 4, dir: (idx / 2) % 6, x: sx1 + sw1 * 1.18, y: sy1, w: sw1 * 0.9 })
+          sprites.push({ kind: "deco", deco: 4, dir: (idx / 2 + 3) % 6, x: sx1 - sw1 * 1.18, y: sy1, w: sw1 * 0.9 })
+        }
+        if (idx % 6 === 3) {
+          sprites.push({ kind: "deco", deco: 5, dir: (idx * 7) % 6, x: sx1 + sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
+          sprites.push({ kind: "deco", deco: 5, dir: (idx * 3) % 6, x: sx1 - sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
+        }
       } else if (idx % 4 === 0) {
         const side = idx % 8 === 0 ? -1 : 1
         sprites.push({ kind: "deco", deco: 0, x: sx1 + sw1 * side * (1.55 + ((idx * 7) % 5) * 0.14), y: sy1, w: sw1 * 0.22 })
@@ -2285,7 +2291,7 @@ export class AutoDashEngine {
     ridge(shade("#2b3c56", amb), 72, hz + 2, this.bgShift * 0.18, 16)
     ridge(shade("#1e2c40", amb), 46, hz + 3, this.bgShift * 0.42, 12)
     // metrópole neon ATRÁS do skyline base (torres altas, letreiros) — só corrida
-    if (this.mode === "race") this.renderNeonCity(hz)
+    // if (this.mode === "race") this.renderNeonCity(hz) - isso aq eu removi por causa de otimização
     // skyline com janelas acesas à noite
     const wrap = W + 90
     for (let i = 0; i < 24; i++) {
@@ -2308,7 +2314,7 @@ export class AutoDashEngine {
    * densos) atrás do skyline base, com janelas em cores de neon e letreiros
    * piscando. Só na corrida — é o cenário que vende o clima.
    */
-  private renderNeonCity(hz: number) {
+  /*private renderNeonCity(hz: number) {
     const ctx = this.ctx
     const wrap = W + 90
     // torres altas ao fundo (parallax mais lento = mais distantes)
@@ -2344,7 +2350,7 @@ export class AutoDashEngine {
         }
       }
     }
-  }
+  }*/
 
   private drawPickup(p: Pickup, x: number, y: number, w: number, amb: number) {
     if (w < 2.5) return
@@ -2392,41 +2398,92 @@ export class AutoDashEngine {
   private drawDeco(kind: number, dir: number, x: number, y: number, w: number, amb: number) {
     if (w < 1.5) return
     const ctx = this.ctx
-    const NEON = ["#ff2d95", "#22d3ee", "#a855f7", "#facc15", "#38bdf8"]
-    if (kind === 4) { // poste de luz NEON (corrida)
-      const cor = NEON[((dir % 5) + 5) % 5]
-      const h = w * 2.6
-      ctx.fillStyle = shade("#1a2033", Math.max(0.4, amb))
-      ctx.fillRect(x - w * 0.045, y - h, w * 0.09, h) // mastro
-      // tubo de neon acendendo o mastro inteiro (a coluna colorida)
-      ctx.fillStyle = cor
-      ctx.fillRect(x - w * 0.02, y - h, w * 0.04, h)
-      // luminária no topo
-      rr(ctx, x - w * 0.16, y - h - w * 0.06, w * 0.32, w * 0.14, w * 0.04)
-      // halo grande e forte
-      const g = ctx.createRadialGradient(x, y - h, 2, x, y - h, w * 1.9)
-      g.addColorStop(0, cor + "dd"); g.addColorStop(0.4, cor + "66"); g.addColorStop(1, cor + "00")
-      ctx.fillStyle = g
-      ctx.beginPath(); ctx.arc(x, y - h, w * 1.9, 0, Math.PI * 2); ctx.fill()
-      // reflexo no chão
-      ctx.fillStyle = cor + "44"
-      ctx.beginPath(); ctx.ellipse(x, y, w * 0.7, w * 0.16, 0, 0, Math.PI * 2); ctx.fill()
+    // paleta quente+neon de rua de Tokyo (Shibuya/Kabukicho).
+    // `paleta()` NUNCA devolve undefined: um addColorStop com cor inválida
+    // lança e derruba o render inteiro (tela congelada), então índice quebrado
+    // cai no vermelho-lanterna em vez de matar o frame.
+    const TOKYO = ["#e03131", "#fff3d6", "#ffd43b", "#ff2d95", "#22d3ee", "#ff8c42"]
+    const paleta = (i: number) =>
+      TOKYO[((Math.trunc(i) % TOKYO.length) + TOKYO.length) % TOKYO.length] ?? TOKYO[0]
+    if (kind === 4) { // fachada baixa colada na borda, com letreiros horizontais empilhados
+      const cor = paleta(dir)
+      const bw = w * 0.85
+      const h = bw * 1.2 // bloco baixo: altura ~1.2x a largura
+      // corpo do prédio
+      ctx.fillStyle = shade("#181022", Math.max(0.4, amb))
+      ctx.fillRect(x - bw / 2, y - h, bw, h)
+      // 4 a 6 barras horizontais de letreiro empilhadas, cada uma de cor diferente
+      const seed = (dir * 2654435761) >>> 0
+      const bars = 4 + (seed % 3)
+      const barH = h / bars
+      for (let i = 0; i < bars; i++) {
+        const barCor = paleta(dir + i)
+        const by = y - h + i * barH
+        ctx.fillStyle = barCor
+        ctx.fillRect(x - bw / 2 + bw * 0.06, by + barH * 0.18, bw * 0.88, barH * 0.64)
+        // brilho de cada letreiro
+        const g = ctx.createRadialGradient(x, by + barH * 0.5, 1, x, by + barH * 0.5, bw * 0.8)
+        g.addColorStop(0, barCor + "88"); g.addColorStop(1, barCor + "00")
+        ctx.fillStyle = g
+        ctx.beginPath(); ctx.ellipse(x, by + barH * 0.5, bw * 0.8, barH * 0.9, 0, 0, Math.PI * 2); ctx.fill()
+      }
+      // reflexo no asfalto (cor do letreiro dominante, alpha baixo)
+      ctx.fillStyle = cor + "33"
+      ctx.beginPath(); ctx.ellipse(x, y, w * 0.7, w * 0.14, 0, 0, Math.PI * 2); ctx.fill()
       return
     }
-    if (kind === 5) { // pilona/letreiro de neon vertical (corrida)
-      const cor = NEON[((dir % 5) + 5) % 5]
-      const h = w * 3.2
-      ctx.fillStyle = shade("#0d1120", Math.max(0.4, amb))
-      ctx.fillRect(x - w * 0.09, y - h, w * 0.18, h)
-      const on = Math.floor(performance.now() / 500 + dir) % 4 !== 0
+    if (kind === 5) { // blade sign vertical saindo da fachada, piscando devagar
+      const cor = paleta(dir)
+      const h = w * 3.4
+      const bw = w * 0.22
+      ctx.fillStyle = shade("#0d0a14", Math.max(0.4, amb))
+      ctx.fillRect(x - bw / 2, y - h, bw, h)
+      const on = Math.floor(performance.now() / 700 + dir) % 4 !== 0
       if (on) {
-        ctx.strokeStyle = cor
-        ctx.lineWidth = Math.max(1.5, w * 0.06)
-        ctx.strokeRect(x - w * 0.06, y - h + w * 0.15, w * 0.12, h - w * 0.3)
-        const g = ctx.createRadialGradient(x, y - h * 0.5, 2, x, y - h * 0.5, w * 1.4)
-        g.addColorStop(0, cor + "66"); g.addColorStop(1, cor + "00")
+        ctx.fillStyle = cor
+        ctx.fillRect(x - bw * 0.38, y - h + bw * 0.3, bw * 0.76, h - bw * 0.6)
+        // traços claros dentro simulando caracteres
+        ctx.strokeStyle = "rgba(255,255,255,0.85)"
+        ctx.lineWidth = Math.max(1, bw * 0.09)
+        const rows = 6
+        for (let r = 0; r < rows; r++) {
+          const cy = y - h + bw * 0.5 + (h - bw) * (r + 0.5) / rows
+          ctx.beginPath()
+          ctx.moveTo(x - bw * 0.22, cy - bw * 0.12)
+          ctx.lineTo(x + bw * 0.22, cy - bw * 0.12)
+          ctx.moveTo(x, cy - bw * 0.2)
+          ctx.lineTo(x, cy + bw * 0.2)
+          ctx.stroke()
+        }
+        // halo
+        const g = ctx.createRadialGradient(x, y - h * 0.5, 2, x, y - h * 0.5, w * 1.3)
+        g.addColorStop(0, cor + "77"); g.addColorStop(1, cor + "00")
         ctx.fillStyle = g
-        ctx.beginPath(); ctx.ellipse(x, y - h * 0.5, w * 1.4, h * 0.5, 0, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.ellipse(x, y - h * 0.5, w * 1.3, h * 0.5, 0, 0, Math.PI * 2); ctx.fill()
+        // reflexo no asfalto
+        ctx.fillStyle = cor + "33"
+        ctx.beginPath(); ctx.ellipse(x, y, w * 0.5, w * 0.12, 0, 0, Math.PI * 2); ctx.fill()
+      }
+      return
+    }
+    if (kind === 6) { // ← ESSE BLOCO INTEIRO é novo, cola aqui
+      const seed = (dir * 2654435761) >>> 0
+      const h = w * (5 + (seed % 700) / 100)
+      const bw = w * (0.8 + ((seed >> 8) % 60) / 100)
+      const lit = amb < 0.62
+
+      ctx.fillStyle = shade(seed % 2 === 0 ? "#0b0f1a" : "#11101f", Math.max(0.4, amb))
+      ctx.fillRect(x - bw / 2, y - h, bw, h)
+
+      if (lit) {
+        for (let wy = y - h + bw * 0.12; wy < y - bw * 0.12; wy += Math.max(3, bw * 0.16)) {
+          for (let wx = x - bw / 2 + bw * 0.08; wx < x + bw / 2 - bw * 0.05; wx += Math.max(3, bw * 0.22)) {
+            if (Math.floor(seed + wx * 3 + wy * 7) % 5 === 0) {
+              ctx.fillStyle = (wx + wy) % 4 === 0 ? "rgba(255,214,153,0.5)" : "rgba(226,240,255,0.5)"
+              ctx.fillRect(wx, wy, Math.max(1, bw * 0.05), Math.max(1, bw * 0.06))
+            }
+          }
+        }
       }
       return
     }
@@ -2720,10 +2777,10 @@ export class AutoDashEngine {
       this.drawTraffic(fake("#64748b"), R - (R - L) * t2, deckY + deckH * 0.1, carW, amb * 0.9)
       const p = (performance.now() / 2800) % 1
       this.drawTraffic(
-        fake("#eab308"),
-        r1x + (r4x - r1x) * p,
-        rampTopY + (y - rampTopY) * p,
-        carW * (0.9 + 0.3 * p), amb * 0.95,
+          fake("#eab308"),
+          r1x + (r4x - r1x) * p,
+          rampTopY + (y - rampTopY) * p,
+          carW * (0.9 + 0.3 * p), amb * 0.95,
       )
     }
   }
@@ -2827,8 +2884,8 @@ export class AutoDashEngine {
     }
     // lanternas (contramão vem DE FRENTE: farol branco, não lanterna vermelha)
     const tail = t.role === "oncoming"
-      ? (amb < 0.62 ? "#fff7cf" : shade("#e8e4c9", amb + 0.25))
-      : (amb < 0.62 ? "#ff3b30" : shade("#c81e1e", amb + 0.25))
+        ? (amb < 0.62 ? "#fff7cf" : shade("#e8e4c9", amb + 0.25))
+        : (amb < 0.62 ? "#ff3b30" : shade("#c81e1e", amb + 0.25))
     ctx.fillStyle = tail
     const th = Math.max(2, h * 0.07)
     rr(ctx, bx + w * 0.06, y - th * 2.2, w * 0.22, th, th / 2)
@@ -2929,8 +2986,8 @@ export class AutoDashEngine {
       const inten = Math.min(1, (this.speed - 150) / 90)
       const n = nitro ? 22 : 9
       ctx.strokeStyle = nitro
-        ? `rgba(120,220,255,${0.22 + inten * 0.2})`
-        : `rgba(220,235,255,${0.08 + inten * 0.16})`
+          ? `rgba(120,220,255,${0.22 + inten * 0.2})`
+          : `rgba(220,235,255,${0.08 + inten * 0.16})`
       ctx.lineWidth = nitro ? 2.5 : 2
       ctx.beginPath()
       for (let i = 0; i < n; i++) {
@@ -3029,9 +3086,9 @@ export class AutoDashEngine {
       }
     }
     const atras = candidatos
-      .map(t => ({ t, d: -this.wrapDz(t.z, playerZ) }))
-      .filter(v => v.d > 0 && v.d <= D_MAX)
-      .sort((a, b) => b.d - a.d)
+        .map(t => ({ t, d: -this.wrapDz(t.z, playerZ) }))
+        .filter(v => v.d > 0 && v.d <= D_MAX)
+        .sort((a, b) => b.d - a.d)
     for (const { t, d } of atras) {
       const f = fOf(d), y = yOf(f), half = halfOf(f)
       const x = cx + (t.offset - this.playerX) * half
@@ -3117,8 +3174,8 @@ export class AutoDashEngine {
     const h = opts.h ?? 28
     const hov = this.isHover(x, y, w, h)
     ctx.fillStyle = opts.primary
-      ? (hov ? "#fde047" : "#facc15")
-      : (hov ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.10)")
+        ? (hov ? "#fde047" : "#facc15")
+        : (hov ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.10)")
     rr(ctx, x, y, w, h, h / 2)
     ctx.strokeStyle = hov ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.18)"
     ctx.lineWidth = 1
@@ -3635,7 +3692,7 @@ export class AutoDashEngine {
     try {
       const spec = CARS[this.cfg.carIdx]
       this.race = await RaceSession.hospedar(
-        this.cfg.pilotName || "PILOTO", this.raceVoltas, this.cfg.carIdx, this.cfg.customs[this.cfg.carIdx].paint,
+          this.cfg.pilotName || "PILOTO", this.raceVoltas, this.cfg.carIdx, this.cfg.customs[this.cfg.carIdx].paint,
       )
       void spec
       this.mode = "race"
@@ -3657,7 +3714,7 @@ export class AutoDashEngine {
     this.raceErro = null
     try {
       this.race = await RaceSession.entrar(
-        this.codeBuf, this.cfg.pilotName || "PILOTO", this.cfg.carIdx, this.cfg.customs[this.cfg.carIdx].paint,
+          this.codeBuf, this.cfg.pilotName || "PILOTO", this.cfg.carIdx, this.cfg.customs[this.cfg.carIdx].paint,
       )
       this.mode = "race"
       this.state = "racewait"
@@ -4701,8 +4758,8 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
 
 /** Carro do jogador visto de trás — silhueta própria por carroceria + customização completa. */
 function drawPlayerCar(
-  ctx: CanvasRenderingContext2D, cx: number, cy: number, spec: CarSpec,
-  custom: CarCustom, steer: number, braking: boolean, amb: number, nitro: boolean, scale = 1,
+    ctx: CanvasRenderingContext2D, cx: number, cy: number, spec: CarSpec,
+    custom: CarCustom, steer: number, braking: boolean, amb: number, nitro: boolean, scale = 1,
 ) {
   const w = spec.width * 640 * scale
   const h = w * 0.62
