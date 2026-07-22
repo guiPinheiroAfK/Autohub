@@ -230,7 +230,8 @@ export class AutoDashEngine {
   private race: RaceSession | null = null
   private raceVoltas = 3
   private raceBots = 3
-  private raceEndT = 0 // volta de desaceleração após cruzar a linha
+  private raceFinished = false // já cruzei a linha (coast + espectador)
+  private raceSpectT = 0       // tempo assistindo os rivais terminarem
   private raceErro: string | null = null
   private duel: DuelSession | null = null
   private codeBuf = ""
@@ -962,7 +963,7 @@ export class AutoDashEngine {
     // sala de espera: consulta quem entrou e detecta a largada dada pelo dono
     if (this.state === "racewait" && this.race) {
       this.race.update(dt, 0, 0, 0, false, this.trackLen)
-      if (this.race.phase === "countdown") { this.raceEndT = 0; this.startRace(this.race.cfg.seed) }
+      if (this.race.phase === "countdown") { this.startRace(this.race.cfg.seed) }
     }
 
     if (["menu", "garage", "duellobby", "duelcode", "duelwaiting", "duelresult",
@@ -985,8 +986,12 @@ export class AutoDashEngine {
       return
     }
 
-    const throttle = this.mouseGas || this.touchThrottle || this.keys.has("w") || this.keys.has("arrowup") ? 1 : 0
+    let throttle = this.mouseGas || this.touchThrottle || this.keys.has("w") || this.keys.has("arrowup") ? 1 : 0
     const braking = this.mouseBrake || this.touchBrake || this.keys.has("s") || this.keys.has("arrowdown")
+    // corrida terminada: neutro, gás cortado — o carro faz a volta de
+    // desaceleração e não pode mais acelerar (bug: a física acelerava antes de
+    // o bloco de chegada zerar a marcha)
+    if (this.raceFinished) throttle = 0
 
     if (this.state === "countdown") {
       this.countT += dt
@@ -1189,20 +1194,23 @@ export class AutoDashEngine {
           this.burst(W / 2 + Math.sign(shove) * 60, H - 110, 12, ["#fde047", "#e2e8f0"])
         }
       }
-      // Cruzou a linha: PONTO MORTO e desaceleração até parar, como numa volta
-      // de desaceleração de verdade. Cortar direto pro pódio no instante da
-      // chegada tirava o respiro do fim da prova.
-      if (r.phase === "finished") {
-        if (this.raceEndT <= 0) {
-          this.raceEndT = 4.5
+      // Cruzou a linha: ponto morto, coast até parar, e vira ESPECTADOR dos
+      // rivais até a corrida acabar de verdade. NÃO retorna — o mundo continua
+      // rodando (rivais correndo, seu carro desacelerando).
+      if (r.finished) {
+        if (!this.raceFinished) {
+          this.raceFinished = true
+          this.raceSpectT = 0
           this.gear = 0
           this.nitroOn = false
           this.floaters.push({ text: "🏁 CHEGOU!", color: "#fde047", y: H * 0.3, life: 2.4, big: true })
           this.floaters.push({ text: `${r.minhaPosicao()}º lugar`, color: "#f8fafc", y: H * 0.38, life: 2.4, big: false })
         }
-        this.raceEndT -= dt
-        if (this.raceEndT <= 0 || this.speed < 6) { this.state = "raceresult"; this.fadeT = 0.22 }
-        return
+        this.raceSpectT += dt
+        // vai pro pódio quando TODOS os rivais terminam (ou um teto de 22 s pra
+        // não travar se alguém ficar pra trás)
+        const todosAcabaram = r.rivais.length > 0 && r.rivais.every((rv) => rv.finished)
+        if (todosAcabaram || this.raceSpectT > 22) { this.state = "raceresult"; this.fadeT = 0.22 }
       }
     }
 
@@ -1567,6 +1575,7 @@ export class AutoDashEngine {
     this.newRecord = false; this.beamT = 0; this.beamCdT = 0; this.pitchY = 0
     this.shiftT = 0; this.wheelspinT = 0; this.bogT = 0
     this.crashed = false; this.crashByPolice = false
+    this.raceFinished = false; this.raceSpectT = 0
     this.raining = false; this.rainRollT = 0
     this.audio.rain(false)
     this.particles = []; this.floaters = []
@@ -3481,7 +3490,6 @@ export class AutoDashEngine {
   private correrComBots() {
     this.audio.ui()
     this.mode = "race"
-    this.raceEndT = 0
     this.race = RaceSession.soloComBots(this.cfg.pilotName || "VOCÊ", this.raceVoltas, this.raceBots)
     this.startRace(this.race.cfg.seed)
   }
@@ -3811,6 +3819,15 @@ export class AutoDashEngine {
     const r = this.race
     if (!r) return
     const ctx = this.ctx
+    // já terminei: faixa "ASSISTINDO" no topo enquanto os rivais fecham a prova
+    if (this.raceFinished) {
+      ctx.textAlign = "center"
+      const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 400)
+      ctx.fillStyle = `rgba(56,189,248,${pulse})`
+      ctx.font = "bold 20px 'Space Grotesk', 'Segoe UI', sans-serif"
+      ctx.fillText("🏁 VOCÊ CHEGOU — assistindo os rivais…", W / 2, 40)
+      ctx.textAlign = "left"
+    }
     const grid = r.grid()
     const bw = 208, bh = 56 + grid.length * 22
     const bx = 14, by = 88
