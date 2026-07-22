@@ -1661,6 +1661,12 @@ export class AutoDashEngine {
 
     ctx.save()
     if (this.shakeT > 0) ctx.translate((Math.random() - 0.5) * 14, (Math.random() - 0.5) * 10)
+    // trepidação de motor no grid da corrida: quanto mais giro, mais treme —
+    // o carro "pedindo pra sair"
+    if (this.mode === "race" && this.state === "countdown") {
+      const rev = clamp((this.rpm - 3000) / 5000, 0, 1)
+      ctx.translate((Math.random() - 0.5) * 3 * rev, (Math.random() - 0.5) * 2.4 * rev)
+    }
     // "FOV pump" no nitro — a câmera aperta levemente
     if (this.nitroOn && this.nitroMeter > 1 && this.state === "racing") {
       ctx.translate(W / 2, H / 2)
@@ -3354,6 +3360,15 @@ export class AutoDashEngine {
     ctx.fillText(this.cfg.transmission === "auto" ? "AUTO" : "SEQ", cx - 16, cy - r - 20)
 
     if (this.goFlashT > 0) {
+      // flash de largada na corrida: a tela toma um estouro verde->branco no
+      // instante do verde, como o clarão de uma arrancada de racha
+      if (this.mode === "race") {
+        const f = clamp((this.goFlashT - 0.8) / 0.4, 0, 1) // só no pico (1.2→0.8)
+        if (f > 0) {
+          ctx.fillStyle = `rgba(180,255,200,${f * 0.5})`
+          ctx.fillRect(0, 0, W, H)
+        }
+      }
       ctx.globalAlpha = clamp(this.goFlashT, 0, 1)
       ctx.fillStyle = "#4ade80"
       ctx.font = "900 54px 'Space Grotesk', 'Segoe UI', sans-serif"
