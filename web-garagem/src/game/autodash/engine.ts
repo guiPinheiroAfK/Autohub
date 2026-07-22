@@ -6,7 +6,7 @@ import {
   KMH2UPS, RPM_IDLE, RPM_REDLINE, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH,
   CARS, PAINTS, STRIPES, NEONS, NEON_NAMES, WHEELS, WINGS,
   loadConfig, saveConfig, cachedScores, fetchLeaderboard, submitScore,
-  type CarSpec, type CarCustom, type GameConfig, type ScoreEntry,
+  type CarSpec, type CarCustom, type GameConfig, type ScoreEntry, type BodyKind,
 } from "./data"
 import { AudioBus } from "./audio"
 import { createRoom, joinRoom, pollRoom, postState, rematchRoom, type DuelTelemetry } from "./net"
@@ -955,8 +955,22 @@ export class AutoDashEngine {
     this.audio.shift()
   }
 
+  /** Caráter sonoro por carroceria: [pitch, brilho]. Grave/encorpado (V grande)
+   *  → agudo/metálico (rotativo, boxer, 4-cil de giro alto). */
+  private static readonly ENGINE_VOICE: Record<BodyKind, [number, number]> = {
+    muscle: [0.80, 0.82], apex: [0.84, 0.86],                 // V grande, grave
+    gt: [1.0, 1.0], ghost: [0.98, 1.05], zcoupe: [1.0, 1.0],  // 6-cil equilibrado
+    kaiju: [0.95, 1.1], alta: [1.0, 0.98],
+    ninja: [1.15, 1.12], sylva: [1.16, 1.1],                  // 4-cil ágil
+    roadster: [1.22, 1.05],
+    rotor: [1.30, 1.4],                                       // rotativo estridente
+    flat6: [1.08, 1.3],                                       // boxer metálico
+  }
+
   private update(dt: number) {
     const spec = CARS[this.cfg.carIdx]
+    const voice = AutoDashEngine.ENGINE_VOICE[spec.body] ?? [1, 1]
+    this.audio.setEngine(voice[0], voice[1])
 
     this.duelNet(dt)
 
@@ -4803,6 +4817,20 @@ function drawPlayerCar(
     ctx.fillStyle = dark
     rr(ctx, bx + w * 0.10, roofY - h * 0.16, w * 0.18, h * 0.09, w * 0.02)
     rr(ctx, bx + w * 0.72, roofY - h * 0.16, w * 0.18, h * 0.09, w * 0.02)
+  } else if (spec.body === "flat6") {
+    // motor traseiro: para-lamas redondos e cheios, teto que escorre numa
+    // rabeta baixa (a curva clássica). Traseira mais larga que a frente.
+    ctx.beginPath()
+    ctx.moveTo(bx - w * 0.01, 0)
+    ctx.quadraticCurveTo(bx - w * 0.06, by + h * 0.60, bx + w * 0.06, by + h * 0.34)
+    ctx.quadraticCurveTo(bx + w * 0.16, by + h * 0.06, bx + w * 0.34, roofY + h * 0.04)
+    ctx.quadraticCurveTo(bx + w * 0.55, roofY - h * 0.08, bx + w * 0.80, by + h * 0.20)
+    ctx.quadraticCurveTo(bx + w * 0.96, by + h * 0.42, bx + w * 1.01, 0)
+    ctx.closePath(); ctx.fill()
+    // para-lamas traseiros salientes (bojo redondo dos dois lados)
+    ctx.fillStyle = dark
+    ctx.beginPath(); ctx.ellipse(bx + w * 0.06, -h * 0.30, w * 0.08, h * 0.26, 0, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.ellipse(bx + w * 0.94, -h * 0.30, w * 0.08, h * 0.26, 0, 0, Math.PI * 2); ctx.fill()
   } else {
     // ghost: cunha facetada, ângulos duros
     ctx.beginPath()
@@ -4852,7 +4880,7 @@ function drawPlayerCar(
   } else if (spec.body !== "roadster") { // conversível não tem vidro traseiro
     const vwPorCorpo: Partial<Record<typeof spec.body, number>> = {
       ninja: 0.56, muscle: 0.44, kaiju: 0.58, alta: 0.60,
-      zcoupe: 0.54, rotor: 0.52, apex: 0.50, sylva: 0.48,
+      zcoupe: 0.54, rotor: 0.52, apex: 0.50, sylva: 0.48, flat6: 0.50,
     }
     const vw = vwPorCorpo[spec.body] ?? 0.52
     ctx.beginPath()
@@ -4886,12 +4914,33 @@ function drawPlayerCar(
   const glow = braking ? 1 : amb < 0.62 ? 0.8 : 0.45
   ctx.fillStyle = `rgba(255,45,40,${glow})`
   const th = h * 0.09
+  // ASSINATURA de lanterna por carro — é o que o jogador vê o tempo todo, então
+  // é o que mais dá identidade de trás.
   if (spec.body === "ninja") {
     rr(ctx, bx + w * 0.08, -th * 2.4, w * 0.30, th, th / 2)
     rr(ctx, bx + w * 0.62, -th * 2.4, w * 0.30, th, th / 2)
-  } else if (spec.body === "ghost") {
-    rr(ctx, bx + w * 0.10, -th * 2.6, w * 0.80, th * 0.7, th / 3) // barra única
+  } else if (spec.body === "ghost" || spec.body === "flat6" || spec.body === "apex") {
+    // faixa VAZADA de ponta a ponta (traço moderno)
+    rr(ctx, bx + w * 0.08, -th * 2.6, w * 0.84, th * 0.7, th / 3)
+    ctx.save(); ctx.fillStyle = shade(paint, Math.max(0.2, amb * 0.4))
+    ctx.fillRect(bx + w * 0.46, -th * 2.7, w * 0.08, th) ; ctx.restore()
+  } else if (spec.body === "rotor" || spec.body === "roadster") {
+    // dois círculos (redondos, retrô)
+    ctx.beginPath(); ctx.arc(bx + w * 0.20, -th * 1.9, th * 0.9, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(bx + w * 0.80, -th * 1.9, th * 0.9, 0, Math.PI * 2); ctx.fill()
+  } else if (spec.body === "muscle") {
+    // três segmentos empilhados de cada lado (muscle clássico)
+    for (let s = 0; s < 3; s++) {
+      rr(ctx, bx + w * 0.08 + s * w * 0.075, -th * 2.4, w * 0.06, th, th * 0.2)
+      rr(ctx, bx + w * 0.70 + s * w * 0.075, -th * 2.4, w * 0.06, th, th * 0.2)
+    }
+  } else if (spec.body === "kaiju") {
+    // quatro anéis (o quarteto redondo do R32)
+    for (const cxr of [0.16, 0.30, 0.70, 0.84]) {
+      ctx.beginPath(); ctx.arc(bx + w * cxr, -th * 1.9, th * 0.7, 0, Math.PI * 2); ctx.fill()
+    }
   } else {
+    // padrão (gt, zcoupe, sylva, alta): par de barras
     rr(ctx, bx + w * 0.07, -th * 2.4, w * 0.24, th, th / 2)
     rr(ctx, bx + w * 0.69, -th * 2.4, w * 0.24, th, th / 2)
   }

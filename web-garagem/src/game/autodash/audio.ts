@@ -181,6 +181,15 @@ export class AudioBus {
     this.rainGain = mkLoop("highpass", 3000)
   }
 
+  // caráter do motor por carro: pitch (grave V8 <1, agudo rotativo/4cil >1) e
+  // brilho do filtro (encorpado x metálico). Default = motor "genérico".
+  private engPitch = 1
+  private engBright = 1
+  setEngine(pitch: number, bright: number) {
+    this.engPitch = pitch
+    this.engBright = bright
+  }
+
   /** Chamado a cada frame: afina o ronco do motor pelo RPM. */
   engine(rpm: number, throttle: number, nitro: boolean, running: boolean) {
     if (!this.ctx || !this.engOsc1 || !this.engOsc2 || !this.engGain || !this.engFilter) return
@@ -189,10 +198,10 @@ export class AudioBus {
       this.engGain.gain.setTargetAtTime(0, t, 0.1)
       return
     }
-    const f = 28 + rpm / 26
+    const f = (28 + rpm / 26) * this.engPitch
     this.engOsc1.frequency.setTargetAtTime(f, t, 0.03)
     this.engOsc2.frequency.setTargetAtTime(f / 2, t, 0.03)
-    this.engFilter.frequency.setTargetAtTime(300 + rpm / 4 + (nitro ? 900 : 0), t, 0.05)
+    this.engFilter.frequency.setTargetAtTime((300 + rpm / 4 + (nitro ? 900 : 0)) * this.engBright, t, 0.05)
     const vol = 0.05 + throttle * 0.10 + rpm / 80000 + (nitro ? 0.05 : 0)
     this.engGain.gain.setTargetAtTime(vol, t, 0.05)
   }
