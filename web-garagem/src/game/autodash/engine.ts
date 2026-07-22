@@ -994,6 +994,10 @@ export class AutoDashEngine {
       const targetRpm = RPM_IDLE + throttle * (7500 - RPM_IDLE)
       this.rpm += (targetRpm - this.rpm) * Math.min(1, dt * 5)
       if (this.rpm > RPM_LIMITER) this.rpm = RPM_LIMITER - Math.random() * 300
+      // burnout no grid: acelerando no ponto morto, pneu fuma (só na corrida)
+      if (this.mode === "race" && throttle > 0.5 && this.rpm > 4500 && Math.random() < 0.6) {
+        this.emitSmoke(2, "#d8dbe2")
+      }
       if (this.countT >= this.greenAt) {
         this.greenFired = true
         this.audio.semaphoreGreen()
@@ -1624,6 +1628,12 @@ export class AutoDashEngine {
 
   // ---------- clima / céu ----------
   private skyNow(): { top: string; bot: string; amb: number } {
+    // corrida é SEMPRE noite neon — o clima "Velozes e Furiosos" vive de racha
+    // noturno. Céu roxo-profundo com barra magenta no horizonte (poluição
+    // luminosa da cidade), sem o ciclo de dia do modo solo.
+    if (this.mode === "race") {
+      return { top: "#0a0618", bot: "#2a1140", amb: this.raining ? 0.34 : 0.44 }
+    }
     const t = (this.km % 10) / 10
     const keys = SKY_KEYS
     let a = keys[keys.length - 1], b = keys[0], p = 0
@@ -2631,6 +2641,17 @@ export class AutoDashEngine {
     ctx.fillStyle = "rgba(0,0,0,0.35)"
     ctx.beginPath(); ctx.ellipse(x, y, w * 0.62, w * 0.10, 0, 0, Math.PI * 2); ctx.fill()
 
+    // NEON sob o carro (rivais da corrida têm accent) — a lavada colorida no
+    // asfalto é a assinatura visual de racha noturno
+    if (t.accent && w > 6) {
+      const g = ctx.createRadialGradient(x, y + h * 0.05, w * 0.1, x, y + h * 0.05, w * 0.95)
+      g.addColorStop(0, t.accent + "cc")
+      g.addColorStop(0.5, t.accent + "55")
+      g.addColorStop(1, t.accent + "00")
+      ctx.fillStyle = g
+      ctx.beginPath(); ctx.ellipse(x, y + h * 0.05, w * 0.95, w * 0.34, 0, 0, Math.PI * 2); ctx.fill()
+    }
+
     const bx = x - w / 2, by = y - h
     ctx.fillStyle = body
     rr(ctx, bx, by, w, h * 0.96, w * 0.14)
@@ -2753,6 +2774,17 @@ export class AutoDashEngine {
     const steer = clamp(this.steerVel * 1.1, -1, 1)
     const braking = this.mouseBrake || this.touchBrake || this.keys.has("s") || this.keys.has("arrowdown")
     const bounce = Math.sin(this.position * 0.03) * Math.min(3, this.speed / 60) + this.pitchY
+    // neon do jogador na corrida: sua cor de identificação (azul) lavando o chão
+    if (this.mode === "race" && (this.state === "racing" || this.state === "countdown")) {
+      const pw = spec.width * 640
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 300)
+      const g = ctx.createRadialGradient(W / 2, H - 40 + bounce, 8, W / 2, H - 40 + bounce, pw * 1.15)
+      g.addColorStop(0, `rgba(56,189,248,${0.32 + pulse * 0.12})`)
+      g.addColorStop(0.55, "rgba(56,189,248,0.14)")
+      g.addColorStop(1, "rgba(56,189,248,0)")
+      ctx.fillStyle = g
+      ctx.beginPath(); ctx.ellipse(W / 2, H - 40 + bounce, pw * 1.15, 46, 0, 0, Math.PI * 2); ctx.fill()
+    }
     if (this.shield) {
       const pw = spec.width * 640
       ctx.fillStyle = "rgba(96,165,250,0.14)"
@@ -2768,21 +2800,40 @@ export class AutoDashEngine {
     drawPlayerCar(ctx, W / 2, H - 34 + bounce, spec, custom, steer, braking, amb, this.nitroOn && this.nitroMeter > 1)
     if (immuneBlink) ctx.globalAlpha = 1
 
-    // sensação de velocidade: streaks translúcidos varrendo as bordas
-    if (this.speed > 165 && this.state === "racing") {
-      const inten = Math.min(1, (this.speed - 165) / 90)
-      ctx.strokeStyle = `rgba(220,235,255,${0.08 + inten * 0.16})`
-      ctx.lineWidth = 2
+    // sensação de velocidade: streaks varrendo as bordas. No nitro viram ciano
+    // e muito mais densos — o "túnel de velocidade" dos filmes.
+    const nitro = this.nitroOn && this.nitroMeter > 1
+    if ((this.speed > 165 || nitro) && this.state === "racing") {
+      const inten = Math.min(1, (this.speed - 150) / 90)
+      const n = nitro ? 22 : 9
+      ctx.strokeStyle = nitro
+        ? `rgba(120,220,255,${0.22 + inten * 0.2})`
+        : `rgba(220,235,255,${0.08 + inten * 0.16})`
+      ctx.lineWidth = nitro ? 2.5 : 2
       ctx.beginPath()
-      for (let i = 0; i < 9; i++) {
+      for (let i = 0; i < n; i++) {
         const side = i % 2 === 0 ? 1 : -1
-        const x = W / 2 + side * (W * 0.30 + Math.random() * W * 0.18)
+        const spread = nitro ? 0.14 : 0.30
+        const x = W / 2 + side * (W * spread + Math.random() * W * 0.34)
         const y = Math.random() * H
-        const len = 40 + Math.random() * 100 * inten
+        const len = (nitro ? 90 : 40) + Math.random() * 120 * inten
         ctx.moveTo(x, y)
-        ctx.lineTo(x + side * 6, y + len)
+        ctx.lineTo(x + side * (nitro ? 3 : 6), y + len)
       }
       ctx.stroke()
+
+      // brilho ciano lambendo as bordas da tela no nitro
+      if (nitro) {
+        const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 90)
+        for (const s of [-1, 1]) {
+          const gx = s < 0 ? 0 : W
+          const g = ctx.createLinearGradient(gx, 0, gx - s * W * 0.22, 0)
+          g.addColorStop(0, `rgba(56,189,248,${0.28 * pulse})`)
+          g.addColorStop(1, "rgba(56,189,248,0)")
+          ctx.fillStyle = g
+          ctx.fillRect(s < 0 ? 0 : W * 0.78, 0, W * 0.22, H)
+        }
+      }
     }
   }
 
