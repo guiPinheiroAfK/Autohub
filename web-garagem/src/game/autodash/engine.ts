@@ -2245,6 +2245,8 @@ export class AutoDashEngine {
     }
     ridge(shade("#2b3c56", amb), 72, hz + 2, this.bgShift * 0.18, 16)
     ridge(shade("#1e2c40", amb), 46, hz + 3, this.bgShift * 0.42, 12)
+    // metrópole neon ATRÁS do skyline base (torres altas, letreiros) — só corrida
+    if (this.mode === "race") this.renderNeonCity(hz)
     // skyline com janelas acesas à noite
     const wrap = W + 90
     for (let i = 0; i < 24; i++) {
@@ -2257,6 +2259,49 @@ export class AutoDashEngine {
         ctx.fillStyle = "rgba(253,224,71,0.45)"
         for (let wy = hz - bh + 9; wy < hz - 3; wy += 9) {
           ctx.fillRect(bx + 3 + ((i + wy) % 3) * 5, wy, 3, 4)
+        }
+      }
+    }
+  }
+
+  /**
+   * Metrópole de racha noturno: uma leva EXTRA de arranha-céus (mais altos e
+   * densos) atrás do skyline base, com janelas em cores de neon e letreiros
+   * piscando. Só na corrida — é o cenário que vende o clima.
+   */
+  private renderNeonCity(hz: number) {
+    const ctx = this.ctx
+    const wrap = W + 90
+    // torres altas ao fundo (parallax mais lento = mais distantes)
+    const NEON = ["#ff2d95", "#22d3ee", "#a855f7", "#facc15", "#38bdf8"]
+    for (let i = 0; i < 40; i++) {
+      const bw = 16 + ((i * 41) % 34)
+      const bh = 40 + ((i * 71) % 120) // bem mais altos
+      const bx = (((i * 53 - this.bgShift * 0.5) % wrap) + wrap) % wrap - 45
+      const top = hz - bh + 4
+      // silhueta escura com uma leve tinta roxa no topo
+      ctx.fillStyle = i % 2 === 0 ? "#0f1424" : "#141026"
+      ctx.fillRect(bx, top, bw, bh)
+      // janelas acesas em cores variadas de neon
+      const cor = NEON[(i * 3) % NEON.length]
+      for (let wy = top + 8; wy < hz - 4; wy += 8) {
+        for (let wx = bx + 3; wx < bx + bw - 3; wx += 7) {
+          if (((i + wx + wy) * 2654435761) % 5 === 0) {
+            ctx.fillStyle = (wx + wy) % 3 === 0 ? cor + "aa" : "rgba(253,224,71,0.5)"
+            ctx.fillRect(wx, wy, 3, 4)
+          }
+        }
+      }
+      // letreiro de neon no topo de algumas torres, piscando devagar
+      if (i % 5 === 2 && bw > 26) {
+        const on = Math.floor(performance.now() / 700 + i) % 3 !== 0
+        if (on) {
+          ctx.fillStyle = cor
+          ctx.fillRect(bx + 3, top - 6, bw - 6, 4)
+          const g = ctx.createRadialGradient(bx + bw / 2, top - 4, 1, bx + bw / 2, top - 4, bw * 0.9)
+          g.addColorStop(0, cor + "55"); g.addColorStop(1, cor + "00")
+          ctx.fillStyle = g
+          ctx.beginPath(); ctx.ellipse(bx + bw / 2, top - 4, bw * 0.9, 12, 0, 0, Math.PI * 2); ctx.fill()
         }
       }
     }
