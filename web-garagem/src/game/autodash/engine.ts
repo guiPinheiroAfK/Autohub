@@ -2166,21 +2166,12 @@ export class AutoDashEngine {
         // CORTE DE DISTÂNCIA: segmento estreito na tela = fachada de 1-2 px.
         // Emitir isso custa draw call cheia por quase nenhum pixel — era 70%
         // do frame. A névoa do horizonte esconde o corte.
-        if (sw1 > 26) {
-          if (idx % 7 === 0) {
-            const lado = (idx % 8 < 4) ? -1 : 1
-            sprites.push({ kind: "deco", deco: 6, dir: idx, x: sx1 + sw1 * lado * 2.0, y: sy1, w: sw1 })
-          }
-          // rua de Tokyo (Shibuya/Kabukicho): parede de fachadas coladas na
-          // beira dos dois lados. `dir` carrega o índice de cor do letreiro.
-          if (idx % 3 === 0) {
-            sprites.push({ kind: "deco", deco: 4, dir: (idx / 3) % 6, x: sx1 + sw1 * 1.18, y: sy1, w: sw1 * 0.9 })
-            sprites.push({ kind: "deco", deco: 4, dir: (idx / 3 + 3) % 6, x: sx1 - sw1 * 1.18, y: sy1, w: sw1 * 0.9 })
-          }
-          if (idx % 9 === 4) {
-            sprites.push({ kind: "deco", deco: 5, dir: (idx * 7) % 6, x: sx1 + sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
-            sprites.push({ kind: "deco", deco: 5, dir: (idx * 3) % 6, x: sx1 - sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
-          }
+        // cidade: paredões de prédios altos (kind 6, janelas acesas) colados na
+        // beira dos DOIS lados, dá a sensação de correr por dentro da cidade.
+        // Sem os letreiros/halos de neon (pareciam fumaça de gás).
+        if (sw1 > 26 && idx % 3 === 0) {
+          sprites.push({ kind: "deco", deco: 6, dir: idx, x: sx1 + sw1 * 1.6, y: sy1, w: sw1 * 1.15 })
+          sprites.push({ kind: "deco", deco: 6, dir: idx + 31, x: sx1 - sw1 * 1.6, y: sy1, w: sw1 * 1.15 })
         }
       } else if (idx % 4 === 0) {
         const side = idx % 8 === 0 ? -1 : 1
