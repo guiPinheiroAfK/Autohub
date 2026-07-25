@@ -198,6 +198,26 @@ export class AutoDashEngine {
     return cv
   }
   // halo warm das luminárias da ponte, cacheado pelo mesmo motivo da vinheta
+  // brilho neon por cor, pré-renderizado UMA vez. createRadialGradient por
+  // desenho era o gargalo do modo corrida: ~1600 gradientes/frame com as
+  // fachadas de Tokyo. drawImage de um sprite pronto é ordens de grandeza
+  // mais barato.
+  private glowCache = new Map<string, HTMLCanvasElement>()
+  private neonGlow(cor: string): HTMLCanvasElement {
+    const hit = this.glowCache.get(cor)
+    if (hit) return hit
+    const cv = document.createElement("canvas")
+    cv.width = 64; cv.height = 64
+    const c = cv.getContext("2d")!
+    const g = c.createRadialGradient(32, 32, 1, 32, 32, 32)
+    g.addColorStop(0, cor + "cc")
+    g.addColorStop(0.45, cor + "55")
+    g.addColorStop(1, cor + "00")
+    c.fillStyle = g
+    c.fillRect(0, 0, 64, 64)
+    this.glowCache.set(cor, cv)
+    return cv
+  }
   private glowSprite: HTMLCanvasElement | null = null
   private glowTex(): HTMLCanvasElement {
     if (this.glowSprite) return this.glowSprite
@@ -2143,20 +2163,24 @@ export class AutoDashEngine {
       if (seg.sign) {
         sprites.push({ kind: "deco", deco: 3, dir: seg.sign, x: sx1 - sw1 * 1.35 * seg.sign, y: sy1, w: sw1 * 0.16 })
       } else if (this.mode === "race") {
-        if (idx % 7 === 0) {
-          const lado = (idx % 8 < 4) ? -1 : 1
-          sprites.push({ kind: "deco", deco: 6, dir: idx, x: sx1 + sw1 * lado * 2.0, y: sy1, w: sw1 })
-        }
-        // rua de Tokyo (Shibuya/Kabukicho): parede contínua de fachadas coladas
-        // na beira dos dois lados, a cada 2 segmentos. `dir` carrega o índice
-        // de cor do letreiro (0..5) + a fase do blade sign piscando.
-        if (idx % 2 === 0) {
-          sprites.push({ kind: "deco", deco: 4, dir: (idx / 2) % 6, x: sx1 + sw1 * 1.18, y: sy1, w: sw1 * 0.9 })
-          sprites.push({ kind: "deco", deco: 4, dir: (idx / 2 + 3) % 6, x: sx1 - sw1 * 1.18, y: sy1, w: sw1 * 0.9 })
-        }
-        if (idx % 6 === 3) {
-          sprites.push({ kind: "deco", deco: 5, dir: (idx * 7) % 6, x: sx1 + sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
-          sprites.push({ kind: "deco", deco: 5, dir: (idx * 3) % 6, x: sx1 - sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
+        // CORTE DE DISTÂNCIA: segmento estreito na tela = fachada de 1-2 px.
+        // Emitir isso custa draw call cheia por quase nenhum pixel — era 70%
+        // do frame. A névoa do horizonte esconde o corte.
+        if (sw1 > 26) {
+          if (idx % 7 === 0) {
+            const lado = (idx % 8 < 4) ? -1 : 1
+            sprites.push({ kind: "deco", deco: 6, dir: idx, x: sx1 + sw1 * lado * 2.0, y: sy1, w: sw1 })
+          }
+          // rua de Tokyo (Shibuya/Kabukicho): parede de fachadas coladas na
+          // beira dos dois lados. `dir` carrega o índice de cor do letreiro.
+          if (idx % 3 === 0) {
+            sprites.push({ kind: "deco", deco: 4, dir: (idx / 3) % 6, x: sx1 + sw1 * 1.18, y: sy1, w: sw1 * 0.9 })
+            sprites.push({ kind: "deco", deco: 4, dir: (idx / 3 + 3) % 6, x: sx1 - sw1 * 1.18, y: sy1, w: sw1 * 0.9 })
+          }
+          if (idx % 9 === 4) {
+            sprites.push({ kind: "deco", deco: 5, dir: (idx * 7) % 6, x: sx1 + sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
+            sprites.push({ kind: "deco", deco: 5, dir: (idx * 3) % 6, x: sx1 - sw1 * 1.62, y: sy1, w: sw1 * 0.5 })
+          }
         }
       } else if (idx % 4 === 0) {
         const side = idx % 8 === 0 ? -1 : 1
@@ -2416,16 +2440,17 @@ export class AutoDashEngine {
       const seed = (dir * 2654435761) >>> 0
       const bars = 4 + (seed % 3)
       const barH = h / bars
+      // barras chapadas — sem gradiente por barra (era o gargalo)
       for (let i = 0; i < bars; i++) {
-        const barCor = paleta(dir + i)
         const by = y - h + i * barH
-        ctx.fillStyle = barCor
+        ctx.fillStyle = paleta(dir + i)
         ctx.fillRect(x - bw / 2 + bw * 0.06, by + barH * 0.18, bw * 0.88, barH * 0.64)
-        // brilho de cada letreiro
-        const g = ctx.createRadialGradient(x, by + barH * 0.5, 1, x, by + barH * 0.5, bw * 0.8)
-        g.addColorStop(0, barCor + "88"); g.addColorStop(1, barCor + "00")
-        ctx.fillStyle = g
-        ctx.beginPath(); ctx.ellipse(x, by + barH * 0.5, bw * 0.8, barH * 0.9, 0, 0, Math.PI * 2); ctx.fill()
+      }
+      // UM brilho pra fachada inteira, via sprite cacheado, e só quando é
+      // grande o bastante pra aparecer
+      if (w > 10) {
+        const gw = bw * 2.4
+        ctx.drawImage(this.neonGlow(cor), x - gw / 2, y - h - gw * 0.18, gw, gw * 0.9)
       }
       // reflexo no asfalto (cor do letreiro dominante, alpha baixo)
       ctx.fillStyle = cor + "33"
@@ -2442,31 +2467,34 @@ export class AutoDashEngine {
       if (on) {
         ctx.fillStyle = cor
         ctx.fillRect(x - bw * 0.38, y - h + bw * 0.3, bw * 0.76, h - bw * 0.6)
-        // traços claros dentro simulando caracteres
-        ctx.strokeStyle = "rgba(255,255,255,0.85)"
-        ctx.lineWidth = Math.max(1, bw * 0.09)
-        const rows = 6
-        for (let r = 0; r < rows; r++) {
-          const cy = y - h + bw * 0.5 + (h - bw) * (r + 0.5) / rows
+        // traços claros simulando caracteres — só de perto (some no horizonte,
+        // onde viravam ruído caro de qualquer jeito)
+        if (w > 12) {
+          ctx.strokeStyle = "rgba(255,255,255,0.85)"
+          ctx.lineWidth = Math.max(1, bw * 0.09)
           ctx.beginPath()
-          ctx.moveTo(x - bw * 0.22, cy - bw * 0.12)
-          ctx.lineTo(x + bw * 0.22, cy - bw * 0.12)
-          ctx.moveTo(x, cy - bw * 0.2)
-          ctx.lineTo(x, cy + bw * 0.2)
-          ctx.stroke()
+          const rows = 6
+          for (let r = 0; r < rows; r++) {
+            const cy = y - h + bw * 0.5 + (h - bw) * (r + 0.5) / rows
+            ctx.moveTo(x - bw * 0.22, cy - bw * 0.12)
+            ctx.lineTo(x + bw * 0.22, cy - bw * 0.12)
+            ctx.moveTo(x, cy - bw * 0.2)
+            ctx.lineTo(x, cy + bw * 0.2)
+          }
+          ctx.stroke() // um stroke só pros 6 caracteres, não 6 strokes
         }
-        // halo
-        const g = ctx.createRadialGradient(x, y - h * 0.5, 2, x, y - h * 0.5, w * 1.3)
-        g.addColorStop(0, cor + "77"); g.addColorStop(1, cor + "00")
-        ctx.fillStyle = g
-        ctx.beginPath(); ctx.ellipse(x, y - h * 0.5, w * 1.3, h * 0.5, 0, 0, Math.PI * 2); ctx.fill()
+        // halo via sprite cacheado
+        if (w > 8) {
+          const gw = w * 2.6
+          ctx.drawImage(this.neonGlow(cor), x - gw / 2, y - h * 0.5 - gw / 2, gw, gw)
+        }
         // reflexo no asfalto
         ctx.fillStyle = cor + "33"
         ctx.beginPath(); ctx.ellipse(x, y, w * 0.5, w * 0.12, 0, 0, Math.PI * 2); ctx.fill()
       }
       return
     }
-    if (kind === 6) { // ← ESSE BLOCO INTEIRO é novo, cola aqui
+    if (kind === 6) { // prédio alto de fundo de rua, com janelas acesas
       const seed = (dir * 2654435761) >>> 0
       const h = w * (5 + (seed % 700) / 100)
       const bw = w * (0.8 + ((seed >> 8) % 60) / 100)
@@ -2475,7 +2503,8 @@ export class AutoDashEngine {
       ctx.fillStyle = shade(seed % 2 === 0 ? "#0b0f1a" : "#11101f", Math.max(0.4, amb))
       ctx.fillRect(x - bw / 2, y - h, bw, h)
 
-      if (lit) {
+      // janelas só de perto: no horizonte viram sub-pixel e custam à toa
+      if (lit && w > 6) {
         for (let wy = y - h + bw * 0.12; wy < y - bw * 0.12; wy += Math.max(3, bw * 0.16)) {
           for (let wx = x - bw / 2 + bw * 0.08; wx < x + bw / 2 - bw * 0.05; wx += Math.max(3, bw * 0.22)) {
             if (Math.floor(seed + wx * 3 + wy * 7) % 5 === 0) {
