@@ -24,7 +24,7 @@ export type BodyKind =
   | "gt" | "muscle" | "ninja" | "ghost"
   // roster JDM — nomes próprios de propósito (as silhuetas são inspiradas,
   // não cópias, e os nomes não remetem a marca nenhuma)
-  | "zcoupe" | "rotor" | "apex" | "kaiju" | "sylva" | "roadster" | "alta"
+  | "zcoupe" | "rotor" | "apex" | "kaiju" | "sylva" | "roadster" | "alta" | "flat6"
 
 export interface CarSpec {
   id: string
@@ -97,6 +97,11 @@ export const CARS: CarSpec[] = [
     id: "alta", name: "ALTA IS", body: "alta",
     power: 48, grip: 0.82, topSpeed: 242, width: 0.27, shiftMs: 210,
     desc: "Sedã de faróis retráteis. Equilibrado e previsível.",
+  },
+  {
+    id: "flat6", name: "TARGA 992", body: "flat6",
+    power: 54, grip: 0.90, topSpeed: 258, width: 0.26, shiftMs: 150,
+    desc: "Motor traseiro boxer. Câmbio relâmpago e aderência de trilho.",
   },
 ]
 
