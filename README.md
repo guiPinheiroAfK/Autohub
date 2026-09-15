@@ -1,5 +1,140 @@
 # AutoHub Garagem — monorepo
 
+**[English](#english) · [Português](#português)**
+
+## English
+
+```
+web-garagem/        React 19 + Vite + Tailwind v4
+api/                 Bun + Hono + postgres.js (same app serves Bun locally and as a Netlify Function)
+docker-compose.yml   PostgreSQL 16 + api + front (local dev)
+netlify.toml         front build + api Netlify Function (production)
+```
+
+### Quick setup (local dev, own Postgres)
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+- Front: http://localhost:5173
+- API:   http://localhost:8000
+- DB:    localhost:5432 (autohub / autohub_dev)
+
+Migrations and seed run automatically before the api comes up (`bun run migrate && bun run seed`).
+The seed only populates on the first `up` — after that it's idempotent.
+
+Login to see Gui's already-seeded garage (RX-8 K24 + Civic):
+- **Email:** *********(netlify)
+- **Password:** *********(netlify)
+
+### Production deploy (Netlify + Neon)
+
+Netlify only hosts the static site + **Functions** (Node.js — can't run a
+standing Bun server). So the same Hono `app` that runs locally also becomes a
+Netlify Function: `api/netlify/functions/api.mts` declares its own paths
+(`/api/*` and `/auth/*`) and serves `app.fetch` directly, with no adapter at
+all — regular Functions (not "Edge") run on real Node.js and support TCP, so
+the `postgres.js` you already use doesn't change at all to talk to Neon.
+
+#### 1. Database — Neon
+1. Create a project at [neon.tech](https://neon.tech) (the free tier works
+   fine for an app this size).
+2. Copy the **pooled connection string** (it has `-pooler` in the hostname —
+   this matters: each Function invocation can be a fresh instance, and their
+   pooler avoids exhausting connections on Postgres). Something like:
+   ```
+   postgres://user:password@ep-xxx-pooler.sa-east-1.aws.neon.tech/autohub?sslmode=require
+   ```
+3. Run the migrations and seed **once**, from your own computer, pointing at
+   that URL (no Docker needed for this):
+   ```bash
+   cd api
+   npm install
+   DATABASE_URL="postgres://...-pooler...neon.tech/autohub?sslmode=require" npx bun run migrate
+   DATABASE_URL="postgres://...-pooler...neon.tech/autohub?sslmode=require" npx bun run seed
+   ```
+   (`db/client.ts` auto-detects the `neon.tech` host and turns on SSL + shrinks
+   the connection pool — nothing else to configure besides `DATABASE_URL`.)
+
+#### 2. Site — Netlify
+1. Connect the repo on Netlify (Import an existing project). It already reads
+   the root `netlify.toml` — no need to configure the build command/publish
+   dir in the UI, it all comes from the file.
+2. Under **Site settings → Environment variables**, add:
+  - `DATABASE_URL` — the pooled Neon connection string (same one as above)
+  - `JWT_SECRET` — any long random string (32+ chars)
+  - `JWT_EXPIRES_IN` — `60m` (or whatever you prefer)
+  - `NODE_ENV` — `production`
+3. Deploy. Front and api live on the same Netlify domain — no need to
+   configure `VITE_API_URL` or CORS in production, `client.ts` on the front
+   already assumes same-origin when that variable doesn't exist.
+
+If the first deploy doesn't route `/api/*` to the Function (falls through to
+the SPA instead), check the ordering between the function's `config.path` and
+the catch-all redirect in `netlify.toml`.
+
+### API endpoints
+
+#### Auth (public, no /api prefix)
+| Method | Path | Body |
+|--------|------|------|
+| POST | /auth/register | `{ nome, email, password }` |
+| POST | /auth/login | `{ email, password }` |
+
+#### Protected (Bearer token, /api prefix)
+| Method | Path | |
+|--------|------|-|
+| GET | /api/auth/me | logged-in user's profile |
+| GET | /api/veiculos | garage list |
+| POST | /api/veiculos | create vehicle |
+| GET | /api/veiculos/:id | detail + phases + items |
+| PATCH | /api/veiculos/:id | update fields (including `status`) |
+| DELETE | /api/veiculos/:id | remove |
+| POST | /api/veiculos/:id/fases | create phase |
+| PATCH | /api/fases/:id | update phase |
+| POST | /api/fases/:id/resetar | resets the phase and all its items back to "planned" |
+| DELETE | /api/fases/:id | remove phase |
+| POST | /api/itens | create item (`{ faseId, nome, precoMin, precoMax, moeda, ... }`) |
+| PATCH | /api/itens/:id | update item — response includes the recalculated `faseStatus` |
+| DELETE | /api/itens/:id | remove item — response includes the recalculated `faseStatus` |
+
+**Automatic status cascade:** every mutation under `/api/itens/*` recalculates
+the parent phase's status (`planned` → `in progress` → `done`, based on its
+items) and returns it as `faseStatus`. This is what makes the phase turn green
+on its own once every item is marked done, and fall back to yellow/gray if any
+item gets unmarked.
+
+### Database schema
+
+```
+users → garages → vehicles → phases → items → expenses
+                       └─ documents
+                            suppliers (global or per-user)
+```
+
+### Local dev without Docker
+
+```bash
+# Terminal 1 — database
+docker compose up db
+
+# Terminal 2 — api
+cd api
+bun install
+DATABASE_URL=postgres://autohub:autohub_dev@localhost:5432/autohub bun run migrate
+DATABASE_URL=postgres://autohub:autohub_dev@localhost:5432/autohub bun run seed
+DATABASE_URL=postgres://autohub:autohub_dev@localhost:5432/autohub bun --watch src/index.ts
+
+# Terminal 3 — front
+cd web-garagem
+npm install
+VITE_API_URL=http://localhost:8000 npm run dev
+```
+
+## Português
+
 ```
 web-garagem/        React 19 + Vite + Tailwind v4
 api/                 Bun + Hono + postgres.js (mesma app serve Bun local e Netlify Function)
@@ -7,7 +142,7 @@ docker-compose.yml   PostgreSQL 16 + api + front (dev local)
 netlify.toml         build do front + Netlify Function da api (produção)
 ```
 
-## Setup rápido (dev local, Postgres próprio)
+### Setup rápido (dev local, Postgres próprio)
 
 ```bash
 cp .env.example .env
@@ -25,7 +160,7 @@ Login pra ver a garagem do Gui já populada (RX-8 K24 + Civic):
 - **E-mail:** *********(netlify)
 - **Senha:** *********(netlify)
 
-## Deploy em produção (Netlify + Neon)
+### Deploy em produção (Netlify + Neon)
 
 Netlify só hospeda site estático + **Functions** (Node.js — não dá pra rodar um
 servidor Bun de pé). Por isso a mesma `app` Hono que roda local também vira uma
@@ -34,7 +169,7 @@ Netlify Function: `api/netlify/functions/api.mts` declara os próprios paths
 normais (não as "Edge") rodam em Node.js de verdade e suportam TCP, então o
 `postgres.js` que você já usa não muda nada pra falar com o Neon.
 
-### 1. Banco — Neon
+#### 1. Banco — Neon
 1. Cria um projeto em [neon.tech](https://neon.tech) (free tier serve numa boa
    pra esse tamanho de app).
 2. Copia a **connection string com pooling** (tem `-pooler` no hostname — isso
@@ -54,7 +189,7 @@ normais (não as "Edge") rodam em Node.js de verdade e suportam TCP, então o
    (`db/client.ts` detecta o host `neon.tech` automaticamente e liga SSL + reduz
    o pool de conexões — não precisa configurar nada além da `DATABASE_URL`.)
 
-### 2. Site — Netlify
+#### 2. Site — Netlify
 1. Conecta o repo no Netlify (Import an existing project). Ele já lê o
    `netlify.toml` da raiz — não precisa configurar build command/publish dir
    na UI, já vem tudo do arquivo.
@@ -69,17 +204,17 @@ normais (não as "Edge") rodam em Node.js de verdade e suportam TCP, então o
 
 Se o primeiro deploy não rotear `/api/*` pra Function (ficar caindo no SPA), o
 ponto a checar é a ordem entre o `config.path` da function e o redirect catch-all
-do `netlify.toml` — me chama com o log do deploy que eu sigo dali.
+do `netlify.toml`.
 
-## API endpoints
+### API endpoints
 
-### Auth (público, sem prefixo /api)
+#### Auth (público, sem prefixo /api)
 | Método | Path | Body |
 |--------|------|------|
 | POST | /auth/register | `{ nome, email, password }` |
 | POST | /auth/login | `{ email, password }` |
 
-### Protegidos (Bearer token, prefixo /api)
+#### Protegidos (Bearer token, prefixo /api)
 | Método | Path | |
 |--------|------|-|
 | GET | /api/auth/me | perfil do usuário logado |
@@ -102,7 +237,7 @@ dela) e devolve em `faseStatus`. É o que faz a fase virar verde sozinha quando
 todo item é marcado concluído, e voltar pra amarelo/cinza se algum item for
 desmarcado.
 
-## Schema do banco
+### Schema do banco
 
 ```
 usuarios → garagens → veiculos → fases → itens → despesas
@@ -110,7 +245,7 @@ usuarios → garagens → veiculos → fases → itens → despesas
                                fornecedores (global ou por usuário)
 ```
 
-## Dev local sem Docker
+### Dev local sem Docker
 
 ```bash
 # Terminal 1 — banco
@@ -128,58 +263,3 @@ cd web-garagem
 npm install
 VITE_API_URL=http://localhost:8000 npm run dev
 ```
-
-## Changelog desta sessão
-
-Você mandou o projeto já com bastante coisa sua (login, CRUD de veículo/fase,
-`itens.ts` novo, o `FaseCard.tsx` com checkbox otimista e bandeirinha de país —
-ficou ótimo). O que eu adicionei/corrigi em cima disso:
-
-**Bug de rota (real, ia quebrar em runtime):**
-- `fasesRoutes` tinha os paths internos absolutos (`/veiculos/:id/fases`,
-  `/fases/:id`) mas tava montado em `/fases` — isso duplicava o prefixo
-  (`/api/fases/fases/:id`). Voltei a montar na raiz, como os paths já esperavam.
-
-**Item 1 — Neon:**
-- `db/client.ts` detecta `neon.tech` na `DATABASE_URL` e ajusta sozinho: liga
-  SSL e reduz o pool pra 1 conexão (cada invocação de Function pode ser uma
-  instância nova — pool grande só desperdiça conexão do lado do Neon).
-
-**Item 2 — Netlify:**
-- `api/src/app.ts` — extraí a `app` Hono pra um módulo compartilhado; o
-  entrypoint Bun (`index.ts`) e a Netlify Function (`netlify/functions/api.mts`)
-  agora montam a mesma instância, sem rota duplicada.
-- A function usa Functions normais do Netlify (Node.js/Lambda), não Edge — por
-  isso não precisa do adapter `hono/netlify` (esse é pra Deno) nem de driver
-  HTTP especial pro Neon: TCP direto via `postgres.js` funciona igual ao local.
-- `netlify.toml` na raiz com o build do front + a pasta de functions da api.
-- `client.ts` do front: fallback de `BASE` mudou de `localhost:8000` pra vazio
-  (same-origin), porque em produção front e api ficam no mesmo domínio.
-
-**Item 3 — criar peças na mão:**
-- `POST /api/itens` (criar) e `DELETE /api/itens/:id` (excluir) — só existia
-  o `PATCH`. `POST /api/veiculos/:id/fases` já existia mas não tinha UI; agora
-  tem o botão "+ Adicionar fase" na página do veículo.
-- `FaseCard.tsx`: form simples (nome, detalhe, preço mín/máx, moeda, link) pra
-  adicionar item dentro de uma fase, sem sugestão nem autocomplete — só os
-  campos. Cada item ganhou um ícone de editar (abre o mesmo form preenchido)
-  e de excluir.
-
-**Item 4 — editar, "destransformar" e feedback visual:**
-- `StatusVeiculoMenu` no topo da página do veículo: dropdown pra mudar o status
-  pra qualquer um dos 4 (`planejamento` / `em_andamento` / `concluido` /
-  `pausado`) a qualquer momento — é o "destransformar de concluído" que você
-  pediu. Junto com o "+ Adicionar fase", cobre o fluxo de reabrir um projeto.
-- `POST /api/fases/:id/resetar` + botão de reset (ícone de "voltar") no header
-  de cada fase — zera a fase e todos os itens dela pra "planejado" de uma vez,
-  pro caso do eterno stage 0.
-- A cascata de status (ver seção da API acima): isso é o que faz a barra da
-  fase ir de amarela pra verde e o badge virar "Concluído" sozinho quando você
-  marca o último item — antes disso só existia client-side, sem persistir, então
-  um reload perdia o estado visual.
-
-`tsc -b` (front), `tsc --noEmit` (api), `oxlint` e `vite build` passam limpos.
-Não dá pra testar o `docker compose up` nem um deploy de verdade no Netlify
-aqui no sandbox (sem rede pra isso) — então o fluxo ponta a ponta (criar item,
-ver a fase ficar verde, reabrir um veículo concluído, deploy no Netlify) precisa
-ser validado na sua máquina. Me chama com o log se algo travar.
