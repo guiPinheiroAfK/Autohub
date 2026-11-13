@@ -1,552 +1,36 @@
-import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, ChevronDown, Users, X, Mail, ImageIcon, Upload, Play, FileDown } from "lucide-react"
-import { api } from "@/lib/api/client"
-import { formatMoeda, formatFaixa } from "@/lib/format"
+import { ArrowRight, Zap, Target, Layers, CheckCircle2, Plus, FileDown } from "lucide-react"
 import { FaseCard } from "@/components/shared/FaseCard"
 import { FotoGaleria } from "@/components/shared/FotoGaleria"
 import { useAuth } from "@/context/AuthContext"
-import type { PerfilVeiculo, StatusVeiculo, VeiculoDetalheAPI, FaseAPI, Moeda } from "@/types"
-
-const PERFIL_LABEL: Record<PerfilVeiculo, string> = {
-    daily: "Daily",
-    street_build: "Street Build",
-    restomod: "Restomod",
-    track: "Track",
-    project: "Projeto",
-}
-
-const STATUS_LABEL: Record<StatusVeiculo, string> = {
-    planejamento: "Planejamento",
-    em_andamento: "Em andamento",
-    concluido: "Concluído",
-    pausado: "Pausado",
-}
-
-const STATUS_DOT: Record<StatusVeiculo, string> = {
-    planejamento: "bg-faint-foreground",
-    em_andamento: "bg-amber animate-pulse",
-    concluido: "bg-green",
-    pausado: "bg-faint-foreground",
-}
-
-// Agrupa itens por moeda e calcula estimado + gasto
-function calcTotais(fases: FaseAPI[]) {
-    const acc: Record<string, { moeda: string; estimadoMin: number; estimadoMax: number; gasto: number }> = {}
-    for (const f of fases) {
-        for (const i of f.itens ?? []) {
-            const m = i.moeda
-            if (!acc[m]) acc[m] = { moeda: m, estimadoMin: 0, estimadoMax: 0, gasto: 0 }
-            acc[m].estimadoMin += Number(i.preco_min)
-            acc[m].estimadoMax += Number(i.preco_max)
-            if (i.status === "concluido") acc[m].gasto += Number(i.preco_max)
-        }
-    }
-    return Object.values(acc)
-}
-
-// ── Skeleton ─────────────────────────────────────────────────────────────────
-function Skeleton() {
-    return (
-        <div className="flex flex-col gap-8 animate-pulse">
-            <div className="flex flex-col gap-3 border-b border-border pb-8">
-                <div className="h-3 w-32 rounded bg-surface" />
-                <div className="h-9 w-64 rounded-lg bg-surface" />
-                <div className="h-3 w-44 rounded bg-surface" />
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {[0,1,2,3].map(i => (
-                    <div key={i} className="h-[72px] rounded-xl border border-border bg-surface" />
-                ))}
-            </div>
-            <div className="flex flex-col gap-2.5">
-                {[0,1,2].map(i => (
-                    <div key={i} className="h-[54px] rounded-xl border border-border bg-surface" />
-                ))}
-            </div>
-        </div>
-    )
-}
-
-// ── Metric card ───────────────────────────────────────────────────────────────
-function Stat({
-                  label, value, sub, accent
-              }: { label: string; value: string; sub?: string; accent?: string }) {
-    return (
-        <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface px-4 py-3.5">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
-                {label}
-            </div>
-            <div className={`font-display text-[22px] font-semibold leading-none ${accent ?? "text-foreground"}`}>
-                {value}
-            </div>
-            {sub && <div className="text-[11px] text-faint-foreground">{sub}</div>}
-        </div>
-    )
-}
-
-// ── Barra de progresso de build ───────────────────────────────────────────────
-function BuildProgress({ fases }: { fases: FaseAPI[] }) {
-    if (fases.length === 0) return null
-    return (
-        <div className="rounded-xl border border-border bg-surface p-5">
-            <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
-                Progresso por fase
-            </div>
-            <div className="flex flex-col gap-2.5">
-                {fases.map((f) => {
-                    const total = f.itens?.length ?? 0
-                    const done = f.itens?.filter(i => i.status === "concluido").length ?? 0
-                    const pct = f.status === "concluido" ? 100 : f.status === "planejado" ? 0 : total > 0 ? Math.round((done / total) * 100) : 0
-
-                    return (
-                        <div key={f.id} className="flex items-center gap-3">
-                            <div className="w-[120px] shrink-0 truncate text-[11px] text-muted-foreground sm:w-[160px]">
-                                {f.titulo}
-                            </div>
-                            <div className="flex-1 h-1.5 rounded-full bg-surface-2">
-                                <div
-                                    className={`h-full rounded-full transition-all duration-500 ${
-                                        f.status === "concluido" ? "bg-green" :
-                                            f.status === "andamento" ? "bg-amber" : "bg-faint-foreground/30"
-                                    }`}
-                                    style={{ width: `${pct}%` }}
-                                />
-                            </div>
-                            <span className="w-8 shrink-0 text-right font-data text-[11px] text-faint-foreground">
-                {pct}%
-              </span>
-                        </div>
-                    )
-                })}
-            </div>
-        </div>
-    )
-}
-
-// ── Resumo financeiro ─────────────────────────────────────────────────────────
-function ResumoFinanceiro({ fases }: { fases: FaseAPI[] }) {
-    const totais = calcTotais(fases)
-    if (totais.length === 0) return null
-
-    return (
-        <div className="rounded-xl border border-border bg-surface p-5">
-            <div className="mb-4 text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
-                Resumo financeiro
-            </div>
-            <div className="flex flex-col gap-4">
-                {totais.map((t) => {
-                    const pct = t.estimadoMax > 0 ? Math.round((t.gasto / t.estimadoMax) * 100) : 0
-                    return (
-                        <div key={t.moeda} className="flex flex-col gap-2">
-                            <div className="flex items-baseline justify-between">
-                                <span className="text-[11px] text-faint-foreground">{t.moeda}</span>
-                                <span className="font-data text-sm text-foreground">
-                  {formatMoeda(t.gasto, t.moeda as Moeda)}{" "}
-                                    <span className="text-faint-foreground">
-                    / {formatFaixa(t.estimadoMin, t.estimadoMax, t.moeda as Moeda)}
-                  </span>
-                </span>
-                            </div>
-                            <div className="h-2 w-full rounded-full bg-surface-2">
-                                <div
-                                    className="h-2 rounded-full bg-purple transition-all duration-500"
-                                    style={{ width: `${Math.min(pct, 100)}%` }}
-                                />
-                            </div>
-                            <div className="flex justify-between text-[10px] text-faint-foreground">
-                                <span>Realizado</span>
-                                <span>{pct}% do estimado</span>
-                            </div>
-                        </div>
-                    )
-                })}
-            </div>
-        </div>
-    )
-}
-
-const STATUS_OPCOES: StatusVeiculo[] = ["planejamento", "em_andamento", "concluido", "pausado"]
-
-// ── Trocador de status do veículo ──────────────────────────────────────────────
-// É o "destransformar de concluído" que a Kamilly pediu: dá pra voltar o
-// veículo pra qualquer status a qualquer momento — junto com o "+ nova fase"
-// embaixo, isso cobre o fluxo de reabrir um projeto "concluído".
-function StatusVeiculoMenu({
-                               status,
-                               saving,
-                               onChange,
-                           }: { status: StatusVeiculo; saving: boolean; onChange: (s: StatusVeiculo) => void }) {
-    const [open, setOpen] = useState(false)
-
-    return (
-        <div className="relative">
-            <button
-                onClick={() => setOpen(o => !o)}
-                disabled={saving}
-                className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-sm text-muted-foreground transition-colors hover:border-border-strong disabled:opacity-50"
-            >
-                <span className={`size-1.5 rounded-full ${STATUS_DOT[status]}`} />
-                {STATUS_LABEL[status]}
-                <ChevronDown className={cn_("size-3 transition-transform", open && "rotate-180")} />
-            </button>
-            {open && (
-                <>
-                    <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-                    <div className="absolute left-0 top-full z-20 mt-1.5 flex w-44 flex-col gap-0.5 rounded-lg border border-border bg-surface p-1 shadow-lg">
-                        {STATUS_OPCOES.map((s) => (
-                            <button
-                                key={s}
-                                onClick={() => { onChange(s); setOpen(false) }}
-                                className={cn_(
-                                    "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-surface-2",
-                                    s === status ? "text-foreground font-medium" : "text-muted-foreground"
-                                )}
-                            >
-                                <span className={`size-1.5 rounded-full ${STATUS_DOT[s]}`} />
-                                {STATUS_LABEL[s]}
-                            </button>
-                        ))}
-                    </div>
-                </>
-            )}
-        </div>
-    )
-}
-
-// pequeno helper local para não trazer a dependência inteira do cn de outro módulo
-function cn_(...c: (string | false | undefined)[]) { return c.filter(Boolean).join(" ") }
-
-// ── Form de nova fase ──────────────────────────────────────────────────────────
-interface NovaFaseValue { titulo: string; orcamentoMin: string; orcamentoMax: string; moeda: Moeda; nota: string }
-const NOVA_FASE_EMPTY: NovaFaseValue = { titulo: "", orcamentoMin: "", orcamentoMax: "", moeda: "BRL", nota: "" }
-const MOEDAS: Moeda[] = ["BRL", "USD", "PYG"]
-
-function NovaFaseForm({
-                          proximaOrdem,
-                          saving,
-                          onSave,
-                          onCancel,
-                      }: { proximaOrdem: number; saving: boolean; onSave: (v: NovaFaseValue) => void; onCancel: () => void }) {
-    const [v, setV] = useState<NovaFaseValue>(NOVA_FASE_EMPTY)
-
-    return (
-        <div className="flex flex-col gap-2.5 rounded-xl border border-dashed border-border bg-surface p-4">
-            <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                    autoFocus
-                    value={v.titulo}
-                    onChange={(e) => setV({ ...v, titulo: e.target.value })}
-                    placeholder={`Nome da fase ${proximaOrdem} — ex: "Troca de radiador"`}
-                    className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
-                />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-                <input
-                    type="number" min={0} step="0.01"
-                    value={v.orcamentoMin}
-                    onChange={(e) => setV({ ...v, orcamentoMin: e.target.value })}
-                    placeholder="Orçamento mín."
-                    className="w-28 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
-                />
-                <span className="text-faint-foreground">—</span>
-                <input
-                    type="number" min={0} step="0.01"
-                    value={v.orcamentoMax}
-                    onChange={(e) => setV({ ...v, orcamentoMax: e.target.value })}
-                    placeholder="Orçamento máx."
-                    className="w-28 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
-                />
-                <select
-                    value={v.moeda}
-                    onChange={(e) => setV({ ...v, moeda: e.target.value as Moeda })}
-                    className="rounded-md border border-border bg-background px-2 py-1.5 text-[13px] text-foreground focus:border-purple focus:outline-none"
-                >
-                    {MOEDAS.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <input
-                    value={v.nota}
-                    onChange={(e) => setV({ ...v, nota: e.target.value })}
-                    placeholder="Nota/aviso — opcional"
-                    className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple focus:outline-none"
-                />
-            </div>
-            <div className="flex items-center gap-2">
-                <button
-                    disabled={saving || v.titulo.trim().length === 0}
-                    onClick={() => onSave(v)}
-                    className="rounded-md bg-purple px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    {saving ? "Salvando..." : "Criar fase"}
-                </button>
-                <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground">
-                    Cancelar
-                </button>
-            </div>
-        </div>
-    )
-}
-
-// ── Colaboradores ────────────────────────────────────────────────────────────
-
-const PAPEL_LABEL: Record<string, string> = {
-  mecanico: "Mecânico",
-  editor: "Editor",
-  visualizador: "Visualizador",
-}
-
-// Shape retornado por GET /api/colaboracoes/veiculo/:id
-interface Colaborador {
-  id: string
-  convidado_email: string
-  papel: string
-  status: "pendente" | "ativo" | "recusado" | "removido"
-  nome: string | null        // preenchido quando aceito
-  avatar_url: string | null
-  criado_em: string
-}
-
-function ColaboradoresPanel({ veiculoId, isDono }: { veiculoId: string; isDono: boolean }) {
-  const [lista, setLista] = useState<Colaborador[]>([])
-  const [loading, setLoading] = useState(true)
-  const [email, setEmail] = useState("")
-  const [papel, setPapel] = useState("editor")
-  const [convidando, setConvidando] = useState(false)
-  const [erro, setErro] = useState("")
-  const [ok, setOk] = useState("")
-
-  function carregar() {
-    setLoading(true)
-    api.get<{ colaboradores: Colaborador[] }>(`/api/colaboracoes/veiculo/${veiculoId}`)
-      .then(r => setLista(r.colaboradores ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => { carregar() }, [veiculoId])
-
-  async function convidar(e: React.FormEvent) {
-    e.preventDefault()
-    if (!email.trim()) return
-    setConvidando(true); setErro(""); setOk("")
-    try {
-      await api.post(`/api/colaboracoes/veiculo/${veiculoId}/convidar`, { email: email.trim(), papel })
-      setOk(`Convite enviado para ${email.trim()}`)
-      setEmail("")
-      carregar()
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao convidar")
-    } finally {
-      setConvidando(false)
-    }
-  }
-
-  async function remover(colaboracaoId: string) {
-    if (!confirm("Remover este colaborador?")) return
-    await api.delete(`/api/colaboracoes/${colaboracaoId}`)
-    setLista(prev => prev.filter(c => c.id !== colaboracaoId))
-  }
-
-  return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <Users className="size-4 text-faint-foreground" />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
-          Colaboradores
-        </span>
-      </div>
-
-      {loading ? (
-        <div className="flex flex-col gap-2">
-          {[1, 2].map(i => <div key={i} className="h-9 animate-pulse rounded-lg bg-surface-2" />)}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          {lista.length === 0 ? (
-            <p className="text-[12px] text-faint-foreground">Nenhum colaborador ainda.</p>
-          ) : (
-            lista.map(c => {
-              const label = c.nome ?? c.convidado_email
-              const initial = label[0].toUpperCase()
-              return (
-                <div key={c.id} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-surface-2">
-                  <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-purple-bg text-[11px] font-bold text-purple">
-                    {initial}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-medium text-foreground truncate">{label}</p>
-                    <p className="text-[10px] text-faint-foreground">
-                      {PAPEL_LABEL[c.papel] ?? c.papel}
-                      {c.status === "pendente" && " · pendente"}
-                    </p>
-                  </div>
-                  {isDono && (
-                    <button
-                      onClick={() => remover(c.id)}
-                      className="shrink-0 text-faint-foreground hover:text-red"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  )}
-                </div>
-              )
-            })
-          )}
-        </div>
-      )}
-
-      {isDono && (
-        <form onSubmit={convidar} className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
-          <p className="text-[11px] font-medium text-foreground">Convidar colaborador</p>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="email@exemplo.com"
-            className="w-full rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-[12px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
-          />
-          <div className="flex gap-2">
-            <select
-              value={papel}
-              onChange={e => setPapel(e.target.value)}
-              className="flex-1 rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[12px] text-foreground focus:border-purple/50 focus:outline-none"
-            >
-              <option value="editor">Editor</option>
-              <option value="mecanico">Mecânico</option>
-              <option value="visualizador">Visualizador</option>
-            </select>
-            <button
-              type="submit"
-              disabled={convidando || !email.trim()}
-              className="flex items-center gap-1 rounded-lg bg-purple px-3 py-1.5 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
-            >
-              <Mail className="size-3" />
-              {convidando ? "..." : "Convidar"}
-            </button>
-          </div>
-          {erro && <p className="text-[11px] text-red">{erro}</p>}
-          {ok && <p className="text-[11px] text-green">{ok}</p>}
-        </form>
-      )}
-    </div>
-  )
-}
+import type { PerfilVeiculo, StatusVeiculo } from "@/types"
+import { PERFIL_LABEL } from "@/pages/veiculo/constants"
+import { calcTotais } from "@/pages/veiculo/calc"
+import { abrirPdfBuild } from "@/pages/veiculo/exportarPdf"
+import { VeiculoSkeleton } from "@/pages/veiculo/VeiculoSkeleton"
+import { StatsVeiculo } from "@/pages/veiculo/StatsVeiculo"
+import { BuildProgress } from "@/pages/veiculo/BuildProgress"
+import { ResumoFinanceiro } from "@/pages/veiculo/ResumoFinanceiro"
+import { StatusVeiculoMenu } from "@/pages/veiculo/StatusVeiculoMenu"
+import { NovaFaseForm } from "@/pages/veiculo/NovaFaseForm"
+import { ColaboradoresPanel } from "@/pages/veiculo/ColaboradoresPanel"
+import { CapaPanel } from "@/pages/veiculo/CapaPanel"
+import { YoutubePanel } from "@/pages/veiculo/YoutubePanel"
+import { useVeiculoDetalhe } from "@/pages/veiculo/useVeiculoDetalhe"
+import { useStatusVeiculo } from "@/pages/veiculo/useStatusVeiculo"
+import { useFasesVeiculo } from "@/pages/veiculo/useFasesVeiculo"
+import { useMidiaVeiculo } from "@/pages/veiculo/useMidiaVeiculo"
 
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function VeiculoDetalhe() {
     const { id } = useParams<{ id: string }>()
     const { user } = useAuth()
-    const [data, setData] = useState<VeiculoDetalheAPI | null>(null)
-    const [loading, setLoading] = useState(true)
-    const [erro, setErro] = useState<string | null>(null)
-    const [savingStatus, setSavingStatus] = useState(false)
-    const [addingFase, setAddingFase] = useState(false)
-    const [savingFase, setSavingFase] = useState(false)
-    const [capaUrl, setCapaUrl] = useState("")
-    const [uploadingCapa, setUploadingCapa] = useState(false)
-    const [youtubeUrl, setYoutubeUrl] = useState("")
-    const [savingYoutube, setSavingYoutube] = useState(false)
+    const { data, setData, loading, erro, capaUrl, setCapaUrl, youtubeUrl, setYoutubeUrl, carregar } = useVeiculoDetalhe(id)
+    const { savingStatus, handleStatusChange } = useStatusVeiculo({ id, data, setData, carregar })
+    const { addingFase, setAddingFase, savingFase, handleCriarFase } = useFasesVeiculo({ id, data, carregar })
+    const { uploadingCapa, handleUploadCapa, savingYoutube, handleSaveYoutube } = useMidiaVeiculo({ id, data, setData, setCapaUrl, youtubeUrl })
 
-    async function carregar() {
-        if (!id) return
-        try {
-            const res = await api.get<VeiculoDetalheAPI>(`/api/veiculos/${id}`)
-            setData(res)
-            setCapaUrl(res.capa_url ?? "")
-            setYoutubeUrl(res.youtube_url ?? "")
-            setErro(null)
-        } catch (e) {
-            setErro(e instanceof Error ? e.message : "Erro ao carregar veículo")
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        setLoading(true)
-        carregar()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id])
-
-    async function handleUploadCapa(file: File) {
-        if (!id || !data) return
-        if (file.size > 2 * 1024 * 1024) {
-            alert("A imagem não pode ultrapassar 2 MB.")
-            return
-        }
-        setUploadingCapa(true)
-        try {
-            const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
-            const preset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
-            const form = new FormData()
-            form.append("file", file)
-            form.append("upload_preset", preset)
-            form.append("folder", "autohub/capas")
-            const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-                method: "POST",
-                body: form,
-            })
-            if (!res.ok) throw new Error("Falha no upload")
-            const json = await res.json() as { secure_url: string }
-            const url = json.secure_url
-            await api.patch(`/api/veiculos/${id}`, { capaUrl: url })
-            setCapaUrl(url)
-            setData({ ...data, capa_url: url })
-        } catch {
-            alert("Erro ao enviar imagem")
-        } finally {
-            setUploadingCapa(false)
-        }
-    }
-
-    async function handleSaveYoutube() {
-        if (!id) return
-        setSavingYoutube(true)
-        try {
-            await api.patch(`/api/veiculos/${id}`, { youtubeUrl: youtubeUrl.trim() || null })
-        } catch (e) {
-            alert(e instanceof Error ? e.message : "Erro ao salvar URL do YouTube")
-        } finally {
-            setSavingYoutube(false)
-        }
-    }
-
-    async function handleStatusChange(status: StatusVeiculo) {
-        if (!id || !data) return
-        setSavingStatus(true)
-        setData({ ...data, status })
-        try {
-            await api.patch(`/api/veiculos/${id}`, { status })
-        } catch (e) {
-            alert(e instanceof Error ? e.message : "Erro ao atualizar status")
-            carregar()
-        } finally {
-            setSavingStatus(false)
-        }
-    }
-
-    async function handleCriarFase(v: NovaFaseValue) {
-        if (!id) return
-        setSavingFase(true)
-        try {
-            await api.post(`/api/veiculos/${id}/fases`, {
-                titulo: v.titulo.trim(),
-                ordem: (data?.fases.length ?? 0) + 1,
-                orcamentoMin: v.orcamentoMin ? Number(v.orcamentoMin) : 0,
-                orcamentoMax: v.orcamentoMax ? Number(v.orcamentoMax) : (v.orcamentoMin ? Number(v.orcamentoMin) : 0),
-                moeda: v.moeda,
-                nota: v.nota.trim() || null,
-            })
-            setAddingFase(false)
-            await carregar()
-        } catch (e) {
-            alert(e instanceof Error ? e.message : "Erro ao criar fase")
-        } finally {
-            setSavingFase(false)
-        }
-    }
-
-    if (loading) return <Skeleton />
+    if (loading) return <VeiculoSkeleton />
 
     if (erro || !data) {
         return (
@@ -562,77 +46,8 @@ export default function VeiculoDetalhe() {
     const isDono = data.garagem_id === user?.garagem?.id
 
     function exportarPDF() {
-      if(!data) return
-      const STATUS_PT: Record<string, string> = {
-        planejamento: "Planejamento", em_andamento: "Em andamento",
-        concluido: "Concluído", pausado: "Pausado",
-        planejado: "Planejado", andamento: "Em andamento",
-      }
-      const linhas = fases.map(f => {
-        const itensHtml = (f.itens ?? []).map(i => `
-          <tr>
-            <td style="padding:6px 12px;border-bottom:1px solid #eee;color:${i.status==="concluido"?"#888":"#222"};text-decoration:${i.status==="concluido"?"line-through":"none"}">${i.nome}</td>
-            <td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:right;font-size:11px;color:#888">${STATUS_PT[i.status]??i.status}</td>
-          </tr>`).join("")
-        return `
-          <div style="margin-bottom:20px;border:1px solid #e2e2e2;border-radius:8px;overflow:hidden">
-            <div style="background:#f8f6ff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
-              <strong style="font-size:13px">${f.titulo}</strong>
-              <span style="font-size:11px;color:#7c3aed">${STATUS_PT[f.status]??f.status}</span>
-            </div>
-            ${itensHtml ? `<table style="width:100%;border-collapse:collapse">${itensHtml}</table>` : '<p style="padding:10px 14px;font-size:12px;color:#aaa">Sem itens</p>'}
-          </div>`
-      }).join("")
-
-      const totaisHtml = totais.map(t => `
-        <tr>
-          <td style="padding:4px 0">${t.moeda}</td>
-          <td style="padding:4px 0;text-align:right">Gasto: <strong>${formatMoeda(t.gasto, t.moeda as Moeda)}</strong></td>
-          <td style="padding:4px 0;text-align:right">Estimado: ${formatMoeda(t.estimadoMax, t.moeda as Moeda)}</td>
-        </tr>`).join("")
-
-      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-        <title>${data.apelido} — AutoHub</title>
-        <style>
-          body{font-family:'Helvetica Neue',Arial,sans-serif;color:#111;margin:0;padding:32px;max-width:780px}
-          h1{font-size:28px;margin:0 0 4px}
-          .sub{color:#666;font-size:13px;margin-bottom:24px}
-          .meta{display:flex;gap:24px;margin-bottom:28px;padding:14px;background:#f9f9f9;border-radius:8px;font-size:12px}
-          .meta-item{display:flex;flex-direction:column;gap:2px}
-          .meta-label{color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
-          .meta-value{font-weight:600;font-size:14px}
-          h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin:28px 0 12px}
-          table.fin{width:100%;border-collapse:collapse;font-size:12px}
-          @media print{.no-print{display:none}}
-        </style>
-      </head><body>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-          <div>
-            <h1>${data.apelido}</h1>
-            <div class="sub">${data.marca} ${data.modelo} · ${data.ano_fabricacao}/${data.ano_modelo}</div>
-          </div>
-          <div style="font-size:10px;color:#aaa;text-align:right">AutoHub · ${new Date().toLocaleDateString("pt-BR")}</div>
-        </div>
-        <div class="meta">
-          <div class="meta-item"><span class="meta-label">Status</span><span class="meta-value">${STATUS_PT[data.status]??data.status}</span></div>
-          <div class="meta-item"><span class="meta-label">Progresso</span><span class="meta-value">${progresso}%</span></div>
-          <div class="meta-item"><span class="meta-label">Itens</span><span class="meta-value">${concluidosItens}/${totalItens}</span></div>
-          ${data.meta_potencia_whp ? `<div class="meta-item"><span class="meta-label">Meta</span><span class="meta-value">${data.meta_potencia_whp} whp</span></div>` : ""}
-        </div>
-        ${totais.length > 0 ? `<h2>Resumo Financeiro</h2><table class="fin">${totaisHtml}</table>` : ""}
-        <h2>Fases do Build</h2>
-        ${linhas || "<p style='color:#aaa;font-size:12px'>Nenhuma fase cadastrada.</p>"}
-        <div style="margin-top:40px;padding-top:16px;border-top:1px solid #eee;font-size:10px;color:#bbb">
-          Gerado via AutoHub · autohubbr.netlify.app
-        </div>
-      </body></html>`
-
-      const win = window.open("", "_blank", "width=900,height=700")
-      if (!win) { alert("Permita popups para exportar o PDF."); return }
-      win.document.write(html)
-      win.document.close()
-      win.focus()
-      setTimeout(() => { win.print() }, 400)
+        if (!data) return
+        abrirPdfBuild({ data, fases, totais, progresso, concluidosItens, totalItens })
     }
 
     const fases = data.fases ?? []
@@ -648,35 +63,6 @@ export default function VeiculoDetalhe() {
         andamento: fases.filter(f => f.status === "andamento").length,
         planejadas: fases.filter(f => f.status === "planejado").length,
     }
-
-    // Bloco de stats reutilizado tanto no mobile quanto no sidebar desktop
-    const statsBlock = (
-        <>
-            <Stat
-                label="Progresso"
-                value={`${progresso}%`}
-                sub={`${concluidosItens} de ${totalItens} itens`}
-                accent="text-green"
-            />
-            <Stat
-                label="Investido"
-                value={principal ? formatMoeda(principal.gasto, principal.moeda as Moeda) : "R$ 0"}
-                sub={principal ? `de ${formatMoeda(principal.estimadoMax, principal.moeda as Moeda)}` : "sem itens"}
-                accent="text-purple"
-            />
-            <Stat
-                label="Fases"
-                value={`${fasesStatus.concluidas}/${fases.length}`}
-                sub={fasesStatus.andamento > 0 ? `${fasesStatus.andamento} em andamento` : "concluídas"}
-                accent="text-amber"
-            />
-            <Stat
-                label="Meta"
-                value={data.meta_potencia_whp ? `${data.meta_potencia_whp} whp` : "—"}
-                sub="potência alvo"
-            />
-        </>
-    )
 
     return (
         <div className="lg:grid lg:grid-cols-[1fr_300px] lg:items-start lg:gap-8">
@@ -749,7 +135,7 @@ export default function VeiculoDetalhe() {
 
                 {/* Stats — mobile/tablet apenas (some no lg) */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:hidden">
-                    {statsBlock}
+                    <StatsVeiculo progresso={progresso} concluidosItens={concluidosItens} totalItens={totalItens} principal={principal} fasesConcluidas={fasesStatus.concluidas} fasesAndamento={fasesStatus.andamento} totalFases={fases.length} metaWhp={data.meta_potencia_whp} />
                 </div>
 
                 {/* Painéis — mobile/tablet apenas */}
@@ -827,77 +213,10 @@ export default function VeiculoDetalhe() {
                 </div>
 
                 {/* ── Imagem de capa ───────────────────────────────────────────── */}
-                {isDono && (
-                  <div className="rounded-xl border border-border bg-surface p-5">
-                    <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
-                      <ImageIcon className="size-3.5" />
-                      Imagem de capa (feed público)
-                    </div>
-                    {capaUrl ? (
-                      <div className="relative mb-3">
-                        <img src={capaUrl} alt="capa" className="h-40 w-full rounded-lg object-cover border border-border" />
-                        <label className="absolute bottom-2 right-2 flex cursor-pointer items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-sm hover:bg-black/80">
-                          <Upload className="size-3" />
-                          Trocar
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadCapa(f) }}
-                          />
-                        </label>
-                        {uploadingCapa && (
-                          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40">
-                            <span className="text-[12px] text-white">Enviando...</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <label className={`mb-3 flex h-32 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-background text-faint-foreground transition-colors hover:border-purple hover:text-purple ${uploadingCapa ? "pointer-events-none opacity-60" : ""}`}>
-                        <Upload className="size-5" />
-                        <span className="text-[12px] font-medium">{uploadingCapa ? "Enviando..." : "Clique para enviar imagem"}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadCapa(f) }}
-                        />
-                      </label>
-                    )}
-                    <p className="text-[11px] text-faint-foreground">
-                      Aparece no feed e na garagem pública. Formatos: JPG, PNG, WebP.
-                    </p>
-                  </div>
-                )}
+                {isDono && <CapaPanel capaUrl={capaUrl} uploadingCapa={uploadingCapa} onUpload={handleUploadCapa} />}
 
                 {/* ── YouTube URL ──────────────────────────────────────────────── */}
-                {isDono && (
-                  <div className="rounded-xl border border-border bg-surface p-5">
-                    <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-faint-foreground">
-                      <Play className="size-3.5 text-red" />
-                      Vídeo do YouTube
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        value={youtubeUrl}
-                        onChange={e => setYoutubeUrl(e.target.value)}
-                        placeholder="https://www.youtube.com/watch?v=..."
-                        className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground placeholder:text-faint-foreground focus:border-purple/50 focus:outline-none"
-                      />
-                      <button
-                        onClick={handleSaveYoutube}
-                        disabled={savingYoutube}
-                        className="shrink-0 rounded-lg bg-purple px-3 py-2 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
-                      >
-                        {savingYoutube ? "Salvando..." : "Salvar"}
-                      </button>
-                    </div>
-                    <p className="mt-2 text-[11px] text-faint-foreground">
-                      Cole o link do YouTube para exibir o vídeo na página pública do build.
-                    </p>
-                  </div>
-                )}
+                {isDono && <YoutubePanel youtubeUrl={youtubeUrl} setYoutubeUrl={setYoutubeUrl} savingYoutube={savingYoutube} onSave={handleSaveYoutube} />}
 
                 {/* ── Fotos da build ───────────────────────────────────────────── */}
                 <div className="rounded-xl border border-border bg-surface p-5">
@@ -916,7 +235,7 @@ export default function VeiculoDetalhe() {
             {/* ── Sidebar desktop ──────────────────────────────────────────────── */}
             <aside className="hidden lg:flex flex-col gap-4 sticky top-[80px]">
                 <div className="grid grid-cols-2 gap-2">
-                    {statsBlock}
+                    <StatsVeiculo progresso={progresso} concluidosItens={concluidosItens} totalItens={totalItens} principal={principal} fasesConcluidas={fasesStatus.concluidas} fasesAndamento={fasesStatus.andamento} totalFases={fases.length} metaWhp={data.meta_potencia_whp} />
                 </div>
                 {fases.length > 0 && (
                     <>

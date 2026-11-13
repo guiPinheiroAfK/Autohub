@@ -351,6 +351,6 @@ autodashRoutes.post("/autodash/race/:code/state", async (c) => {
   return c.json({
     voltas: room.voltas,
     startInMs: room.start_in_ms === null ? null : Math.round(Number(room.start_in_ms)),
-    rivais: todos.filter((p: { player_id: string }) => p.player_id !== playerId),
+    rivais: todos.filter((p: Record<string, any>) => p.player_id !== playerId),
   })
 })

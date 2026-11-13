@@ -27,3 +27,6 @@ Thumbs.db
 .vscode/
 # config local do Claude Code (caminhos absolutos da maquina)
 .claude/
+
+# Java (protótipo legado compilado)
+*.class
