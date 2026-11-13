@@ -1,4 +1,5 @@
 // AutoDash — render/backdrop.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { drawTraffic } from "./objects"
 import { AutoDashEngine, H, W, SKY_KEYS } from "../engine"
 import { shade, mix } from "../math"
 import { rr } from "./primitives"
@@ -311,10 +312,10 @@ export function drawBridge(eng: AutoDashEngine, x: number, y: number, w: number,
     })
     const t1 = (performance.now() / 3400) % 1
     const t2 = (performance.now() / 4100 + 0.5) % 1
-    eng.drawTraffic(fake("#e2e8f0"), L + (R - L) * t1, deckY + deckH * 0.1, carW, amb * 0.9)
-    eng.drawTraffic(fake("#64748b"), R - (R - L) * t2, deckY + deckH * 0.1, carW, amb * 0.9)
+    drawTraffic(eng, fake("#e2e8f0"), L + (R - L) * t1, deckY + deckH * 0.1, carW, amb * 0.9)
+    drawTraffic(eng, fake("#64748b"), R - (R - L) * t2, deckY + deckH * 0.1, carW, amb * 0.9)
     const p = (performance.now() / 2800) % 1
-    eng.drawTraffic(
+    drawTraffic(eng, 
         fake("#eab308"),
         r1x + (r4x - r1x) * p,
         rampTopY + (y - rampTopY) * p,

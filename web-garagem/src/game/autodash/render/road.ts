@@ -1,4 +1,9 @@
 // AutoDash — render/road.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { drawPickup } from "./objects"
+import { drawGhost } from "./objects"
+import { drawObstacle } from "./objects"
+import { drawRoadSign } from "./objects"
+import { drawTraffic } from "./objects"
 import { drawDeco } from "./backdrop"
 import { drawBridge } from "./backdrop"
 import { drawTower } from "./backdrop"
@@ -439,13 +444,13 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       const fade = clamp(((s.dz ?? Infinity) - FADE_IN_START) / FADE_IN_LEN, 0, 1)
       if (fade <= 0) continue
       if (fade < 1) ctx.globalAlpha = fade
-      eng.drawTraffic(s.t!, s.x, s.y, s.w, amb)
+      drawTraffic(eng, s.t!, s.x, s.y, s.w, amb)
       if (fade < 1) ctx.globalAlpha = 1
     }
-    else if (s.kind === "pu") eng.drawPickup(s.p!, s.x, s.y, s.w, amb)
-    else if (s.kind === "ghost") eng.drawGhost(s.x, s.y, s.w, amb)
-    else if (s.kind === "obs") eng.drawObstacle(s.obs!, s.x, s.y, s.w, amb)
-    else if (s.kind === "sign") eng.drawRoadSign(s.sign!, s.x, s.y, s.w, amb)
+    else if (s.kind === "pu") drawPickup(eng, s.p!, s.x, s.y, s.w, amb)
+    else if (s.kind === "ghost") drawGhost(eng, s.x, s.y, s.w, amb)
+    else if (s.kind === "obs") drawObstacle(eng, s.obs!, s.x, s.y, s.w, amb)
+    else if (s.kind === "sign") drawRoadSign(eng, s.sign!, s.x, s.y, s.w, amb)
     else if (s.kind === "bridge") drawBridge(eng, s.x, s.y, s.w, amb)
     else if (s.kind === "gate") drawTower(eng, s.x, s.y, s.w, amb)
     else drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
