@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { Link } from "react-router-dom"
-import { AutoDashEngine } from "@/game/autodash/engine"
+import { AutoDashEngine } from "@/game/autodash"
 
 /** AutoDash — minigame de corrida (tela cheia imersiva, fora do Layout). */
 export default function AutoDashPage() {
