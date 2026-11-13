@@ -1,9 +1,10 @@
-import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, SEG_LEN, DRAW_DIST, CARS, type BodyKind, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
+import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, DRAW_DIST, SEG_LEN, CARS, type BodyKind, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
 import { type DuelTelemetry, postState, rematchRoom, pollRoom, createRoom, joinRoom } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic, type TrafficKind, KINDS, TRAFFIC_COLORS, type WorldView } from "./traffic/types"
 import { RaceSession } from "./race/session"
-import { clamp, mulberry32, mix, shade, hexToRgb } from "./math"
+import { buildTrack, segAt } from "./world/track"
+import { clamp, mix, shade, hexToRgb } from "./math"
 import { DRIVERS } from "./traffic/driver"
 import { rpmFor, powerCurve } from "./physics/rpm"
 import { shiftUp, shiftDown } from "./physics/gearbox"
@@ -48,7 +49,7 @@ interface DuelSession {
 }
 
 
-interface Seg { curve: number; y1: number; y2: number; sign?: number }
+export interface Seg { curve: number; y1: number; y2: number; sign?: number }
 
 // Tipos e IAs do tráfego migraram pra ./traffic/ (types.ts + driver.ts).
 // O engine só cuida da colisão/pontuação/render/reciclagem.
@@ -257,7 +258,7 @@ export class AutoDashEngine {
     // toque longo no celular abria o menu "Salvar/Copiar imagem" por cima do
     // jogo — é o callout de imagem. Desliga seleção, callout e realce de toque.
     this.noCallout(this.canvas)
-    this.buildTrack()
+    buildTrack(this)
     this.seedTraffic(14)
     this.bind()
     if (this.isTouch) this.buildTouchControls()
@@ -289,98 +290,7 @@ export class AutoDashEngine {
    * No modo corrida o desafio tem que vir do traçado, não de desviar de carro —
    * por isso lá o trânsito também é bem mais leve.
    */
-  buildTrack(seed = Math.floor(Math.random() * 2 ** 31), corrida = false) {
-    const rnd = mulberry32(seed)
-    this.segments = []
-    let lastY = 0
-    const seg = (curve: number, y: number) => { this.segments.push({ curve, y1: lastY, y2: y }); lastY = y }
-    const easeIO = (a: number, b: number, p: number) => a + (b - a) * (-Math.cos(p * Math.PI) / 2 + 0.5)
-    const addRoad = (enter: number, hold: number, leave: number, curve: number, dy: number) => {
-      const y0 = lastY, total = enter + hold + leave
-      let i = 0
-      for (let n = 0; n < enter; n++, i++) seg(curve * (n / enter), easeIO(y0, y0 + dy, i / total))
-      for (let n = 0; n < hold; n++, i++) seg(curve, easeIO(y0, y0 + dy, i / total))
-      for (let n = 0; n < leave; n++, i++) seg(curve * (1 - n / leave), easeIO(y0, y0 + dy, i / total))
-    }
-    const r = (lo: number, hi: number) => lo + rnd() * (hi - lo)
-    const ri = (lo: number, hi: number) => Math.floor(r(lo, hi + 1))
 
-    addRoad(30, 80, 30, 0, 0) // reta de largada
-    // ~3200 segmentos = volta de ~35 s a 210 km/h. Com 1800 a volta durava 14 s
-    // e o jogador nem percebia que tinha fechado uma — parecia que a corrida
-    // acabava sozinha.
-    const alvoSegs = corrida ? 3200 : 4000
-    while (this.segments.length < alvoSegs) {
-      const roll = rnd()
-      const hill = r(-1, 1) * r(600, 2600)
-      if (corrida) {
-        // Circuito de VELOCIDADE: retas longas pra esticar marcha e curvas que
-        // dá pra fazer em ritmo. O grampo saiu — fazer um U a 200 km/h não é
-        // corrida, é parede; e a entrada larga das curvas dá tempo de frear.
-        if (roll < 0.42) addRoad(30, ri(120, 240), 30, 0, r(-1, 1) * r(300, 1100)) // retão
-        else if (roll < 0.72) {
-          const c = (rnd() < 0.5 ? -1 : 1) * r(2.5, 4.2)           // curva aberta
-          addRoad(ri(26, 40), ri(40, 80), ri(26, 40), c, hill * 0.45)
-        } else if (roll < 0.92) {
-          const c = (rnd() < 0.5 ? -1 : 1) * r(3, 4.8)             // esse suave
-          addRoad(22, ri(30, 50), 22, c, hill * 0.3)
-          addRoad(22, ri(30, 50), 22, -c, -hill * 0.3)
-        } else {
-          const c = (rnd() < 0.5 ? -1 : 1) * r(4.5, 6)             // a mais fechada do traçado
-          addRoad(24, ri(30, 50), 24, c, 0)
-          addRoad(26, ri(60, 110), 26, 0, hill * 0.2)              // respiro longo depois
-        }
-      } else if (roll < 0.10) addRoad(30, ri(110, 220), 30, 0, r(-1, 1) * r(400, 1600)) // retão pra esticar as marchas
-      else if (roll < 0.30) addRoad(ri(20, 40), ri(30, 70), ri(20, 40), 0, hill)
-      else if (roll < 0.62) {
-        const c = (rnd() < 0.5 ? -1 : 1) * r(2, 5)
-        addRoad(ri(25, 45), ri(30, 70), ri(25, 45), c, hill * 0.6)
-      } else if (roll < 0.86) {
-        const c = (rnd() < 0.5 ? -1 : 1) * r(2.5, 4.5)
-        addRoad(25, 40, 25, c, hill * 0.4)
-        addRoad(25, 40, 25, -c, -hill * 0.4)
-      } else addRoad(ri(15, 25), ri(20, 40), ri(15, 25), (rnd() < 0.5 ? -1 : 1) * r(4.5, 6), 0)
-    }
-    addRoad(40, 40, 40, 0, -lastY) // fecha o loop plano
-    this.trackLen = this.segments.length * SEG_LEN
-
-    // placas de chevron antes de curvas fechadas. No circuito o limiar é mais
-    // baixo e a fila de placas é mais longa: como as curvas são bem mais bravas,
-    // o jogador precisa ler a curva de longe pra escolher onde frear.
-    const limiar = corrida ? 2.5 : 4
-    const inicioPlacas = corrida ? 70 : 46
-    for (let i = inicioPlacas; i < this.segments.length; i++) {
-      const c = this.segments[i].curve
-      if (Math.abs(c) >= limiar && Math.abs(this.segments[i - 1].curve) < limiar) {
-        const ate = corrida ? 70 : 46
-        for (let k = 22; k <= ate; k += 8) {
-          this.segments[i - k].sign = c > 0 ? 1 : -1
-        }
-      }
-    }
-
-    // No circuito, cones marcam a parte interna das curvas bravas: viram
-    // referência de traçado (dá pra "raspar" a curva) e punem quem entra torto.
-    if (corrida) {
-      this.obstacles = []
-      for (let i = 60; i < this.segments.length - 30; i++) {
-        const c = this.segments[i].curve
-        if (Math.abs(c) < 5 || Math.abs(this.segments[i - 1].curve) >= 5) continue
-        const lado = c > 0 ? 1 : -1 // interno da curva
-        for (let k = 0; k < 5; k++) {
-          this.obstacles.push({
-            z: ((i + k * 6) * SEG_LEN) % this.trackLen,
-            offset: lado * 0.92, kind: "cone", w: 0.10, len: 90,
-          })
-        }
-      }
-    }
-  }
-
-  segAt(z: number): Seg {
-    const n = this.segments.length
-    return this.segments[Math.floor(((z % this.trackLen) + this.trackLen) % this.trackLen / SEG_LEN) % n]
-  }
 
   // ---------- tráfego ----------
   laneCenters = [-0.75, -0.25, 0.25, 0.75]
@@ -926,7 +836,7 @@ export class AutoDashEngine {
       this.speed = 95
       this.position = (this.position + this.speed * KMH2UPS * dt) % this.trackLen
       this.playerX = Math.sin(this.demoT * 0.3) * 0.2
-      this.bgShift += this.segAt(this.position + PLAYER_Z).curve * this.speed * dt * 0.6
+      this.bgShift += segAt(this, this.position + PLAYER_Z).curve * this.speed * dt * 0.6
       this.updateTraffic(dt, this.position + PLAYER_Z, true)
       this.updateFx(dt) // floaters/partículas sobrando da corrida ainda precisam morrer
       this.audio.engine(0, 0, false, false)
@@ -975,7 +885,7 @@ export class AutoDashEngine {
     // ---------- racing ----------
     const grip = spec.grip * (this.raining ? 0.62 : 1)
     const playerZ = this.position + PLAYER_Z
-    const seg = this.segAt(playerZ)
+    const seg = segAt(this, playerZ)
 
     // direção — input suavizado, mais firme em alta velocidade
     let steerInput = 0
@@ -1511,7 +1421,7 @@ export class AutoDashEngine {
     // limpa ANTES de construir: no circuito o buildTrack semeia os cones das
     // curvas, e zerar depois apagaria justamente eles
     this.obstacles = []; this.zones = []; this.roadSigns = []; this.eventTimer = corrida ? 1e9 : 12
-    this.buildTrack(seed, corrida)
+    buildTrack(this, seed, corrida)
     this.seedTraffic(corrida ? 5 : 14)
     this.position = 0
     this.speed = 0
@@ -1728,7 +1638,7 @@ export class AutoDashEngine {
     const baseIdx = Math.floor(this.position / SEG_LEN) % N
     const basePct = (this.position % SEG_LEN) / SEG_LEN
     const playerZ = this.position + PLAYER_Z
-    const pSeg = this.segAt(playerZ)
+    const pSeg = segAt(this, playerZ)
     const pPct = (playerZ % SEG_LEN) / SEG_LEN
     const playerY = pSeg.y1 + (pSeg.y2 - pSeg.y1) * pPct
     const camY = playerY + CAM_HEIGHT
