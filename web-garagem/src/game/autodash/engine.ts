@@ -1,5 +1,5 @@
-import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, type BodyKind, CARS, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, SEG_LEN, RPM_PER_KMH, DRAW_DIST, submitScore, fetchLeaderboard } from "./data"
-import { type DuelTelemetry, postState } from "./net"
+import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, type BodyKind, CARS, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, SEG_LEN, RPM_PER_KMH, DRAW_DIST, fetchLeaderboard } from "./data"
+import { type DuelTelemetry } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic } from "./traffic/types"
 import { RaceSession } from "./race/session"
@@ -8,9 +8,10 @@ import { buildTrack, segAt } from "./world/track"
 import { seedTraffic, updateTraffic, wrapDz } from "./traffic/spawner"
 import { clamp, mix } from "./math"
 import { updateEventSpawner } from "./world/events"
-import { duelNet, myTelemetry, duelFinish } from "./modes/duel"
+import { duelNet } from "./modes/duel"
 import { startRace } from "./modes/race"
 import { updateFx, emitSmoke, emitFlame, burst, initRain } from "./fx/particles"
+import { launch } from "./modes/solo"
 import { rpmFor, powerCurve } from "./physics/rpm"
 import { shiftUp, shiftDown } from "./physics/gearbox"
 import { updateZones } from "./world/zones"
@@ -405,7 +406,7 @@ export class AutoDashEngine {
       if (this.countT >= this.greenAt) {
         this.greenFired = true
         this.audio.semaphoreGreen()
-        this.launch()
+        launch(this)
         this.goFlashT = 1.2
         this.state = "racing"
       } else {
@@ -691,76 +692,8 @@ export class AutoDashEngine {
     this.audio.engine(this.rpm, throttle, nitroActive, true)
   }
 
-  launch() {
-    // qualidade da largada pela zona de RPM segurada no verde
-    this.gear = 1
-    if (this.rpm >= 3600 && this.rpm <= 6300) {
-      this.speed = 52
-      this.nitroMeter = Math.min(100, this.nitroMeter + 30)
-      this.floaters.push({ text: "LARGADA PERFEITA!", color: "#fde047", y: H * 0.35, life: 1.6, big: true })
-      this.audio.perfectLaunch()
-    } else if (this.rpm > 6800) {
-      this.speed = 18
-      this.wheelspinT = 1.3
-      this.floaters.push({ text: "PATINOU!", color: "#fb923c", y: H * 0.35, life: 1.4, big: true })
-    } else if (this.rpm < 2200) {
-      this.speed = 10
-      this.bogT = 1.1
-      this.floaters.push({ text: "ENGASGOU...", color: "#94a3b8", y: H * 0.35, life: 1.4, big: true })
-      this.audio.bog()
-    } else {
-      this.speed = 32
-    }
-  }
 
 
-  crash(byPolice = false) {
-    // NA CORRIDA NÃO SE MORRE: bater custa quase toda a velocidade e o tempo
-    // de retomar — que numa disputa por voltas já é punição suficiente. Encerrar
-    // a prova por uma batida tirava o jogador da corrida inteira.
-    if (this.mode === "race" && this.race && !this.race.finished) {
-      this.speed *= 0.1
-      this.steerVel = 0
-      this.wheelspinT = 0.5
-      this.combo = 0
-      this.shakeT = 0.55
-      this.immuneT = Math.max(this.immuneT, 1.3) // respiro pra não bater em cadeia
-      this.audio.crash()
-      burst(this, W / 2, H - 110, 30, ["#fb923c", "#ef4444"])
-      this.floaters.push({ text: "RODOU!", color: "#fb923c", y: H * 0.4, life: 1.3, big: true })
-      return
-    }
-    this.crashed = true
-    this.crashByPolice = byPolice
-    this.audio.crash()
-    this.shakeT = 0.6
-    burst(this, W / 2, H - 110, 40, ["#fb923c", "#ef4444"])
-    const entry: ScoreEntry = {
-      name: (this.cfg.pilotName || "PILOTO").trim(),
-      score: Math.floor(this.score),
-      km: Math.round(this.km * 10) / 10,
-    }
-    this.newRecord = entry.score > 300 && (this.scores.length === 0 || entry.score > this.scores[0].score)
-    if (entry.score > 300) {
-      if (this.duel) this.duel.scoreSent = true
-      void submitScore(entry).then((scores) => {
-        if (!this.destroyed && scores.length) this.scores = scores
-      })
-    }
-
-    if (this.mode === "duel" && this.duel) {
-      const d = this.duel
-      d.iCrashed = true
-      void postState(d.code, d.role, myTelemetry(this, true))
-          .then((r) => { if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() } })
-          .catch(() => { /* spectate segue tentando */ })
-      if (d.opp?.c) duelFinish(this, this.km > d.oppD)
-      else this.state = "duelspectate"
-      return
-    }
-
-    this.state = "gameover"
-  }
 
   async refreshScores() {
     const scores = await fetchLeaderboard()

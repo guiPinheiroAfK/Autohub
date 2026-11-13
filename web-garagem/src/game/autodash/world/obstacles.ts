@@ -1,4 +1,5 @@
 // AutoDash — world/obstacles.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { crash } from "../modes/solo"
 import { burst } from "../fx/particles"
 import { AutoDashEngine, W, H } from "../engine"
 import { CARS, SEG_LEN } from "../data"
@@ -35,7 +36,7 @@ export function updateObstacles(eng: AutoDashEngine, playerZ: number) {
         burst(eng, W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
         eng.floaters.push({ text: "ESCUDO QUEBROU!", color: "#60a5fa", y: H * 0.4, life: 1.3, big: false })
       } else {
-        eng.crash()
+        crash(eng)
       }
     }
   }

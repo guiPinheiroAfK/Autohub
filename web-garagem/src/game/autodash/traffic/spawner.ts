@@ -1,4 +1,5 @@
 // AutoDash — traffic/spawner.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { crash } from "../modes/solo"
 import { burst } from "../fx/particles"
 import { AutoDashEngine, PLAYER_Z, W, H } from "../engine"
 import { DRAW_DIST, SEG_LEN, CARS } from "../data"
@@ -105,7 +106,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           eng.audio.crash()
           burst(eng, W / 2 + dir * 60, H - 110, 14, ["#60a5fa", "#e2e8f0"])
           eng.floaters.push({ text: "ENCOSTÃO! 🚔", color: "#60a5fa", y: H * 0.42, life: 1, big: false })
-          if (Math.abs(eng.playerX) > 1.05) eng.crash(true) // te jogaram pra fora = preso
+          if (Math.abs(eng.playerX) > 1.05) crash(eng, true) // te jogaram pra fora = preso
         }
       } else if (hit && eng.immuneT <= 0) {
         if (eng.shield) {
@@ -116,7 +117,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           burst(eng, W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
           eng.floaters.push({ text: "ESCUDO QUEBROU!", color: "#60a5fa", y: H * 0.4, life: 1.3, big: false })
         } else {
-          eng.crash()
+          crash(eng)
         }
       }
       // near miss: acabou de passar por ele
