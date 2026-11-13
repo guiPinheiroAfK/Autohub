@@ -1,0 +1,11 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AutoDash engine — golden master > partida solo determinística (menu -> nome -> garagem -> largada -> pista) 1`] = `
+{
+  "calls": 14773686,
+  "finalMode": "solo",
+  "finalState": "gameover",
+  "frames": 1200,
+  "hash": "279f8c196295074e5b31c0339b838bf7dfd4f31afc6aab9d45089d73146c88cd",
+}
+`;
