@@ -1,4 +1,8 @@
 // AutoDash — input/keyboard.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { startRace } from "../modes/race"
+import { abrirRaceLobby } from "../modes/race"
+import { correrComBots } from "../modes/race"
+import { abrirCodigoSala } from "../modes/race"
 import { duelRematch } from "../modes/duel"
 import { duelJoin } from "../modes/duel"
 import { AutoDashEngine, H } from "../engine"
@@ -59,12 +63,12 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
     case "menu":
       if (k === "enter") eng.enterFromMenu("garage")
       if (k === "d") eng.enterFromMenu("duellobby")
-      if (k === "c") eng.abrirRaceLobby()
+      if (k === "c") abrirRaceLobby(eng)
       break
     case "racelobby":
-      if (k === "enter") eng.correrComBots()
+      if (k === "enter") correrComBots(eng)
       if (k === "h") void eng.criarSalaOnline()
-      if (k === "j") eng.abrirCodigoSala()
+      if (k === "j") abrirCodigoSala(eng)
       if (k === "arrowleft") { eng.cfg.carIdx = (eng.cfg.carIdx + CARS.length - 1) % CARS.length; saveConfig(eng.cfg); eng.audio.ui() }
       if (k === "arrowright") { eng.cfg.carIdx = (eng.cfg.carIdx + 1) % CARS.length; saveConfig(eng.cfg); eng.audio.ui() }
       if (k === "arrowdown") eng.raceVoltas = Math.max(1, eng.raceVoltas - 1)
@@ -82,7 +86,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "escape") { eng.race = null; eng.mode = "solo"; eng.state = "racelobby" }
       break
     case "raceresult":
-      if (k === "enter") eng.correrComBots()
+      if (k === "enter") correrComBots(eng)
       if (k === "m" || k === "escape") eng.toMenu()
       break
     case "duellobby":
@@ -132,11 +136,11 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       break
     case "paused":
       if (k === "escape" || k === "p" || k === "enter") eng.state = "racing"
-      if (k === "r") eng.startRace()
+      if (k === "r") startRace(eng)
       if (k === "m") eng.state = "menu"
       break
     case "gameover":
-      if (k === "enter") eng.startRace()
+      if (k === "enter") startRace(eng)
       if (k === "g") eng.state = "garage"
       if (k === "m") eng.state = "menu"
       break
@@ -144,7 +148,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
 
   function startAndSave(self: AutoDashEngine) {
     saveConfig(self.cfg)
-    self.startRace()
+    startRace(self)
   }
 }
 

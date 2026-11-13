@@ -9,6 +9,7 @@ import { seedTraffic, updateTraffic, wrapDz } from "./traffic/spawner"
 import { clamp, mix, shade, hexToRgb } from "./math"
 import { updateEventSpawner } from "./world/events"
 import { duelNet, myTelemetry, duelFinish, duelCreate, duelJoin, duelRematch, startDuelLobby } from "./modes/duel"
+import { startRace, abrirRaceLobby, correrComBots, abrirCodigoSala } from "./modes/race"
 import { updateFx, emitSmoke, emitFlame, burst, initRain } from "./fx/particles"
 import { rpmFor, powerCurve } from "./physics/rpm"
 import { shiftUp, shiftDown } from "./physics/gearbox"
@@ -353,7 +354,7 @@ export class AutoDashEngine {
     // sala de espera: consulta quem entrou e detecta a largada dada pelo dono
     if (this.state === "racewait" && this.race) {
       this.race.update(dt, 0, 0, 0, false, this.trackLen)
-      if (this.race.phase === "countdown") { this.startRace(this.race.cfg.seed) }
+      if (this.race.phase === "countdown") { startRace(this, this.race.cfg.seed) }
     }
 
     if (["menu", "garage", "duellobby", "duelcode", "duelwaiting", "duelresult",
@@ -766,38 +767,6 @@ export class AutoDashEngine {
 
 
 
-  startRace(seed?: number) {
-    const corrida = this.mode === "race"
-    // limpa ANTES de construir: no circuito o buildTrack semeia os cones das
-    // curvas, e zerar depois apagaria justamente eles
-    this.obstacles = []; this.zones = []; this.roadSigns = []; this.eventTimer = corrida ? 1e9 : 12
-    buildTrack(this, seed, corrida)
-    seedTraffic(this, corrida ? 5 : 14)
-    this.position = 0
-    this.speed = 0
-    this.playerX = 0
-    this.steerVel = 0
-    this.gear = 0
-    this.rpm = RPM_IDLE
-    this.score = 0; this.km = 0; this.combo = 0; this.comboT = 0
-    this.nitroMeter = 0; this.nitroOn = false
-    this.shield = false; this.immuneT = 0; this.policeHitT = 0; this.policeEscapeT = 0; this.policeChaseT = 0; this.mult2T = 0
-    this.level = 0; this.levelUpT = 0
-    this.powerups = []; this.puTimer = 6
-    this.curveWarn = 0; this.collWarn = null
-    this.newRecord = false; this.beamT = 0; this.beamCdT = 0; this.pitchY = 0
-    this.shiftT = 0; this.wheelspinT = 0; this.bogT = 0
-    this.crashed = false; this.crashByPolice = false
-    this.raceFinished = false; this.raceSpectT = 0
-    this.raining = false; this.rainRollT = 0
-    this.audio.rain(false)
-    this.particles = []; this.floaters = []
-    this.countT = 0
-    // no duelo o verde é fixo pra manter os dois relógios alinhados
-    this.greenAt = this.mode === "duel" ? 3.3 : 2.4 + 0.7 + Math.random() * 0.9
-    this.greenFired = false
-    this.state = "countdown"
-  }
 
 
   // ---------- clima / céu ----------
@@ -2725,7 +2694,7 @@ export class AutoDashEngine {
     ctx.textAlign = "left"
     this.pill("BORA CORRER  [ENTER]", W / 2 - 150, 286, 300, () => this.enterFromMenu("garage"), { primary: true, h: 46, font: 18 })
     this.pill("⚔ DUELO ONLINE  [D]", W / 2 - 150, 342, 300, () => this.enterFromMenu("duellobby"), { h: 38, font: 15 })
-    this.pill("🏁 CORRIDA  [C]", W / 2 - 150, 388, 300, () => this.abrirRaceLobby(), { h: 38, font: 15 })
+    this.pill("🏁 CORRIDA  [C]", W / 2 - 150, 388, 300, () => abrirRaceLobby(this), { h: 38, font: 15 })
     ctx.textAlign = "center"
     ctx.fillStyle = "rgba(248,250,252,0.6)"
     ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
@@ -2743,21 +2712,7 @@ export class AutoDashEngine {
     ctx.textAlign = "left"
   }
 
-  // ---------- modo corrida ----------
-  abrirRaceLobby() {
-    this.audio.ui()
-    this.race = null
-    this.fadeT = 0.22
-    this.state = "racelobby"
-  }
 
-  /** Larga uma corrida contra bots — não toca na rede, é o modo de testar sozinho. */
-  correrComBots() {
-    this.audio.ui()
-    this.mode = "race"
-    this.race = RaceSession.soloComBots(this.cfg.pilotName || "VOCÊ", this.raceVoltas, this.raceBots)
-    this.startRace(this.race.cfg.seed)
-  }
 
   renderRaceLobby() {
     const ctx = this.ctx
@@ -2819,9 +2774,9 @@ export class AutoDashEngine {
     barra("ADERÊNCIA", spec.grip / 0.95, W / 2 - 46)
     barra("VELOCIDADE", spec.topSpeed / 262, W / 2 + 98)
 
-    this.pill("🏁 CORRER COM BOTS  [ENTER]", W / 2 - 160, 366, 320, () => this.correrComBots(), { primary: true, h: 44, font: 16 })
+    this.pill("🏁 CORRER COM BOTS  [ENTER]", W / 2 - 160, 366, 320, () => correrComBots(this), { primary: true, h: 44, font: 16 })
     this.pill("CRIAR SALA  [H]", W / 2 - 160, 416, 155, () => void this.criarSalaOnline(), { h: 36, font: 13 })
-    this.pill("ENTRAR  [J]", W / 2 + 5, 416, 155, () => this.abrirCodigoSala(), { h: 36, font: 13 })
+    this.pill("ENTRAR  [J]", W / 2 + 5, 416, 155, () => abrirCodigoSala(this), { h: 36, font: 13 })
 
     ctx.textAlign = "center"
     ctx.fillStyle = "rgba(248,250,252,0.5)"
@@ -2847,13 +2802,6 @@ export class AutoDashEngine {
     } catch (e) { this.raceErro = (e as Error)?.message ?? "não consegui criar a sala" }
   }
 
-  abrirCodigoSala() {
-    this.audio.ui()
-    this.raceErro = null
-    this.codeBuf = ""
-    this.state = "racecode"
-    this.fadeT = 0.22
-  }
 
   async entrarSalaOnline() {
     if (this.codeBuf.length < 4) return
@@ -2997,7 +2945,7 @@ export class AutoDashEngine {
       y += 27
     }
     ctx.textAlign = "left"
-    this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 230, H - 56, 220, () => this.correrComBots(), { primary: true, h: 42, font: 16 })
+    this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 230, H - 56, 220, () => correrComBots(this), { primary: true, h: 42, font: 16 })
     this.pill("MENU  [M]", W / 2 + 10, H - 56, 220, () => this.toMenu(), { h: 42, font: 16 })
   }
 
@@ -3181,7 +3129,7 @@ export class AutoDashEngine {
       this.state = "nameentry"
       this.audio.ui()
     })
-    this.pill("ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); this.startRace() }, { primary: true, h: 42, font: 17 })
+    this.pill("ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); startRace(this) }, { primary: true, h: 42, font: 17 })
 
     // painel de specs e customização
     this.glass(486, 66, 456, 460, 18)
@@ -3258,7 +3206,7 @@ export class AutoDashEngine {
     ctx.fillText("PAUSADO", W / 2, H / 2 - 60)
     ctx.textAlign = "left"
     this.pill("CONTINUAR  [ESC]", W / 2 - 115, H / 2 - 20, 230, () => { this.state = "racing" }, { primary: true, h: 38, font: 15 })
-    this.pill("RECOMEÇAR  [R]", W / 2 - 115, H / 2 + 28, 230, () => this.startRace(), { h: 32 })
+    this.pill("RECOMEÇAR  [R]", W / 2 - 115, H / 2 + 28, 230, () => startRace(this), { h: 32 })
     this.pill("MENU  [M]", W / 2 - 115, H / 2 + 68, 230, () => { this.state = "menu" }, { h: 32 })
   }
 
@@ -3291,7 +3239,7 @@ export class AutoDashEngine {
     })
     ctx.textAlign = "left"
 
-    this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 250, 490, 250, () => this.startRace(), { primary: true, h: 36, font: 14 })
+    this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 250, 490, 250, () => startRace(this), { primary: true, h: 36, font: 14 })
     this.pill("GARAGEM  [G]", W / 2 + 16, 490, 130, () => { this.state = "garage" }, { h: 36 })
     this.pill("MENU  [M]", W / 2 + 160, 490, 100, () => { this.state = "menu" }, { h: 36 })
   }

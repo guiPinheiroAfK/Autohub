@@ -1,4 +1,5 @@
 // AutoDash — modes/duel.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { startRace } from "./race"
 import { AutoDashEngine, type DuelSession, H } from "../engine"
 import { rematchRoom, pollRoom, postState, type DuelTelemetry, createRoom, joinRoom } from "../net"
 import { clamp } from "../math"
@@ -36,7 +37,7 @@ export function duelNet(eng: AutoDashEngine, dt: number) {
     }
     if (d.startAtLocal !== null && performance.now() >= d.startAtLocal - 3300) {
       d.rematch = false
-      eng.startRace(d.seed)
+      startRace(eng, d.seed)
       // compensa a latência do poll: o verde acende no instante combinado,
       // mesmo que este cliente tenha descoberto a largada atrasado
       const remaining = (d.startAtLocal - performance.now()) / 1000
