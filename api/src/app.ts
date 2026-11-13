@@ -10,7 +10,7 @@ import { cotacoesRoutes } from "./routes/cotacoes.ts"
 import { publicoRoutes } from "./routes/publico.ts"
 import { socialRoutes } from "./routes/social.ts"
 import { colaboracoesRoutes } from "./routes/colaboracoes.ts"
-import { authV2Routes } from "./routes/auth/conta.ts"
+import { authV2Routes, authContaRoutes } from "./routes/auth/conta.ts"
 import { marketplacePublicoRoutes, marketplaceRoutes } from "./routes/marketplace.ts"
 import { lojasPublicoRoutes, lojasRoutes } from "./routes/lojas.ts"
 import { eventosPublicoRoutes, eventosRoutes } from "./routes/eventos-calendario.ts"
@@ -104,6 +104,7 @@ api.route("/cotacoes", cotacoesRoutes)
 api.route("/social", socialRoutes)
 api.route("/colaboracoes", colaboracoesRoutes)
 api.route("/auth", authV2Routes)
+api.route("/auth", authContaRoutes)
 api.route("/marketplace", marketplaceRoutes)
 api.route("/lojas", lojasRoutes)
 api.route("/eventos-calendario", eventosRoutes)
