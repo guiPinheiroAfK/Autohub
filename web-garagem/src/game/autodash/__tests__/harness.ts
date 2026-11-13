@@ -62,6 +62,24 @@ function makeCanvasLike(name: string, sink: Sink) {
   }
 }
 
+// Canvas principal: guarda os listeners (mouse) para o teste poder disparar cliques.
+// Retângulo igual ao canvas lógico (960x540), então clientX/clientY == coordenada do jogo.
+function makeMainCanvas(sink: Sink, store: Map<string, Array<(e: any) => void>>) {
+  const base = makeCanvasLike("canvas", sink)
+  return {
+    ...base,
+    addEventListener(type: string, fn: (e: any) => void) {
+      const arr = store.get(type) ?? []
+      arr.push(fn)
+      store.set(type, arr)
+    },
+    removeEventListener(type: string, fn: (e: any) => void) {
+      store.set(type, (store.get(type) ?? []).filter((f) => f !== fn))
+    },
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 540 }),
+  }
+}
+
 export function mulberry32(seed: number) {
   let a = seed >>> 0
   return () => {
@@ -79,6 +97,8 @@ export interface ScenarioApi {
   tap(key: string): void
   down(key: string): void
   up(key: string): void
+  /** Clique real: movimento até (x,y) no canvas, botão esquerdo pressionado e solto. */
+  click(x: number, y: number): void
 }
 
 export interface ScenarioResult {
@@ -149,14 +169,24 @@ export async function runScenario(
     const dispatch = (type: string, key: string) => {
       for (const fn of listeners.get(type) ?? []) fn({ key, preventDefault() {} })
     }
+    const canvasListeners = new Map<string, Array<(e: any) => void>>()
+    const dispatchCanvas = (type: string, ev: any) => {
+      for (const fn of canvasListeners.get(type) ?? []) fn(ev)
+    }
     const api: ScenarioApi = {
       tap: (key) => { dispatch("keydown", key); dispatch("keyup", key) },
       down: (key) => dispatch("keydown", key),
       up: (key) => dispatch("keyup", key),
+      click: (x, y) => {
+        const ev = (extra = {}) => ({ button: 0, clientX: x, clientY: y, preventDefault() {}, ...extra })
+        dispatchCanvas("mousemove", ev())
+        dispatchCanvas("mousedown", ev())
+        dispatch("mouseup", "")
+      },
     }
 
     const { AutoDashEngine } = await import("../engine")
-    const canvas = makeCanvasLike("canvas", sink)
+    const canvas = makeMainCanvas(sink, canvasListeners)
     const engine: any = new AutoDashEngine(canvas as any)
 
     for (let i = 0; i < frames; i++) {

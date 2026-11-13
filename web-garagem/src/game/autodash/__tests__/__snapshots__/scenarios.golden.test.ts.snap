@@ -10,6 +10,16 @@ exports[`AutoDash — cenários golden (corrida e duelo) > corrida com bots: lob
 }
 `;
 
+exports[`AutoDash — cenários golden (corrida e duelo) > corrida por CLIQUE real: botão CORRIDA -> CORRER COM BOTS -> pilotagem 1`] = `
+{
+  "calls": 16332001,
+  "finalMode": "race",
+  "finalState": "racing",
+  "frames": 1200,
+  "hash": "630bf28e9f1cf40192e69c2833f8f12ae30e44a69f0c92b9b2ead3d63a9da90b",
+}
+`;
+
 exports[`AutoDash — cenários golden (corrida e duelo) > tela de duelo sem rede: menu -> lobby do duelo -> voltar 1`] = `
 {
   "calls": 3984019,

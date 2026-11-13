@@ -17,6 +17,15 @@ describe("AutoDash — cenários golden (corrida e duelo)", () => {
     expect({ frames: result.frames, calls: result.calls, hash: result.hash, finalState: result.finalState, finalMode: result.finalMode }).toMatchSnapshot()
   }, 180_000)
 
+  it("corrida por CLIQUE real: botão CORRIDA -> CORRER COM BOTS -> pilotagem", async () => {
+    const result = await runScenario(1200, 777003, (i, api) => {
+      if (i === 10) api.click(480, 407)   // botão CORRIDA (960x540)
+      if (i === 20) api.click(480, 388)   // botão CORRER COM BOTS
+      drive(i, api, 60)
+    })
+    expect({ frames: result.frames, calls: result.calls, hash: result.hash, finalState: result.finalState, finalMode: result.finalMode }).toMatchSnapshot()
+  }, 180_000)
+
   it("tela de duelo sem rede: menu -> lobby do duelo -> voltar", async () => {
     const result = await runScenario(300, 777002, (i, api) => {
       if (i === 10) api.tap("d")        // menu -> sem nome salvo: pede nome (destino: lobby do duelo)
