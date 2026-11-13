@@ -7,7 +7,7 @@ export interface SkyKey { t: number; top: string; bot: string; amb: number }
 export interface SkyState { top: string; bot: string; amb: number }
 
 // Tipos de camada conhecidos pelo render (registro CAMADAS em render/backdrop.ts).
-export type LayerKind = "ceu-sol" | "montanhas" | "skyline"
+export type LayerKind = "ceu-sol" | "montanhas" | "skyline" | "brilho-urbano"
 
 export interface BiomeDef {
   id: string
@@ -38,7 +38,7 @@ export const BIOMES: Record<string, BiomeDef> = {
     nome: "Cidade",
     ceu: SKY_KEYS,
     ceuCorrida: { top: "#0a0618", bot: "#2a1140", amb: 0.44, ambChuva: 0.34 },
-    camadas: { longe: ["ceu-sol", "montanhas"], meio: ["skyline"], perto: [] },
+    camadas: { longe: ["ceu-sol", "montanhas"], meio: ["skyline"], perto: ["brilho-urbano"] },
     arvore: 0,
     climas: ["limpo", "chuva"],
   },

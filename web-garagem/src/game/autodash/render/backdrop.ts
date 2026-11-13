@@ -13,6 +13,7 @@ const CAMADAS: Record<LayerKind, (eng: AutoDashEngine, amb: number) => void> = {
   "ceu-sol": camadaCeuSol,
   montanhas: camadaMontanhas,
   skyline: camadaSkyline,
+  "brilho-urbano": camadaBrilhoUrbano,
 }
 
 export function renderBackdrop(eng: AutoDashEngine, amb: number) {
@@ -95,6 +96,19 @@ function camadaSkyline(eng: AutoDashEngine, amb: number) {
       }
     }
   }
+}
+
+// brilho de poluição luminosa no horizonte: névoa neon sobre o skyline. Só à noite.
+function camadaBrilhoUrbano(eng: AutoDashEngine, amb: number) {
+  if (amb >= 0.6) return
+  const ctx = eng.ctx
+  const hz = H * 0.5
+  const g = ctx.createLinearGradient(0, hz - 46, 0, hz + 2)
+  g.addColorStop(0, "rgba(217,70,239,0)")
+  g.addColorStop(0.7, "rgba(217,70,239,0.16)")
+  g.addColorStop(1, "rgba(251,113,133,0.22)")
+  ctx.fillStyle = g
+  ctx.fillRect(0, hz - 46, W, 48)
 }
 
 export function drawDeco(eng: AutoDashEngine, kind: number, dir: number, x: number, y: number, w: number, amb: number) {
