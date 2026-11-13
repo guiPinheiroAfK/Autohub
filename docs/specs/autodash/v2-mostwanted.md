@@ -1,6 +1,6 @@
 # AutoDash v2 — "mini Most Wanted"
 
-**Status:** Fase 0 concluída (planejamento). Fases 1 e 2 em andamento neste branch.
+**Status:** Fases 0 a 3 implementadas, aguardando playtest. Status e commits no GUIA. Próxima: Fase 4.
 **Guia vivo (fonte da verdade do ciclo):** [GUIA-V2.md](GUIA-V2.md). Esta spec detalha escopo, fases e critérios; decisões e log ficam no guia.
 
 ## 1. Escopo
@@ -74,4 +74,5 @@ Detalhadas quando a fase anterior for aprovada (ver GUIA).
 - [ADR 0011](../../adr/0011-autodash-biomas-e-camadas.md) — biomas como dados e camadas.
 - [ADR 0012](../../adr/0012-autodash-modelo-de-fisica.md) — tração, pneus, câmbio e clima como entrada da física.
 - [ADR 0013](../../adr/0013-autodash-relogio-em-ticks.md) — relógio em ticks e clima.
+- [ADR 0014](../../adr/0014-autodash-circuitos-e-ramais.md) — circuitos fixos, ramais e reconhecimento de percurso.
 - [ADR 0007](../../adr/0007-autodash-canvas-sem-libs.md) e [ADR 0008](../../adr/0008-autodash-strategy-para-trafego.md) — base do engine atual.

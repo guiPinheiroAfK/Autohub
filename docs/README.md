@@ -19,9 +19,10 @@
 | [0008](adr/0008-autodash-strategy-para-trafego.md) | Tráfego do AutoDash com padrão strategy |
 | [0009](adr/0009-duelo-por-polling.md) | Multiplayer do AutoDash por polling |
 | [0010](adr/0010-autodash-roblox-spec-driven.md) | Port do AutoDash para Roblox guiado por spec |
-| [0011](adr/0011-autodash-biomas-e-camadas.md) | AutoDash v2: biomas como dados e camadas de cenário (proposto) |
-| [0012](adr/0012-autodash-modelo-de-fisica.md) | AutoDash v2: tração, pneus, câmbio e clima na física (proposto) |
+| [0011](adr/0011-autodash-biomas-e-camadas.md) | AutoDash v2: biomas como dados e camadas de cenário |
+| [0012](adr/0012-autodash-modelo-de-fisica.md) | AutoDash v2: tração, pneus, câmbio e clima na física |
 | [0013](adr/0013-autodash-relogio-em-ticks.md) | AutoDash v2: relógio em ticks e clima (proposto) |
+| [0014](adr/0014-autodash-circuitos-e-ramais.md) | AutoDash v2: circuitos fixos, ramais (atalhos) e reconhecimento de percurso |
 
 ## Specs
 - [autodash/](specs/autodash/README.md) — minigame web (descrição do que o código faz hoje).
