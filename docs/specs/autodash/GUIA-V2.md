@@ -170,13 +170,23 @@ Critério de aceite: solo e corrida leem o bioma da tabela. Snapshot do golden m
 
 Critério de aceite: o carro padrão continua idêntico (ou o snapshot muda com justificativa). Os quatro carros de teste se comportam diferente de forma perceptível no navegador.
 
-### Fase 3 — Pistas de corrida e lobby — `pendente`
+### Fase 3 — Pistas de corrida e lobby — `concluída` (hashes no log; aguardando playtest)
+Decisões e alternativa rejeitada em [ADR 0014](../../adr/0014-autodash-circuitos-e-ramais.md).
+- [x] Circuitos fixos como dados (`world/circuits.ts`): Anel de Shibuya, Serra do Píer (costa), Marginal Neon.
+- [x] Atalhos e ramificações como **ramal paralelo** na mesma fita (`world/ramais.ts`): sem checkpoint, sem teleporte; grama entre pista e ramal; `ganho` de avanço no miolo.
+- [x] Bots pegam o ramal; minimapa e prévia mostram o ramal; placas de atalho.
+- [x] Lobby com escolha de pista (P/setas), painel com traçado, km, curvas, atalhos e bioma.
+- [x] Reconhecimento de percurso: sobrevoo de uma volta com nome dos trechos (tecla R).
+- [x] Sala online: pista na seed (`seed % 8`); API aceita `seed` opcional, sem migration.
+- [x] Tração agora também muda direção e patinada (correção da revisão da Fase 2).
+- Pendente / não verificado: ramal com geometria própria (bifurcação de verdade); o trecho separado do ramal só foi visto no começo, no navegador; tsc da api não rodou; bots no ramal sem playtest; `ganho` e larguras são palpite a calibrar.
+
 ### Fase 4 — Clima e ciclo de dia em ticks, com efeito na física — `pendente`
 ### Fase 5 — Eventos novos (racha, combustível) — `pendente`
 ### Fase 6 — Polícia por estrelas — `pendente`
 ### Fase 7 — Customização estética (bodykit, som, efeitos) — `pendente`
 
-Fases 3 em diante só são detalhadas quando a anterior for aprovada.
+Fases 4 em diante só são detalhadas quando a anterior for aprovada.
 
 ## 9. Ideias de rodadas e drift (para brainstorm, não implementar)
 
@@ -204,4 +214,8 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-13 | d0f8e39 | Fase 1c-ii: seletor de bioma na garagem (tecla X e pill). | atualizado no replay solo (+98 chamadas pela pill nova). Cenas de corrida não mudaram. |
 | 2026-11-13 | b6451b0 | Fase 2a: tração, pneus e relação final na física (`physics/traction.ts`); carro padrão inalterado. | não alterado |
 | 2026-11-13 | 9f4cd77 | Fase 2b: quatro carros de teste de tração. | atualizado no replay solo (garagem mostra "1 / 16"; só o hash muda, as chamadas de desenho não). Cenas de corrida não mudaram. |
+| 2026-11-13 | d637260 | Revisão da Fase 2: `steerK` (direção por tração) e `wheelspinK` (patinada); seletor de bioma troca o cenário na hora. | não alterado |
+| 2026-11-13 | 5ee3269 | Garagem mostra tração e pneu do carro. | atualizado no replay solo (+14 chamadas de texto). |
+| 2026-11-13 | 81ce03d, e1174c3, 35a7804 | Fase 3a: ADR 0014; circuitos fixos e ramais (dados, física, render); bots, minimapa e prévia com ramais. | não alterado |
+| 2026-11-13 | a87237c | Fase 3b: escolha de pista, prévia e reconhecimento no lobby; pista na seed; API aceita seed. | atualizado nas 2 cenas de corrida (largam no circuito fixo; lobby com painel). Solo e duelo não mudaram. |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |
