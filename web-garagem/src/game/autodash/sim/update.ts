@@ -9,6 +9,7 @@ import { updateFx, emitSmoke, emitFlame, burst, initRain } from "../fx/particles
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
+import { accelK, finalDriveOf, tyreOf } from "../physics/traction"
 import { shiftUp, shiftDown } from "../physics/gearbox"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
@@ -81,7 +82,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   // ---------- racing ----------
-  const grip = spec.grip * (eng.raining ? 0.62 : 1)
+  const grip = spec.grip * tyreOf(spec).grip * (eng.raining ? 0.62 : 1)
   const playerZ = eng.position + PLAYER_Z
   const seg = segAt(eng, playerZ)
 
@@ -142,7 +143,10 @@ export function update(eng: AutoDashEngine, dt: number) {
   let accel = 0
   if (eng.gear >= 1 && throttle && eng.shiftT <= 0) {
     const gearF = Math.pow(GEAR_RATIOS[eng.gear - 1] / GEAR_RATIOS[0], 0.9)
-    accel = spec.power * powerCurve(eng, eng.rpm) * gearF
+    const pc = powerCurve(eng, eng.rpm)
+    accel = spec.power * pc * gearF
+    // tração: o eixo motor limita a aceleração (ADR 0012). Padrão RWD = 1, sem efeito.
+    accel *= accelK(spec, pc * gearF, centrif)
     if (eng.rpm >= RPM_LIMITER - 50) { accel = 0; if (Math.random() < 0.4) eng.audio.limiter() }
     if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0") }
     if (eng.bogT > 0) accel *= 0.5
@@ -169,7 +173,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.speed = clamp(eng.speed, 0, maxSpd)
   // limite por marcha (estourou o giro = não anda mais) — e freio motor na descida
   if (eng.gear >= 1) {
-    const gearTop = (RPM_LIMITER - RPM_IDLE) / (GEAR_RATIOS[eng.gear - 1] * RPM_PER_KMH)
+    const gearTop = (RPM_LIMITER - RPM_IDLE) / (GEAR_RATIOS[eng.gear - 1] * RPM_PER_KMH * finalDriveOf(spec))
     eng.speed = Math.min(eng.speed, gearTop)
   }
 

@@ -26,6 +26,18 @@ export type BodyKind =
   // não cópias, e os nomes não remetem a marca nenhuma)
   | "zcoupe" | "rotor" | "apex" | "kaiju" | "sylva" | "roadster" | "alta" | "flat6"
 
+// Tração e pneus (ADR 0012). Campos opcionais: sem eles, o carro é RWD com pneu padrão,
+// que é a referência do modelo (multiplicador de tração exatamente 1).
+export type Drive = "FWD" | "RWD" | "AWD"
+export type TyreId = "padrao" | "esportivo" | "macio" | "misto"
+
+export const TYRES: Record<TyreId, { name: string; grip: number; traction: number }> = {
+  padrao: { name: "padrão", grip: 1, traction: 1 },
+  esportivo: { name: "esportivo", grip: 1.08, traction: 1.12 },
+  macio: { name: "macio (semi-slick)", grip: 1.18, traction: 1.25 },
+  misto: { name: "misto (chuva)", grip: 0.95, traction: 0.7 },
+}
+
 export interface CarSpec {
   id: string
   name: string
@@ -36,6 +48,10 @@ export interface CarSpec {
   topSpeed: number   // km/h
   width: number      // meia-largura normalizada (fração da meia-pista) — carro largo sofre no tráfego
   shiftMs: number    // tempo de troca de marcha
+  drive?: Drive      // tração (padrão RWD)
+  frontBias?: number // só AWD: fração do torque na dianteira (0.5 = 50/50, 0.3 = 30/70)
+  tyre?: TyreId      // pneu (padrão "padrao")
+  finalDrive?: number // relação final (1 = padrão; maior = mais torque e menos velocidade final)
 }
 
 export const CARS: CarSpec[] = [
@@ -103,6 +119,7 @@ export const CARS: CarSpec[] = [
     power: 54, grip: 0.90, topSpeed: 258, width: 0.26, shiftMs: 150,
     desc: "Motor traseiro boxer. Câmbio relâmpago e aderência de trilho.",
   },
+
 ]
 
 export const PAINTS = [

@@ -1,6 +1,7 @@
 // AutoDash — physics/rpm.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine } from "../engine"
-import { RPM_LIMITER, RPM_IDLE, GEAR_RATIOS, RPM_PER_KMH } from "../data"
+import { RPM_LIMITER, RPM_IDLE, GEAR_RATIOS, RPM_PER_KMH, CARS } from "../data"
+import { finalDriveOf } from "./traction"
 
 export function powerCurve(_eng: AutoDashEngine, rpm: number) : number {
   if (rpm >= RPM_LIMITER) return 0
@@ -12,5 +13,5 @@ export function powerCurve(_eng: AutoDashEngine, rpm: number) : number {
 
 export function rpmFor(eng: AutoDashEngine, speed: number, gear: number) : number {
   if (gear <= 0) return eng.rpm
-  return RPM_IDLE + speed * GEAR_RATIOS[gear - 1] * RPM_PER_KMH
+  return RPM_IDLE + speed * GEAR_RATIOS[gear - 1] * RPM_PER_KMH * finalDriveOf(CARS[eng.cfg.carIdx])
 }
