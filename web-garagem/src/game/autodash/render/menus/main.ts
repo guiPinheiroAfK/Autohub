@@ -8,6 +8,7 @@ import { CARS, saveConfig, NEONS, PAINTS, WHEELS, STRIPES, WINGS, NEON_NAMES } f
 import { drawPlayerCar, rr } from "../primitives"
 import { clamp } from "../../math"
 import { biomeById, proximoBioma } from "../../world/biomes"
+import { driveLabel } from "../../physics/traction"
 
 export function renderMenu(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -69,6 +70,8 @@ export function renderGarage(eng: AutoDashEngine) {
   ctx.fillStyle = "rgba(248,250,252,0.55)"
   ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillText(`${eng.cfg.carIdx + 1} / ${CARS.length}`, 240, 78)
+  ctx.font = "12px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText(driveLabel(spec), 240, 98)
   ctx.textAlign = "left"
 
   pill(eng, "← menu", 16, 16, 92, () => { eng.state = "menu" }, { h: 26, font: 12 })
