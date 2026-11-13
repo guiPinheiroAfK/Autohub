@@ -1,10 +1,11 @@
-import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, SEG_LEN, DRAW_DIST, CARS, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH, type BodyKind, KMH2UPS, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
+import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, SEG_LEN, DRAW_DIST, CARS, RPM_LIMITER, type BodyKind, KMH2UPS, GEAR_RATIOS, RPM_PER_KMH, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
 import { type DuelTelemetry, postState, rematchRoom, pollRoom, createRoom, joinRoom } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic, type TrafficKind, KINDS, TRAFFIC_COLORS, type WorldView } from "./traffic/types"
 import { RaceSession } from "./race/session"
 import { clamp, mulberry32, mix, shade, hexToRgb } from "./math"
 import { DRIVERS } from "./traffic/driver"
+import { rpmFor, powerCurve } from "./physics/rpm"
 import { poly, rr, drawPlayerCar } from "./render/primitives"
 
 // AutoDash — engine pseudo-3D (estilo NFS de PSP) em Canvas 2D puro.
@@ -887,25 +888,13 @@ export class AutoDashEngine {
     if (this.obstacles.some(o => o.dead)) this.obstacles = this.obstacles.filter(o => !o.dead)
   }
 
-  // ---------- física ----------
-  powerCurve(rpm: number): number {
-    if (rpm >= RPM_LIMITER) return 0
-    if (rpm < 1400) return 0.25
-    if (rpm < 4500) return 0.5 + 0.5 * ((rpm - 1400) / 3100)
-    if (rpm < 7000) return 1.0
-    return 1.0 - 0.45 * ((rpm - 7000) / (RPM_LIMITER - 7000))
-  }
 
-  rpmFor(speed: number, gear: number): number {
-    if (gear <= 0) return this.rpm
-    return RPM_IDLE + speed * GEAR_RATIOS[gear - 1] * RPM_PER_KMH
-  }
 
   shiftUp() {
     if (this.gear === 0) {
       let best = 1
       for (let g = 6; g >= 1; g--) {
-        const r = this.rpmFor(this.speed, g)
+        const r = rpmFor(this, this.speed, g)
         if (r >= 1800 && r <= 6500) { best = g; break }
         if (r < 1800) best = Math.max(1, g - 0)
       }
@@ -918,7 +907,7 @@ export class AutoDashEngine {
     if (this.gear >= 6) return
     this.gear++
     this.shiftT = CARS[this.cfg.carIdx].shiftMs / 1000
-    if (this.rpmFor(this.speed, this.gear) < 1500) this.audio.bog()
+    if (rpmFor(this, this.speed, this.gear) < 1500) this.audio.bog()
     else { this.audio.shift(); this.popExhaust() }
   }
 
@@ -941,7 +930,7 @@ export class AutoDashEngine {
     if (this.gear <= 0) return
     if (this.gear === 1) { this.gear = 0; this.audio.shift(); return }
     const next = this.gear - 1
-    if (this.rpmFor(this.speed, next) > RPM_LIMITER + 400) { this.audio.limiter(); return } // protege o motor
+    if (rpmFor(this, this.speed, next) > RPM_LIMITER + 400) { this.audio.limiter(); return } // protege o motor
     this.gear = next
     this.shiftT = CARS[this.cfg.carIdx].shiftMs / 1000
     this.audio.shift()
@@ -1072,7 +1061,7 @@ export class AutoDashEngine {
     if (this.wheelspinT > 0) this.wheelspinT -= dt
     if (this.bogT > 0) this.bogT -= dt
 
-    if (this.gear >= 1) this.rpm = this.rpmFor(this.speed, this.gear)
+    if (this.gear >= 1) this.rpm = rpmFor(this, this.speed, this.gear)
     else {
       const targetRpm = RPM_IDLE + throttle * (7500 - RPM_IDLE)
       this.rpm += (targetRpm - this.rpm) * Math.min(1, dt * 5)
@@ -1087,7 +1076,7 @@ export class AutoDashEngine {
     let accel = 0
     if (this.gear >= 1 && throttle && this.shiftT <= 0) {
       const gearF = Math.pow(GEAR_RATIOS[this.gear - 1] / GEAR_RATIOS[0], 0.9)
-      accel = spec.power * this.powerCurve(this.rpm) * gearF
+      accel = spec.power * powerCurve(this, this.rpm) * gearF
       if (this.rpm >= RPM_LIMITER - 50) { accel = 0; if (Math.random() < 0.4) this.audio.limiter() }
       if (this.wheelspinT > 0) { accel *= 0.35; this.emitSmoke(2, "#e2e8f0") }
       if (this.bogT > 0) accel *= 0.5
