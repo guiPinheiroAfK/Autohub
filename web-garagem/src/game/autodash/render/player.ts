@@ -1,4 +1,5 @@
 // AutoDash — render/player.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { glass } from "../ui/widgets"
 import { AutoDashEngine, W, H, PLAYER_Z } from "../engine"
 import { CARS, PAINTS } from "../data"
 import { clamp, shade } from "../math"
@@ -95,7 +96,7 @@ export function renderRearView(eng: AutoDashEngine) {
   const yOf = (f: number) => hy + (by - hy) * f
   const halfOf = (f: number) => mw * 0.52 * f + 1.5
 
-  eng.glass(mx, my, mw, mh, 10)
+  glass(eng, mx, my, mw, mh, 10)
   ctx.save()
   ctx.beginPath(); ctx.roundRect(mx + 2, my + 2, mw - 4, mh - 4, 9); ctx.clip()
 

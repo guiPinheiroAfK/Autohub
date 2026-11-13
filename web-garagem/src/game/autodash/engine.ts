@@ -18,6 +18,7 @@ import { updateObstacles } from "./world/obstacles"
 import { skyNow, renderBackdrop } from "./render/backdrop"
 import { renderRoad } from "./render/road"
 import { renderPlayer, renderRearThreat, renderRearView } from "./render/player"
+import { glass, pill, arrowBtn } from "./ui/widgets"
 import { rr, drawPlayerCar } from "./render/primitives"
 import { onKeyDown, onKeyUp } from "./input/keyboard"
 import { onMouseDown, onMouseUp, onMouseMove, onWheel, onCtx } from "./input/pointer"
@@ -975,66 +976,14 @@ export class AutoDashEngine {
     ctx.globalAlpha = 1
   }
 
-  // ---------- HUD ----------
-  glass(x: number, y: number, w: number, h: number, r = 14) {
-    const ctx = this.ctx
-    ctx.fillStyle = "rgba(8,13,26,0.55)"
-    rr(ctx, x, y, w, h, r)
-    const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.55)
-    hl.addColorStop(0, "rgba(255,255,255,0.10)")
-    hl.addColorStop(1, "rgba(255,255,255,0)")
-    ctx.fillStyle = hl
-    rr(ctx, x, y, w, h * 0.55, r)
-    ctx.strokeStyle = "rgba(255,255,255,0.14)"
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, r)
-    ctx.stroke()
-  }
 
-  isHover(x: number, y: number, w: number, h: number) {
-    return this.mousePx.x >= x && this.mousePx.x <= x + w && this.mousePx.y >= y && this.mousePx.y <= y + h
-  }
 
-  /** Botão pill clicável (mouse) com hover; o atalho de teclado continua valendo. */
-  pill(label: string, x: number, y: number, w: number, act: () => void, opts: { primary?: boolean; h?: number; font?: number } = {}) {
-    const ctx = this.ctx
-    const h = opts.h ?? 28
-    const hov = this.isHover(x, y, w, h)
-    ctx.fillStyle = opts.primary
-        ? (hov ? "#fde047" : "#facc15")
-        : (hov ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.10)")
-    rr(ctx, x, y, w, h, h / 2)
-    ctx.strokeStyle = hov ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.18)"
-    ctx.lineWidth = 1
-    ctx.beginPath(); ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2); ctx.stroke()
-    ctx.fillStyle = opts.primary ? "#1c1917" : "#f8fafc"
-    ctx.font = `bold ${opts.font ?? 13}px 'Space Grotesk', 'Segoe UI', sans-serif`
-    ctx.textAlign = "center"
-    ctx.fillText(label, x + w / 2, y + h / 2 + (opts.font ?? 13) * 0.36)
-    ctx.textAlign = "left"
-    this.uiRegions.push({ x, y, w, h, act })
-  }
 
-  /** Seta clicável de navegação (◀ / ▶). */
-  arrowBtn(x: number, y: number, dir: -1 | 1, act: () => void) {
-    const ctx = this.ctx
-    const s = 46
-    const hov = this.isHover(x, y, s, s)
-    ctx.fillStyle = hov ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.10)"
-    rr(ctx, x, y, s, s, 12)
-    ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 22px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.textAlign = "center"
-    ctx.fillText(dir < 0 ? "◀" : "▶", x + s / 2, y + s / 2 + 8)
-    ctx.textAlign = "left"
-    this.uiRegions.push({ x, y, w: s, h: s, act })
-  }
 
   renderHud() {
     const ctx = this.ctx
     // placar
-    this.glass(14, 12, 210, 62)
+    glass(this, 14, 12, 210, 62)
     ctx.fillStyle = "#f8fafc"
     ctx.font = "bold 24px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(`${Math.floor(this.score).toLocaleString("pt-BR")}`, 28, 40)
@@ -1086,7 +1035,7 @@ export class AutoDashEngine {
     // direção touch (ainda encosta um pouco; ajuste fino pendente de ver
     // numa tela de verdade)
     const nx = 22, ny = this.isTouch ? H - 230 : H - 160, nh = 120
-    this.glass(nx - 6, ny - 8, 34, nh + 34, 10)
+    glass(this, nx - 6, ny - 8, 34, nh + 34, 10)
     ctx.fillStyle = "rgba(148,163,184,0.3)"
     rr(ctx, nx, ny, 22, nh, 8)
     const nfill = nh * this.nitroMeter / 100
@@ -1105,7 +1054,7 @@ export class AutoDashEngine {
   renderMinimap() {
     const ctx = this.ctx
     const bx = W - 122, byy = H - 296, bw = 104, bh = 88
-    this.glass(bx, byy, bw, bh, 10)
+    glass(this, bx, byy, bw, bh, 10)
     ctx.save()
     ctx.beginPath()
     ctx.roundRect(bx + 3, byy + 3, bw - 6, bh - 6, 8)
@@ -1220,7 +1169,7 @@ export class AutoDashEngine {
     const ctx = this.ctx
     const d = this.duel!
     const bw = 380, bx = W / 2 - bw / 2, byy = this.state === "countdown" ? 128 : 10
-    this.glass(bx, byy, bw, 46, 12)
+    glass(this, bx, byy, bw, 46, 12)
     const myName = (this.cfg.pilotName || "VOCÊ").slice(0, 10)
     const oppName = (d.oppName || "RIVAL").slice(0, 10)
     const deltaM = Math.round((this.km - d.oppD) * 1000)
@@ -1405,9 +1354,9 @@ export class AutoDashEngine {
     ctx.font = "18px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("costure o trânsito · respeite o câmbio · sobreviva", W / 2, 214)
     ctx.textAlign = "left"
-    this.pill("BORA CORRER  [ENTER]", W / 2 - 150, 286, 300, () => this.enterFromMenu("garage"), { primary: true, h: 46, font: 18 })
-    this.pill("⚔ DUELO ONLINE  [D]", W / 2 - 150, 342, 300, () => this.enterFromMenu("duellobby"), { h: 38, font: 15 })
-    this.pill("🏁 CORRIDA  [C]", W / 2 - 150, 388, 300, () => abrirRaceLobby(this), { h: 38, font: 15 })
+    pill(this, "BORA CORRER  [ENTER]", W / 2 - 150, 286, 300, () => this.enterFromMenu("garage"), { primary: true, h: 46, font: 18 })
+    pill(this, "⚔ DUELO ONLINE  [D]", W / 2 - 150, 342, 300, () => this.enterFromMenu("duellobby"), { h: 38, font: 15 })
+    pill(this, "🏁 CORRIDA  [C]", W / 2 - 150, 388, 300, () => abrirRaceLobby(this), { h: 38, font: 15 })
     ctx.textAlign = "center"
     ctx.fillStyle = "rgba(248,250,252,0.6)"
     ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
@@ -1445,16 +1394,16 @@ export class AutoDashEngine {
     ctx.font = "bold 16px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(`VOLTAS: ${this.raceVoltas}`, W / 2, 196)
     ctx.textAlign = "left"
-    this.arrowBtn(W / 2 - 108, 180, -1, () => { this.raceVoltas = Math.max(1, this.raceVoltas - 1); this.audio.ui() })
-    this.arrowBtn(W / 2 + 84, 180, 1, () => { this.raceVoltas = Math.min(9, this.raceVoltas + 1); this.audio.ui() })
+    arrowBtn(this, W / 2 - 108, 180, -1, () => { this.raceVoltas = Math.max(1, this.raceVoltas - 1); this.audio.ui() })
+    arrowBtn(this, W / 2 + 84, 180, 1, () => { this.raceVoltas = Math.min(9, this.raceVoltas + 1); this.audio.ui() })
 
     // seletor de bots
     ctx.textAlign = "center"
     ctx.fillStyle = "rgba(248,250,252,0.85)"
     ctx.fillText(`ADVERSÁRIOS (BOTS): ${this.raceBots}`, W / 2, 244)
     ctx.textAlign = "left"
-    this.arrowBtn(W / 2 - 148, 228, -1, () => { this.raceBots = Math.max(1, this.raceBots - 1); this.audio.ui() })
-    this.arrowBtn(W / 2 + 124, 228, 1, () => { this.raceBots = Math.min(3, this.raceBots + 1); this.audio.ui() })
+    arrowBtn(this, W / 2 - 148, 228, -1, () => { this.raceBots = Math.max(1, this.raceBots - 1); this.audio.ui() })
+    arrowBtn(this, W / 2 + 124, 228, 1, () => { this.raceBots = Math.min(3, this.raceBots + 1); this.audio.ui() })
 
     // seletor de CARRO — a escolha vive aqui, não na garagem, porque é aqui
     // que se monta a corrida
@@ -1467,10 +1416,10 @@ export class AutoDashEngine {
     ctx.font = "12px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText(spec.desc, W / 2, 316)
     ctx.textAlign = "left"
-    this.arrowBtn(W / 2 - 190, 280, -1, () => {
+    arrowBtn(this, W / 2 - 190, 280, -1, () => {
       this.cfg.carIdx = (this.cfg.carIdx + CARS.length - 1) % CARS.length; saveConfig(this.cfg); this.audio.ui()
     })
-    this.arrowBtn(W / 2 + 166, 280, 1, () => {
+    arrowBtn(this, W / 2 + 166, 280, 1, () => {
       this.cfg.carIdx = (this.cfg.carIdx + 1) % CARS.length; saveConfig(this.cfg); this.audio.ui()
     })
     // barrinhas de atributo, pra comparar sem decorar número
@@ -1487,9 +1436,9 @@ export class AutoDashEngine {
     barra("ADERÊNCIA", spec.grip / 0.95, W / 2 - 46)
     barra("VELOCIDADE", spec.topSpeed / 262, W / 2 + 98)
 
-    this.pill("🏁 CORRER COM BOTS  [ENTER]", W / 2 - 160, 366, 320, () => correrComBots(this), { primary: true, h: 44, font: 16 })
-    this.pill("CRIAR SALA  [H]", W / 2 - 160, 416, 155, () => void this.criarSalaOnline(), { h: 36, font: 13 })
-    this.pill("ENTRAR  [J]", W / 2 + 5, 416, 155, () => abrirCodigoSala(this), { h: 36, font: 13 })
+    pill(this, "🏁 CORRER COM BOTS  [ENTER]", W / 2 - 160, 366, 320, () => correrComBots(this), { primary: true, h: 44, font: 16 })
+    pill(this, "CRIAR SALA  [H]", W / 2 - 160, 416, 155, () => void this.criarSalaOnline(), { h: 36, font: 13 })
+    pill(this, "ENTRAR  [J]", W / 2 + 5, 416, 155, () => abrirCodigoSala(this), { h: 36, font: 13 })
 
     ctx.textAlign = "center"
     ctx.fillStyle = "rgba(248,250,252,0.5)"
@@ -1571,7 +1520,7 @@ export class AutoDashEngine {
     }
     ctx.textAlign = "left"
     if (r?.cfg.souDono) {
-      this.pill("🏁 LARGAR  [ENTER]", W / 2 - 120, y + 12, 240, () => void r.largar(), { primary: true, h: 44, font: 16 })
+      pill(this, "🏁 LARGAR  [ENTER]", W / 2 - 120, y + 12, 240, () => void r.largar(), { primary: true, h: 44, font: 16 })
     } else {
       ctx.textAlign = "center"
       ctx.fillStyle = "rgba(248,250,252,0.6)"
@@ -1658,8 +1607,8 @@ export class AutoDashEngine {
       y += 27
     }
     ctx.textAlign = "left"
-    this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 230, H - 56, 220, () => correrComBots(this), { primary: true, h: 42, font: 16 })
-    this.pill("MENU  [M]", W / 2 + 10, H - 56, 220, () => this.toMenu(), { h: 42, font: 16 })
+    pill(this, "CORRER DE NOVO  [ENTER]", W / 2 - 230, H - 56, 220, () => correrComBots(this), { primary: true, h: 42, font: 16 })
+    pill(this, "MENU  [M]", W / 2 + 10, H - 56, 220, () => this.toMenu(), { h: 42, font: 16 })
   }
 
   /**
@@ -1693,7 +1642,7 @@ export class AutoDashEngine {
     const ctx = this.ctx
     const bw = 420, bh = 300
     const bx = W / 2 - bw / 2, by = 96
-    this.glass(bx - 14, by - 14, bw + 28, bh + 66, 14)
+    glass(this, bx - 14, by - 14, bw + 28, bh + 66, 14)
     ctx.textAlign = "center"
     ctx.fillStyle = "#f8fafc"
     ctx.font = "bold 20px 'Space Grotesk', 'Segoe UI', sans-serif"
@@ -1757,7 +1706,7 @@ export class AutoDashEngine {
     const grid = r.grid()
     const bw = 208, bh = 56 + grid.length * 22
     const bx = 14, by = 88
-    this.glass(bx, by, bw, bh, 10)
+    glass(this, bx, by, bw, bh, 10)
 
     // VOLTA e POSIÇÃO em tamanho grande: são as duas informações que o piloto
     // consulta de relance, não dá pra deixar como linha miúda de cabeçalho
@@ -1813,9 +1762,9 @@ export class AutoDashEngine {
     ctx.fillText(`${this.cfg.carIdx + 1} / ${CARS.length}`, 240, 78)
     ctx.textAlign = "left"
 
-    this.pill("← menu", 16, 16, 92, () => { this.state = "menu" }, { h: 26, font: 12 })
-    this.arrowBtn(38, 206, -1, () => { this.cfg.carIdx = (this.cfg.carIdx + CARS.length - 1) % CARS.length; save(); this.audio.ui() })
-    this.arrowBtn(396, 206, 1, () => { this.cfg.carIdx = (this.cfg.carIdx + 1) % CARS.length; save(); this.audio.ui() })
+    pill(this, "← menu", 16, 16, 92, () => { this.state = "menu" }, { h: 26, font: 12 })
+    arrowBtn(this, 38, 206, -1, () => { this.cfg.carIdx = (this.cfg.carIdx + CARS.length - 1) % CARS.length; save(); this.audio.ui() })
+    arrowBtn(this, 396, 206, 1, () => { this.cfg.carIdx = (this.cfg.carIdx + 1) % CARS.length; save(); this.audio.ui() })
 
     // plataforma + carro
     const px = 240, py = 316
@@ -1836,16 +1785,16 @@ export class AutoDashEngine {
     ctx.fillText(spec.desc, px, 414)
     ctx.textAlign = "left"
 
-    this.pill(`piloto: ${this.cfg.pilotName || "?"} · trocar [N]`, 120, 430, 240, () => {
+    pill(this, `piloto: ${this.cfg.pilotName || "?"} · trocar [N]`, 120, 430, 240, () => {
       this.nameBuf = this.cfg.pilotName
       this.afterName = "garage"
       this.state = "nameentry"
       this.audio.ui()
     })
-    this.pill("ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); startRace(this) }, { primary: true, h: 42, font: 17 })
+    pill(this, "ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); startRace(this) }, { primary: true, h: 42, font: 17 })
 
     // painel de specs e customização
-    this.glass(486, 66, 456, 460, 18)
+    glass(this, 486, 66, 456, 460, 18)
     const sx = 510
     const stat = (label: string, frac: number, x: number, y: number, invert = false) => {
       ctx.fillStyle = "rgba(248,250,252,0.75)"
@@ -1891,11 +1840,11 @@ export class AutoDashEngine {
     }
 
     // pills de opções
-    this.pill(`faixa: ${STRIPES[custom.stripe]} [V]`, sx, 222, 200, () => { custom.stripe = (custom.stripe + 1) % STRIPES.length; save(); this.audio.ui() })
-    this.pill(`aerofólio: ${WINGS[custom.wing]} [G]`, sx + 216, 222, 200, () => { custom.wing = (custom.wing + 1) % WINGS.length; save(); this.audio.ui() })
-    this.pill(`neon: ${NEON_NAMES[custom.neon]} [B]`, sx, 258, 200, () => { custom.neon = (custom.neon + 1) % NEONS.length; save(); this.audio.ui() })
-    this.pill(`direção: ${this.cfg.steering === "mouse" ? "mouse" : "teclado"} [Y]`, sx + 216, 258, 200, () => { this.cfg.steering = this.cfg.steering === "mouse" ? "keyboard" : "mouse"; save(); this.audio.ui() })
-    this.pill(`câmbio: ${this.cfg.transmission === "auto" ? "automático" : "sequencial (scroll)"} [T]`, sx, 294, 416, () => { this.cfg.transmission = this.cfg.transmission === "auto" ? "manual" : "auto"; save(); this.audio.ui() })
+    pill(this, `faixa: ${STRIPES[custom.stripe]} [V]`, sx, 222, 200, () => { custom.stripe = (custom.stripe + 1) % STRIPES.length; save(); this.audio.ui() })
+    pill(this, `aerofólio: ${WINGS[custom.wing]} [G]`, sx + 216, 222, 200, () => { custom.wing = (custom.wing + 1) % WINGS.length; save(); this.audio.ui() })
+    pill(this, `neon: ${NEON_NAMES[custom.neon]} [B]`, sx, 258, 200, () => { custom.neon = (custom.neon + 1) % NEONS.length; save(); this.audio.ui() })
+    pill(this, `direção: ${this.cfg.steering === "mouse" ? "mouse" : "teclado"} [Y]`, sx + 216, 258, 200, () => { this.cfg.steering = this.cfg.steering === "mouse" ? "keyboard" : "mouse"; save(); this.audio.ui() })
+    pill(this, `câmbio: ${this.cfg.transmission === "auto" ? "automático" : "sequencial (scroll)"} [T]`, sx, 294, 416, () => { this.cfg.transmission = this.cfg.transmission === "auto" ? "manual" : "auto"; save(); this.audio.ui() })
 
     // leaderboard global
     ctx.fillStyle = "rgba(253,224,71,0.9)"
@@ -1918,9 +1867,9 @@ export class AutoDashEngine {
     ctx.font = "bold 46px 'Space Grotesk', 'Segoe UI', sans-serif"
     ctx.fillText("PAUSADO", W / 2, H / 2 - 60)
     ctx.textAlign = "left"
-    this.pill("CONTINUAR  [ESC]", W / 2 - 115, H / 2 - 20, 230, () => { this.state = "racing" }, { primary: true, h: 38, font: 15 })
-    this.pill("RECOMEÇAR  [R]", W / 2 - 115, H / 2 + 28, 230, () => startRace(this), { h: 32 })
-    this.pill("MENU  [M]", W / 2 - 115, H / 2 + 68, 230, () => { this.state = "menu" }, { h: 32 })
+    pill(this, "CONTINUAR  [ESC]", W / 2 - 115, H / 2 - 20, 230, () => { this.state = "racing" }, { primary: true, h: 38, font: 15 })
+    pill(this, "RECOMEÇAR  [R]", W / 2 - 115, H / 2 + 28, 230, () => startRace(this), { h: 32 })
+    pill(this, "MENU  [M]", W / 2 - 115, H / 2 + 68, 230, () => { this.state = "menu" }, { h: 32 })
   }
 
   renderGameOver() {
@@ -1952,15 +1901,15 @@ export class AutoDashEngine {
     })
     ctx.textAlign = "left"
 
-    this.pill("CORRER DE NOVO  [ENTER]", W / 2 - 250, 490, 250, () => startRace(this), { primary: true, h: 36, font: 14 })
-    this.pill("GARAGEM  [G]", W / 2 + 16, 490, 130, () => { this.state = "garage" }, { h: 36 })
-    this.pill("MENU  [M]", W / 2 + 160, 490, 100, () => { this.state = "menu" }, { h: 36 })
+    pill(this, "CORRER DE NOVO  [ENTER]", W / 2 - 250, 490, 250, () => startRace(this), { primary: true, h: 36, font: 14 })
+    pill(this, "GARAGEM  [G]", W / 2 + 16, 490, 130, () => { this.state = "garage" }, { h: 36 })
+    pill(this, "MENU  [M]", W / 2 + 160, 490, 100, () => { this.state = "menu" }, { h: 36 })
   }
 
   renderNameEntry() {
     const ctx = this.ctx
     this.dim(0.7)
-    this.glass(W / 2 - 230, 140, 460, 270, 20)
+    glass(this, W / 2 - 230, 140, 460, 270, 20)
     ctx.textAlign = "center"
     ctx.fillStyle = "#fde047"
     ctx.font = "900 38px 'Space Grotesk', 'Segoe UI', sans-serif"
@@ -1975,7 +1924,7 @@ export class AutoDashEngine {
     ctx.fillStyle = "rgba(255,255,255,0.25)"
     ctx.fillRect(W / 2 - 150, 320, 300, 2)
     ctx.textAlign = "left"
-    this.pill("CONFIRMAR  [ENTER]", W / 2 - 115, 352, 230, () => this.confirmName(), { primary: true, h: 36, font: 14 })
+    pill(this, "CONFIRMAR  [ENTER]", W / 2 - 115, 352, 230, () => this.confirmName(), { primary: true, h: 36, font: 14 })
   }
 
   // ---------- telas do duelo ----------
@@ -1998,15 +1947,15 @@ export class AutoDashEngine {
     ctx.fillText("dois pilotos, mesma pista, largada junta.", W / 2, 186)
     ctx.fillText("quem for mais longe sem bater, leva.", W / 2, 208)
     ctx.textAlign = "left"
-    this.pill("CRIAR SALA", W / 2 - 150, 260, 300, () => duelCreate(this), { primary: true, h: 44, font: 17 })
-    this.pill("TENHO UM CÓDIGO", W / 2 - 150, 316, 300, () => { this.codeBuf = ""; this.state = "duelcode"; this.audio.ui() }, { h: 38, font: 15 })
-    this.pill("← voltar  [ESC]", W / 2 - 150, 368, 300, () => this.toMenu(), { h: 30 })
+    pill(this, "CRIAR SALA", W / 2 - 150, 260, 300, () => duelCreate(this), { primary: true, h: 44, font: 17 })
+    pill(this, "TENHO UM CÓDIGO", W / 2 - 150, 316, 300, () => { this.codeBuf = ""; this.state = "duelcode"; this.audio.ui() }, { h: 38, font: 15 })
+    pill(this, "← voltar  [ESC]", W / 2 - 150, 368, 300, () => this.toMenu(), { h: 30 })
   }
 
   renderDuelCode() {
     const ctx = this.ctx
     this.dim(0.7)
-    this.glass(W / 2 - 210, 150, 420, 250, 20)
+    glass(this, W / 2 - 210, 150, 420, 250, 20)
     ctx.textAlign = "center"
     ctx.fillStyle = "#38bdf8"
     ctx.font = "900 30px 'Space Grotesk', sans-serif"
@@ -2018,8 +1967,8 @@ export class AutoDashEngine {
     ctx.fillStyle = "rgba(255,255,255,0.25)"
     ctx.fillRect(W / 2 - 90, 296, 180, 2)
     ctx.textAlign = "left"
-    this.pill("ENTRAR  [ENTER]", W / 2 - 110, 330, 220, () => duelJoin(this), { primary: true, h: 34, font: 14 })
-    this.pill("← voltar", W / 2 - 110, 372, 220, () => { this.state = "duellobby" }, { h: 26 })
+    pill(this, "ENTRAR  [ENTER]", W / 2 - 110, 330, 220, () => duelJoin(this), { primary: true, h: 34, font: 14 })
+    pill(this, "← voltar", W / 2 - 110, 372, 220, () => { this.state = "duellobby" }, { h: 26 })
   }
 
   renderDuelWaiting() {
@@ -2049,7 +1998,7 @@ export class AutoDashEngine {
         ctx.fillText(`esperando oponente${dots}`, W / 2, 330)
       }
       ctx.textAlign = "left"
-      this.pill("cancelar  [ESC]", W / 2 - 100, 370, 200, () => this.toMenu(), { h: 28 })
+      pill(this, "cancelar  [ESC]", W / 2 - 100, 370, 200, () => this.toMenu(), { h: 28 })
     } else {
       const secs = Math.max(0, (d.startAtLocal - performance.now()) / 1000)
       ctx.fillStyle = "#4ade80"
@@ -2112,8 +2061,8 @@ export class AutoDashEngine {
       }
     }
     ctx.textAlign = "left"
-    this.pill("⚔ REVANCHE  [ENTER]", W / 2 - 240, 340, 240, () => duelRematch(this), { primary: true, h: 40, font: 15 })
-    this.pill("MENU", W / 2 + 20, 340, 220, () => this.toMenu(), { h: 40, font: 15 })
+    pill(this, "⚔ REVANCHE  [ENTER]", W / 2 - 240, 340, 240, () => duelRematch(this), { primary: true, h: 40, font: 15 })
+    pill(this, "MENU", W / 2 + 20, 340, 220, () => this.toMenu(), { h: 40, font: 15 })
   }
 
   // ---------- input ----------
