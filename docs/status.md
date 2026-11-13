@@ -21,12 +21,18 @@ Atualizado em 2026-11-13, a partir da memória de sessões anteriores e do códi
 - **Marketplace:** listagem pública, busca e filtros, interesse, patrocínio, CRUD de anúncios. Minha Loja com preview ao vivo.
 - **AutoDash** (`/autodash`): minigame de corrida em Canvas, com leaderboard global, duelo 1v1 online e modo corrida de até 4 pilotos. Ver [specs/autodash](specs/autodash/README.md).
 
-## Em andamento
-- Refatoração em commits, conforme [plano-reorganizacao.md](plano-reorganizacao.md). Branch `chore/reorganizacao`.
+## Reorganização (branch `chore/reorganizacao`, ainda não está na master)
+- Plano em [plano-reorganizacao.md](plano-reorganizacao.md). Fases 0, 1, 2 (testes), 4 (páginas) e 5 (API) concluídas.
+- **AutoDash:** o engine foi dividido em módulos (`game/autodash/`). `engine.ts` ficou com ~660 linhas (campos, render, bind). Ponto de entrada público: `game/autodash/index.ts`.
+- **Testes:** `npm test` em `web-garagem/` roda vitest. O golden master (`__tests__/`) replica partida solo, corrida com bots, corrida por clique e lobby do duelo, e compara o hash de tudo que o canvas desenha. Os snapshots foram gerados no código original.
+- **Pendente na refatoração:**
+  - Teclas de debug do AutoDash (`O L B V J K I U`) ainda ativas. Decisão do dono do projeto.
+  - Unificar os dois módulos de rede (`game/autodash/net.ts` e `race/net.ts`). Não coberto pelo golden, porque a rede não roda no teste.
+  - Checagem de tipos da API: não há `typescript` no `api/`. Só foi validado com `bun build`.
+  - Migrations: o SQL foi conferido e é idêntico ao original, mas a API não foi executada contra o Neon.
 - Port do AutoDash para Roblox (projeto separado, fora deste repo). Spec em [specs/autodash-roblox](specs/autodash-roblox/autodash-roblox-spec.md). Marco 3 implementado, aguardando playtest.
 
 ## Próximos passos já planejados
-- Merge do PR de marketplace na master (**verificar** se já foi feito).
 - Página pública de loja (`/loja/:slug`) pode precisar de polimento.
-- AutoDash: validar perseguição e blitz, depois remover as teclas de debug (plano, Fase 3).
+- AutoDash: validar perseguição e blitz, depois decidir sobre as teclas de debug.
 - Integrar carros do AutoDash com os veículos reais do usuário.

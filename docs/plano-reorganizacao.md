@@ -1,6 +1,6 @@
 # Plano de reorganização do Autohub
 
-Status: **Fases 0 e 1 concluídas** (branch `chore/reorganizacao`, não enviada). Próxima: Fase 2 (testes). Nenhum código do jogo foi alterado ainda.
+Status: **Fases 0, 1, 2, 4 e 5 concluídas; Fase 3 quase toda concluída** (branch `chore/reorganizacao`, não enviada). Engine do AutoDash foi de 5.091 para ~660 linhas, com golden master cobrindo partida solo, corrida e duelo. Pendências: teclas de debug (decisão do dono), unificar os dois módulos de rede e a checagem de tipos da API. Fase 6 (memória) em andamento.
 
 Decisões tomadas: D1 (protótipo em `legacy/`), D3 (Rojo fora do repo). D2 virou **npm**, não bun: o `netlify.toml` e o Docker do front usam npm, então o `package-lock.json` ficou e os `bun.lock` saíram.
 

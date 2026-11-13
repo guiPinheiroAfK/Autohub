@@ -3,7 +3,7 @@
 Descrição do que o minigame faz hoje, derivada do código. Mudou de comportamento? Atualize esta spec no mesmo commit.
 
 **Rota:** `/autodash` (pública, tela cheia, fora do `Layout`). Página: `web-garagem/src/pages/AutoDashPage.tsx`.
-**Código:** `web-garagem/src/game/autodash/`. Ver a estrutura alvo em `docs/plano-reorganizacao.md`.
+**Código:** `web-garagem/src/game/autodash/`, ponto de entrada `index.ts`. Módulos: `engine.ts` (orquestra), `sim/` (quadro), `physics/`, `world/`, `traffic/`, `modes/` (solo, corrida, duelo), `render/`, `input/`, `ui/`, `fx/`, `flow.ts`. Ver `docs/plano-reorganizacao.md`.
 
 ## Visão
 Corrida pseudo-3D em Canvas 2D (segmentos estilo OutRun). Estética de jogo de PSP. Dados em `localStorage`, ranking global e multiplayer pela API. Ver ADR 0007.
@@ -65,7 +65,10 @@ Sintetizado com WebAudio em `audio.ts`. Sem arquivos de som. Mute no menu.
 Teclas de atalho para testar perseguição, blitz, pontes e obstáculos (`O`, `L`, `B`, `V`, `J`, `K`, `I`, `U`, segundo a memória de desenvolvimento). **Devem sair ou ficar atrás de `import.meta.env.DEV`** (plano, Fase 3, item 34).
 
 ## Testes
-Sem suíte automatizada ainda. Verificação manual em `/autodash`. Após a Fase 2 do plano, funções puras (`mulberry32`, geração de pista, `powerCurve`, `rpmFor`) ganham teste.
+- `npm test` em `web-garagem/` (vitest).
+- `math.test.ts`: `mulberry32` (reprodutível), cores e `clamp`.
+- `engine.golden.test.ts` e `scenarios.golden.test.ts`: replay determinístico com canvas e relógio falsos. Partida solo, corrida com bots, corrida por clique e lobby do duelo. Compara um hash de tudo que o engine desenha. Os snapshots são do código original, antes da divisão em módulos. Mudança de comportamento intencional exige atualizar o snapshot de propósito.
+- O golden não cobre a rede (duelo online e corrida online). Isso é verificação manual.
 
 ## Roadmap
 - Validar perseguição e blitz no navegador com o usuário.
