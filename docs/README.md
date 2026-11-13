@@ -22,6 +22,7 @@
 
 ## Specs
 - [autodash/](specs/autodash/README.md) — minigame web (descrição do que o código faz hoje).
+- [autodash/GUIA-V2.md](specs/autodash/GUIA-V2.md) — **guia vivo da v2 (mini Most Wanted)**: decisões, fases e status. Quem trabalhar no AutoDash lê este arquivo primeiro.
 - [autodash-roblox/](specs/autodash-roblox/autodash-roblox-spec.md) — spec completa do port para Roblox (fonte da verdade do port).
 
 ## Como adicionar um ADR
