@@ -1,0 +1,21 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AutoDash — cenários golden (corrida e duelo) > corrida com bots: lobby -> largada -> pilotagem -> pausa 1`] = `
+{
+  "calls": 21059643,
+  "finalMode": "race",
+  "finalState": "racing",
+  "frames": 1500,
+  "hash": "45bbd1cd1a6af85504182971c229d555c043c5ae1efbd9be12ac8e4a40b9b5fc",
+}
+`;
+
+exports[`AutoDash — cenários golden (corrida e duelo) > tela de duelo sem rede: menu -> lobby do duelo -> voltar 1`] = `
+{
+  "calls": 3984019,
+  "finalMode": "solo",
+  "finalState": "menu",
+  "frames": 300,
+  "hash": "88a6ed3585a75f46eb0bdeaefb78df7a95e0c061befc10039b21e065f40334fb",
+}
+`;
