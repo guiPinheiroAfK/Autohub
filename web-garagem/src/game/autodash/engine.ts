@@ -1,19 +1,13 @@
+import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, SEG_LEN, DRAW_DIST, CARS, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH, type BodyKind, KMH2UPS, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES, type CarSpec } from "./data"
+import { type DuelTelemetry, postState, rematchRoom, pollRoom, createRoom, joinRoom } from "./net"
+import { AudioBus } from "./audio"
+import { type Traffic, type TrafficKind, KINDS, TRAFFIC_COLORS, type WorldView } from "./traffic/types"
+import { RaceSession } from "./race/session"
+import { clamp, mulberry32, mix, shade, hexToRgb } from "./math"
+import { DRIVERS } from "./traffic/driver"
+
 // AutoDash — engine pseudo-3D (estilo NFS de PSP) em Canvas 2D puro.
 // Estrada por segmentos projetados, tráfego, clima, câmbio com RPM e ranking local.
-
-import {
-  CANVAS_W, CANVAS_H, SEG_LEN, ROAD_WIDTH, CAM_HEIGHT, CAM_DEPTH, DRAW_DIST,
-  KMH2UPS, RPM_IDLE, RPM_REDLINE, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH,
-  CARS, PAINTS, STRIPES, NEONS, NEON_NAMES, WHEELS, WINGS,
-  loadConfig, saveConfig, cachedScores, fetchLeaderboard, submitScore,
-  type CarSpec, type CarCustom, type GameConfig, type ScoreEntry, type BodyKind,
-} from "./data"
-import { AudioBus } from "./audio"
-import { createRoom, joinRoom, pollRoom, postState, rematchRoom, type DuelTelemetry } from "./net"
-import { KINDS, TRAFFIC_COLORS, type Traffic, type TrafficKind, type WorldView } from "./traffic/types"
-import { DRIVERS } from "./traffic/driver"
-import { RaceSession } from "./race/session"
-
 
 const W = CANVAS_W, H = CANVAS_H
 const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH
@@ -50,16 +44,6 @@ interface DuelSession {
   msg: string
 }
 
-// RNG determinístico — no duelo os dois recebem a mesma pista via seed
-function mulberry32(seed: number) {
-  let a = seed >>> 0
-  return () => {
-    a |= 0; a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
 
 interface Seg { curve: number; y1: number; y2: number; sign?: number }
 
@@ -96,95 +80,82 @@ const SKY_KEYS = [
   { t: 0.875, top: "#33507c", bot: "#fcd9a0", amb: 0.78 },
 ]
 
-function hexToRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16)
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-}
-function mix(a: string, b: string, p: number): string {
-  const ca = hexToRgb(a), cb = hexToRgb(b)
-  return `rgb(${Math.round(ca[0] + (cb[0] - ca[0]) * p)},${Math.round(ca[1] + (cb[1] - ca[1]) * p)},${Math.round(ca[2] + (cb[2] - ca[2]) * p)})`
-}
-function shade(hex: string, f: number): string {
-  const c = hexToRgb(hex)
-  return `rgb(${Math.round(c[0] * f)},${Math.round(c[1] * f)},${Math.round(c[2] * f)})`
-}
-function clamp(v: number, lo: number, hi: number) { return v < lo ? lo : v > hi ? hi : v }
 
 export class AutoDashEngine {
-  private canvas: HTMLCanvasElement
-  private ctx: CanvasRenderingContext2D
-  private audio = new AudioBus()
-  private cfg: GameConfig = loadConfig()
-  private scores: ScoreEntry[] = cachedScores()
+  canvas: HTMLCanvasElement
+  ctx: CanvasRenderingContext2D
+  audio = new AudioBus()
+  cfg: GameConfig = loadConfig()
+  scores: ScoreEntry[] = cachedScores()
 
-  private state: GameState = "menu"
-  private raf = 0
-  private lastT = 0
-  private destroyed = false
+  state: GameState = "menu"
+  raf = 0
+  lastT = 0
+  destroyed = false
 
   // pista
-  private segments: Seg[] = []
-  private trackLen = 0
+  segments: Seg[] = []
+  trackLen = 0
 
   // jogador
-  private position = 0
-  private speed = 0            // km/h
-  private playerX = 0          // -1..1 (fração da meia-pista)
-  private gear = 1             // 0 = neutro
-  private rpm = RPM_IDLE
-  private shiftT = 0
-  private wheelspinT = 0
-  private bogT = 0
-  private nitroMeter = 0
-  private nitroOn = false
-  private offroadT = 0
-  private steerVel = 0
-  private shield = false
-  private mult2T = 0
-  private level = 0
-  private levelUpT = 0
+  position = 0
+  speed = 0            // km/h
+  playerX = 0          // -1..1 (fração da meia-pista)
+  gear = 1             // 0 = neutro
+  rpm = RPM_IDLE
+  shiftT = 0
+  wheelspinT = 0
+  bogT = 0
+  nitroMeter = 0
+  nitroOn = false
+  offroadT = 0
+  steerVel = 0
+  shield = false
+  mult2T = 0
+  level = 0
+  levelUpT = 0
 
   // corrida
-  private score = 0
-  private km = 0
-  private combo = 0
-  private comboT = 0
-  private countT = 0
-  private greenAt = 0
-  private greenFired = false
-  private goFlashT = 0
-  private shakeT = 0
-  private crashed = false
-  private crashByPolice = false // a batida foi contra uma viatura? (muda o texto do game over)
+  score = 0
+  km = 0
+  combo = 0
+  comboT = 0
+  countT = 0
+  greenAt = 0
+  greenFired = false
+  goFlashT = 0
+  shakeT = 0
+  crashed = false
+  crashByPolice = false // a batida foi contra uma viatura? (muda o texto do game over)
 
   // mundo
-  private traffic: Traffic[] = []
-  private obstacles: Obstacle[] = []
-  private zones: Zone[] = []
-  private roadSigns: RoadSign[] = []
-  private powerups: Pickup[] = []
-  private puTimer = 6
-  private eventTimer = 12 // s até o próximo evento de mapa sorteado
-  private bgShift = 0
-  private curveWarn = 0
-  private curveWarnDist = 0
-  private curveBeepT = 0
-  private collWarn: Traffic | null = null
-  private collBeepT = 0
-  private immuneT = 0 // invulnerabilidade pós-escudo — vale contra TUDO
-  private policeHitT = 0 // cooldown pós-encostão — vale SÓ contra viatura
-  private policeEscapeT = 0 // tempo mantendo distância da polícia (protótipo do "despiste")
-  private policeChaseT = 0 // duração da perseguição atual — despiste só vale após o aquecimento
-  private particles: Particle[] = []
-  private floaters: Floater[] = []
-  private drops: Drop[] = []
-  private clouds = Array.from({ length: 6 }, (_, i) => ({
+  traffic: Traffic[] = []
+  obstacles: Obstacle[] = []
+  zones: Zone[] = []
+  roadSigns: RoadSign[] = []
+  powerups: Pickup[] = []
+  puTimer = 6
+  eventTimer = 12 // s até o próximo evento de mapa sorteado
+  bgShift = 0
+  curveWarn = 0
+  curveWarnDist = 0
+  curveBeepT = 0
+  collWarn: Traffic | null = null
+  collBeepT = 0
+  immuneT = 0 // invulnerabilidade pós-escudo — vale contra TUDO
+  policeHitT = 0 // cooldown pós-encostão — vale SÓ contra viatura
+  policeEscapeT = 0 // tempo mantendo distância da polícia (protótipo do "despiste")
+  policeChaseT = 0 // duração da perseguição atual — despiste só vale após o aquecimento
+  particles: Particle[] = []
+  floaters: Floater[] = []
+  drops: Drop[] = []
+  clouds = Array.from({ length: 6 }, (_, i) => ({
     x: (i * 173) % W, y: 26 + (i * 61) % 130, s: 34 + (i * 37) % 44,
   }))
   // vinheta cacheada (gradiente por frame é caro; drawImage é barato)
-  private vignetteSprite: HTMLCanvasElement | null = null
+  vignetteSprite: HTMLCanvasElement | null = null
 
-  private vignetteTex(): HTMLCanvasElement {
+  vignetteTex(): HTMLCanvasElement {
     if (this.vignetteSprite) return this.vignetteSprite
     const cv = document.createElement("canvas")
     cv.width = W; cv.height = H
@@ -202,8 +173,8 @@ export class AutoDashEngine {
   // desenho era o gargalo do modo corrida: ~1600 gradientes/frame com as
   // fachadas de Tokyo. drawImage de um sprite pronto é ordens de grandeza
   // mais barato.
-  private glowCache = new Map<string, HTMLCanvasElement>()
-  private neonGlow(cor: string): HTMLCanvasElement {
+  glowCache = new Map<string, HTMLCanvasElement>()
+  neonGlow(cor: string): HTMLCanvasElement {
     const hit = this.glowCache.get(cor)
     if (hit) return hit
     const cv = document.createElement("canvas")
@@ -218,8 +189,8 @@ export class AutoDashEngine {
     this.glowCache.set(cor, cv)
     return cv
   }
-  private glowSprite: HTMLCanvasElement | null = null
-  private glowTex(): HTMLCanvasElement {
+  glowSprite: HTMLCanvasElement | null = null
+  glowTex(): HTMLCanvasElement {
     if (this.glowSprite) return this.glowSprite
     const cv = document.createElement("canvas")
     cv.width = 64; cv.height = 64
@@ -232,43 +203,43 @@ export class AutoDashEngine {
     this.glowSprite = cv
     return cv
   }
-  private raining = false
-  private rainT = 0
-  private rainRollT = 0
-  private demoT = 0
+  raining = false
+  rainT = 0
+  rainRollT = 0
+  demoT = 0
 
   // input
-  private keys = new Set<string>()
-  private mouseGas = false
-  private mouseBrake = false
-  private mouseXn = 0.5
-  private mousePx = { x: -1, y: -1 }
-  private uiRegions: { x: number; y: number; w: number; h: number; act: () => void }[] = []
-  private nameBuf = ""
-  private afterName: "garage" | "duellobby" = "garage"
-  private mode: "solo" | "duel" | "race" = "solo"
-  private race: RaceSession | null = null
-  private raceVoltas = 3
-  private raceBots = 3
-  private raceFinished = false // já cruzei a linha (coast + espectador)
-  private raceSpectT = 0       // tempo assistindo os rivais terminarem
-  private raceErro: string | null = null
-  private duel: DuelSession | null = null
-  private codeBuf = ""
-  private prevState: GameState = "menu"
-  private fadeT = 0
-  private newRecord = false
-  private beamT = 0
-  private beamCdT = 0
-  private pitchY = 0
+  keys = new Set<string>()
+  mouseGas = false
+  mouseBrake = false
+  mouseXn = 0.5
+  mousePx = { x: -1, y: -1 }
+  uiRegions: { x: number; y: number; w: number; h: number; act: () => void }[] = []
+  nameBuf = ""
+  afterName: "garage" | "duellobby" = "garage"
+  mode: "solo" | "duel" | "race" = "solo"
+  race: RaceSession | null = null
+  raceVoltas = 3
+  raceBots = 3
+  raceFinished = false // já cruzei a linha (coast + espectador)
+  raceSpectT = 0       // tempo assistindo os rivais terminarem
+  raceErro: string | null = null
+  duel: DuelSession | null = null
+  codeBuf = ""
+  prevState: GameState = "menu"
+  fadeT = 0
+  newRecord = false
+  beamT = 0
+  beamCdT = 0
+  pitchY = 0
 
   // touch (celular) — nil na maioria dos campos até buildTouchControls() rodar
-  private isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0
-  private touchThrottle = false
-  private touchBrake = false
-  private touchSteerLeft = false
-  private touchSteerRight = false
-  private touchControlsEl: HTMLDivElement | null = null
+  isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0
+  touchThrottle = false
+  touchBrake = false
+  touchSteerLeft = false
+  touchSteerRight = false
+  touchControlsEl: HTMLDivElement | null = null
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -315,7 +286,7 @@ export class AutoDashEngine {
    * No modo corrida o desafio tem que vir do traçado, não de desviar de carro —
    * por isso lá o trânsito também é bem mais leve.
    */
-  private buildTrack(seed = Math.floor(Math.random() * 2 ** 31), corrida = false) {
+  buildTrack(seed = Math.floor(Math.random() * 2 ** 31), corrida = false) {
     const rnd = mulberry32(seed)
     this.segments = []
     let lastY = 0
@@ -403,20 +374,20 @@ export class AutoDashEngine {
     }
   }
 
-  private segAt(z: number): Seg {
+  segAt(z: number): Seg {
     const n = this.segments.length
     return this.segments[Math.floor(((z % this.trackLen) + this.trackLen) % this.trackLen / SEG_LEN) % n]
   }
 
   // ---------- tráfego ----------
-  private laneCenters = [-0.75, -0.25, 0.25, 0.75]
+  laneCenters = [-0.75, -0.25, 0.25, 0.75]
 
-  private seedTraffic(count: number) {
+  seedTraffic(count: number) {
     this.traffic = []
     for (let i = 0; i < count; i++) this.spawnTraffic((i + 1) * (DRAW_DIST * SEG_LEN / count) + 6000)
   }
 
-  private spawnTraffic(relAhead: number) {
+  spawnTraffic(relAhead: number) {
     const roll = Math.random()
     const kind: TrafficKind = roll < 0.52 ? "car" : roll < 0.68 ? "moto" : roll < 0.87 ? "truck" : "bus"
     const k = KINDS[kind]
@@ -443,7 +414,7 @@ export class AutoDashEngine {
    * natural (updateEventSpawner) e pelas teclas de debug do playtest
    * (B ponte · V viaduto · J obstáculos · K mão dupla · I blitz · U radar).
    */
-  private spawnEvent(kind: "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap") {
+  spawnEvent(kind: "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap") {
     const at = (d: number) => ((this.position + d) % this.trackLen + this.trackLen) % this.trackLen
     const note = (text: string) => this.floaters.push({ text, color: "#fbbf24", y: H * 0.38, life: 1.6, big: false })
     // O perigo SEMPRE nasce além do horizonte de render (VIEW), e as placas
@@ -570,7 +541,7 @@ export class AutoDashEngine {
   }
 
   /** DEBUG: solta 3 viaturas atrás do jogador pra testar a IA de perseguição (PoliceDriver). */
-  private spawnPoliceChase() {
+  spawnPoliceChase() {
     const lanes = [-0.5, 0, 0.5]
     for (let i = 0; i < 3; i++) {
       // ATRÁS, escalonadas: elas vêm te alcançar. Só dá pra fazer isso agora que
@@ -588,14 +559,14 @@ export class AutoDashEngine {
     this.audio.horn()
   }
 
-  private wrapDz(a: number, b: number): number {
+  wrapDz(a: number, b: number): number {
     let d = a - b
     if (d > this.trackLen / 2) d -= this.trackLen
     if (d < -this.trackLen / 2) d += this.trackLen
     return d
   }
 
-  private updateTraffic(dt: number, playerZ: number, demo: boolean) {
+  updateTraffic(dt: number, playerZ: number, demo: boolean) {
     // no circuito o desafio é o traçado, não a quantidade de carro: bem menos
     // trânsito, e sem escalar com nível (a corrida tem duração fixa em voltas)
     const target = this.mode === "race"
@@ -760,7 +731,7 @@ export class AutoDashEngine {
    * obstáculos, mão dupla, blitz e radar aparecerem SOZINHOS, sem tecla de debug.
    * Também poda o que já ficou pra trás: zonas/placas se acumulavam pra sempre.
    */
-  private updateEventSpawner(dt: number, playerZ: number) {
+  updateEventSpawner(dt: number, playerZ: number) {
     // poda o que ficou muito atrás (sem isso os arrays crescem sem limite)
     const atras = (z: number) => this.wrapDz(z, playerZ) < -60 * SEG_LEN
     if (this.zones.some(z => atras(z.end))) this.zones = this.zones.filter(z => !atras(z.end))
@@ -785,7 +756,7 @@ export class AutoDashEngine {
    * Zonas de evento: mão dupla spawnando contramão (e espremendo o trânsito na
    * direita), blitz/radar reduzindo o trânsito e checando a sua velocidade.
    */
-  private updateZones(dt: number, playerZ: number) {
+  updateZones(dt: number, playerZ: number) {
     for (const zn of this.zones) {
       const toStart = this.wrapDz(zn.z, playerZ) // >0: início à frente
       const toEnd = this.wrapDz(zn.end, playerZ)
@@ -877,7 +848,7 @@ export class AutoDashEngine {
   }
 
   /** Colisão e limpeza dos obstáculos físicos (cones perdoam, barreira não). */
-  private updateObstacles(playerZ: number) {
+  updateObstacles(playerZ: number) {
     const spec = CARS[this.cfg.carIdx]
     for (const o of this.obstacles) {
       const d = this.wrapDz(o.z, playerZ)
@@ -916,7 +887,7 @@ export class AutoDashEngine {
   }
 
   // ---------- física ----------
-  private powerCurve(rpm: number): number {
+  powerCurve(rpm: number): number {
     if (rpm >= RPM_LIMITER) return 0
     if (rpm < 1400) return 0.25
     if (rpm < 4500) return 0.5 + 0.5 * ((rpm - 1400) / 3100)
@@ -924,12 +895,12 @@ export class AutoDashEngine {
     return 1.0 - 0.45 * ((rpm - 7000) / (RPM_LIMITER - 7000))
   }
 
-  private rpmFor(speed: number, gear: number): number {
+  rpmFor(speed: number, gear: number): number {
     if (gear <= 0) return this.rpm
     return RPM_IDLE + speed * GEAR_RATIOS[gear - 1] * RPM_PER_KMH
   }
 
-  private shiftUp() {
+  shiftUp() {
     if (this.gear === 0) {
       let best = 1
       for (let g = 6; g >= 1; g--) {
@@ -951,7 +922,7 @@ export class AutoDashEngine {
   }
 
   /** Estouro no escape ao engatar — puro juice. */
-  private popExhaust() {
+  popExhaust() {
     if (this.state !== "racing" || this.speed < 30) return
     for (const sx of [-22, 22]) {
       for (let i = 0; i < 3; i++) {
@@ -965,7 +936,7 @@ export class AutoDashEngine {
     }
   }
 
-  private shiftDown() {
+  shiftDown() {
     if (this.gear <= 0) return
     if (this.gear === 1) { this.gear = 0; this.audio.shift(); return }
     const next = this.gear - 1
@@ -977,7 +948,7 @@ export class AutoDashEngine {
 
   /** Caráter sonoro por carroceria: [pitch, brilho]. Grave/encorpado (V grande)
    *  → agudo/metálico (rotativo, boxer, 4-cil de giro alto). */
-  private static readonly ENGINE_VOICE: Record<BodyKind, [number, number]> = {
+  static readonly ENGINE_VOICE: Record<BodyKind, [number, number]> = {
     muscle: [0.80, 0.82], apex: [0.84, 0.86],                 // V grande, grave
     gt: [1.0, 1.0], ghost: [0.98, 1.05], zcoupe: [1.0, 1.0],  // 6-cil equilibrado
     kaiju: [0.95, 1.1], alta: [1.0, 0.98],
@@ -987,7 +958,7 @@ export class AutoDashEngine {
     flat6: [1.08, 1.3],                                       // boxer metálico
   }
 
-  private update(dt: number) {
+  update(dt: number) {
     const spec = CARS[this.cfg.carIdx]
     const voice = AutoDashEngine.ENGINE_VOICE[spec.body] ?? [1, 1]
     this.audio.setEngine(voice[0], voice[1])
@@ -1326,7 +1297,7 @@ export class AutoDashEngine {
     this.audio.engine(this.rpm, throttle, nitroActive, true)
   }
 
-  private launch() {
+  launch() {
     // qualidade da largada pela zona de RPM segurada no verde
     this.gear = 1
     if (this.rpm >= 3600 && this.rpm <= 6300) {
@@ -1348,7 +1319,7 @@ export class AutoDashEngine {
     }
   }
 
-  private burst(x: number, y: number, n: number, colors: string[]) {
+  burst(x: number, y: number, n: number, colors: string[]) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 260
       this.particles.push({
@@ -1359,7 +1330,7 @@ export class AutoDashEngine {
     }
   }
 
-  private crash(byPolice = false) {
+  crash(byPolice = false) {
     // NA CORRIDA NÃO SE MORRE: bater custa quase toda a velocidade e o tempo
     // de retomar — que numa disputa por voltas já é punição suficiente. Encerrar
     // a prova por uma batida tirava o jogador da corrida inteira.
@@ -1407,13 +1378,13 @@ export class AutoDashEngine {
     this.state = "gameover"
   }
 
-  private async refreshScores() {
+  async refreshScores() {
     const scores = await fetchLeaderboard()
     if (!this.destroyed && scores.length) this.scores = scores
   }
 
   // ---------- duelo online ----------
-  private duelNet(dt: number) {
+  duelNet(dt: number) {
     const d = this.duel
     if (!d || this.mode !== "duel") return
     d.postT -= dt
@@ -1492,7 +1463,7 @@ export class AutoDashEngine {
     }
   }
 
-  private duelFinish(win: boolean, msg = "") {
+  duelFinish(win: boolean, msg = "") {
     const d = this.duel
     if (!d || d.result) return
     d.result = win ? "win" : "lose"
@@ -1514,7 +1485,7 @@ export class AutoDashEngine {
     if (win) this.audio.levelUp(); else this.audio.bog()
   }
 
-  private startDuelLobby() {
+  startDuelLobby() {
     this.mode = "duel"
     this.duel = null
     this.codeBuf = ""
@@ -1522,7 +1493,7 @@ export class AutoDashEngine {
     this.audio.ui()
   }
 
-  private newDuelSession(code: string, seed: number, role: "host" | "guest", oppName = "", startInMs: number | null = null): DuelSession {
+  newDuelSession(code: string, seed: number, role: "host" | "guest", oppName = "", startInMs: number | null = null): DuelSession {
     return {
       code, seed, role, oppName,
       startAtLocal: startInMs === null ? null : performance.now() + startInMs,
@@ -1533,7 +1504,7 @@ export class AutoDashEngine {
   }
 
   /** Minha telemetria atual (inclui o carro, pro fantasma do rival ser fiel). */
-  private myTelemetry(crashed: boolean): DuelTelemetry {
+  myTelemetry(crashed: boolean): DuelTelemetry {
     return {
       d: this.km,
       s: Math.floor(this.score),
@@ -1546,7 +1517,7 @@ export class AutoDashEngine {
   }
 
   /** Revanche: mesma sala, pista nova — espera o rival topar. */
-  private duelRematch() {
+  duelRematch() {
     const d = this.duel
     if (!d) { this.startDuelLobby(); return }
     d.rematch = true
@@ -1556,7 +1527,7 @@ export class AutoDashEngine {
     this.audio.ui()
   }
 
-  private duelCreate() {
+  duelCreate() {
     const nome = this.cfg.pilotName || "PILOTO"
     this.state = "duelwaiting"
     this.duel = this.newDuelSession("....", 0, "host")
@@ -1570,7 +1541,7 @@ export class AutoDashEngine {
     })
   }
 
-  private duelJoin() {
+  duelJoin() {
     const code = this.codeBuf.trim().toUpperCase()
     if (code.length !== 4) {
       this.floaters.push({ text: "código tem 4 letras", color: "#ef4444", y: H * 0.68, life: 1.5, big: false })
@@ -1587,7 +1558,7 @@ export class AutoDashEngine {
     })
   }
 
-  private startRace(seed?: number) {
+  startRace(seed?: number) {
     const corrida = this.mode === "race"
     // limpa ANTES de construir: no circuito o buildTrack semeia os cones das
     // curvas, e zerar depois apagaria justamente eles
@@ -1621,7 +1592,7 @@ export class AutoDashEngine {
   }
 
   // ---------- efeitos ----------
-  private emitSmoke(n: number, color: string) {
+  emitSmoke(n: number, color: string) {
     for (let i = 0; i < n; i++) {
       this.particles.push({
         x: W / 2 + (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 25),
@@ -1631,7 +1602,7 @@ export class AutoDashEngine {
       })
     }
   }
-  private emitFlame() {
+  emitFlame() {
     for (let i = 0; i < 2; i++) {
       this.particles.push({
         x: W / 2 + (i === 0 ? -22 : 22) + (Math.random() - 0.5) * 8,
@@ -1642,13 +1613,13 @@ export class AutoDashEngine {
       })
     }
   }
-  private initRain() {
+  initRain() {
     this.drops = []
     for (let i = 0; i < 90; i++) {
       this.drops.push({ x: Math.random() * W, y: Math.random() * H, len: 10 + Math.random() * 18, spd: 500 + Math.random() * 400 })
     }
   }
-  private updateFx(dt: number) {
+  updateFx(dt: number) {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i]
       p.x += p.vx * dt; p.y += p.vy * dt; p.size += 14 * dt
@@ -1670,7 +1641,7 @@ export class AutoDashEngine {
   }
 
   // ---------- clima / céu ----------
-  private skyNow(): { top: string; bot: string; amb: number } {
+  skyNow(): { top: string; bot: string; amb: number } {
     // corrida é SEMPRE noite neon — o clima "Velozes e Furiosos" vive de racha
     // noturno. Céu roxo-profundo com barra magenta no horizonte (poluição
     // luminosa da cidade), sem o ciclo de dia do modo solo.
@@ -1691,7 +1662,7 @@ export class AutoDashEngine {
   }
 
   // ---------- render ----------
-  private render() {
+  render() {
     const ctx = this.ctx
     this.uiRegions = []
     if (this.state !== this.prevState) {
@@ -1803,7 +1774,7 @@ export class AutoDashEngine {
     }
   }
 
-  private renderRoad(amb: number, fogColor: string) {
+  renderRoad(amb: number, fogColor: string) {
     const ctx = this.ctx
     const N = this.segments.length
     const baseIdx = Math.floor(this.position / SEG_LEN) % N
@@ -2255,7 +2226,7 @@ export class AutoDashEngine {
     ctx.fillRect(0, maxY - 34, W, 154)
   }
 
-  private renderBackdrop(amb: number) {
+  renderBackdrop(amb: number) {
     const ctx = this.ctx
     const hz = H * 0.5
     // nuvens macias em parallax
@@ -2362,7 +2333,7 @@ export class AutoDashEngine {
     }
   }*/
 
-  private drawPickup(p: Pickup, x: number, y: number, w: number, amb: number) {
+  drawPickup(p: Pickup, x: number, y: number, w: number, amb: number) {
     if (w < 2.5) return
     const ctx = this.ctx
     const r = w * (1 + Math.sin(p.pulse) * 0.12)
@@ -2405,7 +2376,7 @@ export class AutoDashEngine {
     }
   }
 
-  private drawDeco(kind: number, dir: number, x: number, y: number, w: number, amb: number) {
+  drawDeco(kind: number, dir: number, x: number, y: number, w: number, amb: number) {
     if (w < 1.5) return
     const ctx = this.ctx
     // paleta quente+neon de rua de Tokyo (Shibuya/Kabukicho).
@@ -2563,7 +2534,7 @@ export class AutoDashEngine {
   }
 
   /** Carro fantasma do rival: o carro REAL dele (carroceria+pintura), translúcido. */
-  private drawGhost(x: number, y: number, w: number, amb: number) {
+  drawGhost(x: number, y: number, w: number, amb: number) {
     if (w < 24) return
     const ctx = this.ctx
     const d = this.duel
@@ -2588,7 +2559,7 @@ export class AutoDashEngine {
     }
   }
 
-  private drawObstacle(o: Obstacle, x: number, y: number, w: number, amb: number) {
+  drawObstacle(o: Obstacle, x: number, y: number, w: number, amb: number) {
     if (w < 2) return
     const ctx = this.ctx
     if (o.kind === "cone") {
@@ -2615,7 +2586,7 @@ export class AutoDashEngine {
     }
   }
 
-  private drawRoadSign(sign: RoadSign, x: number, y: number, w: number, amb: number) {
+  drawRoadSign(sign: RoadSign, x: number, y: number, w: number, amb: number) {
     if (w < 3) return
     const ctx = this.ctx
     const poleH = w * 2.8, r = w * 0.95
@@ -2702,7 +2673,7 @@ export class AutoDashEngine {
    * sobre a pista) e uma alça de descida à direita: é DALI que os carros saem
    * e fazem merge na sua via. Contexto > enfeite.
    */
-  private drawBridge(x: number, y: number, w: number, amb: number) {
+  drawBridge(x: number, y: number, w: number, amb: number) {
     const ctx = this.ctx
     // paleta em camadas: topo claro, face frontal média, sombra por baixo —
     // é o que dá volume. Antes era tudo o mesmo cinza chapado.
@@ -2801,7 +2772,7 @@ export class AutoDashEngine {
   }
 
   /** Torre da ponte suspensa (portal vermelho estilo Golden Gate) — você passa por dentro. */
-  private drawTower(x: number, y: number, w: number, amb: number) {
+  drawTower(x: number, y: number, w: number, amb: number) {
     const ctx = this.ctx
     const red = shade("#c0392b", amb)
     const dark = shade("#8f2a20", amb * 0.9)
@@ -2824,7 +2795,7 @@ export class AutoDashEngine {
     ctx.stroke()
   }
 
-  private drawTraffic(t: Traffic, x: number, y: number, w: number, amb: number) {
+  drawTraffic(t: Traffic, x: number, y: number, w: number, amb: number) {
     if (w < 2) return
     const ctx = this.ctx
     const k = KINDS[t.kind]
@@ -2960,7 +2931,7 @@ export class AutoDashEngine {
     }
   }
 
-  private renderPlayer(amb: number) {
+  renderPlayer(amb: number) {
     if (this.state === "menu" || this.state === "garage") return
     const ctx = this.ctx
     const spec = CARS[this.cfg.carIdx]
@@ -3042,7 +3013,7 @@ export class AutoDashEngine {
    * Perspectiva simplificada de propósito (painel de 288x86): o que importa é
    * ler QUAL faixa e QUÃO PERTO, não fidelidade de traçado.
    */
-  private renderRearView() {
+  renderRearView() {
     // na contagem o painel do traçado ocupa o topo — os dois se sobrepunham e
     // viravam um borrão ilegível. Antes de largar não há o que ver atrás.
     if (this.state !== "racing") return
@@ -3129,7 +3100,7 @@ export class AutoDashEngine {
    * lateral dela, crescendo e pulsando mais rápido conforme encosta, pra dar
    * leitura de onde ela vem antes de sentir o encostão.
    */
-  private renderRearThreat() {
+  renderRearThreat() {
     if (this.state !== "racing" && this.state !== "countdown") return
     const ctx = this.ctx
     const playerZ = this.position + PLAYER_Z
@@ -3152,7 +3123,7 @@ export class AutoDashEngine {
     }
   }
 
-  private renderParticles() {
+  renderParticles() {
     const ctx = this.ctx
     for (const p of this.particles) {
       ctx.globalAlpha = clamp(p.life / p.maxLife, 0, 1) * 0.8
@@ -3163,7 +3134,7 @@ export class AutoDashEngine {
   }
 
   // ---------- HUD ----------
-  private glass(x: number, y: number, w: number, h: number, r = 14) {
+  glass(x: number, y: number, w: number, h: number, r = 14) {
     const ctx = this.ctx
     ctx.fillStyle = "rgba(8,13,26,0.55)"
     rr(ctx, x, y, w, h, r)
@@ -3179,12 +3150,12 @@ export class AutoDashEngine {
     ctx.stroke()
   }
 
-  private isHover(x: number, y: number, w: number, h: number) {
+  isHover(x: number, y: number, w: number, h: number) {
     return this.mousePx.x >= x && this.mousePx.x <= x + w && this.mousePx.y >= y && this.mousePx.y <= y + h
   }
 
   /** Botão pill clicável (mouse) com hover; o atalho de teclado continua valendo. */
-  private pill(label: string, x: number, y: number, w: number, act: () => void, opts: { primary?: boolean; h?: number; font?: number } = {}) {
+  pill(label: string, x: number, y: number, w: number, act: () => void, opts: { primary?: boolean; h?: number; font?: number } = {}) {
     const ctx = this.ctx
     const h = opts.h ?? 28
     const hov = this.isHover(x, y, w, h)
@@ -3204,7 +3175,7 @@ export class AutoDashEngine {
   }
 
   /** Seta clicável de navegação (◀ / ▶). */
-  private arrowBtn(x: number, y: number, dir: -1 | 1, act: () => void) {
+  arrowBtn(x: number, y: number, dir: -1 | 1, act: () => void) {
     const ctx = this.ctx
     const s = 46
     const hov = this.isHover(x, y, s, s)
@@ -3218,7 +3189,7 @@ export class AutoDashEngine {
     this.uiRegions.push({ x, y, w: s, h: s, act })
   }
 
-  private renderHud() {
+  renderHud() {
     const ctx = this.ctx
     // placar
     this.glass(14, 12, 210, 62)
@@ -3289,7 +3260,7 @@ export class AutoDashEngine {
   }
 
   /** Minimapa estilo GPS: você fixo embaixo, o traçado à frente sobe reto — sem girar. */
-  private renderMinimap() {
+  renderMinimap() {
     const ctx = this.ctx
     const bx = W - 122, byy = H - 296, bw = 104, bh = 88
     this.glass(bx, byy, bw, bh, 10)
@@ -3403,7 +3374,7 @@ export class AutoDashEngine {
   }
 
   /** Barra do duelo: você × rival, com delta em metros ao vivo. */
-  private renderDuelBar() {
+  renderDuelBar() {
     const ctx = this.ctx
     const d = this.duel!
     const bw = 380, bx = W / 2 - bw / 2, byy = this.state === "countdown" ? 128 : 10
@@ -3431,7 +3402,7 @@ export class AutoDashEngine {
     ctx.textAlign = "left"
   }
 
-  private renderTacho() {
+  renderTacho() {
     const ctx = this.ctx
     // no celular, menor e um pouco mais alto — reduz (não elimina) a
     // sobreposição com os botões de gás/freio/marcha do canto direito
@@ -3522,7 +3493,7 @@ export class AutoDashEngine {
     }
   }
 
-  private renderSemaphore() {
+  renderSemaphore() {
     const ctx = this.ctx
     const cx = W / 2, top = 46
     ctx.strokeStyle = "#1e293b"
@@ -3561,12 +3532,12 @@ export class AutoDashEngine {
   }
 
   // ---------- telas ----------
-  private dim(alpha = 0.55) {
+  dim(alpha = 0.55) {
     this.ctx.fillStyle = `rgba(2,6,23,${alpha})`
     this.ctx.fillRect(0, 0, W, H)
   }
 
-  private renderMenu() {
+  renderMenu() {
     const ctx = this.ctx
     this.dim(0.45)
     ctx.textAlign = "center"
@@ -3613,7 +3584,7 @@ export class AutoDashEngine {
   }
 
   // ---------- modo corrida ----------
-  private abrirRaceLobby() {
+  abrirRaceLobby() {
     this.audio.ui()
     this.race = null
     this.fadeT = 0.22
@@ -3621,14 +3592,14 @@ export class AutoDashEngine {
   }
 
   /** Larga uma corrida contra bots — não toca na rede, é o modo de testar sozinho. */
-  private correrComBots() {
+  correrComBots() {
     this.audio.ui()
     this.mode = "race"
     this.race = RaceSession.soloComBots(this.cfg.pilotName || "VOCÊ", this.raceVoltas, this.raceBots)
     this.startRace(this.race.cfg.seed)
   }
 
-  private renderRaceLobby() {
+  renderRaceLobby() {
     const ctx = this.ctx
     this.dim(0.6)
     ctx.textAlign = "center"
@@ -3701,7 +3672,7 @@ export class AutoDashEngine {
   }
 
   /** Sala online: cria e cai no lobby de espera com o código na tela. */
-  private async criarSalaOnline() {
+  async criarSalaOnline() {
     this.audio.ui()
     this.raceErro = null
     try {
@@ -3716,7 +3687,7 @@ export class AutoDashEngine {
     } catch (e) { this.raceErro = (e as Error)?.message ?? "não consegui criar a sala" }
   }
 
-  private abrirCodigoSala() {
+  abrirCodigoSala() {
     this.audio.ui()
     this.raceErro = null
     this.codeBuf = ""
@@ -3724,7 +3695,7 @@ export class AutoDashEngine {
     this.fadeT = 0.22
   }
 
-  private async entrarSalaOnline() {
+  async entrarSalaOnline() {
     if (this.codeBuf.length < 4) return
     this.raceErro = null
     try {
@@ -3738,7 +3709,7 @@ export class AutoDashEngine {
   }
 
   /** Digitação do código de 4 letras. */
-  private renderRaceCode() {
+  renderRaceCode() {
     const ctx = this.ctx
     this.dim(0.62)
     ctx.textAlign = "center"
@@ -3755,7 +3726,7 @@ export class AutoDashEngine {
   }
 
   /** Sala de espera: código na tela, quem já entrou e o botão de largada. */
-  private renderRaceWait() {
+  renderRaceWait() {
     const ctx = this.ctx
     const r = this.race
     this.dim(0.62)
@@ -3794,7 +3765,7 @@ export class AutoDashEngine {
     ctx.textAlign = "left"
   }
 
-  private renderRaceResult() {
+  renderRaceResult() {
     const ctx = this.ctx
     const r = this.race
     const grid = r?.grid() ?? []
@@ -3875,7 +3846,7 @@ export class AutoDashEngine {
    * acumulando a curvatura, normaliza pra caber na caixa e devolve os pontos.
    * É o que deixa o jogador ler as curvas antes de largar.
    */
-  private tracadoCompleto(cx: number, cy: number, cw: number, ch: number) {
+  tracadoCompleto(cx: number, cy: number, cw: number, ch: number) {
     const pts: { x: number; y: number; c: number }[] = []
     let x = 0, y = 0, h = 0
     const passo = 3
@@ -3897,7 +3868,7 @@ export class AutoDashEngine {
   }
 
   /** Mapa do circuito na largada: curvas bravas em vermelho, retas em verde. */
-  private renderTrackPreview() {
+  renderTrackPreview() {
     const ctx = this.ctx
     const bw = 420, bh = 300
     const bx = W / 2 - bw / 2, by = 96
@@ -3949,7 +3920,7 @@ export class AutoDashEngine {
   }
 
   /** Placar ao vivo no canto da tela durante a corrida. */
-  private renderRaceHud() {
+  renderRaceHud() {
     const r = this.race
     if (!r) return
     const ctx = this.ctx
@@ -4005,7 +3976,7 @@ export class AutoDashEngine {
     }
   }
 
-  private renderGarage() {
+  renderGarage() {
     const ctx = this.ctx
     this.dim(0.72)
     const spec = CARS[this.cfg.carIdx]
@@ -4118,7 +4089,7 @@ export class AutoDashEngine {
     })
   }
 
-  private renderPause() {
+  renderPause() {
     const ctx = this.ctx
     this.dim()
     ctx.textAlign = "center"
@@ -4131,7 +4102,7 @@ export class AutoDashEngine {
     this.pill("MENU  [M]", W / 2 - 115, H / 2 + 68, 230, () => { this.state = "menu" }, { h: 32 })
   }
 
-  private renderGameOver() {
+  renderGameOver() {
     const ctx = this.ctx
     this.dim(0.6)
     ctx.textAlign = "center"
@@ -4165,7 +4136,7 @@ export class AutoDashEngine {
     this.pill("MENU  [M]", W / 2 + 160, 490, 100, () => { this.state = "menu" }, { h: 36 })
   }
 
-  private renderNameEntry() {
+  renderNameEntry() {
     const ctx = this.ctx
     this.dim(0.7)
     this.glass(W / 2 - 230, 140, 460, 270, 20)
@@ -4187,14 +4158,14 @@ export class AutoDashEngine {
   }
 
   // ---------- telas do duelo ----------
-  private toMenu() {
+  toMenu() {
     this.mode = "solo"
     this.duel = null
     this.floaters = []
     this.state = "menu"
   }
 
-  private renderDuelLobby() {
+  renderDuelLobby() {
     const ctx = this.ctx
     this.dim(0.62)
     ctx.textAlign = "center"
@@ -4211,7 +4182,7 @@ export class AutoDashEngine {
     this.pill("← voltar  [ESC]", W / 2 - 150, 368, 300, () => this.toMenu(), { h: 30 })
   }
 
-  private renderDuelCode() {
+  renderDuelCode() {
     const ctx = this.ctx
     this.dim(0.7)
     this.glass(W / 2 - 210, 150, 420, 250, 20)
@@ -4230,7 +4201,7 @@ export class AutoDashEngine {
     this.pill("← voltar", W / 2 - 110, 372, 220, () => { this.state = "duellobby" }, { h: 26 })
   }
 
-  private renderDuelWaiting() {
+  renderDuelWaiting() {
     const ctx = this.ctx
     const d = this.duel
     this.dim(0.66)
@@ -4273,7 +4244,7 @@ export class AutoDashEngine {
     }
   }
 
-  private renderDuelSpectate() {
+  renderDuelSpectate() {
     const ctx = this.ctx
     const d = this.duel
     this.dim(0.55)
@@ -4300,7 +4271,7 @@ export class AutoDashEngine {
     ctx.textAlign = "left"
   }
 
-  private renderDuelResult() {
+  renderDuelResult() {
     const ctx = this.ctx
     const d = this.duel
     this.dim(0.66)
@@ -4325,8 +4296,8 @@ export class AutoDashEngine {
   }
 
   // ---------- input ----------
-  private audioInit = false
-  private ensureAudio() {
+  audioInit = false
+  ensureAudio() {
     this.audio.ensure()
     if (!this.audioInit) {
       this.audioInit = true
@@ -4334,7 +4305,7 @@ export class AutoDashEngine {
     }
   }
 
-  private onKeyDown = (e: KeyboardEvent) => {
+  onKeyDown = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase()
     if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault()
     this.ensureAudio()
@@ -4455,7 +4426,7 @@ export class AutoDashEngine {
     }
   }
 
-  private toggleMute() {
+  toggleMute() {
     this.cfg.sound = !this.cfg.sound
     saveConfig(this.cfg)
     this.audio.setMuted(!this.cfg.sound)
@@ -4465,7 +4436,7 @@ export class AutoDashEngine {
     })
   }
 
-  private enterFromMenu(dest: "garage" | "duellobby" = "garage") {
+  enterFromMenu(dest: "garage" | "duellobby" = "garage") {
     this.audio.ui()
     if (!this.cfg.pilotName) {
       this.nameBuf = ""
@@ -4482,7 +4453,7 @@ export class AutoDashEngine {
     }
   }
 
-  private confirmName() {
+  confirmName() {
     this.cfg.pilotName = (this.nameBuf.trim() || "PILOTO").slice(0, 12)
     saveConfig(this.cfg)
     this.audio.ui()
@@ -4492,7 +4463,7 @@ export class AutoDashEngine {
   }
 
   /** Farol alto: pisca e pede passagem pra quem está na sua faixa. */
-  private flashBeam() {
+  flashBeam() {
     if (this.state !== "racing" || this.beamCdT > 0) return
     this.beamCdT = 2.2
     this.beamT = 0.55
@@ -4504,25 +4475,25 @@ export class AutoDashEngine {
     }
   }
 
-  private tryShift(dir: 1 | -1) {
+  tryShift(dir: 1 | -1) {
     if (this.cfg.transmission !== "manual" && this.gear !== 0) return
     if (this.state !== "racing" && this.state !== "countdown") return
     if (dir === 1) this.shiftUp(); else this.shiftDown()
   }
 
-  private toNeutral() {
+  toNeutral() {
     if (this.state !== "racing") return
     this.gear = 0
     this.audio.shift()
   }
 
-  private onKeyUp = (e: KeyboardEvent) => {
+  onKeyUp = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase()
     this.keys.delete(k)
     if (k === " ") this.nitroOn = false
   }
 
-  private onMouseDown = (e: MouseEvent) => {
+  onMouseDown = (e: MouseEvent) => {
     this.ensureAudio()
     if (e.button === 0) {
       if (this.state === "racing" || this.state === "countdown") {
@@ -4537,12 +4508,12 @@ export class AutoDashEngine {
     if (e.button === 1) { e.preventDefault(); this.toNeutral() }
     if (e.button === 3 || e.button === 4) { e.preventDefault(); this.nitroOn = true }
   }
-  private onMouseUp = (e: MouseEvent) => {
+  onMouseUp = (e: MouseEvent) => {
     if (e.button === 0) this.mouseGas = false
     if (e.button === 2) this.mouseBrake = false
     if (e.button === 3 || e.button === 4) this.nitroOn = false
   }
-  private onMouseMove = (e: MouseEvent) => {
+  onMouseMove = (e: MouseEvent) => {
     const rect = this.canvas.getBoundingClientRect()
     this.mouseXn = clamp((e.clientX - rect.left) / rect.width, 0, 1)
     this.mousePx.x = ((e.clientX - rect.left) / rect.width) * W
@@ -4551,24 +4522,24 @@ export class AutoDashEngine {
     this.canvas.style.cursor = uiState && this.regionAt(this.mousePx.x, this.mousePx.y) ? "pointer" : "default"
   }
 
-  private regionAt(x: number, y: number) {
+  regionAt(x: number, y: number) {
     for (const r of this.uiRegions) {
       if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r
     }
     return null
   }
-  private onWheel = (e: WheelEvent) => {
+  onWheel = (e: WheelEvent) => {
     e.preventDefault()
     if (this.state !== "racing" && this.state !== "countdown") return
     this.tryShift(e.deltaY < 0 ? 1 : -1)
   }
-  private onCtx = (e: Event) => e.preventDefault()
-  private onBlur = () => { if (this.state === "racing" && this.mode !== "duel") this.state = "paused" }
+  onCtx = (e: Event) => e.preventDefault()
+  onBlur = () => { if (this.state === "racing" && this.mode !== "duel") this.state = "paused" }
 
   // toque no canvas: espelha o mousedown/mousemove pra navegação de menu (tap
   // num botão do garagem/pause/resultado) — duplicado em vez de refatorado
   // pra não arriscar quebrar o caminho de mouse, que já funciona.
-  private onTouchStart = (e: TouchEvent) => {
+  onTouchStart = (e: TouchEvent) => {
     const touch = e.touches[0]
     if (!touch) return
     this.ensureAudio()
@@ -4583,8 +4554,8 @@ export class AutoDashEngine {
       else if (this.state === "menu") this.enterFromMenu()
     }
   }
-  private onTouchEnd = () => { this.mouseGas = false }
-  private onTouchMove = (e: TouchEvent) => {
+  onTouchEnd = () => { this.mouseGas = false }
+  onTouchMove = (e: TouchEvent) => {
     const touch = e.touches[0]
     if (!touch) return
     e.preventDefault()
@@ -4608,7 +4579,7 @@ export class AutoDashEngine {
    */
   /** Mata seleção/callout/realce de toque — no celular o toque longo abria o
    *  menu "Salvar imagem" por cima do jogo. Vale pro canvas e pra cada botão. */
-  private noCallout(el: HTMLElement) {
+  noCallout(el: HTMLElement) {
     const s = el.style as CSSStyleDeclaration & Record<string, string>
     s.userSelect = "none"
     s.webkitUserSelect = "none"
@@ -4619,7 +4590,7 @@ export class AutoDashEngine {
     el.addEventListener("dragstart", (e) => e.preventDefault())
   }
 
-  private buildTouchControls() {
+  buildTouchControls() {
     const wrap = document.createElement("div")
     wrap.style.position = "fixed"
     wrap.style.inset = "0"
@@ -4727,7 +4698,7 @@ export class AutoDashEngine {
     bindTap(gearDown, () => this.tryShift(-1))
   }
 
-  private bind() {
+  bind() {
     window.addEventListener("keydown", this.onKeyDown)
     window.addEventListener("keyup", this.onKeyUp)
     window.addEventListener("blur", this.onBlur)
@@ -4741,7 +4712,7 @@ export class AutoDashEngine {
     this.canvas.addEventListener("wheel", this.onWheel, { passive: false })
     this.canvas.addEventListener("contextmenu", this.onCtx)
   }
-  private unbind() {
+  unbind() {
     window.removeEventListener("keydown", this.onKeyDown)
     window.removeEventListener("keyup", this.onKeyUp)
     window.removeEventListener("blur", this.onBlur)
