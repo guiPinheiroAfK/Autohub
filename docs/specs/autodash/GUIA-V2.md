@@ -79,7 +79,8 @@ API: `api/src/routes/autodash.ts`. Tabelas: `autodash_scores`, `autodash_rooms`,
 - **Eventos (solo):** ponte, viaduto, obstáculos, mão dupla, blitz, radar (`speedtrap`), perseguição policial.
 - **Cenário:** um tema urbano (árvores, postes, outdoors, prédios em `render/backdrop.ts`). Sem biomas.
 - **Carros:** lista pequena em `CARS`. Customização estética: pintura, faixa, neon, rodas, asa.
-- **Tração e câmbio:** sem distinção FWD/RWD/AWD. Câmbio é só marcha automática ou manual com 1 curva de torque.
+- **Tração:** FWD, RWD e AWD com divisão e pneu, em `physics/traction.ts` (Fase 2). Padrão continua RWD com pneu padrão.
+- **Câmbio:** ainda só marcha automática ou manual, com 6 marchas e 1 curva de torque. Relação final já vale. Tipo de câmbio pendente.
 
 ## 6. Decisões tomadas (com data)
 
@@ -159,11 +160,13 @@ Critério de aceite: usuário aprova os ADRs e a lista.
 
 Critério de aceite: solo e corrida leem o bioma da tabela. Snapshot do golden muda só pela camada intencional, em commit próprio. Browser: menu, corrida e troca de bioma funcionam.
 
-### Fase 2 — Tração, pneus e câmbio (dados e física, sem visual novo) — `pendente`
-- [ ] Carro ganha: tração (FWD/RWD/AWD + divisão), tipo de pneu, tipo de câmbio, relação final.
-- [ ] Física lê esses dados: limite de tração por eixo, perda de tração na saída de curva, aceleração em reta por tração.
-- [ ] Quatro carros de teste: FWD, RWD, AWD 50/50, AWD 30/70.
-- [ ] Testes unitários da matemática de tração (funções puras).
+### Fase 2 — Tração, pneus e câmbio (dados e física, sem visual novo) — `concluída` (hashes no log)
+- [x] Carro ganha: tração (FWD/RWD/AWD + divisão), tipo de pneu, relação final.
+- [ ] **Pendente (próxima fase de câmbio):** tipo de câmbio (5 e 6 marchas, CVT, manual, híbrido) e embreagem. Hoje `GEAR_RATIOS` tem 6 marchas fixas.
+- [x] Física lê esses dados: limite de tração por eixo, perda de tração na saída de curva (círculo de atrito), aceleração em reta por tração, relação final.
+- [x] Quatro carros de teste: FWD, RWD, AWD 50/50, AWD 30/70 (no fim de `CARS`).
+- [x] Testes unitários da matemática de tração (`__tests__/traction.test.ts`, 14 casos).
+- Nitro não passa pelo limite de tração (decisão registrada no ADR 0012).
 
 Critério de aceite: o carro padrão continua idêntico (ou o snapshot muda com justificativa). Os quatro carros de teste se comportam diferente de forma perceptível no navegador.
 
@@ -199,4 +202,6 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-13 | c37ea84 | Fase 1b: camada perto da cidade (brilho urbano no horizonte, só à noite). | atualizado nas 2 cenas de corrida (noturnas). O replay solo não mudou (fato). O motivo escrito no commit ("trecho de dia") não foi verificado. |
 | 2026-11-13 | c6d8999 | Fase 1c-i: bioma costa (mar, palmeiras, píer, palmeira de beira). | não alterado |
 | 2026-11-13 | d0f8e39 | Fase 1c-ii: seletor de bioma na garagem (tecla X e pill). | atualizado no replay solo (+98 chamadas pela pill nova). Cenas de corrida não mudaram. |
+| 2026-11-13 | b6451b0 | Fase 2a: tração, pneus e relação final na física (`physics/traction.ts`); carro padrão inalterado. | não alterado |
+| 2026-11-13 | 9f4cd77 | Fase 2b: quatro carros de teste de tração. | atualizado no replay solo (garagem mostra "1 / 16"; só o hash muda, as chamadas de desenho não). Cenas de corrida não mudaram. |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

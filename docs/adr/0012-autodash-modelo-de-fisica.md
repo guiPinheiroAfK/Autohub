@@ -1,6 +1,6 @@
 # ADR 0012 — Modelo de física do AutoDash: tração, pneus, câmbio e clima
 
-**Status:** Proposto (Fase 0 do ciclo v2). Parâmetros da Fase 2 já implementados em `physics/traction.ts`.
+**Status:** Implementado na Fase 2 (tração, pneus, relação final). Câmbio (tipo e número de marchas) segue pendente. Aguardando playtest.
 
 ## Contexto
 Hoje o carro tem `power`, `grip` (aderência de direção), `topSpeed` e `shiftMs`. A aceleração não depende de tração: qualquer carro acelera igual em qualquer condição, e não há distinção entre tração dianteira, traseira ou integral. Clima (chuva) só reduz `grip` por um fator fixo, no modo solo. O usuário quer que tração, tipo de pneu e relação final mudem a condução e que o clima altere a física, não só o visual (GUIA, D10 a D15).
@@ -12,7 +12,7 @@ Hoje o carro tem `power`, `grip` (aderência de direção), `topSpeed` e `shiftM
 - `frontBias`: fração do torque na dianteira, só AWD. `0.5` = 50/50, `0.3` = 30/70. Padrão `0.5`.
 - `tyre`: `"padrao" | "esportivo" | "macio" | "misto"`, com `grip` (multiplica o `grip` do carro) e `traction` (capacidade de tração do eixo). `padrao` vale `1` nos dois, é a referência.
 - `finalDrive`: multiplicador da relação final sobre todas as marchas. Padrão `1`.
-- Câmbio (5 ou 6 marchas, CVT, manual, híbrido) e embreagem: **não implementados nesta fase**. Ficam como próximo passo; `GEAR_RATIOS` continua com 6 marchas.
+- Câmbio (5 ou 6 marchas, CVT, manual, híbrido) e embreagem: **não implementados nesta fase** (pendência registrada no GUIA). Ficam como próximo passo; `GEAR_RATIOS` continua com 6 marchas.
 
 ### Tração por eixo (funções puras em `physics/traction.ts`)
 - `aN` = aceleração normalizada em reta = `powerCurve × fator de marcha`, em `[0, 1]`.
