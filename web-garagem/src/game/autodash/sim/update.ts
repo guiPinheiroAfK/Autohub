@@ -9,7 +9,7 @@ import { updateFx, emitSmoke, emitFlame, burst, initRain } from "../fx/particles
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
-import { accelK, finalDriveOf, tyreOf } from "../physics/traction"
+import { accelK, finalDriveOf, steerK, tyreOf } from "../physics/traction"
 import { shiftUp, shiftDown } from "../physics/gearbox"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
@@ -95,7 +95,11 @@ export function update(eng: AutoDashEngine, dt: number) {
     if (eng.keys.has("d") || eng.keys.has("arrowright") || eng.touchSteerRight) steerInput += 1
   }
   const speedF = Math.min(1, eng.speed / 240)
-  const maxSteer = (0.95 + grip * 0.85) * (1 - 0.38 * speedF) * (0.35 + 0.65 * Math.min(1, eng.speed / 55))
+  // tração na direção: dianteira com torque abre a curva no gás e fecha ao aliviar
+  // (ADR 0012). Usa o giro do quadro anterior; RWD devolve 1 e nada muda.
+  const aNdir = throttle && eng.gear >= 1 && eng.shiftT <= 0
+    ? powerCurve(eng, eng.rpm) * Math.pow(GEAR_RATIOS[eng.gear - 1] / GEAR_RATIOS[0], 0.9) : 0
+  const maxSteer = (0.95 + grip * 0.85) * (1 - 0.38 * speedF) * (0.35 + 0.65 * Math.min(1, eng.speed / 55)) * steerK(spec, aNdir)
   eng.steerVel += (steerInput * maxSteer - eng.steerVel) * Math.min(1, dt * 9)
   if (eng.levelUpT > 0) eng.steerVel += Math.sin(eng.levelUpT * 22) * 0.9 * dt // rabeio da virada de nível
   eng.playerX += eng.steerVel * dt

@@ -1,7 +1,8 @@
 // AutoDash — modes/solo.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine, H, W } from "../engine"
 import { burst } from "../fx/particles"
-import { type ScoreEntry, submitScore } from "../data"
+import { CARS, type ScoreEntry, submitScore } from "../data"
+import { wheelspinK } from "../physics/traction"
 import { postState } from "../net"
 import { myTelemetry, duelFinish } from "./duel"
 
@@ -15,7 +16,7 @@ export function launch(eng: AutoDashEngine) {
     eng.audio.perfectLaunch()
   } else if (eng.rpm > 6800) {
     eng.speed = 18
-    eng.wheelspinT = 1.3
+    eng.wheelspinT = 1.3 * wheelspinK(CARS[eng.cfg.carIdx])
     eng.floaters.push({ text: "PATINOU!", color: "#fb923c", y: H * 0.35, life: 1.4, big: true })
   } else if (eng.rpm < 2200) {
     eng.speed = 10
@@ -34,7 +35,7 @@ export function crash(eng: AutoDashEngine, byPolice = false) {
   if (eng.mode === "race" && eng.race && !eng.race.finished) {
     eng.speed *= 0.1
     eng.steerVel = 0
-    eng.wheelspinT = 0.5
+    eng.wheelspinT = 0.5 * wheelspinK(CARS[eng.cfg.carIdx])
     eng.combo = 0
     eng.shakeT = 0.55
     eng.immuneT = Math.max(eng.immuneT, 1.3) // respiro pra não bater em cadeia

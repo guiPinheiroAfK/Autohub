@@ -30,6 +30,37 @@ export function driveSplit(spec: CarSpec): { front: number; rear: number } {
   return { front: 0, rear: 1 }
 }
 
+// Texto curto da tração e do pneu, para a garagem e o lobby ("torque legível").
+export function driveLabel(spec: CarSpec): string {
+  const d = spec.drive ?? "RWD"
+  const s = driveSplit(spec)
+  const tracao = d === "FWD" ? "dianteira (FWD)" : d === "RWD" ? "traseira (RWD)"
+    : `integral ${Math.round(s.front * 100)}/${Math.round(s.rear * 100)} (AWD)`
+  return `tração ${tracao} · pneu ${tyreOf(spec).name}`
+}
+
+// Direção por tração. Eixo dianteiro com torque "puxa reto" quando se acelera
+// (subesterço de potência) e fecha a curva quando se alivia o pé (tuck-in).
+// Vale na proporção do torque dianteiro: FWD inteiro, AWD pela divisão, RWD nada
+// (devolve exatamente 1, então o carro padrão não muda).
+//   aN: aceleração normalizada 0..1; passe 0 quando o acelerador está solto.
+export const POWER_UNDERSTEER = 0.35
+export const LIFT_TUCK = 0.12
+export function steerK(spec: CarSpec, aN: number): number {
+  const f = driveSplit(spec).front
+  if (f === 0) return 1
+  return aN > 0 ? 1 - POWER_UNDERSTEER * f * aN : 1 + LIFT_TUCK * f
+}
+
+// Duração da patinada (largada queimada, saída de batida). Tração integral
+// divide o torque e agarra antes; FWD descarrega a dianteira e patina mais.
+// RWD = exatamente 1.
+export function wheelspinK(spec: CarSpec): number {
+  if ((spec.drive ?? "RWD") === "FWD") return 1.25
+  const f = driveSplit(spec).front
+  return 1 - 1.4 * Math.min(f, 1 - f)
+}
+
 // Multiplicador da aceleração de base.
 //   aN:      aceleração normalizada em reta, 0..1 (powerCurve × fator de marcha)
 //   centrif: força centrífuga atual (mesma unidade de sim/update.ts)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { accelK, driveSplit, LAT_CLAMP } from "../physics/traction"
+import { accelK, driveSplit, LAT_CLAMP, steerK, wheelspinK, driveLabel } from "../physics/traction"
 import { CARS, type CarSpec } from "../data"
 
 // Carro base de teste: mesmos números do AUTOHUB GT, tração e pneu por parâmetro.
@@ -92,5 +92,41 @@ describe("perda do sistema e relação final", () => {
     const curta = accelK(car({ finalDrive: 1.21 }), 0.5, 0)
     expect(curta).toBeGreaterThan(longa)
     expect(curta / longa).toBeCloseTo(1.1, 6)
+  })
+})
+
+describe("direção e patinada por tração", () => {
+  it("RWD não muda a direção nem a patinada (referência exata)", () => {
+    for (let a = 0; a <= 1; a += 0.1) expect(steerK(base, a)).toBe(1)
+    expect(wheelspinK(base)).toBe(1)
+  })
+
+  it("FWD abre a curva no gás e fecha ao aliviar", () => {
+    const fwd = car({ drive: "FWD" })
+    expect(steerK(fwd, 1)).toBeCloseTo(0.65, 9)
+    expect(steerK(fwd, 0.5)).toBeLessThan(1)
+    expect(steerK(fwd, 0)).toBeCloseTo(1.12, 9)
+  })
+
+  it("AWD sente o efeito na proporção do torque dianteiro", () => {
+    const a50 = steerK(car({ drive: "AWD", frontBias: 0.5 }), 1)
+    const a30 = steerK(car({ drive: "AWD", frontBias: 0.3 }), 1)
+    const fwd = steerK(car({ drive: "FWD" }), 1)
+    expect(fwd).toBeLessThan(a50)
+    expect(a50).toBeLessThan(a30)
+    expect(a30).toBeLessThan(1)
+  })
+
+  it("patinada: AWD 50/50 < AWD 30/70 < RWD < FWD", () => {
+    const a50 = wheelspinK(car({ drive: "AWD", frontBias: 0.5 }))
+    const a30 = wheelspinK(car({ drive: "AWD", frontBias: 0.3 }))
+    expect(a50).toBeLessThan(a30)
+    expect(a30).toBeLessThan(1)
+    expect(wheelspinK(car({ drive: "FWD" }))).toBeGreaterThan(1)
+  })
+
+  it("rótulo de tração legível", () => {
+    expect(driveLabel(base)).toBe("tração traseira (RWD) · pneu padrão")
+    expect(driveLabel(car({ drive: "AWD", frontBias: 0.3 }))).toBe("tração integral 30/70 (AWD) · pneu padrão")
   })
 })
