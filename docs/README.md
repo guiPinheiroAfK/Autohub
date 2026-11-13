@@ -19,9 +19,14 @@
 | [0008](adr/0008-autodash-strategy-para-trafego.md) | Tráfego do AutoDash com padrão strategy |
 | [0009](adr/0009-duelo-por-polling.md) | Multiplayer do AutoDash por polling |
 | [0010](adr/0010-autodash-roblox-spec-driven.md) | Port do AutoDash para Roblox guiado por spec |
+| [0011](adr/0011-autodash-biomas-e-camadas.md) | AutoDash v2: biomas como dados e camadas de cenário (proposto) |
+| [0012](adr/0012-autodash-modelo-de-fisica.md) | AutoDash v2: tração, pneus, câmbio e clima na física (proposto) |
+| [0013](adr/0013-autodash-relogio-em-ticks.md) | AutoDash v2: relógio em ticks e clima (proposto) |
 
 ## Specs
 - [autodash/](specs/autodash/README.md) — minigame web (descrição do que o código faz hoje).
+- [autodash/GUIA-V2.md](specs/autodash/GUIA-V2.md) — guia vivo do ciclo v2 (fonte da verdade, status e log).
+- [autodash/v2-mostwanted.md](specs/autodash/v2-mostwanted.md) — escopo, fases e critérios da v2.
 - [autodash-roblox/](specs/autodash-roblox/autodash-roblox-spec.md) — spec completa do port para Roblox (fonte da verdade do port).
 
 ## Como adicionar um ADR
