@@ -14,7 +14,7 @@ import { shiftUp, shiftDown } from "../physics/gearbox"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
-import { ramalNoSeg, sobreRamal, ganhoRamal } from "../world/ramais"
+import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro } from "../world/ramais"
 
 export function update(eng: AutoDashEngine, dt: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -250,6 +250,16 @@ export function update(eng: AutoDashEngine, dt: number) {
           if (Math.abs(t.offset - x) < 0.3 || Math.abs(t.targetOffset - x) < 0.3) return false
         }
         return true
+      },
+      ramal: (z) => {
+        if (!eng.ramais.length) return null
+        const idx = Math.floor(z / SEG_LEN) % eng.segments.length
+        const q = ramalNoSeg(eng.ramais, idx)
+        if (!q) return null
+        return {
+          centro: ramalCentro(q), ganho: q.r.ganho, miolo: q.p.f > 0.5,
+          voltar: idx > (q.r.a + q.r.b) / 2 && q.p.f === 0,
+        }
       },
     })
     // cruzou a linha: anúncio grande, som e tremida — o jogador tem que

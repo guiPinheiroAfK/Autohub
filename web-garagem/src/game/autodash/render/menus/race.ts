@@ -7,6 +7,7 @@ import { CARS, saveConfig } from "../../data"
 import { rr, drawPlayerCar } from "../primitives"
 import { clamp } from "../../math"
 import { correrComBots, abrirCodigoSala } from "../../modes/race"
+import { ramalNoSeg } from "../../world/ramais"
 
 export function renderRaceLobby(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -212,14 +213,15 @@ export function renderRaceResult(eng: AutoDashEngine) {
 }
 
 export function tracadoCompleto(eng: AutoDashEngine, cx: number, cy: number, cw: number, ch: number) {
-  const pts: { x: number; y: number; c: number }[] = []
+  // `i` (segmento) e `h` (rumo) servem para desenhar ramais e marcar a posição
+  const pts: { x: number; y: number; c: number; i: number; h: number }[] = []
   let x = 0, y = 0, h = 0
   const passo = 3
   for (let i = 0; i < eng.segments.length; i += passo) {
     const s = eng.segments[i]
     h += s.curve * 0.0125 * passo
     x += Math.sin(h); y -= Math.cos(h)
-    pts.push({ x, y, c: Math.abs(s.curve) })
+    pts.push({ x, y, c: Math.abs(s.curve), i, h })
   }
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
   for (const p of pts) {
@@ -229,7 +231,53 @@ export function tracadoCompleto(eng: AutoDashEngine, cx: number, cy: number, cw:
   const esc = Math.min(cw / Math.max(1, maxX - minX), ch / Math.max(1, maxY - minY))
   const offX = cx - ((minX + maxX) / 2) * esc
   const offY = cy - ((minY + maxY) / 2) * esc
-  return pts.map(p => ({ x: offX + p.x * esc, y: offY + p.y * esc, c: p.c }))
+  return pts.map(p => ({ x: offX + p.x * esc, y: offY + p.y * esc, c: p.c, i: p.i, h: p.h }))
+}
+
+type PontoTracado = ReturnType<typeof tracadoCompleto>[number]
+
+/**
+ * Desenha o traçado (colorido por severidade da curva), os ramais em ciano
+ * tracejado e a largada. Usado na contagem, no lobby e no reconhecimento.
+ */
+export function desenharTracado(eng: AutoDashEngine, pts: PontoTracado[], grosso = 6) {
+  const ctx = eng.ctx
+  // traço grosso escuro por baixo dá contorno e legibilidade
+  ctx.strokeStyle = "rgba(2,6,23,0.75)"
+  ctx.lineWidth = grosso + 5; ctx.lineJoin = "round"; ctx.lineCap = "round"
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y)
+  for (const p of pts) ctx.lineTo(p.x, p.y)
+  ctx.closePath(); ctx.stroke()
+  // por cima, colorido por severidade: onde dá pra ir com tudo x onde freia
+  ctx.lineWidth = grosso
+  for (let i = 1; i < pts.length; i++) {
+    const sev = clamp(pts[i].c / 8, 0, 1)
+    ctx.strokeStyle = sev > 0.62 ? "#ef4444" : sev > 0.3 ? "#fbbf24" : "#4ade80"
+    ctx.beginPath(); ctx.moveTo(pts[i - 1].x, pts[i - 1].y); ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke()
+  }
+  // ramais (atalhos): linha ciano tracejada ao lado da pista, do lado do ramal
+  if (eng.ramais.length) {
+    ctx.strokeStyle = "#22d3ee"
+    ctx.lineWidth = Math.max(2, grosso * 0.5)
+    ctx.setLineDash([5, 4])
+    ctx.beginPath()
+    let aberto = false
+    for (const p of pts) {
+      const q = ramalNoSeg(eng.ramais, p.i)
+      if (!q || q.p.w <= 0) { aberto = false; continue }
+      const off = (grosso * 0.4 + grosso * 1.1 * q.p.f) * q.r.lado
+      const px = p.x + Math.cos(p.h) * off, py = p.y + Math.sin(p.h) * off
+      if (aberto) ctx.lineTo(px, py); else { ctx.moveTo(px, py); aberto = true }
+    }
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
+  // largada (quem chama já deixou o textAlign em "center")
+  ctx.fillStyle = "#f8fafc"
+  ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, grosso, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = "#0f172a"
+  ctx.font = "bold 10px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText("S", pts[0].x, pts[0].y + 3.5)
 }
 
 export function renderTrackPreview(eng: AutoDashEngine) {
@@ -243,30 +291,13 @@ export function renderTrackPreview(eng: AutoDashEngine) {
   ctx.fillText("CONHEÇA O CIRCUITO", W / 2, by + 6)
 
   const pts = tracadoCompleto(eng, W / 2, by + 26 + bh / 2 - 14, bw - 40, bh - 60)
-  // traço grosso escuro por baixo dá contorno e legibilidade
-  ctx.strokeStyle = "rgba(2,6,23,0.75)"
-  ctx.lineWidth = 11; ctx.lineJoin = "round"; ctx.lineCap = "round"
-  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y)
-  for (const p of pts) ctx.lineTo(p.x, p.y)
-  ctx.closePath(); ctx.stroke()
-  // por cima, colorido por severidade: onde dá pra ir com tudo x onde freia
-  ctx.lineWidth = 6
-  for (let i = 1; i < pts.length; i++) {
-    const sev = clamp(pts[i].c / 8, 0, 1)
-    ctx.strokeStyle = sev > 0.62 ? "#ef4444" : sev > 0.3 ? "#fbbf24" : "#4ade80"
-    ctx.beginPath(); ctx.moveTo(pts[i - 1].x, pts[i - 1].y); ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke()
-  }
-  // largada
-  ctx.fillStyle = "#f8fafc"
-  ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, 6, 0, Math.PI * 2); ctx.fill()
-  ctx.fillStyle = "#0f172a"
-  ctx.font = "bold 10px 'Space Grotesk', 'Segoe UI', sans-serif"
-  ctx.fillText("S", pts[0].x, pts[0].y + 3.5)
+  desenharTracado(eng, pts)
 
   // legenda
   const ly = by + bh + 22
   const itens: [string, string][] = [["#4ade80", "acelera"], ["#fbbf24", "atenção"], ["#ef4444", "freia"]]
-  let lx = W / 2 - 150
+  if (eng.ramais.length) itens.push(["#22d3ee", "atalho"])
+  let lx = W / 2 - (eng.ramais.length ? 200 : 150)
   ctx.textAlign = "left"
   ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
   for (const [cor, txt] of itens) {

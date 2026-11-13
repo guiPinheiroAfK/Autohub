@@ -7,6 +7,7 @@ import { rr } from "./primitives"
 import { renderRearView } from "./player"
 import { SEG_LEN, RPM_REDLINE } from "../data"
 import { wrapDz } from "../traffic/spawner"
+import { ramalNoSeg } from "../world/ramais"
 
 export function renderHud(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -97,7 +98,7 @@ export function renderMinimap(eng: AutoDashEngine) {
   ctx.lineCap = "round"
   ctx.beginPath()
   ctx.moveTo(ox, oy)
-  const pts: { x: number; y: number }[] = [{ x: ox, y: oy }]
+  const pts: { x: number; y: number; h: number }[] = [{ x: ox, y: oy, h: 0 }]
   for (let n = 0; n < 160; n += 2) {
     const s = eng.segments[(start + n) % N]
     // ângulo suave e travado a ~60°: o traçado sempre progride pra cima,
@@ -106,10 +107,27 @@ export function renderMinimap(eng: AutoDashEngine) {
     hx += Math.sin(heading) * 1.0
     hy -= Math.cos(heading) * 1.0
     ctx.lineTo(ox + hx, oy + hy)
-    pts.push({ x: ox + hx, y: oy + hy })
+    pts.push({ x: ox + hx, y: oy + hy, h: heading })
   }
   ctx.stroke()
   ctx.lineWidth = 1
+
+  // ramais (atalhos) à frente: traço verde ao lado da pista, do lado do ramal
+  if (eng.ramais.length) {
+    ctx.strokeStyle = "#4ade80"
+    ctx.lineWidth = 2.5
+    ctx.beginPath()
+    let aberto = false
+    for (let k = 1; k < pts.length; k++) {
+      const q = ramalNoSeg(eng.ramais, (start + k * 2) % N)
+      if (!q || q.p.w <= 0) { aberto = false; continue }
+      const off = (2.5 + 4.5 * q.p.f) * q.r.lado
+      const px = pts[k].x + Math.cos(pts[k].h) * off, py = pts[k].y + Math.sin(pts[k].h) * off
+      if (aberto) ctx.lineTo(px, py); else { ctx.moveTo(px, py); aberto = true }
+    }
+    ctx.stroke()
+    ctx.lineWidth = 1
+  }
 
   // travessia d'água: o trecho de ponte aparece em azul no GPS (halo = lago)
   const bset = new Set<number>()
