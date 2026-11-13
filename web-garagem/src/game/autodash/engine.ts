@@ -18,6 +18,7 @@ import { updateObstacles } from "./world/obstacles"
 import { skyNow, renderBackdrop } from "./render/backdrop"
 import { renderRoad } from "./render/road"
 import { renderPlayer, renderRearThreat } from "./render/player"
+import { renderParticles } from "./render/particles"
 import { renderHud, renderSemaphore } from "./render/hud"
 import { pill, arrowBtn, glass } from "./ui/widgets"
 import { rr, drawPlayerCar } from "./render/primitives"
@@ -827,7 +828,7 @@ export class AutoDashEngine {
     renderRoad(this, amb, sky.bot)
     renderPlayer(this, amb)
     renderRearThreat(this)
-    this.renderParticles()
+    renderParticles(this)
 
     if (this.raining) {
       ctx.strokeStyle = "rgba(190,215,240,0.35)"
@@ -967,15 +968,6 @@ export class AutoDashEngine {
    * leitura de onde ela vem antes de sentir o encostão.
    */
 
-  renderParticles() {
-    const ctx = this.ctx
-    for (const p of this.particles) {
-      ctx.globalAlpha = clamp(p.life / p.maxLife, 0, 1) * 0.8
-      ctx.fillStyle = p.color
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill()
-    }
-    ctx.globalAlpha = 1
-  }
 
 
 
