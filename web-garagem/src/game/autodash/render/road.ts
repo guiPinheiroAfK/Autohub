@@ -1,4 +1,7 @@
 // AutoDash — render/road.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { drawDeco } from "./backdrop"
+import { drawBridge } from "./backdrop"
+import { drawTower } from "./backdrop"
 import { AutoDashEngine, PLAYER_Z, H, W, type Pickup, type Obstacle, type RoadSign, NEAR_SPRITE_MIN, RUMBLE, FADE_IN_START, FADE_IN_LEN } from "../engine"
 import { SEG_LEN, CAM_HEIGHT, ROAD_WIDTH, PAINTS, KMH2UPS, DRAW_DIST, CAM_DEPTH } from "../data"
 import { segAt } from "../world/track"
@@ -443,9 +446,9 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     else if (s.kind === "ghost") eng.drawGhost(s.x, s.y, s.w, amb)
     else if (s.kind === "obs") eng.drawObstacle(s.obs!, s.x, s.y, s.w, amb)
     else if (s.kind === "sign") eng.drawRoadSign(s.sign!, s.x, s.y, s.w, amb)
-    else if (s.kind === "bridge") eng.drawBridge(s.x, s.y, s.w, amb)
-    else if (s.kind === "gate") eng.drawTower(s.x, s.y, s.w, amb)
-    else eng.drawDeco(s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
+    else if (s.kind === "bridge") drawBridge(eng, s.x, s.y, s.w, amb)
+    else if (s.kind === "gate") drawTower(eng, s.x, s.y, s.w, amb)
+    else drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
   }
 
   // névoa suave no horizonte — esfuma a pista e os sprites distantes
