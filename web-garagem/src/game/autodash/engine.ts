@@ -1,4 +1,4 @@
-import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, SEG_LEN, DRAW_DIST, CARS, RPM_LIMITER, type BodyKind, KMH2UPS, GEAR_RATIOS, RPM_PER_KMH, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
+import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, SEG_LEN, DRAW_DIST, CARS, type BodyKind, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
 import { type DuelTelemetry, postState, rematchRoom, pollRoom, createRoom, joinRoom } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic, type TrafficKind, KINDS, TRAFFIC_COLORS, type WorldView } from "./traffic/types"
@@ -6,12 +6,13 @@ import { RaceSession } from "./race/session"
 import { clamp, mulberry32, mix, shade, hexToRgb } from "./math"
 import { DRIVERS } from "./traffic/driver"
 import { rpmFor, powerCurve } from "./physics/rpm"
+import { shiftUp, shiftDown } from "./physics/gearbox"
 import { poly, rr, drawPlayerCar } from "./render/primitives"
 
 // AutoDash — engine pseudo-3D (estilo NFS de PSP) em Canvas 2D puro.
 // Estrada por segmentos projetados, tráfego, clima, câmbio com RPM e ranking local.
 
-const W = CANVAS_W, H = CANVAS_H
+export const W = CANVAS_W, H = CANVAS_H
 const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH
 const RUMBLE = 3
 // Veículo mais perto que isso não tem nem o topo do sprite dentro da tela
@@ -890,51 +891,8 @@ export class AutoDashEngine {
 
 
 
-  shiftUp() {
-    if (this.gear === 0) {
-      let best = 1
-      for (let g = 6; g >= 1; g--) {
-        const r = rpmFor(this, this.speed, g)
-        if (r >= 1800 && r <= 6500) { best = g; break }
-        if (r < 1800) best = Math.max(1, g - 0)
-      }
-      this.gear = Math.max(1, Math.min(6, best))
-      this.shiftT = CARS[this.cfg.carIdx].shiftMs / 1000
-      this.audio.shift()
-      this.popExhaust()
-      return
-    }
-    if (this.gear >= 6) return
-    this.gear++
-    this.shiftT = CARS[this.cfg.carIdx].shiftMs / 1000
-    if (rpmFor(this, this.speed, this.gear) < 1500) this.audio.bog()
-    else { this.audio.shift(); this.popExhaust() }
-  }
 
-  /** Estouro no escape ao engatar — puro juice. */
-  popExhaust() {
-    if (this.state !== "racing" || this.speed < 30) return
-    for (const sx of [-22, 22]) {
-      for (let i = 0; i < 3; i++) {
-        this.particles.push({
-          x: W / 2 + sx + (Math.random() - 0.5) * 6, y: H - 56,
-          vx: (Math.random() - 0.5) * 40, vy: 60 + Math.random() * 60,
-          size: 3 + Math.random() * 4, life: 0.18, maxLife: 0.18,
-          color: Math.random() < 0.5 ? "#fb923c" : "#fde047",
-        })
-      }
-    }
-  }
 
-  shiftDown() {
-    if (this.gear <= 0) return
-    if (this.gear === 1) { this.gear = 0; this.audio.shift(); return }
-    const next = this.gear - 1
-    if (rpmFor(this, this.speed, next) > RPM_LIMITER + 400) { this.audio.limiter(); return } // protege o motor
-    this.gear = next
-    this.shiftT = CARS[this.cfg.carIdx].shiftMs / 1000
-    this.audio.shift()
-  }
 
   /** Caráter sonoro por carroceria: [pitch, brilho]. Grave/encorpado (V grande)
    *  → agudo/metálico (rotativo, boxer, 4-cil de giro alto). */
@@ -1069,8 +1027,8 @@ export class AutoDashEngine {
 
     // câmbio automático
     if (this.cfg.transmission === "auto" && this.gear >= 1 && this.shiftT <= 0) {
-      if (throttle && this.rpm > 6900 && this.gear < 6) this.shiftUp()
-      else if (this.rpm < 2000 && this.gear > 1) this.shiftDown()
+      if (throttle && this.rpm > 6900 && this.gear < 6) shiftUp(this)
+      else if (this.rpm < 2000 && this.gear > 1) shiftDown(this)
     }
 
     let accel = 0
@@ -4468,7 +4426,7 @@ export class AutoDashEngine {
   tryShift(dir: 1 | -1) {
     if (this.cfg.transmission !== "manual" && this.gear !== 0) return
     if (this.state !== "racing" && this.state !== "countdown") return
-    if (dir === 1) this.shiftUp(); else this.shiftDown()
+    if (dir === 1) shiftUp(this); else shiftDown(this)
   }
 
   toNeutral() {
