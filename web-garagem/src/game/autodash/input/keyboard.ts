@@ -1,4 +1,5 @@
 // AutoDash — input/keyboard.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { proximoBioma } from "../world/biomes"
 import { enterFromMenu } from "../flow"
 import { confirmName } from "../flow"
 import { toMenu } from "../flow"
@@ -115,8 +116,9 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "g") { custom.wing = (custom.wing + 1) % WINGS.length; eng.audio.ui() }
       if (k === "t") { eng.cfg.transmission = eng.cfg.transmission === "auto" ? "manual" : "auto"; eng.audio.ui() }
       if (k === "y") { eng.cfg.steering = eng.cfg.steering === "mouse" ? "keyboard" : "mouse"; eng.audio.ui() }
+      if (k === "x") { eng.cfg.biome = proximoBioma(eng.cfg.biome); eng.audio.ui() }
       if (k === "n") { eng.nameBuf = eng.cfg.pilotName; eng.afterName = "garage"; eng.state = "nameentry"; eng.audio.ui() }
-      if (["c", "v", "b", "r", "g", "t", "y"].includes(k) || k.startsWith("arrow")) saveConfig(eng.cfg)
+      if (["c", "v", "b", "r", "g", "t", "y", "x"].includes(k) || k.startsWith("arrow")) saveConfig(eng.cfg)
       if (k === "enter") startAndSave(eng)
       if (k === "escape") eng.state = "menu"
       break

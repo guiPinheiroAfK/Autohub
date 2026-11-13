@@ -7,6 +7,7 @@ import { abrirRaceLobby, startRace } from "../../modes/race"
 import { CARS, saveConfig, NEONS, PAINTS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "../../data"
 import { drawPlayerCar, rr } from "../primitives"
 import { clamp } from "../../math"
+import { biomeById, proximoBioma } from "../../world/biomes"
 
 export function renderMenu(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -152,7 +153,8 @@ export function renderGarage(eng: AutoDashEngine) {
   pill(eng, `aerofólio: ${WINGS[custom.wing]} [G]`, sx + 216, 222, 200, () => { custom.wing = (custom.wing + 1) % WINGS.length; save(); eng.audio.ui() })
   pill(eng, `neon: ${NEON_NAMES[custom.neon]} [B]`, sx, 258, 200, () => { custom.neon = (custom.neon + 1) % NEONS.length; save(); eng.audio.ui() })
   pill(eng, `direção: ${eng.cfg.steering === "mouse" ? "mouse" : "teclado"} [Y]`, sx + 216, 258, 200, () => { eng.cfg.steering = eng.cfg.steering === "mouse" ? "keyboard" : "mouse"; save(); eng.audio.ui() })
-  pill(eng, `câmbio: ${eng.cfg.transmission === "auto" ? "automático" : "sequencial (scroll)"} [T]`, sx, 294, 416, () => { eng.cfg.transmission = eng.cfg.transmission === "auto" ? "manual" : "auto"; save(); eng.audio.ui() })
+  pill(eng, `câmbio: ${eng.cfg.transmission === "auto" ? "automático" : "sequencial (scroll)"} [T]`, sx, 294, 200, () => { eng.cfg.transmission = eng.cfg.transmission === "auto" ? "manual" : "auto"; save(); eng.audio.ui() })
+  pill(eng, `bioma: ${biomeById(eng.cfg.biome).nome} [X]`, sx + 216, 294, 200, () => { eng.cfg.biome = proximoBioma(eng.cfg.biome); save(); eng.audio.ui() })
 
   // leaderboard global
   ctx.fillStyle = "rgba(253,224,71,0.9)"
