@@ -1,9 +1,9 @@
 ﻿import { Hono } from "hono"
 import { z } from "zod"
 import bcrypt from "bcryptjs"
-import { sql } from "../db/client.ts"
-import { enviarVerificacaoEmail, enviarResetSenha } from "../lib/email.ts"
-import type { AppEnv } from "../types.ts"
+import { sql } from "../../db/client.ts"
+import { enviarVerificacaoEmail, enviarResetSenha } from "../../lib/email.ts"
+import type { AppEnv } from "../../types.ts"
 
 export const authV2Routes = new Hono<AppEnv>()
 

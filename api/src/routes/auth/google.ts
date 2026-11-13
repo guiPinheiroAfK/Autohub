@@ -15,9 +15,9 @@
  */
 
 import { Hono } from "hono"
-import { sql } from "../db/client.ts"
+import { sql } from "../../db/client.ts"
 import { signToken } from "@/middleware/jwt.ts"
-import { notificarNovoUsuario } from "../lib/discord.ts"
+import { notificarNovoUsuario } from "../../lib/discord.ts"
 
 export const googleAuthRoutes = new Hono()
 

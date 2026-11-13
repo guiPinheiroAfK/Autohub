@@ -1,10 +1,10 @@
 ﻿import { Hono } from "hono"
 import { z } from "zod"
 import bcrypt from "bcryptjs"
-import { sql } from "../db/client.ts"
-import { signToken } from "../middleware/jwt.ts"
-import { enviarVerificacaoEmail } from "../lib/email.ts"
-import { notificarNovoUsuario } from "../lib/discord.ts"
+import { sql } from "../../db/client.ts"
+import { signToken } from "../../middleware/jwt.ts"
+import { enviarVerificacaoEmail } from "../../lib/email.ts"
+import { notificarNovoUsuario } from "../../lib/discord.ts"
 
 // Validação manual com zod (sem @hono/zod-validator, que não está
 // instalado — evita dependência extra só pra isso).
