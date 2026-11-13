@@ -1,6 +1,8 @@
 # Plano de reorganização do Autohub
 
-Status: **proposta, aguardando aprovação.** Nenhum código foi alterado. Este arquivo é o único entregue nesta etapa.
+Status: **Fases 0 e 1 concluídas** (branch `chore/reorganizacao`, não enviada). Próxima: Fase 2 (testes). Nenhum código do jogo foi alterado ainda.
+
+Decisões tomadas: D1 (protótipo em `legacy/`), D3 (Rojo fora do repo). D2 virou **npm**, não bun: o `netlify.toml` e o Docker do front usam npm, então o `package-lock.json` ficou e os `bun.lock` saíram.
 
 ---
 
