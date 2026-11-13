@@ -13,7 +13,8 @@ import { shiftUp, shiftDown } from "./physics/gearbox"
 import { updateZones } from "./world/zones"
 import { updateObstacles } from "./world/obstacles"
 import { poly, rr, drawPlayerCar } from "./render/primitives"
-import { onKeyDown, onKeyUp, toNeutral, tryShift } from "./input/keyboard"
+import { onKeyDown, onKeyUp, tryShift } from "./input/keyboard"
+import { onMouseDown, onMouseUp, onMouseMove, onWheel, onCtx, regionAt } from "./input/pointer"
 
 // AutoDash — engine pseudo-3D (estilo NFS de PSP) em Canvas 2D puro.
 // Estrada por segmentos projetados, tráfego, clima, câmbio com RPM e ranking local.
@@ -3675,47 +3676,12 @@ export class AutoDashEngine {
 
   onKeyUp = (e: KeyboardEvent) => onKeyUp(this, e)
 
-  onMouseDown = (e: MouseEvent) => {
-    this.ensureAudio()
-    if (e.button === 0) {
-      if (this.state === "racing" || this.state === "countdown") {
-        this.mouseGas = true
-      } else {
-        const hit = this.regionAt(this.mousePx.x, this.mousePx.y)
-        if (hit) hit.act()
-        else if (this.state === "menu") this.enterFromMenu()
-      }
-    }
-    if (e.button === 2 && (this.state === "racing" || this.state === "countdown")) this.mouseBrake = true
-    if (e.button === 1) { e.preventDefault(); toNeutral(this) }
-    if (e.button === 3 || e.button === 4) { e.preventDefault(); this.nitroOn = true }
-  }
-  onMouseUp = (e: MouseEvent) => {
-    if (e.button === 0) this.mouseGas = false
-    if (e.button === 2) this.mouseBrake = false
-    if (e.button === 3 || e.button === 4) this.nitroOn = false
-  }
-  onMouseMove = (e: MouseEvent) => {
-    const rect = this.canvas.getBoundingClientRect()
-    this.mouseXn = clamp((e.clientX - rect.left) / rect.width, 0, 1)
-    this.mousePx.x = ((e.clientX - rect.left) / rect.width) * W
-    this.mousePx.y = ((e.clientY - rect.top) / rect.height) * H
-    const uiState = ["menu", "garage", "paused", "gameover", "nameentry"].includes(this.state)
-    this.canvas.style.cursor = uiState && this.regionAt(this.mousePx.x, this.mousePx.y) ? "pointer" : "default"
-  }
+  onMouseDown = (e: MouseEvent) => onMouseDown(this, e)
+  onMouseUp = (e: MouseEvent) => onMouseUp(this, e)
+  onMouseMove = (e: MouseEvent) => onMouseMove(this, e)
 
-  regionAt(x: number, y: number) {
-    for (const r of this.uiRegions) {
-      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r
-    }
-    return null
-  }
-  onWheel = (e: WheelEvent) => {
-    e.preventDefault()
-    if (this.state !== "racing" && this.state !== "countdown") return
-    tryShift(this, e.deltaY < 0 ? 1 : -1)
-  }
-  onCtx = (e: Event) => e.preventDefault()
+  onWheel = (e: WheelEvent) => onWheel(this, e)
+  onCtx = (e: Event) => onCtx(this, e)
   onBlur = () => { if (this.state === "racing" && this.mode !== "duel") this.state = "paused" }
 
   // toque no canvas: espelha o mousedown/mousemove pra navegação de menu (tap
@@ -3731,7 +3697,7 @@ export class AutoDashEngine {
     if (this.state === "racing" || this.state === "countdown") {
       this.mouseGas = true
     } else {
-      const hit = this.regionAt(this.mousePx.x, this.mousePx.y)
+      const hit = regionAt(this, this.mousePx.x, this.mousePx.y)
       if (hit) hit.act()
       else if (this.state === "menu") this.enterFromMenu()
     }
