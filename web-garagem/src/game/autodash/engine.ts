@@ -20,6 +20,7 @@ import { skyNow, renderBackdrop } from "./render/backdrop"
 import { renderRoad } from "./render/road"
 import { renderPlayer, renderRearThreat } from "./render/player"
 import { renderParticles } from "./render/particles"
+import { vignetteTex } from "./render/textures"
 import { renderMenu, renderGarage, renderPause, renderGameOver, renderNameEntry } from "./render/menus/main"
 import { renderHud, renderSemaphore } from "./render/hud"
 import { renderTrackPreview, renderRaceLobby, renderRaceCode, renderRaceWait, renderRaceResult } from "./render/menus/race"
@@ -177,54 +178,13 @@ export class AutoDashEngine {
   // vinheta cacheada (gradiente por frame é caro; drawImage é barato)
   vignetteSprite: HTMLCanvasElement | null = null
 
-  vignetteTex(): HTMLCanvasElement {
-    if (this.vignetteSprite) return this.vignetteSprite
-    const cv = document.createElement("canvas")
-    cv.width = W; cv.height = H
-    const c = cv.getContext("2d")!
-    const vg = c.createRadialGradient(W / 2, H * 0.55, H * 0.38, W / 2, H * 0.55, H * 0.95)
-    vg.addColorStop(0, "rgba(0,0,0,0)")
-    vg.addColorStop(1, "rgba(0,0,0,0.38)")
-    c.fillStyle = vg
-    c.fillRect(0, 0, W, H)
-    this.vignetteSprite = cv
-    return cv
-  }
   // halo warm das luminárias da ponte, cacheado pelo mesmo motivo da vinheta
   // brilho neon por cor, pré-renderizado UMA vez. createRadialGradient por
   // desenho era o gargalo do modo corrida: ~1600 gradientes/frame com as
   // fachadas de Tokyo. drawImage de um sprite pronto é ordens de grandeza
   // mais barato.
   glowCache = new Map<string, HTMLCanvasElement>()
-  neonGlow(cor: string): HTMLCanvasElement {
-    const hit = this.glowCache.get(cor)
-    if (hit) return hit
-    const cv = document.createElement("canvas")
-    cv.width = 64; cv.height = 64
-    const c = cv.getContext("2d")!
-    const g = c.createRadialGradient(32, 32, 1, 32, 32, 32)
-    g.addColorStop(0, cor + "cc")
-    g.addColorStop(0.45, cor + "55")
-    g.addColorStop(1, cor + "00")
-    c.fillStyle = g
-    c.fillRect(0, 0, 64, 64)
-    this.glowCache.set(cor, cv)
-    return cv
-  }
   glowSprite: HTMLCanvasElement | null = null
-  glowTex(): HTMLCanvasElement {
-    if (this.glowSprite) return this.glowSprite
-    const cv = document.createElement("canvas")
-    cv.width = 64; cv.height = 64
-    const c = cv.getContext("2d")!
-    const g = c.createRadialGradient(32, 32, 2, 32, 32, 32)
-    g.addColorStop(0, "rgba(255,233,168,0.4)")
-    g.addColorStop(1, "rgba(255,233,168,0)")
-    c.fillStyle = g
-    c.fillRect(0, 0, 64, 64)
-    this.glowSprite = cv
-    return cv
-  }
   raining = false
   rainT = 0
   rainRollT = 0
@@ -778,7 +738,7 @@ export class AutoDashEngine {
     ctx.restore()
 
     // vinheta — dá peso à imagem (sprite cacheado)
-    ctx.drawImage(this.vignetteTex(), 0, 0)
+    ctx.drawImage(vignetteTex(this), 0, 0)
 
     switch (this.state) {
       case "menu": renderMenu(this); break

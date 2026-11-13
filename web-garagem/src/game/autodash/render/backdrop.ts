@@ -1,4 +1,5 @@
 // AutoDash — render/backdrop.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { neonGlow } from "./textures"
 import { drawTraffic } from "./objects"
 import { AutoDashEngine, H, W, SKY_KEYS } from "../engine"
 import { shade, mix } from "../math"
@@ -100,7 +101,7 @@ export function drawDeco(eng: AutoDashEngine, kind: number, dir: number, x: numb
     // grande o bastante pra aparecer
     if (w > 10) {
       const gw = bw * 2.4
-      ctx.drawImage(eng.neonGlow(cor), x - gw / 2, y - h - gw * 0.18, gw, gw * 0.9)
+      ctx.drawImage(neonGlow(eng, cor), x - gw / 2, y - h - gw * 0.18, gw, gw * 0.9)
     }
     // reflexo no asfalto (cor do letreiro dominante, alpha baixo)
     ctx.fillStyle = cor + "33"
@@ -136,7 +137,7 @@ export function drawDeco(eng: AutoDashEngine, kind: number, dir: number, x: numb
       // halo via sprite cacheado
       if (w > 8) {
         const gw = w * 2.6
-        ctx.drawImage(eng.neonGlow(cor), x - gw / 2, y - h * 0.5 - gw / 2, gw, gw)
+        ctx.drawImage(neonGlow(eng, cor), x - gw / 2, y - h * 0.5 - gw / 2, gw, gw)
       }
       // reflexo no asfalto
       ctx.fillStyle = cor + "33"

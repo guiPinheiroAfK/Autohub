@@ -1,4 +1,5 @@
 // AutoDash — render/road.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { glowTex } from "./textures"
 import { drawPickup } from "./objects"
 import { drawGhost } from "./objects"
 import { drawObstacle } from "./objects"
@@ -228,7 +229,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
           ctx.beginPath(); ctx.arc(sx1 - sw1 * 1.08, ry1 - lh, Math.max(1, sw1 * 0.022), 0, Math.PI * 2); ctx.fill()
           ctx.beginPath(); ctx.arc(sx1 + sw1 * 1.08, ry1 - lh, Math.max(1, sw1 * 0.022), 0, Math.PI * 2); ctx.fill()
           if (lit && sw1 > 26) {
-            const gs = eng.glowTex(), gw = sw1 * 0.6
+            const gs = glowTex(eng), gw = sw1 * 0.6
             ctx.drawImage(gs, sx1 - sw1 * 1.08 - gw / 2, ry1 - lh - gw / 2, gw, gw)
             ctx.drawImage(gs, sx1 + sw1 * 1.08 - gw / 2, ry1 - lh - gw / 2, gw, gw)
           }
