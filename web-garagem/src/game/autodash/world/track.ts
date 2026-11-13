@@ -2,9 +2,12 @@
 import { AutoDashEngine, type Seg } from "../engine"
 import { mulberry32 } from "../math"
 import { SEG_LEN } from "../data"
+import { biomeById, biomeDaCorrida } from "./biomes"
 
 export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() * 2 ** 31), corrida = false) {
   const rnd = mulberry32(seed)
+  // bioma: a corrida usa o bioma fixo do lobby; o solo usa a escolha do jogador
+  eng.bioma = corrida ? biomeDaCorrida() : biomeById(eng.cfg.biome)
   eng.segments = []
   let lastY = 0
   const seg = (curve: number, y: number) => { eng.segments.push({ curve, y1: lastY, y2: y }); lastY = y }

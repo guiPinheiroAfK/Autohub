@@ -9,6 +9,7 @@ import { seedTraffic } from "./traffic/spawner"
 import { clamp, mix } from "./math"
 import { update } from "./sim/update"
 import { skyNow, renderBackdrop } from "./render/backdrop"
+import { type BiomeDef, biomeById } from "./world/biomes"
 import { renderRoad } from "./render/road"
 import { renderPlayer, renderRearThreat } from "./render/player"
 import { renderParticles } from "./render/particles"
@@ -86,14 +87,6 @@ export interface Pickup { z: number; offset: number; type: number; pulse: number
 interface Particle { x: number; y: number; vx: number; vy: number; size: number; life: number; maxLife: number; color: string }
 interface Floater { text: string; color: string; y: number; life: number; big: boolean }
 interface Drop { x: number; y: number; len: number; spd: number }
-
-// paletas de céu por hora do dia (t = fração do ciclo)
-export const SKY_KEYS = [
-  { t: 0.125, top: "#2b8fd6", bot: "#bfe6f7", amb: 1.0 },
-  { t: 0.375, top: "#3b2a63", bot: "#fb923c", amb: 0.8 },
-  { t: 0.625, top: "#050816", bot: "#16233f", amb: 0.42 },
-  { t: 0.875, top: "#33507c", bot: "#fcd9a0", amb: 0.78 },
-]
 
 
 export class AutoDashEngine {
@@ -178,6 +171,8 @@ export class AutoDashEngine {
   glowCache = new Map<string, HTMLCanvasElement>()
   glowSprite: HTMLCanvasElement | null = null
   raining = false
+  // bioma da pista atual (ADR 0011). Definido em buildTrack, lido pelo render.
+  bioma: BiomeDef = biomeById(undefined)
   rainT = 0
   rainRollT = 0
   demoT = 0

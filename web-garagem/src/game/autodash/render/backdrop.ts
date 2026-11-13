@@ -1,12 +1,29 @@
 // AutoDash — render/backdrop.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { neonGlow } from "./textures"
 import { drawTraffic } from "./objects"
-import { AutoDashEngine, H, W, SKY_KEYS } from "../engine"
+import { AutoDashEngine, H, W } from "../engine"
+import { type LayerKind } from "../world/biomes"
 import { shade, mix } from "../math"
 import { rr } from "./primitives"
 import { type Traffic } from "../traffic/types"
 
+// Camadas de fundo (ADR 0011). Cada tipo é uma função; o bioma escolhe quais
+// e em que ordem (longe → meio → perto). Adicionar um tipo = nova função + registro aqui.
+const CAMADAS: Record<LayerKind, (eng: AutoDashEngine, amb: number) => void> = {
+  "ceu-sol": camadaCeuSol,
+  montanhas: camadaMontanhas,
+  skyline: camadaSkyline,
+}
+
 export function renderBackdrop(eng: AutoDashEngine, amb: number) {
+  const c = eng.bioma.camadas
+  for (const k of c.longe) CAMADAS[k](eng, amb)
+  for (const k of c.meio) CAMADAS[k](eng, amb)
+  for (const k of c.perto) CAMADAS[k](eng, amb)
+}
+
+// céu, nuvens, sol e lua
+function camadaCeuSol(eng: AutoDashEngine, amb: number) {
   const ctx = eng.ctx
   const hz = H * 0.5
   // nuvens macias em parallax
@@ -35,7 +52,12 @@ export function renderBackdrop(eng: AutoDashEngine, amb: number) {
     ctx.beginPath(); ctx.arc(W * 0.24 - 7, hz - 126, 5, 0, Math.PI * 2); ctx.fill()
     ctx.beginPath(); ctx.arc(W * 0.24 + 6, hz - 114, 3.5, 0, Math.PI * 2); ctx.fill()
   }
-  // montanhas em parallax (2 camadas)
+}
+
+// montanhas em parallax (2 faixas)
+function camadaMontanhas(eng: AutoDashEngine, amb: number) {
+  const ctx = eng.ctx
+  const hz = H * 0.5
   const ridge = (col: string, amp: number, base: number, shift: number, step: number) => {
     ctx.fillStyle = col
     ctx.beginPath()
@@ -51,9 +73,14 @@ export function renderBackdrop(eng: AutoDashEngine, amb: number) {
   }
   ridge(shade("#2b3c56", amb), 72, hz + 2, eng.bgShift * 0.18, 16)
   ridge(shade("#1e2c40", amb), 46, hz + 3, eng.bgShift * 0.42, 12)
+}
+
+// skyline com janelas acesas à noite
+function camadaSkyline(eng: AutoDashEngine, amb: number) {
+  const ctx = eng.ctx
+  const hz = H * 0.5
   // metrópole neon ATRÁS do skyline base (torres altas, letreiros) — só corrida
   // if (eng.mode === "race") eng.renderNeonCity(hz) - isso aq eu removi por causa de otimização
-  // skyline com janelas acesas à noite
   const wrap = W + 90
   for (let i = 0; i < 24; i++) {
     const bw = 20 + ((i * 37) % 28)
@@ -352,11 +379,13 @@ export function skyNow(eng: AutoDashEngine) : { top: string; bot: string; amb: n
   // corrida é SEMPRE noite neon — o clima "Velozes e Furiosos" vive de racha
   // noturno. Céu roxo-profundo com barra magenta no horizonte (poluição
   // luminosa da cidade), sem o ciclo de dia do modo solo.
+  const bio = eng.bioma
   if (eng.mode === "race") {
-    return { top: "#0a0618", bot: "#2a1140", amb: eng.raining ? 0.34 : 0.44 }
+    const cr = bio.ceuCorrida
+    return { top: cr.top, bot: cr.bot, amb: eng.raining ? cr.ambChuva : cr.amb }
   }
   const t = (eng.km % 10) / 10
-  const keys = SKY_KEYS
+  const keys = bio.ceu
   let a = keys[keys.length - 1], b = keys[0], p = 0
   for (let i = 0; i < keys.length; i++) {
     const k1 = keys[i], k2 = keys[(i + 1) % keys.length]

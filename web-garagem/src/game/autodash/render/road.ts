@@ -382,7 +382,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       // beira limpa na corrida (só a zebra roxa marca a pista)
     } else if (idx % 4 === 0) {
       const side = idx % 8 === 0 ? -1 : 1
-      sprites.push({ kind: "deco", deco: 0, x: sx1 + sw1 * side * (1.55 + ((idx * 7) % 5) * 0.14), y: sy1, w: sw1 * 0.22 })
+      sprites.push({ kind: "deco", deco: eng.bioma.arvore, x: sx1 + sw1 * side * (1.55 + ((idx * 7) % 5) * 0.14), y: sy1, w: sw1 * 0.22 })
     } else if (idx % 10 === 5) {
       sprites.push({ kind: "deco", deco: 1, x: sx1 - sw1 * 1.28, y: sy1, w: sw1 * 0.05 })
     } else if (idx % 51 === 17) {

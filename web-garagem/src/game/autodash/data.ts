@@ -144,6 +144,7 @@ export interface GameConfig {
   customs: CarCustom[]
   transmission: "auto" | "manual"
   steering: "keyboard" | "mouse"
+  biome: string        // id do bioma do modo solo (world/biomes.ts)
   sound: boolean
   pilotName: string
 }
@@ -163,6 +164,7 @@ export function defaultConfig(): GameConfig {
     customs: CARS.map((_, i) => defaultCustom(i)),
     transmission: "auto",
     steering: "keyboard",
+    biome: "cidade",
     sound: true,
     pilotName: "",
   }
