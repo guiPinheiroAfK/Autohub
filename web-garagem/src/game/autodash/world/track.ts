@@ -8,6 +8,8 @@ export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() 
   const rnd = mulberry32(seed)
   // bioma: a corrida usa o bioma fixo do lobby; o solo usa a escolha do jogador
   eng.bioma = corrida ? biomeDaCorrida() : biomeById(eng.cfg.biome)
+  // pista procedural não tem circuito fixo, ramais nem trechos com nome
+  eng.pistaId = null; eng.ramais = []; eng.trechos = []
   eng.segments = []
   let lastY = 0
   const seg = (curve: number, y: number) => { eng.segments.push({ curve, y1: lastY, y2: y }); lastY = y }
@@ -61,9 +63,14 @@ export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() 
   addRoad(40, 40, 40, 0, -lastY) // fecha o loop plano
   eng.trackLen = eng.segments.length * SEG_LEN
 
-  // placas de chevron antes de curvas fechadas. No circuito o limiar é mais
-  // baixo e a fila de placas é mais longa: como as curvas são bem mais bravas,
-  // o jogador precisa ler a curva de longe pra escolher onde frear.
+  sinalizarCurvas(eng, corrida)
+  if (corrida) conesDeCurva(eng)
+}
+
+// Placas de chevron antes de curvas fechadas. No circuito o limiar é mais
+// baixo e a fila de placas é mais longa: como as curvas são bem mais bravas,
+// o jogador precisa ler a curva de longe pra escolher onde frear.
+export function sinalizarCurvas(eng: AutoDashEngine, corrida: boolean) {
   const limiar = corrida ? 2.5 : 4
   const inicioPlacas = corrida ? 70 : 46
   for (let i = inicioPlacas; i < eng.segments.length; i++) {
@@ -75,21 +82,21 @@ export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() 
       }
     }
   }
+}
 
-  // No circuito, cones marcam a parte interna das curvas bravas: viram
-  // referência de traçado (dá pra "raspar" a curva) e punem quem entra torto.
-  if (corrida) {
-    eng.obstacles = []
-    for (let i = 60; i < eng.segments.length - 30; i++) {
-      const c = eng.segments[i].curve
-      if (Math.abs(c) < 5 || Math.abs(eng.segments[i - 1].curve) >= 5) continue
-      const lado = c > 0 ? 1 : -1 // interno da curva
-      for (let k = 0; k < 5; k++) {
-        eng.obstacles.push({
-          z: ((i + k * 6) * SEG_LEN) % eng.trackLen,
-          offset: lado * 0.92, kind: "cone", w: 0.10, len: 90,
-        })
-      }
+// No circuito, cones marcam a parte interna das curvas bravas: viram
+// referência de traçado (dá pra "raspar" a curva) e punem quem entra torto.
+export function conesDeCurva(eng: AutoDashEngine) {
+  eng.obstacles = []
+  for (let i = 60; i < eng.segments.length - 30; i++) {
+    const c = eng.segments[i].curve
+    if (Math.abs(c) < 5 || Math.abs(eng.segments[i - 1].curve) >= 5) continue
+    const lado = c > 0 ? 1 : -1 // interno da curva
+    for (let k = 0; k < 5; k++) {
+      eng.obstacles.push({
+        z: ((i + k * 6) * SEG_LEN) % eng.trackLen,
+        offset: lado * 0.92, kind: "cone", w: 0.10, len: 90,
+      })
     }
   }
 }

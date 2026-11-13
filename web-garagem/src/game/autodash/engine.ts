@@ -10,6 +10,8 @@ import { clamp, mix } from "./math"
 import { update } from "./sim/update"
 import { skyNow, renderBackdrop } from "./render/backdrop"
 import { type BiomeDef, biomeById } from "./world/biomes"
+import { type Ramal } from "./world/ramais"
+import { type TrechoInfo } from "./world/circuits"
 import { renderRoad } from "./render/road"
 import { renderPlayer, renderRearThreat } from "./render/player"
 import { renderParticles } from "./render/particles"
@@ -68,7 +70,8 @@ export interface Seg { curve: number; y1: number; y2: number; sign?: number }
 
 // Obstáculo físico na pista (cones, barreiras). Cone é perdoável (tranco);
 // barreira é parede. Base do futuro modo corrida.
-export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier"; w: number; len: number; prevD?: number; dead?: boolean }
+// `fixo`: faz parte do circuito (não some quando fica para trás; vale a corrida toda).
+export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean }
 // Zona de evento no traçado:
 //  bridge    — ponte suspensa (estilo Golden Gate): você dirige EM CIMA, com
 //              guarda-corpo, torres e água dos dois lados
@@ -79,7 +82,7 @@ export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier";
 //  speedtrap — radar (placa 90): trânsito reduz, polícia observando; passar
 //              rápido demais = perseguição (o evento da conversa original)
 interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap"; z: number; end: number; spawnT: number; checked?: boolean }
-export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge"; label?: string }
+export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho"; label?: string; lado?: number }
 
 export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 export interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
@@ -173,6 +176,11 @@ export class AutoDashEngine {
   raining = false
   // bioma da pista atual (ADR 0011). Definido em buildTrack, lido pelo render.
   bioma: BiomeDef = biomeById(undefined)
+  // circuito fixo da corrida (ADR 0014). Vazios na pista procedural.
+  pistaId: string | null = null
+  noRamal = false // o jogador está no miolo de um ramal (para anunciar a entrada uma vez)
+  ramais: Ramal[] = []
+  trechos: TrechoInfo[] = []
   rainT = 0
   rainRollT = 0
   demoT = 0

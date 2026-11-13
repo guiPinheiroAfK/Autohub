@@ -14,6 +14,7 @@ import { shiftUp, shiftDown } from "../physics/gearbox"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
+import { ramalNoSeg, sobreRamal, ganhoRamal } from "../world/ramais"
 
 export function update(eng: AutoDashEngine, dt: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -85,6 +86,9 @@ export function update(eng: AutoDashEngine, dt: number) {
   const grip = spec.grip * tyreOf(spec).grip * (eng.raining ? 0.62 : 1)
   const playerZ = eng.position + PLAYER_Z
   const seg = segAt(eng, playerZ)
+  // ramal (atalho) neste ponto da pista, se houver (ADR 0014). Sem ramais: null.
+  const ramal = eng.ramais.length
+    ? ramalNoSeg(eng.ramais, Math.floor(playerZ / SEG_LEN) % eng.segments.length) : null
 
   // direção — input suavizado, mais firme em alta velocidade
   let steerInput = 0
@@ -117,7 +121,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.pitchY += (pitchTarget - eng.pitchY) * Math.min(1, dt * 8)
 
   // fora da pista
-  if (Math.abs(eng.playerX) > 1.05) {
+  if (Math.abs(eng.playerX) > 1.05 && !(ramal && sobreRamal(ramal, eng.playerX))) {
     eng.offroadT += dt
     eng.speed = Math.max(Math.min(eng.speed, 60), eng.speed - 160 * dt)
     eng.shakeT = 0.1
@@ -125,7 +129,11 @@ export function update(eng: AutoDashEngine, dt: number) {
     if (Math.random() < 0.3) eng.audio.offroad()
     emitSmoke(eng, 3, "#a3a3a3")
   } else eng.offroadT = 0
-  eng.playerX = clamp(eng.playerX, -1.6, 1.6)
+  if (ramal) {
+    // do lado do ramal a pista é mais larga: o limite vai até depois dele
+    const lim = Math.max(1.6, ramal.outer + 0.45)
+    eng.playerX = ramal.r.lado > 0 ? clamp(eng.playerX, -1.6, lim) : clamp(eng.playerX, -lim, 1.6)
+  } else eng.playerX = clamp(eng.playerX, -1.6, 1.6)
 
   // ---------- motor ----------
   if (eng.shiftT > 0) eng.shiftT -= dt
@@ -181,7 +189,17 @@ export function update(eng: AutoDashEngine, dt: number) {
     eng.speed = Math.min(eng.speed, gearTop)
   }
 
-  eng.position = ((eng.position + eng.speed * KMH2UPS * dt) % eng.trackLen + eng.trackLen) % eng.trackLen
+  // no miolo do ramal o avanço rende mais (linha de dentro). Fora dele, ganho = 1.
+  const ganho = ganhoRamal(ramal, eng.playerX)
+  if (ganho !== 1 && !eng.noRamal && ramal) {
+    const pct = Math.round((ganho - 1) * 100)
+    eng.floaters.push({
+      text: `${ramal.r.nome.toUpperCase()}  ${pct >= 0 ? "+" : ""}${pct}%`,
+      color: "#4ade80", y: H * 0.3, life: 1.6, big: false,
+    })
+  }
+  eng.noRamal = ganho !== 1
+  eng.position = ((eng.position + eng.speed * KMH2UPS * dt * ganho) % eng.trackLen + eng.trackLen) % eng.trackLen
   eng.km += eng.speed * dt / 3600
 
   if (eng.goFlashT > 0) eng.goFlashT -= dt

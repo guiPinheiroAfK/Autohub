@@ -149,6 +149,22 @@ export function drawRoadSign(eng: AutoDashEngine, sign: RoadSign, x: number, y: 
       ctx.moveTo(x + r * 0.52, cy + r * 0.5); ctx.lineTo(x + r * 0.05, cy - r * 0.1)
       ctx.stroke()
     }
+  } else if (sign.type === "atalho") {
+    // ATALHO: placa verde retangular com seta apontando para o lado do ramal
+    const pw = r * 2.6, ph = r * 1.5
+    ctx.fillStyle = shade("#15803d", Math.max(0.55, amb))
+    ctx.fillRect(x - pw / 2, cy - ph / 2, pw, ph)
+    ctx.strokeStyle = shade("#f8fafc", Math.max(0.6, amb))
+    ctx.lineWidth = Math.max(1, r * 0.1)
+    ctx.strokeRect(x - pw / 2, cy - ph / 2, pw, ph)
+    if (r > 5) {
+      const d = sign.lado ?? 1
+      ctx.beginPath()
+      ctx.moveTo(x - d * pw * 0.3, cy); ctx.lineTo(x + d * pw * 0.3, cy)
+      ctx.moveTo(x + d * pw * 0.12, cy - ph * 0.26); ctx.lineTo(x + d * pw * 0.3, cy)
+      ctx.lineTo(x + d * pw * 0.12, cy + ph * 0.26)
+      ctx.stroke()
+    }
   } else if (sign.type === "bridgewarn") {
     // aviso de ponte: losango amarelo com o vão desenhado
     ctx.fillStyle = shade("#fbbf24", amb)

@@ -26,7 +26,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.curveWarn = 0; eng.collWarn = null
   eng.newRecord = false; eng.beamT = 0; eng.beamCdT = 0; eng.pitchY = 0
   eng.shiftT = 0; eng.wheelspinT = 0; eng.bogT = 0
-  eng.crashed = false; eng.crashByPolice = false
+  eng.crashed = false; eng.crashByPolice = false; eng.noRamal = false
   eng.raceFinished = false; eng.raceSpectT = 0
   eng.raining = false; eng.rainRollT = 0
   eng.audio.rain(false)

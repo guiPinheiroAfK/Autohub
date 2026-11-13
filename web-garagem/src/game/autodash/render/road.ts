@@ -14,6 +14,10 @@ import { segAt } from "../world/track"
 import { shade, clamp, hexToRgb } from "../math"
 import { type Traffic, KINDS } from "../traffic/types"
 import { poly } from "./primitives"
+import { drawRamalSeg } from "./ramal"
+
+const PLACA_ATALHO_DIR: RoadSign = { z: 0, type: "atalho", lado: 1 }
+const PLACA_ATALHO_ESQ: RoadSign = { z: 0, type: "atalho", lado: -1 }
 
 export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   const ctx = eng.ctx
@@ -277,6 +281,8 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
               sx2 + sw2 * (0.97 + 0.62 * vrF2), ry2, sx2 + sw2 * 0.97, ry2)
         }
       }
+      // ramal paralelo (atalho) dos circuitos fixos
+      if (eng.ramais.length) drawRamalSeg(eng, idx, sx1, sw1, ry1, sx2, sw2, ry2, alt, roadL, roadD, rumbA, rumbB, laneC)
       // linhas de faixa
       if (alt) {
         ctx.fillStyle = laneC
@@ -367,6 +373,12 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       for (const s of signsHere) {
         // placa na beira direita da pista
         sprites.push({ kind: "sign", sign: s, x: sx1 + sw1 * 1.35, y: sy1, w: sw1 * 0.11 })
+      }
+    }
+    // placas de atalho antes da entrada de cada ramal, do lado dele
+    for (const r of eng.ramais) {
+      if (idx === r.a - 50 || idx === r.a - 12) {
+        sprites.push({ kind: "sign", sign: r.lado > 0 ? PLACA_ATALHO_DIR : PLACA_ATALHO_ESQ, x: sx1 + sw1 * 1.35 * r.lado, y: sy1, w: sw1 * 0.11 })
       }
     }
     if (viaductSegs.has(idx)) sprites.push({ kind: "bridge", x: sx1, y: sy1, w: sw1 })

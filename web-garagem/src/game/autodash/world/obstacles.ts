@@ -9,7 +9,7 @@ export function updateObstacles(eng: AutoDashEngine, playerZ: number) {
   const spec = CARS[eng.cfg.carIdx]
   for (const o of eng.obstacles) {
     const d = wrapDz(eng, o.z, playerZ)
-    if (d < -35 * SEG_LEN) { o.dead = true; continue }
+    if (d < -35 * SEG_LEN && !o.fixo) { o.dead = true; continue }
     const halfSum = (o.w + spec.width) / 2 * 0.85
     // obstáculo é ESTÁTICO: a velocidade de fechamento é a do jogador — acima
     // de ~45 km/h a janela em Z é pulada entre frames. A varredura (cruzou o
