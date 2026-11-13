@@ -4,10 +4,10 @@
  * e salva/atualiza na tabela `cotacoes` do Neon.
  *
  * Netlify Scheduled Functions v2: export config.schedule + export default handler
- * Não precisa de nenhum pacote extra — usa Request/Response nativo.
+ * Usa o cliente Neon de src/db/client.ts (mesmo do resto da API) e Request/Response nativo.
  */
 
-import postgres from "postgres"
+import { sql } from "../../src/db/client.ts"
 
 export const config = {
   schedule: "0 11 * * *",  // 8h BRT = 11h UTC
@@ -21,20 +21,6 @@ interface AwesomeQuote {
 }
 
 export default async function handler(): Promise<Response> {
-  const DATABASE_URL = process.env.DATABASE_URL
-  if (!DATABASE_URL) {
-    console.error("[cotacao-diaria] DATABASE_URL não definida")
-    return new Response(JSON.stringify({ error: "DATABASE_URL ausente" }), { status: 500 })
-  }
-
-  const isNeon = DATABASE_URL.includes("neon.tech")
-  const sql = postgres(DATABASE_URL, {
-    max: 1,
-    idle_timeout: 20,
-    connect_timeout: 10,
-    ssl: isNeon ? "require" : undefined,
-  })
-
   try {
     // AwesomeAPI — gratuita, sem chave, retorna cotações em tempo real
     const resp = await fetch(
@@ -86,8 +72,5 @@ export default async function handler(): Promise<Response> {
   } catch (err) {
     console.error("[cotacao-diaria] Erro:", err)
     return new Response(JSON.stringify({ error: String(err) }), { status: 500 })
-
-  } finally {
-    await sql.end()
   }
 }
