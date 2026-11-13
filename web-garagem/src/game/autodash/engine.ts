@@ -8,7 +8,7 @@ import { buildTrack, segAt } from "./world/track"
 import { seedTraffic, updateTraffic, wrapDz } from "./traffic/spawner"
 import { clamp, mix } from "./math"
 import { updateEventSpawner } from "./world/events"
-import { duelNet, myTelemetry, duelFinish, duelCreate, duelJoin, duelRematch, startDuelLobby } from "./modes/duel"
+import { duelNet, myTelemetry, duelFinish, startDuelLobby } from "./modes/duel"
 import { startRace } from "./modes/race"
 import { updateFx, emitSmoke, emitFlame, burst, initRain } from "./fx/particles"
 import { rpmFor, powerCurve } from "./physics/rpm"
@@ -19,10 +19,11 @@ import { skyNow, renderBackdrop } from "./render/backdrop"
 import { renderRoad } from "./render/road"
 import { renderPlayer, renderRearThreat } from "./render/player"
 import { renderParticles } from "./render/particles"
-import { renderMenu, renderGarage, renderPause, renderGameOver, renderNameEntry, dim } from "./render/menus/main"
+import { renderMenu, renderGarage, renderPause, renderGameOver, renderNameEntry } from "./render/menus/main"
 import { renderHud, renderSemaphore } from "./render/hud"
 import { renderTrackPreview, renderRaceLobby, renderRaceCode, renderRaceWait, renderRaceResult } from "./render/menus/race"
-import { glass, pill } from "./ui/widgets"
+import { renderDuelLobby, renderDuelCode, renderDuelWaiting, renderDuelSpectate, renderDuelResult } from "./render/menus/duel"
+import { glass } from "./ui/widgets"
 import { onKeyDown, onKeyUp } from "./input/keyboard"
 import { onMouseDown, onMouseUp, onMouseMove, onWheel, onCtx } from "./input/pointer"
 
@@ -859,11 +860,11 @@ export class AutoDashEngine {
       case "paused": renderHud(this); renderPause(this); break
       case "gameover": renderGameOver(this); break
       case "nameentry": renderNameEntry(this); break
-      case "duellobby": this.renderDuelLobby(); break
-      case "duelcode": this.renderDuelCode(); break
-      case "duelwaiting": this.renderDuelWaiting(); break
-      case "duelspectate": this.renderDuelSpectate(); break
-      case "duelresult": this.renderDuelResult(); break
+      case "duellobby": renderDuelLobby(this); break
+      case "duelcode": renderDuelCode(this); break
+      case "duelwaiting": renderDuelWaiting(this); break
+      case "duelspectate": renderDuelSpectate(this); break
+      case "duelresult": renderDuelResult(this); break
       case "racelobby": renderRaceLobby(this); break
       case "racecode": renderRaceCode(this); break
       case "racewait": renderRaceWait(this); break
@@ -1093,135 +1094,10 @@ export class AutoDashEngine {
     this.state = "menu"
   }
 
-  renderDuelLobby() {
-    const ctx = this.ctx
-    dim(this, 0.62)
-    ctx.textAlign = "center"
-    ctx.fillStyle = "#38bdf8"
-    ctx.font = "900 44px 'Space Grotesk', sans-serif"
-    ctx.fillText("DUELO ONLINE", W / 2, 150)
-    ctx.fillStyle = "rgba(248,250,252,0.75)"
-    ctx.font = "15px 'Space Grotesk', sans-serif"
-    ctx.fillText("dois pilotos, mesma pista, largada junta.", W / 2, 186)
-    ctx.fillText("quem for mais longe sem bater, leva.", W / 2, 208)
-    ctx.textAlign = "left"
-    pill(this, "CRIAR SALA", W / 2 - 150, 260, 300, () => duelCreate(this), { primary: true, h: 44, font: 17 })
-    pill(this, "TENHO UM CÓDIGO", W / 2 - 150, 316, 300, () => { this.codeBuf = ""; this.state = "duelcode"; this.audio.ui() }, { h: 38, font: 15 })
-    pill(this, "← voltar  [ESC]", W / 2 - 150, 368, 300, () => this.toMenu(), { h: 30 })
-  }
 
-  renderDuelCode() {
-    const ctx = this.ctx
-    dim(this, 0.7)
-    glass(this, W / 2 - 210, 150, 420, 250, 20)
-    ctx.textAlign = "center"
-    ctx.fillStyle = "#38bdf8"
-    ctx.font = "900 30px 'Space Grotesk', sans-serif"
-    ctx.fillText("CÓDIGO DA SALA", W / 2, 204)
-    const cursor = Math.floor(performance.now() / 400) % 2 === 0 ? "▌" : " "
-    ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 44px 'Consolas', monospace"
-    ctx.fillText(this.codeBuf + cursor, W / 2, 282)
-    ctx.fillStyle = "rgba(255,255,255,0.25)"
-    ctx.fillRect(W / 2 - 90, 296, 180, 2)
-    ctx.textAlign = "left"
-    pill(this, "ENTRAR  [ENTER]", W / 2 - 110, 330, 220, () => duelJoin(this), { primary: true, h: 34, font: 14 })
-    pill(this, "← voltar", W / 2 - 110, 372, 220, () => { this.state = "duellobby" }, { h: 26 })
-  }
 
-  renderDuelWaiting() {
-    const ctx = this.ctx
-    const d = this.duel
-    dim(this, 0.66)
-    ctx.textAlign = "center"
-    if (!d) { this.state = "duellobby"; return }
-    if (d.startAtLocal === null) {
-      const dots = ".".repeat(1 + (Math.floor(performance.now() / 400) % 3))
-      if (d.rematch) {
-        ctx.fillStyle = "#fde047"
-        ctx.font = "900 40px 'Space Grotesk', sans-serif"
-        ctx.fillText("⚔ REVANCHE!", W / 2, 220)
-        ctx.fillStyle = "rgba(248,250,252,0.75)"
-        ctx.font = "16px 'Space Grotesk', sans-serif"
-        ctx.fillText(`esperando ${d.oppName || "o rival"} topar${dots}`, W / 2, 268)
-      } else {
-        ctx.fillStyle = "rgba(248,250,252,0.8)"
-        ctx.font = "16px 'Space Grotesk', sans-serif"
-        ctx.fillText(d.code === "...." ? "criando sala..." : "manda esse código pro seu rival:", W / 2, 170)
-        ctx.fillStyle = "#fde047"
-        ctx.font = "900 84px 'Consolas', monospace"
-        if (d.code !== "....") ctx.fillText(d.code, W / 2, 268)
-        ctx.fillStyle = "rgba(248,250,252,0.6)"
-        ctx.font = "16px 'Space Grotesk', sans-serif"
-        ctx.fillText(`esperando oponente${dots}`, W / 2, 330)
-      }
-      ctx.textAlign = "left"
-      pill(this, "cancelar  [ESC]", W / 2 - 100, 370, 200, () => this.toMenu(), { h: 28 })
-    } else {
-      const secs = Math.max(0, (d.startAtLocal - performance.now()) / 1000)
-      ctx.fillStyle = "#4ade80"
-      ctx.font = "900 40px 'Space Grotesk', sans-serif"
-      ctx.fillText(`${d.oppName} ENTROU!`, W / 2, 220)
-      ctx.fillStyle = "#f8fafc"
-      ctx.font = "bold 64px 'Space Grotesk', sans-serif"
-      ctx.fillText(secs.toFixed(1), W / 2, 300)
-      ctx.fillStyle = "rgba(248,250,252,0.7)"
-      ctx.font = "15px 'Space Grotesk', sans-serif"
-      ctx.fillText("prepara o dedo no acelerador...", W / 2, 340)
-      ctx.textAlign = "left"
-    }
-  }
 
-  renderDuelSpectate() {
-    const ctx = this.ctx
-    const d = this.duel
-    dim(this, 0.55)
-    ctx.textAlign = "center"
-    ctx.fillStyle = "#ef4444"
-    ctx.font = "900 44px 'Space Grotesk', sans-serif"
-    ctx.fillText("VOCÊ BATEU!", W / 2, 170)
-    ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 22px 'Space Grotesk', sans-serif"
-    ctx.fillText(`sua marca: ${this.km.toFixed(2)} km · ${Math.floor(this.score).toLocaleString("pt-BR")} pts`, W / 2, 220)
-    if (d) {
-      const dots = ".".repeat(1 + (Math.floor(performance.now() / 400) % 3))
-      ctx.fillStyle = "#f472b6"
-      ctx.font = "bold 26px 'Space Grotesk', sans-serif"
-      ctx.fillText(`${d.oppName || "RIVAL"} ainda está correndo${dots}`, W / 2, 290)
-      ctx.fillStyle = "rgba(248,250,252,0.85)"
-      ctx.font = "bold 34px 'Space Grotesk', sans-serif"
-      ctx.fillText(`${d.oppD.toFixed(2)} km`, W / 2, 336)
-      const lead = this.km - d.oppD
-      ctx.font = "15px 'Space Grotesk', sans-serif"
-      ctx.fillStyle = lead > 0 ? "#4ade80" : "#ef4444"
-      ctx.fillText(lead > 0 ? `ele ainda precisa de ${Math.round(lead * 1000)}m pra te passar` : "ele já passou a sua marca...", W / 2, 372)
-    }
-    ctx.textAlign = "left"
-  }
 
-  renderDuelResult() {
-    const ctx = this.ctx
-    const d = this.duel
-    dim(this, 0.66)
-    ctx.textAlign = "center"
-    const win = d?.result === "win"
-    ctx.fillStyle = win ? "#4ade80" : "#ef4444"
-    ctx.font = "900 72px 'Space Grotesk', sans-serif"
-    ctx.fillText(win ? "VITÓRIA!" : "DERROTA", W / 2, 190)
-    if (d) {
-      ctx.fillStyle = "#f8fafc"
-      ctx.font = "bold 22px 'Space Grotesk', sans-serif"
-      ctx.fillText(`você: ${this.km.toFixed(2)} km   ·   ${d.oppName || "rival"}: ${d.oppD.toFixed(2)} km`, W / 2, 250)
-      if (d.msg) {
-        ctx.fillStyle = "rgba(248,250,252,0.6)"
-        ctx.font = "14px 'Space Grotesk', sans-serif"
-        ctx.fillText(d.msg, W / 2, 284)
-      }
-    }
-    ctx.textAlign = "left"
-    pill(this, "⚔ REVANCHE  [ENTER]", W / 2 - 240, 340, 240, () => duelRematch(this), { primary: true, h: 40, font: 15 })
-    pill(this, "MENU", W / 2 + 20, 340, 220, () => this.toMenu(), { h: 40, font: 15 })
-  }
 
   // ---------- input ----------
   audioInit = false
