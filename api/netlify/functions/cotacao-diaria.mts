@@ -7,8 +7,6 @@
  * Usa o cliente Neon de src/db/client.ts (mesmo do resto da API) e Request/Response nativo.
  */
 
-import { sql } from "../../src/db/client.ts"
-
 export const config = {
   schedule: "0 11 * * *",  // 8h BRT = 11h UTC
 }
@@ -21,6 +19,15 @@ interface AwesomeQuote {
 }
 
 export default async function handler(): Promise<Response> {
+  if (!process.env.DATABASE_URL) {
+    console.error("[cotacao-diaria] DATABASE_URL não definida")
+    return new Response(JSON.stringify({ error: "DATABASE_URL ausente" }), { status: 500 })
+  }
+
+  // Import dinâmico: client.ts lança erro ao carregar sem DATABASE_URL, então
+  // só importa depois da checagem acima (mantém a resposta 500 de antes).
+  const { sql } = await import("../../src/db/client.ts")
+
   try {
     // AwesomeAPI — gratuita, sem chave, retorna cotações em tempo real
     const resp = await fetch(
