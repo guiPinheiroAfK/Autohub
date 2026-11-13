@@ -1,4 +1,4 @@
-import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, DRAW_DIST, SEG_LEN, CARS, type BodyKind, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
+import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, DRAW_DIST, SEG_LEN, type BodyKind, CARS, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
 import { type DuelTelemetry, postState, rematchRoom, pollRoom, createRoom, joinRoom } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic, TRAFFIC_COLORS, KINDS } from "./traffic/types"
@@ -9,6 +9,7 @@ import { clamp, mix, shade, hexToRgb } from "./math"
 import { rpmFor, powerCurve } from "./physics/rpm"
 import { shiftUp, shiftDown } from "./physics/gearbox"
 import { updateZones } from "./world/zones"
+import { updateObstacles } from "./world/obstacles"
 import { poly, rr, drawPlayerCar } from "./render/primitives"
 
 // AutoDash — engine pseudo-3D (estilo NFS de PSP) em Canvas 2D puro.
@@ -481,44 +482,6 @@ export class AutoDashEngine {
    * direita), blitz/radar reduzindo o trânsito e checando a sua velocidade.
    */
 
-  /** Colisão e limpeza dos obstáculos físicos (cones perdoam, barreira não). */
-  updateObstacles(playerZ: number) {
-    const spec = CARS[this.cfg.carIdx]
-    for (const o of this.obstacles) {
-      const d = wrapDz(this, o.z, playerZ)
-      if (d < -35 * SEG_LEN) { o.dead = true; continue }
-      const halfSum = (o.w + spec.width) / 2 * 0.85
-      // obstáculo é ESTÁTICO: a velocidade de fechamento é a do jogador — acima
-      // de ~45 km/h a janela em Z é pulada entre frames. A varredura (cruzou o
-      // ponto neste frame?) é obrigatória aqui, não otimização.
-      const prev = o.prevD ?? d
-      o.prevD = d
-      const swept = prev > 0 && d <= 0 && prev < 1200 && prev - d < 2000
-      if ((Math.abs(d) < o.len / 2 + 40 || swept) && Math.abs(o.offset - this.playerX) < halfSum && !this.crashed && this.immuneT <= 0) {
-        if (o.kind === "cone") {
-          // cone é perdoável: tranco, perde velocidade e combo — não mata
-          o.dead = true
-          this.speed *= 0.78
-          this.combo = 0
-          this.shakeT = Math.max(this.shakeT, 0.3)
-          this.immuneT = Math.max(this.immuneT, 0.25)
-          this.audio.offroad()
-          this.burst(W / 2, H - 110, 10, ["#fb923c", "#fde68a"])
-          this.floaters.push({ text: "CONE! 🚧", color: "#fb923c", y: H * 0.44, life: 0.9, big: false })
-        } else if (this.shield) {
-          this.shield = false
-          this.immuneT = 2.0
-          o.dead = true
-          this.audio.shieldBreak()
-          this.burst(W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
-          this.floaters.push({ text: "ESCUDO QUEBROU!", color: "#60a5fa", y: H * 0.4, life: 1.3, big: false })
-        } else {
-          this.crash()
-        }
-      }
-    }
-    if (this.obstacles.some(o => o.dead)) this.obstacles = this.obstacles.filter(o => !o.dead)
-  }
 
 
 
@@ -841,7 +804,7 @@ export class AutoDashEngine {
 
     updateTraffic(this, dt, playerZ, false)
     updateZones(this, dt, playerZ)
-    this.updateObstacles(playerZ)
+    updateObstacles(this, playerZ)
 
     // aviso de curva fechada à frente
     this.curveWarn = 0
