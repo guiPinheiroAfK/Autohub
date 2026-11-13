@@ -1,11 +1,11 @@
 import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, DRAW_DIST, SEG_LEN, CARS, type BodyKind, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, RPM_PER_KMH, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
 import { type DuelTelemetry, postState, rematchRoom, pollRoom, createRoom, joinRoom } from "./net"
 import { AudioBus } from "./audio"
-import { type Traffic, type TrafficKind, KINDS, TRAFFIC_COLORS, type WorldView } from "./traffic/types"
+import { type Traffic, TRAFFIC_COLORS, type TrafficKind, KINDS } from "./traffic/types"
 import { RaceSession } from "./race/session"
 import { buildTrack, segAt } from "./world/track"
+import { seedTraffic, wrapDz, updateTraffic } from "./traffic/spawner"
 import { clamp, mix, shade, hexToRgb } from "./math"
-import { DRIVERS } from "./traffic/driver"
 import { rpmFor, powerCurve } from "./physics/rpm"
 import { shiftUp, shiftDown } from "./physics/gearbox"
 import { poly, rr, drawPlayerCar } from "./render/primitives"
@@ -14,7 +14,7 @@ import { poly, rr, drawPlayerCar } from "./render/primitives"
 // Estrada por segmentos projetados, tráfego, clima, câmbio com RPM e ranking local.
 
 export const W = CANVAS_W, H = CANVAS_H
-const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH
+export const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH
 const RUMBLE = 3
 // Veículo mais perto que isso não tem nem o topo do sprite dentro da tela
 // (a base projeta muito abaixo da borda) — não vale emitir.
@@ -259,7 +259,7 @@ export class AutoDashEngine {
     // jogo — é o callout de imagem. Desliga seleção, callout e realce de toque.
     this.noCallout(this.canvas)
     buildTrack(this)
-    this.seedTraffic(14)
+    seedTraffic(this, 14)
     this.bind()
     if (this.isTouch) this.buildTouchControls()
     void this.refreshScores()
@@ -295,32 +295,7 @@ export class AutoDashEngine {
   // ---------- tráfego ----------
   laneCenters = [-0.75, -0.25, 0.25, 0.75]
 
-  seedTraffic(count: number) {
-    this.traffic = []
-    for (let i = 0; i < count; i++) this.spawnTraffic((i + 1) * (DRAW_DIST * SEG_LEN / count) + 6000)
-  }
 
-  spawnTraffic(relAhead: number) {
-    const roll = Math.random()
-    const kind: TrafficKind = roll < 0.52 ? "car" : roll < 0.68 ? "moto" : roll < 0.87 ? "truck" : "bus"
-    const k = KINDS[kind]
-    const lane = this.laneCenters[Math.floor(Math.random() * 4)]
-    const z = ((this.position + relAhead) % this.trackLen + this.trackLen) % this.trackLen
-    // não nasce em cima de outro
-    for (const t of this.traffic) {
-      if (Math.abs(t.offset - lane) < 0.3 && Math.abs(this.wrapDz(t.z, z)) < k.len + KINDS[t.kind].len) return
-    }
-    this.traffic.push({
-      z, offset: lane, targetOffset: lane,
-      speed: k.spd[0] + Math.random() * (k.spd[1] - k.spd[0]),
-      kind, role: "civilian",
-      color: TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)],
-      // prevD REAL (não o sentinela 1): a varredura de colisão compara prevD com
-      // d pra saber se o veículo cruzou você neste frame. Com prevD=1, qualquer
-      // carro atrás na sua faixa parecia "acabou de cruzar" e te matava na hora.
-      blinkT: 0, prevD: this.wrapDz(z, this.position + PLAYER_Z),
-    })
-  }
 
   /**
    * Materializa um evento de mapa à frente do jogador. Chamado pelo sorteio
@@ -381,7 +356,7 @@ export class AutoDashEngine {
           z: cz, offset: 1.32, targetOffset: 0.75,
           speed: 84 + Math.random() * 22, kind: "car", role: "civilian",
           color: TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)],
-          blinkT: 1.1 + i * 0.5, prevD: this.wrapDz(cz, this.position + PLAYER_Z),
+          blinkT: 1.1 + i * 0.5, prevD: wrapDz(this, cz, this.position + PLAYER_Z),
         })
       }
       note("🛣️ viaduto à frente — carros entrando!")
@@ -431,7 +406,7 @@ export class AutoDashEngine {
         this.traffic.push({
           z: pz2, offset: -0.5, targetOffset: -0.5, speed: 0,
           kind: "police", role: "police", parked: true,
-          color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(pz2, this.position + PLAYER_Z),
+          color: "#1d4ed8", blinkT: 0, prevD: wrapDz(this, pz2, this.position + PLAYER_Z),
         })
       }
       note("👮 BLITZ à frente — reduza pra 60!")
@@ -446,7 +421,7 @@ export class AutoDashEngine {
         this.traffic.push({
           z: pz2, offset: 1.18, targetOffset: 1.18, speed: 0,
           kind: "police", role: "police", parked: true,
-          color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(pz2, this.position + PLAYER_Z),
+          color: "#1d4ed8", blinkT: 0, prevD: wrapDz(this, pz2, this.position + PLAYER_Z),
         })
       }
       note("📸 RADAR à frente — limite 90!")
@@ -465,179 +440,14 @@ export class AutoDashEngine {
       this.traffic.push({
         z, offset: lanes[i], targetOffset: lanes[i],
         speed: clamp(this.speed, 150, 215), kind: "police", role: "police",
-        color: "#1d4ed8", blinkT: 0, prevD: this.wrapDz(z, this.position + PLAYER_Z),
+        color: "#1d4ed8", blinkT: 0, prevD: wrapDz(this, z, this.position + PLAYER_Z),
       })
     }
     this.floaters.push({ text: "🚓 PERSEGUIÇÃO!", color: "#60a5fa", y: H * 0.34, life: 2, big: true })
     this.audio.horn()
   }
 
-  wrapDz(a: number, b: number): number {
-    let d = a - b
-    if (d > this.trackLen / 2) d -= this.trackLen
-    if (d < -this.trackLen / 2) d += this.trackLen
-    return d
-  }
 
-  updateTraffic(dt: number, playerZ: number, demo: boolean) {
-    // no circuito o desafio é o traçado, não a quantidade de carro: bem menos
-    // trânsito, e sem escalar com nível (a corrida tem duração fixa em voltas)
-    const target = this.mode === "race"
-        ? 5
-        : 14 + Math.min(14, Math.floor(this.km * 1.3)) + this.level * 3
-    if (this.traffic.length < target) this.spawnTraffic(DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))
-    if (this.immuneT > 0) this.immuneT -= dt
-    if (this.policeHitT > 0) this.policeHitT -= dt
-
-    const spec = CARS[this.cfg.carIdx]
-    // visão read-only do mundo que as IAs consomem (ver ./traffic/driver.ts)
-    const world: WorldView = {
-      traffic: this.traffic,
-      playerX: this.playerX,
-      playerZ,
-      playerSpeed: this.speed,
-      trackLen: this.trackLen,
-      demo,
-      wrapDz: (a, b) => this.wrapDz(a, b),
-    }
-    for (const t of this.traffic) {
-      const k = KINDS[t.kind]
-      // a IA do papel do veículo decide faixa/velocidade e o move
-      // (estacionado não tem IA — cenografia de blitz)
-      const spd = t.parked ? 0 : DRIVERS[t.role].drive(t, world, dt)
-
-      const d = this.wrapDz(t.z, playerZ)
-      if (!demo) {
-        // soma das meia-larguras (casa com os sprites), com margem de perdão de
-        // arcade: um tico mais estreita que o teórico pra matar "bati no nada"
-        const halfSum = (k.w + spec.width) / 2 * 0.85
-        // colisão. Dois cooldowns SEPARADOS de propósito: immuneT (escudo) vale
-        // contra tudo; policeHitT vale só contra viatura. Se o encostão desse
-        // imunidade geral, ser jogado em cima do trânsito faria você atravessar
-        // os carros — e é justamente aí que a perseguição tem que doer.
-        // janela em Z OU cruzamento no frame (varredura): na contramão a
-        // velocidade de fechamento passa de 600 unidades/frame e o veículo
-        // atravessaria a janela entre dois frames sem nunca "estar" nela
-        // ...e o salto tem que ser FISICAMENTE plausível pra um frame: sem isso,
-        // um prevD errado (ou um veículo teleportado) vira "cruzou você agora"
-        const swept = t.prevD > 0 && d <= 0 && t.prevD < 1200 && t.prevD - d < 2000
-        const hit = (Math.abs(d) < k.len / 2 + 40 || swept) && Math.abs(t.offset - this.playerX) < halfSum && !this.crashed
-        if (hit && t.role === "police" && !t.parked) {
-          // Encostão de viatura NÃO mata: empurra pro lado. O engine só desenha
-          // o que está à frente, então uma viatura atrás é invisível — morrer
-          // por ela seria injusto. Ela te espreme até te jogar fora da pista,
-          // e É ISSO que prende. Não consome escudo (não é batida letal).
-          if (this.immuneT <= 0 && this.policeHitT <= 0) {
-            const dir = Math.sign(this.playerX - t.offset) || (Math.random() < 0.5 ? -1 : 1)
-            this.playerX += dir * 0.16
-            this.steerVel += dir * 1.4
-            this.speed *= 0.9
-            this.shakeT = Math.max(this.shakeT, 0.4)
-            this.combo = 0
-            // janela de recuperação: sem isso vira pinball, um encostão atrás do
-            // outro sem o jogador conseguir voltar pra pista
-            this.policeHitT = 1.2
-            // TODAS as viaturas recuam (não só a que bateu), senão a de trás
-            // emenda o combo assim que o cooldown expira
-            for (const o of this.traffic) if (o.role === "police") o.backoffT = 1.3
-            // acabou de levar encostão: obviamente não despistou ninguém
-            this.policeEscapeT = 0
-            this.audio.crash()
-            this.burst(W / 2 + dir * 60, H - 110, 14, ["#60a5fa", "#e2e8f0"])
-            this.floaters.push({ text: "ENCOSTÃO! 🚔", color: "#60a5fa", y: H * 0.42, life: 1, big: false })
-            if (Math.abs(this.playerX) > 1.05) this.crash(true) // te jogaram pra fora = preso
-          }
-        } else if (hit && this.immuneT <= 0) {
-          if (this.shield) {
-            this.shield = false
-            this.immuneT = 2.0
-            t.dead = true
-            this.audio.shieldBreak()
-            this.burst(W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
-            this.floaters.push({ text: "ESCUDO QUEBROU!", color: "#60a5fa", y: H * 0.4, life: 1.3, big: false })
-          } else {
-            this.crash()
-          }
-        }
-        // near miss: acabou de passar por ele
-        if (t.prevD > 0 && d <= 0 && !this.crashed) {
-          const gap = Math.abs(t.offset - this.playerX)
-          if (gap < halfSum + 0.20 && this.speed > spd + 15) {
-            this.combo = Math.min(7, this.combo + 1)
-            this.comboT = 4
-            const mult = (1 + this.combo) * (this.mult2T > 0 ? 2 : 1)
-            const pts = 200 * mult
-            this.score += pts
-            this.nitroMeter = Math.min(100, this.nitroMeter + 14)
-            this.floaters.push({ text: `QUASE! +${pts}  x${mult}`, color: "#fde047", y: H * 0.42, life: 1.2, big: false })
-            this.burst(W / 2 + (t.offset > this.playerX ? 72 : -72), H - 100, 9, ["#fde047", "#fff7c0"])
-            this.shakeT = Math.max(this.shakeT, 0.08)
-            this.audio.nearMiss()
-            if (Math.random() < 0.3) this.audio.horn()
-          }
-        }
-      }
-      t.prevD = d
-
-      // Recicla quem ficou muito longe — MAS a polícia é ENTIDADE, não população
-      // de cenário: ela nunca é teleportada. Reciclar uma viatura que você
-      // deixou pra trás a jogava lá na frente numa faixa aleatória, e ela caía
-      // de volta em cima de você — era isso que parecia "pulo" depois de
-      // ultrapassar. Quem perde a perseguição some pelo despiste, ali embaixo.
-      // Estacionados (blitz) e contramão também não reciclam: cenografia que
-      // ficou pra trás simplesmente some.
-      if (t.parked || t.role === "oncoming") {
-        const rel = this.wrapDz(t.z, this.position)
-        if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 140) * SEG_LEN) t.dead = true
-      } else if (t.role !== "police") {
-        const rel = this.wrapDz(t.z, this.position)
-        if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 80) * SEG_LEN) {
-          t.z = ((this.position + (DRAW_DIST * 0.55 + Math.random() * DRAW_DIST * 0.4) * SEG_LEN) % this.trackLen + this.trackLen) % this.trackLen
-          const lane = this.laneCenters[Math.floor(Math.random() * 4)]
-          t.offset = lane; t.targetOffset = lane
-          const kk = KINDS[t.kind]
-          t.speed = kk.spd[0] + Math.random() * (kk.spd[1] - kk.spd[0])
-          t.prevD = this.wrapDz(t.z, playerZ)
-        }
-      }
-    }
-    // despiste da polícia (protótipo do sistema tipo "estrelas" do GTA): se o
-    // jogador mantém distância grande de TODAS as viaturas por alguns segundos,
-    // elas desistem. Fugir = abrir gap em reta limpa ou perder eles no trânsito.
-    if (!demo) {
-      let nearestPolice = Infinity
-      let hasPolice = false
-      let anyBackoff = false
-      for (const t of this.traffic) {
-        if (t.role !== "police" || t.parked) continue // estacionada não é perseguição
-        hasPolice = true
-        if (t.backoffT && t.backoffT > 0) anyBackoff = true
-        nearestPolice = Math.min(nearestPolice, Math.abs(this.wrapDz(t.z, playerZ)))
-      }
-      if (hasPolice) {
-        this.policeChaseT += dt
-        // aquecimento: nos primeiros segundos a caçada não pode ser despistada —
-        // elas acabaram de chegar, insistem. Recuo pós-encostão também não conta
-        // como fuga: elas aliviaram, você não escapou.
-        if (nearestPolice > 10000 && !anyBackoff && this.policeChaseT > 6) {
-          this.policeEscapeT += dt
-          if (this.policeEscapeT >= 3) {
-            for (const t of this.traffic) if (t.role === "police") t.dead = true
-            this.floaters.push({ text: "DESPISTOU A POLÍCIA! 🚔💨", color: "#4ade80", y: H * 0.34, life: 2.4, big: true })
-            this.audio.levelUp()
-            this.policeEscapeT = 0
-          }
-        } else {
-          this.policeEscapeT = Math.max(0, this.policeEscapeT - dt * 0.5)
-        }
-      } else {
-        this.policeEscapeT = 0
-        this.policeChaseT = 0
-      }
-    }
-
-    if (this.traffic.some(t => t.dead)) this.traffic = this.traffic.filter(t => !t.dead)
-  }
 
   /**
    * Sorteia os eventos de mapa ao longo da corrida — é o que faz ponte, viaduto,
@@ -646,7 +456,7 @@ export class AutoDashEngine {
    */
   updateEventSpawner(dt: number, playerZ: number) {
     // poda o que ficou muito atrás (sem isso os arrays crescem sem limite)
-    const atras = (z: number) => this.wrapDz(z, playerZ) < -60 * SEG_LEN
+    const atras = (z: number) => wrapDz(this, z, playerZ) < -60 * SEG_LEN
     if (this.zones.some(z => atras(z.end))) this.zones = this.zones.filter(z => !atras(z.end))
     if (this.roadSigns.some(s => atras(s.z))) this.roadSigns = this.roadSigns.filter(s => !atras(s.z))
 
@@ -654,7 +464,7 @@ export class AutoDashEngine {
     if (this.eventTimer > 0) return
 
     // já tem evento rolando à frente? não empilha — espera acabar
-    if (this.zones.some(z => this.wrapDz(z.end, playerZ) > 0)) { this.eventTimer = 5; return }
+    if (this.zones.some(z => wrapDz(this, z.end, playerZ) > 0)) { this.eventTimer = 5; return }
     this.eventTimer = 15 + Math.random() * 15
 
     // blitz e radar só a partir do nível 4 (regra combinada: perseguição não cai
@@ -671,8 +481,8 @@ export class AutoDashEngine {
    */
   updateZones(dt: number, playerZ: number) {
     for (const zn of this.zones) {
-      const toStart = this.wrapDz(zn.z, playerZ) // >0: início à frente
-      const toEnd = this.wrapDz(zn.end, playerZ)
+      const toStart = wrapDz(this, zn.z, playerZ) // >0: início à frente
+      const toEnd = wrapDz(this, zn.end, playerZ)
 
       if (zn.type === "wrongway") {
         // ativa um pouco antes (você vê os carros vindo) e morre no fim da zona
@@ -683,8 +493,8 @@ export class AutoDashEngine {
             // nasce no horizonte visível — clampado pra DENTRO da zona (o
             // horizonte pode estar além do fim dela, e aí nada nascia)
             let z = ((playerZ + DRAW_DIST * SEG_LEN * 0.85) % this.trackLen + this.trackLen) % this.trackLen
-            if (this.wrapDz(zn.end, z) < 0) z = ((zn.end - 400) % this.trackLen + this.trackLen) % this.trackLen
-            if (this.wrapDz(z, zn.z) > 0 && this.wrapDz(zn.end, z) > 0) {
+            if (wrapDz(this, zn.end, z) < 0) z = ((zn.end - 400) % this.trackLen + this.trackLen) % this.trackLen
+            if (wrapDz(this, z, zn.z) > 0 && wrapDz(this, zn.end, z) > 0) {
               const kind: TrafficKind = Math.random() < 0.72 ? "car" : "truck"
               const lane = Math.random() < 0.5 ? -0.75 : -0.25 // mão dupla: DUAS faixas contra
               this.traffic.push({
@@ -692,7 +502,7 @@ export class AutoDashEngine {
                 speed: -(70 + Math.random() * 45), // negativa: vem contra você
                 kind, role: "oncoming",
                 color: TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)],
-                blinkT: 0, prevD: this.wrapDz(z, playerZ),
+                blinkT: 0, prevD: wrapDz(this, z, playerZ),
               })
             }
           }
@@ -702,16 +512,16 @@ export class AutoDashEngine {
           // Sem vaga? Freia e espera abrir.
           for (const t of this.traffic) {
             if (t.role !== "civilian" || t.parked) continue
-            const d = this.wrapDz(t.z, zn.z)
-            if (d > -6000 && this.wrapDz(zn.end, t.z) > 0 && t.targetOffset < 0.1) {
+            const d = wrapDz(this, t.z, zn.z)
+            if (d > -6000 && wrapDz(this, zn.end, t.z) > 0 && t.targetOffset < 0.1) {
               let moved = false
               for (const lane of [0.25, 0.75]) {
                 let clear = true
                 for (const o of this.traffic) {
                   if (o === t) continue
-                  if (Math.abs(this.wrapDz(o.z, t.z)) < 1100 && (Math.abs(o.offset - lane) < 0.3 || Math.abs(o.targetOffset - lane) < 0.3)) { clear = false; break }
+                  if (Math.abs(wrapDz(this, o.z, t.z)) < 1100 && (Math.abs(o.offset - lane) < 0.3 || Math.abs(o.targetOffset - lane) < 0.3)) { clear = false; break }
                 }
-                if (clear && Math.abs(this.wrapDz(playerZ, t.z)) < 2200 && Math.abs(this.playerX - lane) < 0.3) clear = false
+                if (clear && Math.abs(wrapDz(this, playerZ, t.z)) < 2200 && Math.abs(this.playerX - lane) < 0.3) clear = false
                 if (clear) { t.targetOffset = lane; t.blinkT = Math.max(t.blinkT, 0.5); moved = true; break }
               }
               if (!moved) t.speed = Math.max(55, t.speed - 50 * dt)
@@ -724,8 +534,8 @@ export class AutoDashEngine {
         if (toStart < 22000 && toEnd > -2000) {
           for (const t of this.traffic) {
             if (t.role !== "civilian" || t.parked) continue
-            const d = this.wrapDz(t.z, zn.z)
-            if (d > -20000 && this.wrapDz(zn.end, t.z) > -1000 && t.speed > lim + 4) {
+            const d = wrapDz(this, t.z, zn.z)
+            if (d > -20000 && wrapDz(this, zn.end, t.z) > -1000 && t.speed > lim + 4) {
               t.speed = Math.max(lim - 4 + Math.random() * 8, t.speed - 80 * dt)
             }
           }
@@ -735,11 +545,11 @@ export class AutoDashEngine {
           for (const t of this.traffic) {
             if (t.role !== "civilian" || t.parked) continue
             const kk = KINDS[t.kind]
-            if (this.wrapDz(t.z, zn.end) > 0 && t.speed < kk.spd[0]) t.speed = Math.min(kk.spd[1], t.speed + 24 * dt)
+            if (wrapDz(this, t.z, zn.end) > 0 && t.speed < kk.spd[0]) t.speed = Math.min(kk.spd[1], t.speed + 24 * dt)
           }
         }
         // cruzou a linha: passou no limite ou virou caçada
-        if (!zn.checked && this.wrapDz(playerZ, zn.z) > 0 && this.wrapDz(playerZ, zn.z) < 4000) {
+        if (!zn.checked && wrapDz(this, playerZ, zn.z) > 0 && wrapDz(this, playerZ, zn.z) < 4000) {
           zn.checked = true
           const tol = lim + 6
           if (this.speed > tol) {
@@ -764,7 +574,7 @@ export class AutoDashEngine {
   updateObstacles(playerZ: number) {
     const spec = CARS[this.cfg.carIdx]
     for (const o of this.obstacles) {
-      const d = this.wrapDz(o.z, playerZ)
+      const d = wrapDz(this, o.z, playerZ)
       if (d < -35 * SEG_LEN) { o.dead = true; continue }
       const halfSum = (o.w + spec.width) / 2 * 0.85
       // obstáculo é ESTÁTICO: a velocidade de fechamento é a do jogador — acima
@@ -837,7 +647,7 @@ export class AutoDashEngine {
       this.position = (this.position + this.speed * KMH2UPS * dt) % this.trackLen
       this.playerX = Math.sin(this.demoT * 0.3) * 0.2
       this.bgShift += segAt(this, this.position + PLAYER_Z).curve * this.speed * dt * 0.6
-      this.updateTraffic(dt, this.position + PLAYER_Z, true)
+      updateTraffic(this, dt, this.position + PLAYER_Z, true)
       this.updateFx(dt) // floaters/partículas sobrando da corrida ainda precisam morrer
       this.audio.engine(0, 0, false, false)
       return
@@ -1013,7 +823,7 @@ export class AutoDashEngine {
           let melhor: { dz: number; v: number } | null = null
           for (const t of this.traffic) {
             if (t.role === "oncoming") continue
-            const dz = this.wrapDz(t.z, z)
+            const dz = wrapDz(this, t.z, z)
             if (dz <= 0 || dz > alcance) continue
             if (Math.abs(t.offset - x) > 0.32) continue
             if (!melhor || dz < melhor.dz) melhor = { dz, v: t.speed }
@@ -1022,7 +832,7 @@ export class AutoDashEngine {
         },
         faixaLivre: (z, x, alcance) => {
           for (const t of this.traffic) {
-            if (Math.abs(this.wrapDz(t.z, z)) > alcance) continue
+            if (Math.abs(wrapDz(this, t.z, z)) > alcance) continue
             if (Math.abs(t.offset - x) < 0.3 || Math.abs(t.targetOffset - x) < 0.3) return false
           }
           return true
@@ -1092,7 +902,7 @@ export class AutoDashEngine {
     }
     for (const p of this.powerups) {
       p.pulse += dt * 6
-      const d = this.wrapDz(p.z, playerZ)
+      const d = wrapDz(this, p.z, playerZ)
       if (!p.taken && Math.abs(d) < 160 && Math.abs(p.offset - this.playerX) < 0.30) {
         p.taken = true
         this.audio.pickup()
@@ -1101,7 +911,7 @@ export class AutoDashEngine {
         if (p.type === PU_X2) { this.mult2T = 8; this.floaters.push({ text: "PONTOS EM DOBRO!", color: "#fde047", y: H * 0.45, life: 1.2, big: false }) }
       }
     }
-    this.powerups = this.powerups.filter(p => !p.taken && this.wrapDz(p.z, this.position) > -20 * SEG_LEN)
+    this.powerups = this.powerups.filter(p => !p.taken && wrapDz(this, p.z, this.position) > -20 * SEG_LEN)
 
     // fumaça de escape / arrancada
     if (throttle && this.speed < 40 && this.gear >= 1) this.emitSmoke(2, "#cbd5e1")
@@ -1118,7 +928,7 @@ export class AutoDashEngine {
       if (this.rainT <= 0) { this.raining = false; this.audio.rain(false) }
     }
 
-    this.updateTraffic(dt, playerZ, false)
+    updateTraffic(this, dt, playerZ, false)
     this.updateZones(dt, playerZ)
     this.updateObstacles(playerZ)
 
@@ -1139,7 +949,7 @@ export class AutoDashEngine {
     this.collWarn = null
     let bestD = Infinity
     for (const t of this.traffic) {
-      const d = this.wrapDz(t.z, playerZ)
+      const d = wrapDz(this, t.z, playerZ)
       if (d > 200 && d < 3600 && Math.abs(t.offset - this.playerX) < 0.30 && this.speed > t.speed + 45 && d < bestD) {
         bestD = d
         this.collWarn = t
@@ -1422,7 +1232,7 @@ export class AutoDashEngine {
     // curvas, e zerar depois apagaria justamente eles
     this.obstacles = []; this.zones = []; this.roadSigns = []; this.eventTimer = corrida ? 1e9 : 12
     buildTrack(this, seed, corrida)
-    this.seedTraffic(corrida ? 5 : 14)
+    seedTraffic(this, corrida ? 5 : 14)
     this.position = 0
     this.speed = 0
     this.playerX = 0
@@ -2930,7 +2740,7 @@ export class AutoDashEngine {
       }
     }
     const atras = candidatos
-        .map(t => ({ t, d: -this.wrapDz(t.z, playerZ) }))
+        .map(t => ({ t, d: -wrapDz(this, t.z, playerZ) }))
         .filter(v => v.d > 0 && v.d <= D_MAX)
         .sort((a, b) => b.d - a.d)
     for (const { t, d } of atras) {
@@ -2965,7 +2775,7 @@ export class AutoDashEngine {
     const RANGE = 5000
     for (const t of this.traffic) {
       if (t.role !== "police" || t.parked) continue
-      const d = this.wrapDz(t.z, playerZ)
+      const d = wrapDz(this, t.z, playerZ)
       if (d >= 0 || d < -RANGE) continue // só quem está atrás e dentro do alcance
       const prox = 1 - -d / RANGE // 0 = longe, 1 = colada
       const x = clamp(W / 2 + (t.offset - this.playerX) * (W * 0.34), 24, W - 24)
@@ -3184,7 +2994,7 @@ export class AutoDashEngine {
       const playerZ = this.position + PLAYER_Z
       ctx.fillStyle = `rgba(239,68,68,${pulse})`
       for (const t of police) {
-        const sn = this.wrapDz(t.z, playerZ) / SEG_LEN
+        const sn = wrapDz(this, t.z, playerZ) / SEG_LEN
         let px: number, py: number
         if (sn >= 0) {
           const p = pts[clamp(Math.round(sn / 2), 0, pts.length - 1)]
@@ -3202,7 +3012,7 @@ export class AutoDashEngine {
       const playerZ2 = this.position + PLAYER_Z
       for (const rv of this.race.rivais) {
         if (rv.finished) continue
-        const sn = this.wrapDz(rv.z, playerZ2) / SEG_LEN
+        const sn = wrapDz(this, rv.z, playerZ2) / SEG_LEN
         let px: number, py: number
         if (sn >= 0) {
           const p = pts[clamp(Math.round(sn / 2), 0, pts.length - 1)]
@@ -4328,7 +4138,7 @@ export class AutoDashEngine {
     this.audio.flash()
     const playerZ = this.position + PLAYER_Z
     for (const t of this.traffic) {
-      const d = this.wrapDz(t.z, playerZ)
+      const d = wrapDz(this, t.z, playerZ)
       if (d > 200 && d < 7000 && Math.abs(t.offset - this.playerX) < 0.35) t.yieldT = 1.4
     }
   }
