@@ -120,6 +120,29 @@ export const CARS: CarSpec[] = [
     desc: "Motor traseiro boxer. Câmbio relâmpago e aderência de trilho.",
   },
 
+  // ── carros de teste da Fase 2 (tração) ────────────────────────────────────
+  // Mesmos números do AUTOHUB GT; só a tração muda. Ficam no FIM da lista para
+  // não mudar os índices salvos em cfg.carIdx.
+  {
+    id: "test-fwd", name: "TESTE FWD", body: "gt",
+    power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220, drive: "FWD",
+    desc: "Teste: tração dianteira. Perde na arrancada em marcha baixa.",
+  },
+  {
+    id: "test-rwd", name: "TESTE RWD", body: "gt",
+    power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220, drive: "RWD",
+    desc: "Teste: tração traseira (referência). Forte na reta, sem perda.",
+  },
+  {
+    id: "test-awd5050", name: "TESTE AWD 50/50", body: "gt",
+    power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220, drive: "AWD", frontBias: 0.5,
+    desc: "Teste: integral 50/50. Puxa em tudo, perde um pouco de potência.",
+  },
+  {
+    id: "test-awd3070", name: "TESTE AWD 30/70", body: "gt",
+    power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220, drive: "AWD", frontBias: 0.3,
+    desc: "Teste: integral 30/70. Mais peso atrás: segura melhor na chuva.",
+  },
 ]
 
 export const PAINTS = [

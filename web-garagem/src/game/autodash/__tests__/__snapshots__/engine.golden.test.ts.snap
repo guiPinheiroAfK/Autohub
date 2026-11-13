@@ -6,6 +6,6 @@ exports[`AutoDash engine — golden master > partida solo determinística (menu 
   "finalMode": "solo",
   "finalState": "gameover",
   "frames": 1200,
-  "hash": "a7f58f73685b933561ea8ed7d1ba2adb89b04f3812a5a4efd5ce445497c479f3",
+  "hash": "bbbe0a38c6a108d562a3e2b12b3e5a0e0fbdb8e868bde8ee280dba73948a2af2",
 }
 `;
