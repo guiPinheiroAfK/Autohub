@@ -7,7 +7,7 @@ export interface SkyKey { t: number; top: string; bot: string; amb: number }
 export interface SkyState { top: string; bot: string; amb: number }
 
 // Tipos de camada conhecidos pelo render (registro CAMADAS em render/backdrop.ts).
-export type LayerKind = "ceu-sol" | "montanhas" | "skyline" | "brilho-urbano"
+export type LayerKind = "ceu-sol" | "montanhas" | "skyline" | "brilho-urbano" | "mar" | "palmeiras" | "pier"
 
 export interface BiomeDef {
   id: string
@@ -42,9 +42,30 @@ export const BIOMES: Record<string, BiomeDef> = {
     arvore: 0,
     climas: ["limpo", "chuva"],
   },
+  // costa: mesmo sistema de camadas. Horizonte com mar, palmeiras e um píer.
+  costa: {
+    id: "costa",
+    nome: "Costa",
+    ceu: [
+      { t: 0.125, top: "#38bdf8", bot: "#cffafe", amb: 1.0 },
+      { t: 0.375, top: "#7c2d12", bot: "#fb923c", amb: 0.82 },
+      { t: 0.625, top: "#041c2b", bot: "#0f4c5c", amb: 0.42 },
+      { t: 0.875, top: "#0e7490", bot: "#fde68a", amb: 0.8 },
+    ],
+    ceuCorrida: { top: "#04161c", bot: "#0e3b43", amb: 0.46, ambChuva: 0.36 },
+    camadas: { longe: ["ceu-sol", "mar"], meio: ["palmeiras"], perto: ["pier"] },
+    arvore: 7, // palmeira de beira (drawDeco, kind 7)
+    climas: ["limpo", "chuva"],
+  },
 }
 
 export const BIOME_IDS = Object.keys(BIOMES)
+
+// Próximo bioma na ordem do registro (usado pelo seletor do menu).
+export function proximoBioma(id: string): string {
+  const i = BIOME_IDS.indexOf(id)
+  return BIOME_IDS[(i + 1) % BIOME_IDS.length]
+}
 
 export function biomeById(id: string | undefined): BiomeDef {
   return (id && BIOMES[id]) || BIOMES.cidade

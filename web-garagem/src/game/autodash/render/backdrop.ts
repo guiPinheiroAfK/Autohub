@@ -14,6 +14,9 @@ const CAMADAS: Record<LayerKind, (eng: AutoDashEngine, amb: number) => void> = {
   montanhas: camadaMontanhas,
   skyline: camadaSkyline,
   "brilho-urbano": camadaBrilhoUrbano,
+  mar: camadaMar,
+  palmeiras: camadaPalmeiras,
+  pier: camadaPier,
 }
 
 export function renderBackdrop(eng: AutoDashEngine, amb: number) {
@@ -111,6 +114,63 @@ function camadaBrilhoUrbano(eng: AutoDashEngine, amb: number) {
   ctx.fillRect(0, hz - 46, W, 48)
 }
 
+// mar no horizonte: faixa de água com cintilação que anda com a pista
+function camadaMar(eng: AutoDashEngine, amb: number) {
+  const ctx = eng.ctx
+  const hz = H * 0.5
+  const g = ctx.createLinearGradient(0, hz - 52, 0, hz + 2)
+  g.addColorStop(0, shade("#0b4a5e", amb))
+  g.addColorStop(1, shade("#1b8aa6", amb))
+  ctx.fillStyle = g
+  ctx.fillRect(-20, hz - 52, W + 40, 54)
+  ctx.fillStyle = `rgba(224,242,254,${Math.max(0.08, amb * 0.22)})`
+  const wrapM = W + 60
+  for (let i = 0; i < 26; i++) {
+    const x = (((i * 97 - eng.bgShift * 0.25) % wrapM) + wrapM) % wrapM - 30
+    ctx.fillRect(x, hz - 46 + ((i * 29) % 40), 14 + ((i * 7) % 16), 1.5)
+  }
+}
+
+// fileira de palmeiras contra o mar (rola devagar com a pista)
+function camadaPalmeiras(eng: AutoDashEngine, amb: number) {
+  const ctx = eng.ctx
+  const hz = H * 0.5
+  const wrap = W + 120
+  const cor = shade("#0d3b2e", Math.max(0.35, amb))
+  ctx.strokeStyle = cor
+  for (let i = 0; i < 12; i++) {
+    const x = (((i * 131 - eng.bgShift * 0.6) % wrap) + wrap) % wrap - 60
+    const h = 40 + ((i * 53) % 26)
+    const lean = ((i % 3) - 1) * 10
+    const tx = x + lean, ty = hz - h
+    ctx.lineWidth = 3
+    ctx.beginPath(); ctx.moveTo(x, hz + 4); ctx.quadraticCurveTo(x + lean * 0.2, hz - h * 0.5, tx, ty); ctx.stroke()
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    for (let f = 0; f < 5; f++) {
+      const a = Math.PI + (f / 4) * Math.PI
+      const fx = tx + Math.cos(a) * 16, fy = ty + Math.sin(a) * 7 + 4
+      ctx.moveTo(tx, ty); ctx.quadraticCurveTo(tx + (fx - tx) * 0.5, ty - 8, fx, fy)
+    }
+    ctx.stroke()
+  }
+}
+
+// píer de madeira entrando no mar, à esquerda do horizonte
+function camadaPier(eng: AutoDashEngine, amb: number) {
+  const ctx = eng.ctx
+  const hz = H * 0.5
+  const x0 = W * 0.12, x1 = W * 0.3
+  ctx.fillStyle = shade("#6b4f35", Math.max(0.4, amb))
+  ctx.fillRect(x0, hz - 6, x1 - x0, 4)
+  ctx.fillStyle = shade("#3f2d1d", Math.max(0.4, amb))
+  for (let x = x0; x <= x1; x += 22) ctx.fillRect(x, hz - 2, 3, 12)
+  if (amb < 0.6) {
+    ctx.fillStyle = "rgba(253,224,71,0.8)"
+    for (let x = x0 + 10; x < x1; x += 60) ctx.fillRect(x, hz - 9, 2, 3)
+  }
+}
+
 export function drawDeco(eng: AutoDashEngine, kind: number, dir: number, x: number, y: number, w: number, amb: number) {
   if (w < 1.5) return
   const ctx = eng.ctx
@@ -206,6 +266,23 @@ export function drawDeco(eng: AutoDashEngine, kind: number, dir: number, x: numb
         }
       }
     }
+    return
+  }
+  if (kind === 7) { // palmeira de beira (bioma costa): tronco curvo e folhas
+    const h = w * 2.6
+    const lean = w * 0.35
+    ctx.strokeStyle = shade("#6b4f35", amb)
+    ctx.lineWidth = Math.max(1, w * 0.12)
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + lean * 0.2, y - h * 0.5, x + lean, y - h); ctx.stroke()
+    ctx.strokeStyle = shade("#14532d", amb)
+    ctx.lineWidth = Math.max(1, w * 0.09)
+    ctx.beginPath()
+    for (let f = 0; f < 6; f++) {
+      const a = Math.PI + (f / 5) * Math.PI
+      const fx = x + lean + Math.cos(a) * w * 0.9, fy = y - h + Math.sin(a) * w * 0.35 + w * 0.2
+      ctx.moveTo(x + lean, y - h); ctx.quadraticCurveTo(x + lean + (fx - x - lean) * 0.5, y - h - w * 0.5, fx, fy)
+    }
+    ctx.stroke()
     return
   }
   if (kind === 0) { // árvore
