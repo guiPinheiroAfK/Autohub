@@ -26,7 +26,7 @@ Atualizado em 2026-11-13, a partir da memória de sessões anteriores e do códi
 - **AutoDash:** o engine foi dividido em módulos (`game/autodash/`). `engine.ts` ficou com ~660 linhas (campos, render, bind). Ponto de entrada público: `game/autodash/index.ts`.
 - **Testes:** `npm test` em `web-garagem/` roda vitest. O golden master (`__tests__/`) replica partida solo, corrida com bots, corrida por clique e lobby do duelo, e compara o hash de tudo que o canvas desenha. Os snapshots foram gerados no código original.
 - **Pendente na refatoração:**
-  - Teclas de debug do AutoDash (`O L B V J K I U`) ainda ativas. Decisão do dono do projeto.
+  - Teclas de debug do AutoDash (`O L B V J K I U`) ficam ativas de propósito: são ferramenta de teste do dono do projeto.
   - Unificar os dois módulos de rede (`game/autodash/net.ts` e `race/net.ts`). Não coberto pelo golden, porque a rede não roda no teste.
   - Checagem de tipos da API: não há `typescript` no `api/`. Só foi validado com `bun build`.
   - Migrations: o SQL foi conferido e é idêntico ao original, mas a API não foi executada contra o Neon.
