@@ -7,6 +7,7 @@
 
 import { KMH2UPS } from "../data"
 import { BotRacer, type PistaInfo } from "./bots"
+import { codificarSeed } from "../world/circuits"
 import { RaceNet, criarSala, entrarSala, darLargada, meuPlayerId, verLobby } from "./net"
 import { ordenarGrid, type GridRow, type RaceConfig, type RacePhase, type Rival, type RaceTelemetry } from "./types"
 
@@ -44,8 +45,8 @@ export class RaceSession {
   // ── criação ────────────────────────────────────────────────────────────────
 
   /** Corrida local contra bots — não toca na rede. */
-  static soloComBots(nome: string, voltas: number, qtdBots: number, dificuldade = 0.6): RaceSession {
-    const seed = Math.floor(Math.random() * 2 ** 31)
+  static soloComBots(nome: string, voltas: number, qtdBots: number, dificuldade = 0.6, pista = 0): RaceSession {
+    const seed = codificarSeed(Math.floor(Math.random() * 2 ** 31), pista)
     const s = new RaceSession(
       { code: "BOTS", seed, voltas, souDono: true, meuId: meuPlayerId() }, nome, true,
     )
@@ -55,9 +56,10 @@ export class RaceSession {
     return s
   }
 
-  static async hospedar(nome: string, voltas: number, car: number, paint: number): Promise<RaceSession> {
+  static async hospedar(nome: string, voltas: number, car: number, paint: number, pista = 0): Promise<RaceSession> {
     const id = meuPlayerId()
-    const r = await criarSala(nome, id, voltas, car, paint)
+    const seed = codificarSeed(Math.floor(Math.random() * 2 ** 31), pista)
+    const r = await criarSala(nome, id, voltas, car, paint, seed)
     return new RaceSession({ code: r.code, seed: r.seed, voltas: r.voltas, souDono: true, meuId: id }, nome, false)
   }
 

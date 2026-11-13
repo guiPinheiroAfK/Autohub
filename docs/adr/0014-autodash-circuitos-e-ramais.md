@@ -37,7 +37,7 @@ Regras:
 
 ### 3. Escolha da pista
 - Corrida com bots: seletor no lobby (circuitos fixos e "aleatória").
-- Sala online: a pista vai **codificada na seed** (`seed % 8`: `0` = aleatória, `1..N` = circuito). O dono manda a seed na criação da sala; a API passa a aceitar `seed` opcional no `POST /autodash/race`. Não há migration: a coluna `seed` já existe. Sala criada por cliente antigo (seed sorteada no servidor) cai num circuito pelo mesmo cálculo, e todos os pilotos da sala veem a mesma pista.
+- Sala online: a pista vai **codificada na seed** (`seed % 8`: `0` = aleatória, `1..N` = circuito). O dono manda a seed na criação da sala; a API passa a aceitar `seed` opcional no `POST /autodash/race`. Não há migration: a coluna `seed` já existe. Sala criada por cliente antigo (seed sorteada no servidor) cai pelo mesmo cálculo: `0` é a pista procedural, o resto um circuito. Todos os pilotos da sala veem a mesma pista.
 
 ### 4. Reconhecimento de percurso
 - O lobby mostra o traçado do circuito escolhido (com os ramais), extensão, número de curvas fechadas, ramais e bioma.

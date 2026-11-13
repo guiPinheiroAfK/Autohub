@@ -90,3 +90,24 @@ describe("ramal paralelo", () => {
     expect(ganhoRamal(q, -centro)).toBe(1.2)
   })
 })
+
+describe("pista dentro da seed", () => {
+  it("codificar e ler devolve a mesma pista, para qualquer seed", async () => {
+    const { codificarSeed, circuitoDaSeed, SEED_PISTAS } = await import("../world/circuits")
+    for (const seed of [0, 1, 7, 8, 12345, 2 ** 31 - 1, 987654321]) {
+      expect(circuitoDaSeed(codificarSeed(seed, 0))).toBeNull()
+      for (let k = 1; k <= CIRCUITS.length; k++) {
+        expect(circuitoDaSeed(codificarSeed(seed, k))?.id).toBe(CIRCUITS[k - 1].id)
+      }
+      expect(codificarSeed(seed, 3) % SEED_PISTAS).toBe(3)
+    }
+  })
+
+  it("seed de sala antiga (sorteada no servidor) sempre cai numa pista válida", async () => {
+    const { circuitoDaSeed } = await import("../world/circuits")
+    for (let seed = 1000; seed < 1064; seed++) {
+      const c = circuitoDaSeed(seed)
+      expect(c === null || CIRCUITS.includes(c)).toBe(true)
+    }
+  })
+})

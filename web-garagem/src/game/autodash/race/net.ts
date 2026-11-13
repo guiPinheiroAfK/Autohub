@@ -42,9 +42,9 @@ export interface LobbyInfo {
   startInMs: number | null; pilotos: PilotoApi[]
 }
 
-export const criarSala = (nome: string, playerId: string, voltas: number, car: number, paint: number) =>
+export const criarSala = (nome: string, playerId: string, voltas: number, car: number, paint: number, seed?: number) =>
   post<{ code: string; seed: number; voltas: number; owner: boolean }>(
-    "/api/autodash/race", { nome, playerId, voltas, car, paint })
+    "/api/autodash/race", { nome, playerId, voltas, car, paint, seed })
 
 export const entrarSala = (code: string, nome: string, playerId: string, car: number, paint: number) =>
   post<{ seed: number; voltas: number; owner: boolean }>(

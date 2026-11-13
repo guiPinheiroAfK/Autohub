@@ -29,6 +29,18 @@ export function update(eng: AutoDashEngine, dt: number) {
     if (eng.race.phase === "countdown") { startRace(eng, eng.race.cfg.seed) }
   }
 
+  // reconhecimento de percurso: a câmera faz uma volta sozinha (sem rivais nem trânsito)
+  if (eng.state === "racerecon") {
+    eng.demoT += dt
+    eng.speed = 200
+    eng.position = (eng.position + eng.speed * KMH2UPS * dt) % eng.trackLen
+    eng.playerX = 0
+    eng.bgShift += segAt(eng, eng.position + PLAYER_Z).curve * eng.speed * dt * 0.6
+    updateFx(eng, dt)
+    eng.audio.engine(0, 0, false, false)
+    return
+  }
+
   if (["menu", "garage", "duellobby", "duelcode", "duelwaiting", "duelresult",
     "racelobby", "racecode", "racewait", "raceresult"].includes(eng.state)) {
     // demo: câmera passeia pela pista

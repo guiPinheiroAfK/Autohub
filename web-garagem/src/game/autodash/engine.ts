@@ -18,7 +18,7 @@ import { renderParticles } from "./render/particles"
 import { vignetteTex } from "./render/textures"
 import { renderMenu, renderGarage, renderPause, renderGameOver, renderNameEntry } from "./render/menus/main"
 import { renderHud, renderSemaphore } from "./render/hud"
-import { renderTrackPreview, renderRaceLobby, renderRaceCode, renderRaceWait, renderRaceResult } from "./render/menus/race"
+import { renderTrackPreview, renderRaceLobby, renderRaceCode, renderRaceWait, renderRaceResult, renderRaceRecon } from "./render/menus/race"
 import { renderRaceHud } from "./render/race-hud"
 import { renderDuelLobby, renderDuelCode, renderDuelWaiting, renderDuelSpectate, renderDuelResult } from "./render/menus/duel"
 import { onKeyDown, onKeyUp } from "./input/keyboard"
@@ -42,7 +42,7 @@ export const FADE_IN_LEN = 90
 type GameState =
     | "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
     | "duellobby" | "duelcode" | "duelwaiting" | "duelspectate" | "duelresult"
-    | "racelobby" | "racecode" | "racewait" | "raceresult"
+    | "racelobby" | "racecode" | "racewait" | "raceresult" | "racerecon"
 
 export interface DuelSession {
   code: string
@@ -198,6 +198,7 @@ export class AutoDashEngine {
   race: RaceSession | null = null
   raceVoltas = 3
   raceBots = 3
+  racePista = 1 // 0 = procedural, 1..N = circuito fixo (world/circuits.ts, ADR 0014)
   raceFinished = false // já cruzei a linha (coast + espectador)
   raceSpectT = 0       // tempo assistindo os rivais terminarem
   raceErro: string | null = null
@@ -419,6 +420,7 @@ export class AutoDashEngine {
       case "racecode": renderRaceCode(this); break
       case "racewait": renderRaceWait(this); break
       case "raceresult": renderRaceResult(this); break
+      case "racerecon": renderRaceRecon(this); break
     }
 
     // floaters por cima de tudo
@@ -543,6 +545,7 @@ export class AutoDashEngine {
       const spec = CARS[this.cfg.carIdx]
       this.race = await RaceSession.hospedar(
           this.cfg.pilotName || "PILOTO", this.raceVoltas, this.cfg.carIdx, this.cfg.customs[this.cfg.carIdx].paint,
+          this.racePista,
       )
       void spec
       this.mode = "race"

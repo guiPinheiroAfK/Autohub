@@ -6,7 +6,8 @@ import { toMenu } from "../flow"
 import { flashBeam } from "../flow"
 import { ensureAudio } from "../flow"
 import { startRace } from "../modes/race"
-import { abrirRaceLobby } from "../modes/race"
+import { abrirRaceLobby, reconhecerPista, sairReconhecimento } from "../modes/race"
+import { mudarPista } from "../render/menus/race"
 import { correrComBots } from "../modes/race"
 import { abrirCodigoSala } from "../modes/race"
 import { duelRematch } from "../modes/duel"
@@ -79,7 +80,12 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "arrowright") { eng.cfg.carIdx = (eng.cfg.carIdx + 1) % CARS.length; saveConfig(eng.cfg); eng.audio.ui() }
       if (k === "arrowdown") eng.raceVoltas = Math.max(1, eng.raceVoltas - 1)
       if (k === "arrowup") eng.raceVoltas = Math.min(9, eng.raceVoltas + 1)
+      if (k === "p") mudarPista(eng, 1)
+      if (k === "r") reconhecerPista(eng)
       if (k === "escape") toMenu(eng)
+      break
+    case "racerecon":
+      sairReconhecimento(eng) // qualquer tecla volta ao lobby
       break
     case "racecode":
       if (k === "enter") void eng.entrarSalaOnline()

@@ -150,6 +150,22 @@ export const CIRCUITS: CircuitDef[] = [
   },
 ]
 
+// A pista da corrida viaja DENTRO da seed (ADR 0014): seed % 8 == 0 é a pista
+// procedural; 1..N escolhe o circuito fixo N. Sala online e bots usam a mesma
+// regra, então todo mundo da sala vê a mesma pista sem mudar o banco.
+export const SEED_PISTAS = 8
+
+export function circuitoDaSeed(seed: number): CircuitDef | null {
+  const k = ((Math.floor(seed) % SEED_PISTAS) + SEED_PISTAS) % SEED_PISTAS
+  return k === 0 ? null : CIRCUITS[(k - 1) % CIRCUITS.length]
+}
+
+/** Troca o resto da seed por `pista` (0 = procedural, 1..N = circuito). */
+export function codificarSeed(seed: number, pista: number): number {
+  const base = Math.floor(seed) - (Math.floor(seed) % SEED_PISTAS)
+  return base + (pista % SEED_PISTAS)
+}
+
 export function circuitById(id: string | null | undefined): CircuitDef | null {
   return CIRCUITS.find(c => c.id === id) ?? null
 }

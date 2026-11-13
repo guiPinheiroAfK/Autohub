@@ -1,6 +1,7 @@
 // AutoDash — modes/race.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine } from "../engine"
 import { buildTrack } from "../world/track"
+import { buildCircuit, circuitoDaSeed, CIRCUITS } from "../world/circuits"
 import { seedTraffic } from "../traffic/spawner"
 import { RPM_IDLE } from "../data"
 import { RaceSession } from "../race/session"
@@ -10,7 +11,10 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   // limpa ANTES de construir: no circuito o buildTrack semeia os cones das
   // curvas, e zerar depois apagaria justamente eles
   eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = corrida ? 1e9 : 12
-  buildTrack(eng, seed, corrida)
+  // a pista da corrida vem da seed: circuito fixo ou procedural (ADR 0014)
+  const circuito = corrida && seed !== undefined ? circuitoDaSeed(seed) : null
+  if (circuito) buildCircuit(eng, circuito)
+  else buildTrack(eng, seed, corrida)
   seedTraffic(eng, corrida ? 5 : 14)
   eng.position = 0
   eng.speed = 0
@@ -48,8 +52,32 @@ export function abrirRaceLobby(eng: AutoDashEngine) {
 export function correrComBots(eng: AutoDashEngine) {
   eng.audio.ui()
   eng.mode = "race"
-  eng.race = RaceSession.soloComBots(eng.cfg.pilotName || "VOCÊ", eng.raceVoltas, eng.raceBots)
+  eng.race = RaceSession.soloComBots(eng.cfg.pilotName || "VOCÊ", eng.raceVoltas, eng.raceBots, 0.6, eng.racePista)
   startRace(eng, eng.race.cfg.seed)
+}
+
+/** Reconhecimento de percurso: sobrevoo de uma volta do circuito escolhido, sem rivais. */
+export function reconhecerPista(eng: AutoDashEngine) {
+  const def = CIRCUITS[eng.racePista - 1]
+  if (!def) return
+  eng.audio.ui()
+  eng.mode = "race" // a pista é desenhada como a da corrida (zebra roxa, linha de largada)
+  eng.race = null
+  eng.obstacles = []; eng.zones = []; eng.roadSigns = []
+  buildCircuit(eng, def)
+  eng.traffic = []
+  eng.position = 0
+  eng.playerX = 0
+  eng.demoT = 0
+  eng.state = "racerecon"
+  eng.fadeT = 0.22
+}
+
+export function sairReconhecimento(eng: AutoDashEngine) {
+  eng.audio.ui()
+  eng.mode = "solo"
+  eng.state = "racelobby"
+  eng.fadeT = 0.22
 }
 
 export function abrirCodigoSala(eng: AutoDashEngine) {
