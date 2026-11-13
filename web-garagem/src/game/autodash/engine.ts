@@ -7,6 +7,7 @@ import { buildTrack, segAt } from "./world/track"
 import { seedTraffic, updateTraffic, wrapDz } from "./traffic/spawner"
 import { clamp, mix, shade, hexToRgb } from "./math"
 import { updateEventSpawner } from "./world/events"
+import { updateFx, emitSmoke, emitFlame, burst, initRain } from "./fx/particles"
 import { rpmFor, powerCurve } from "./physics/rpm"
 import { shiftUp, shiftDown } from "./physics/gearbox"
 import { updateZones } from "./world/zones"
@@ -360,12 +361,12 @@ export class AutoDashEngine {
       this.playerX = Math.sin(this.demoT * 0.3) * 0.2
       this.bgShift += segAt(this, this.position + PLAYER_Z).curve * this.speed * dt * 0.6
       updateTraffic(this, dt, this.position + PLAYER_Z, true)
-      this.updateFx(dt) // floaters/partículas sobrando da corrida ainda precisam morrer
+      updateFx(this, dt) // floaters/partículas sobrando da corrida ainda precisam morrer
       this.audio.engine(0, 0, false, false)
       return
     }
     if (this.state === "paused" || this.state === "gameover" || this.state === "nameentry" || this.state === "duelspectate") {
-      this.updateFx(dt)
+      updateFx(this, dt)
       this.audio.engine(0, 0, false, false)
       this.audio.skid(0)
       return
@@ -386,7 +387,7 @@ export class AutoDashEngine {
       if (this.rpm > RPM_LIMITER) this.rpm = RPM_LIMITER - Math.random() * 300
       // burnout no grid: acelerando no ponto morto, pneu fuma (só na corrida)
       if (this.mode === "race" && throttle > 0.5 && this.rpm > 4500 && Math.random() < 0.6) {
-        this.emitSmoke(2, "#d8dbe2")
+        emitSmoke(this, 2, "#d8dbe2")
       }
       if (this.countT >= this.greenAt) {
         this.greenFired = true
@@ -400,7 +401,7 @@ export class AutoDashEngine {
         }
       }
       this.audio.engine(this.rpm, throttle, false, true)
-      this.updateFx(dt)
+      updateFx(this, dt)
       return
     }
 
@@ -428,7 +429,7 @@ export class AutoDashEngine {
     this.playerX -= centrif * dt
     const slip = Math.abs(centrif) * speedF
     this.audio.skid(slip > 0.3 ? slip : 0)
-    if (slip > 0.45 && Math.abs(this.steerVel) > 0.3 && Math.random() < 0.5) this.emitSmoke(1, "#6b7280")
+    if (slip > 0.45 && Math.abs(this.steerVel) > 0.3 && Math.random() < 0.5) emitSmoke(this, 1, "#6b7280")
     this.bgShift += seg.curve * this.speed * dt * 0.6
 
     // transferência de peso: sobe o bico na freada, agacha no gás
@@ -442,7 +443,7 @@ export class AutoDashEngine {
       this.shakeT = 0.1
       this.combo = 0
       if (Math.random() < 0.3) this.audio.offroad()
-      this.emitSmoke(3, "#a3a3a3")
+      emitSmoke(this, 3, "#a3a3a3")
     } else this.offroadT = 0
     this.playerX = clamp(this.playerX, -1.6, 1.6)
 
@@ -468,13 +469,13 @@ export class AutoDashEngine {
       const gearF = Math.pow(GEAR_RATIOS[this.gear - 1] / GEAR_RATIOS[0], 0.9)
       accel = spec.power * powerCurve(this, this.rpm) * gearF
       if (this.rpm >= RPM_LIMITER - 50) { accel = 0; if (Math.random() < 0.4) this.audio.limiter() }
-      if (this.wheelspinT > 0) { accel *= 0.35; this.emitSmoke(2, "#e2e8f0") }
+      if (this.wheelspinT > 0) { accel *= 0.35; emitSmoke(this, 2, "#e2e8f0") }
       if (this.bogT > 0) accel *= 0.5
     }
     if (this.nitroOn && this.nitroMeter > 1 && this.gear >= 1) {
       accel += 42
       this.nitroMeter = Math.max(0, this.nitroMeter - 38 * dt)
-      this.emitFlame()
+      emitFlame(this)
     }
     const nitroActive = this.nitroOn && this.nitroMeter > 1
 
@@ -520,7 +521,7 @@ export class AutoDashEngine {
     }
     if (this.levelUpT > 0) {
       this.levelUpT -= dt
-      if (Math.random() < 0.6) this.emitSmoke(2, "#e2e8f0")
+      if (Math.random() < 0.6) emitSmoke(this, 2, "#e2e8f0")
     }
 
     // modo corrida: adianta bots/rede, conta voltas e aplica o empurrão entre
@@ -576,7 +577,7 @@ export class AutoDashEngine {
           this.shakeT = Math.max(this.shakeT, 0.3)
           this.immuneT = 0.5
           this.audio.crash()
-          this.burst(W / 2 + Math.sign(shove) * 60, H - 110, 12, ["#fde047", "#e2e8f0"])
+          burst(this, W / 2 + Math.sign(shove) * 60, H - 110, 12, ["#fde047", "#e2e8f0"])
         }
       }
       // Cruzou a linha: ponto morto, coast até parar, e vira ESPECTADOR dos
@@ -626,14 +627,14 @@ export class AutoDashEngine {
     this.powerups = this.powerups.filter(p => !p.taken && wrapDz(this, p.z, this.position) > -20 * SEG_LEN)
 
     // fumaça de escape / arrancada
-    if (throttle && this.speed < 40 && this.gear >= 1) this.emitSmoke(2, "#cbd5e1")
-    else if (throttle && Math.random() < 0.3) this.emitSmoke(1, "#64748b")
+    if (throttle && this.speed < 40 && this.gear >= 1) emitSmoke(this, 2, "#cbd5e1")
+    else if (throttle && Math.random() < 0.3) emitSmoke(this, 1, "#64748b")
 
     // clima
     this.rainRollT += dt
     if (this.rainRollT > 18) {
       this.rainRollT = 0
-      if (!this.raining && Math.random() < 0.18) { this.raining = true; this.rainT = 22 + Math.random() * 20; this.initRain(); this.audio.rain(true) }
+      if (!this.raining && Math.random() < 0.18) { this.raining = true; this.rainT = 22 + Math.random() * 20; initRain(this); this.audio.rain(true) }
     }
     if (this.raining) {
       this.rainT -= dt
@@ -673,7 +674,7 @@ export class AutoDashEngine {
       this.audio.warn()
     }
 
-    this.updateFx(dt)
+    updateFx(this, dt)
     this.audio.engine(this.rpm, throttle, nitroActive, true)
   }
 
@@ -699,16 +700,6 @@ export class AutoDashEngine {
     }
   }
 
-  burst(x: number, y: number, n: number, colors: string[]) {
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 260
-      this.particles.push({
-        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 80,
-        size: 4 + Math.random() * 9, life: 0.9, maxLife: 0.9,
-        color: colors[Math.floor(Math.random() * colors.length)],
-      })
-    }
-  }
 
   crash(byPolice = false) {
     // NA CORRIDA NÃO SE MORRE: bater custa quase toda a velocidade e o tempo
@@ -722,7 +713,7 @@ export class AutoDashEngine {
       this.shakeT = 0.55
       this.immuneT = Math.max(this.immuneT, 1.3) // respiro pra não bater em cadeia
       this.audio.crash()
-      this.burst(W / 2, H - 110, 30, ["#fb923c", "#ef4444"])
+      burst(this, W / 2, H - 110, 30, ["#fb923c", "#ef4444"])
       this.floaters.push({ text: "RODOU!", color: "#fb923c", y: H * 0.4, life: 1.3, big: true })
       return
     }
@@ -730,7 +721,7 @@ export class AutoDashEngine {
     this.crashByPolice = byPolice
     this.audio.crash()
     this.shakeT = 0.6
-    this.burst(W / 2, H - 110, 40, ["#fb923c", "#ef4444"])
+    burst(this, W / 2, H - 110, 40, ["#fb923c", "#ef4444"])
     const entry: ScoreEntry = {
       name: (this.cfg.pilotName || "PILOTO").trim(),
       score: Math.floor(this.score),
@@ -971,54 +962,6 @@ export class AutoDashEngine {
     this.state = "countdown"
   }
 
-  // ---------- efeitos ----------
-  emitSmoke(n: number, color: string) {
-    for (let i = 0; i < n; i++) {
-      this.particles.push({
-        x: W / 2 + (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 25),
-        y: H - 62 + Math.random() * 8,
-        vx: (Math.random() - 0.5) * 60, vy: 30 + Math.random() * 60,
-        size: 6 + Math.random() * 10, life: 0.7, maxLife: 0.7, color,
-      })
-    }
-  }
-  emitFlame() {
-    for (let i = 0; i < 2; i++) {
-      this.particles.push({
-        x: W / 2 + (i === 0 ? -22 : 22) + (Math.random() - 0.5) * 8,
-        y: H - 58,
-        vx: (Math.random() - 0.5) * 30, vy: 90 + Math.random() * 80,
-        size: 5 + Math.random() * 7, life: 0.35, maxLife: 0.35,
-        color: Math.random() < 0.5 ? "#fb923c" : "#fde047",
-      })
-    }
-  }
-  initRain() {
-    this.drops = []
-    for (let i = 0; i < 90; i++) {
-      this.drops.push({ x: Math.random() * W, y: Math.random() * H, len: 10 + Math.random() * 18, spd: 500 + Math.random() * 400 })
-    }
-  }
-  updateFx(dt: number) {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i]
-      p.x += p.vx * dt; p.y += p.vy * dt; p.size += 14 * dt
-      p.life -= dt
-      if (p.life <= 0) this.particles.splice(i, 1)
-    }
-    for (let i = this.floaters.length - 1; i >= 0; i--) {
-      const f = this.floaters[i]
-      f.y -= 24 * dt; f.life -= dt
-      if (f.life <= 0) this.floaters.splice(i, 1)
-    }
-    if (this.raining) {
-      for (const d of this.drops) {
-        d.y += d.spd * dt; d.x -= 60 * dt
-        if (d.y > H) { d.y = -20; d.x = Math.random() * (W + 100) }
-      }
-    }
-    if (this.shakeT > 0) this.shakeT -= dt
-  }
 
   // ---------- clima / céu ----------
   skyNow(): { top: string; bot: string; amb: number } {

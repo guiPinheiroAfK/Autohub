@@ -1,4 +1,5 @@
 // AutoDash — traffic/spawner.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { burst } from "../fx/particles"
 import { AutoDashEngine, PLAYER_Z, W, H } from "../engine"
 import { DRAW_DIST, SEG_LEN, CARS } from "../data"
 import { type TrafficKind, KINDS, TRAFFIC_COLORS, type WorldView } from "./types"
@@ -102,7 +103,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           // acabou de levar encostão: obviamente não despistou ninguém
           eng.policeEscapeT = 0
           eng.audio.crash()
-          eng.burst(W / 2 + dir * 60, H - 110, 14, ["#60a5fa", "#e2e8f0"])
+          burst(eng, W / 2 + dir * 60, H - 110, 14, ["#60a5fa", "#e2e8f0"])
           eng.floaters.push({ text: "ENCOSTÃO! 🚔", color: "#60a5fa", y: H * 0.42, life: 1, big: false })
           if (Math.abs(eng.playerX) > 1.05) eng.crash(true) // te jogaram pra fora = preso
         }
@@ -112,7 +113,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           eng.immuneT = 2.0
           t.dead = true
           eng.audio.shieldBreak()
-          eng.burst(W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
+          burst(eng, W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
           eng.floaters.push({ text: "ESCUDO QUEBROU!", color: "#60a5fa", y: H * 0.4, life: 1.3, big: false })
         } else {
           eng.crash()
@@ -129,7 +130,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           eng.score += pts
           eng.nitroMeter = Math.min(100, eng.nitroMeter + 14)
           eng.floaters.push({ text: `QUASE! +${pts}  x${mult}`, color: "#fde047", y: H * 0.42, life: 1.2, big: false })
-          eng.burst(W / 2 + (t.offset > eng.playerX ? 72 : -72), H - 100, 9, ["#fde047", "#fff7c0"])
+          burst(eng, W / 2 + (t.offset > eng.playerX ? 72 : -72), H - 100, 9, ["#fde047", "#fff7c0"])
           eng.shakeT = Math.max(eng.shakeT, 0.08)
           eng.audio.nearMiss()
           if (Math.random() < 0.3) eng.audio.horn()
