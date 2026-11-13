@@ -10,7 +10,7 @@ import { launch } from "../modes/solo"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
 import { accelK, finalDriveOf, steerK, tyreOf } from "../physics/traction"
-import { shiftUp, shiftDown } from "../physics/gearbox"
+import { autoShift } from "../physics/gearbox"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
@@ -159,10 +159,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   // câmbio automático
-  if (eng.cfg.transmission === "auto" && eng.gear >= 1 && eng.shiftT <= 0) {
-    if (throttle && eng.rpm > 6900 && eng.gear < 6) shiftUp(eng)
-    else if (eng.rpm < 2000 && eng.gear > 1) shiftDown(eng)
-  }
+  if (eng.cfg.transmission === "auto" && eng.gear >= 1 && eng.shiftT <= 0) autoShift(eng, throttle > 0)
 
   let accel = 0
   if (eng.gear >= 1 && throttle && eng.shiftT <= 0) {
