@@ -13,6 +13,7 @@ import { shiftUp, shiftDown } from "./physics/gearbox"
 import { updateZones } from "./world/zones"
 import { updateObstacles } from "./world/obstacles"
 import { poly, rr, drawPlayerCar } from "./render/primitives"
+import { onKeyDown, onKeyUp, toNeutral, tryShift } from "./input/keyboard"
 
 // AutoDash — engine pseudo-3D (estilo NFS de PSP) em Canvas 2D puro.
 // Estrada por segmentos projetados, tráfego, clima, câmbio com RPM e ranking local.
@@ -3628,136 +3629,8 @@ export class AutoDashEngine {
     }
   }
 
-  onKeyDown = (e: KeyboardEvent) => {
-    const k = e.key.toLowerCase()
-    if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault()
-    this.ensureAudio()
+  onKeyDown = (e: KeyboardEvent) => onKeyDown(this, e)
 
-    if (this.state === "nameentry") {
-      if (k === "enter") {
-        this.confirmName()
-      } else if (k === "backspace") this.nameBuf = this.nameBuf.slice(0, -1)
-      else if (/^[a-z0-9 _-]$/i.test(e.key) && this.nameBuf.length < 12) this.nameBuf += e.key.toUpperCase()
-      return
-    }
-    if (this.state === "duelcode") {
-      if (k === "enter") this.duelJoin()
-      else if (k === "escape") this.state = "duellobby"
-      else if (k === "backspace") this.codeBuf = this.codeBuf.slice(0, -1)
-      else if (/^[a-z0-9]$/i.test(e.key) && this.codeBuf.length < 4) this.codeBuf += e.key.toUpperCase()
-      return
-    }
-
-    this.keys.add(k)
-    if (k === " ") this.nitroOn = true
-    // [M] alterna o som (menos em pause/game over, onde M = menu)
-    if (k === "m" && ["racing", "countdown", "menu", "garage", "duellobby"].includes(this.state)) {
-      this.toggleMute()
-      return
-    }
-
-    switch (this.state) {
-      case "menu":
-        if (k === "enter") this.enterFromMenu("garage")
-        if (k === "d") this.enterFromMenu("duellobby")
-        if (k === "c") this.abrirRaceLobby()
-        break
-      case "racelobby":
-        if (k === "enter") this.correrComBots()
-        if (k === "h") void this.criarSalaOnline()
-        if (k === "j") this.abrirCodigoSala()
-        if (k === "arrowleft") { this.cfg.carIdx = (this.cfg.carIdx + CARS.length - 1) % CARS.length; saveConfig(this.cfg); this.audio.ui() }
-        if (k === "arrowright") { this.cfg.carIdx = (this.cfg.carIdx + 1) % CARS.length; saveConfig(this.cfg); this.audio.ui() }
-        if (k === "arrowdown") this.raceVoltas = Math.max(1, this.raceVoltas - 1)
-        if (k === "arrowup") this.raceVoltas = Math.min(9, this.raceVoltas + 1)
-        if (k === "escape") this.toMenu()
-        break
-      case "racecode":
-        if (k === "enter") void this.entrarSalaOnline()
-        else if (k === "backspace") this.codeBuf = this.codeBuf.slice(0, -1)
-        else if (k === "escape") { this.state = "racelobby"; this.raceErro = null }
-        else if (/^[a-z0-9]$/i.test(e.key) && this.codeBuf.length < 4) this.codeBuf += e.key.toUpperCase()
-        break
-      case "racewait":
-        if (k === "enter" && this.race?.cfg.souDono) void this.race.largar()
-        if (k === "escape") { this.race = null; this.mode = "solo"; this.state = "racelobby" }
-        break
-      case "raceresult":
-        if (k === "enter") this.correrComBots()
-        if (k === "m" || k === "escape") this.toMenu()
-        break
-      case "duellobby":
-        if (k === "escape") this.toMenu()
-        break
-      case "duelwaiting":
-        if (k === "escape") this.toMenu()
-        break
-      case "duelresult":
-        if (k === "enter") this.duelRematch()
-        if (k === "m" || k === "escape") this.toMenu()
-        break
-      case "garage": {
-        const custom = this.cfg.customs[this.cfg.carIdx]
-        if (k === "arrowleft") { this.cfg.carIdx = (this.cfg.carIdx + CARS.length - 1) % CARS.length; this.audio.ui() }
-        if (k === "arrowright") { this.cfg.carIdx = (this.cfg.carIdx + 1) % CARS.length; this.audio.ui() }
-        if (k === "c") { custom.paint = (custom.paint + 1) % PAINTS.length; this.audio.ui() }
-        if (k === "v") { custom.stripe = (custom.stripe + 1) % STRIPES.length; this.audio.ui() }
-        if (k === "b") { custom.neon = (custom.neon + 1) % NEONS.length; this.audio.ui() }
-        if (k === "r") { custom.wheel = (custom.wheel + 1) % WHEELS.length; this.audio.ui() }
-        if (k === "g") { custom.wing = (custom.wing + 1) % WINGS.length; this.audio.ui() }
-        if (k === "t") { this.cfg.transmission = this.cfg.transmission === "auto" ? "manual" : "auto"; this.audio.ui() }
-        if (k === "y") { this.cfg.steering = this.cfg.steering === "mouse" ? "keyboard" : "mouse"; this.audio.ui() }
-        if (k === "n") { this.nameBuf = this.cfg.pilotName; this.afterName = "garage"; this.state = "nameentry"; this.audio.ui() }
-        if (["c", "v", "b", "r", "g", "t", "y"].includes(k) || k.startsWith("arrow")) saveConfig(this.cfg)
-        if (k === "enter") startAndSave(this)
-        if (k === "escape") this.state = "menu"
-        break
-      }
-      case "racing":
-      case "countdown":
-        if (k === "escape" || k === "p") {
-          if (this.mode === "duel") {
-            this.floaters.push({ text: "sem pause no duelo! 😅", color: "#f472b6", y: H * 0.4, life: 1.2, big: false })
-          } else {
-            this.state = "paused"
-            this.audio.uiLow()
-          }
-        }
-        if (k === "q") this.tryShift(-1)
-        if (k === "e") this.tryShift(1)
-        if (k === "n") this.toNeutral()
-        if (k === "f") this.flashBeam()
-        // (as teclas de debug de playtest — O perseguição, L nível, B/V/J/K/I/U
-        // eventos — foram removidas: tudo isso agora é sorteado pelo próprio
-        // jogo em updateEventSpawner)
-        break
-      case "paused":
-        if (k === "escape" || k === "p" || k === "enter") this.state = "racing"
-        if (k === "r") this.startRace()
-        if (k === "m") this.state = "menu"
-        break
-      case "gameover":
-        if (k === "enter") this.startRace()
-        if (k === "g") this.state = "garage"
-        if (k === "m") this.state = "menu"
-        break
-    }
-
-    function startAndSave(self: AutoDashEngine) {
-      saveConfig(self.cfg)
-      self.startRace()
-    }
-  }
-
-  toggleMute() {
-    this.cfg.sound = !this.cfg.sound
-    saveConfig(this.cfg)
-    this.audio.setMuted(!this.cfg.sound)
-    this.floaters.push({
-      text: this.cfg.sound ? "🔊 som ligado" : "🔇 som desligado",
-      color: "#94a3b8", y: H * 0.52, life: 1, big: false,
-    })
-  }
 
   enterFromMenu(dest: "garage" | "duellobby" = "garage") {
     this.audio.ui()
@@ -3798,23 +3671,9 @@ export class AutoDashEngine {
     }
   }
 
-  tryShift(dir: 1 | -1) {
-    if (this.cfg.transmission !== "manual" && this.gear !== 0) return
-    if (this.state !== "racing" && this.state !== "countdown") return
-    if (dir === 1) shiftUp(this); else shiftDown(this)
-  }
 
-  toNeutral() {
-    if (this.state !== "racing") return
-    this.gear = 0
-    this.audio.shift()
-  }
 
-  onKeyUp = (e: KeyboardEvent) => {
-    const k = e.key.toLowerCase()
-    this.keys.delete(k)
-    if (k === " ") this.nitroOn = false
-  }
+  onKeyUp = (e: KeyboardEvent) => onKeyUp(this, e)
 
   onMouseDown = (e: MouseEvent) => {
     this.ensureAudio()
@@ -3828,7 +3687,7 @@ export class AutoDashEngine {
       }
     }
     if (e.button === 2 && (this.state === "racing" || this.state === "countdown")) this.mouseBrake = true
-    if (e.button === 1) { e.preventDefault(); this.toNeutral() }
+    if (e.button === 1) { e.preventDefault(); toNeutral(this) }
     if (e.button === 3 || e.button === 4) { e.preventDefault(); this.nitroOn = true }
   }
   onMouseUp = (e: MouseEvent) => {
@@ -3854,7 +3713,7 @@ export class AutoDashEngine {
   onWheel = (e: WheelEvent) => {
     e.preventDefault()
     if (this.state !== "racing" && this.state !== "countdown") return
-    this.tryShift(e.deltaY < 0 ? 1 : -1)
+    tryShift(this, e.deltaY < 0 ? 1 : -1)
   }
   onCtx = (e: Event) => e.preventDefault()
   onBlur = () => { if (this.state === "racing" && this.mode !== "duel") this.state = "paused" }
@@ -4017,8 +3876,8 @@ export class AutoDashEngine {
     const gearDown = makeButton("▼", W - EDGE - NI - 14 - GE - 12 - GE, upRowY, GE, "#fbbf24")
     gearUp.style.fontSize = "24px"; gearDown.style.fontSize = "24px"
     bindHold(nitro, (p) => { this.nitroOn = p })
-    bindTap(gearUp, () => this.tryShift(1))
-    bindTap(gearDown, () => this.tryShift(-1))
+    bindTap(gearUp, () => tryShift(this, 1))
+    bindTap(gearDown, () => tryShift(this, -1))
   }
 
   bind() {
