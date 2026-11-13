@@ -1,4 +1,5 @@
 // AutoDash — world/zones.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { spawnPoliceChase } from "./events"
 import { AutoDashEngine, H } from "../engine"
 import { wrapDz } from "../traffic/spawner"
 import { DRAW_DIST, SEG_LEN } from "../data"
@@ -83,7 +84,7 @@ export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
             color: "#ef4444", y: H * 0.32, life: 2.2, big: true,
           })
           eng.audio.horn()
-          eng.spawnPoliceChase()
+          spawnPoliceChase(eng)
         } else {
           eng.floaters.push({
             text: zn.type === "blitz" ? "passou na blitz ✅" : "radar ok ✅",
