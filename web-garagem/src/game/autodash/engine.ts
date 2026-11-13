@@ -1,4 +1,4 @@
-import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, type BodyKind, CARS, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, SEG_LEN, RPM_PER_KMH, DRAW_DIST, submitScore, fetchLeaderboard, saveConfig, NEONS, PAINTS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
+import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, type BodyKind, CARS, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, SEG_LEN, RPM_PER_KMH, DRAW_DIST, submitScore, fetchLeaderboard, saveConfig } from "./data"
 import { type DuelTelemetry, postState } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic } from "./traffic/types"
@@ -9,7 +9,7 @@ import { seedTraffic, updateTraffic, wrapDz } from "./traffic/spawner"
 import { clamp, mix } from "./math"
 import { updateEventSpawner } from "./world/events"
 import { duelNet, myTelemetry, duelFinish, duelCreate, duelJoin, duelRematch, startDuelLobby } from "./modes/duel"
-import { startRace, abrirRaceLobby, correrComBots, abrirCodigoSala } from "./modes/race"
+import { startRace, correrComBots, abrirCodigoSala } from "./modes/race"
 import { updateFx, emitSmoke, emitFlame, burst, initRain } from "./fx/particles"
 import { rpmFor, powerCurve } from "./physics/rpm"
 import { shiftUp, shiftDown } from "./physics/gearbox"
@@ -19,8 +19,9 @@ import { skyNow, renderBackdrop } from "./render/backdrop"
 import { renderRoad } from "./render/road"
 import { renderPlayer, renderRearThreat } from "./render/player"
 import { renderParticles } from "./render/particles"
+import { renderMenu, renderGarage, renderPause, renderGameOver, renderNameEntry, dim } from "./render/menus/main"
 import { renderHud, renderSemaphore } from "./render/hud"
-import { pill, arrowBtn, glass } from "./ui/widgets"
+import { arrowBtn, pill, glass } from "./ui/widgets"
 import { rr, drawPlayerCar } from "./render/primitives"
 import { onKeyDown, onKeyUp } from "./input/keyboard"
 import { onMouseDown, onMouseUp, onMouseMove, onWheel, onCtx } from "./input/pointer"
@@ -846,8 +847,8 @@ export class AutoDashEngine {
     ctx.drawImage(this.vignetteTex(), 0, 0)
 
     switch (this.state) {
-      case "menu": this.renderMenu(); break
-      case "garage": this.renderGarage(); break
+      case "menu": renderMenu(this); break
+      case "garage": renderGarage(this); break
       case "countdown":
         renderHud(this)
         // na corrida, a contagem serve pra estudar o traçado antes de largar
@@ -855,9 +856,9 @@ export class AutoDashEngine {
         renderSemaphore(this)
         break
       case "racing": renderHud(this); if (this.mode === "race") this.renderRaceHud(); break
-      case "paused": renderHud(this); this.renderPause(); break
-      case "gameover": this.renderGameOver(); break
-      case "nameentry": this.renderNameEntry(); break
+      case "paused": renderHud(this); renderPause(this); break
+      case "gameover": renderGameOver(this); break
+      case "nameentry": renderNameEntry(this); break
       case "duellobby": this.renderDuelLobby(); break
       case "duelcode": this.renderDuelCode(); break
       case "duelwaiting": this.renderDuelWaiting(); break
@@ -978,63 +979,13 @@ export class AutoDashEngine {
 
 
 
-  // ---------- telas ----------
-  dim(alpha = 0.55) {
-    this.ctx.fillStyle = `rgba(2,6,23,${alpha})`
-    this.ctx.fillRect(0, 0, W, H)
-  }
 
-  renderMenu() {
-    const ctx = this.ctx
-    this.dim(0.45)
-    ctx.textAlign = "center"
-    const tg = ctx.createLinearGradient(0, 118, 0, 185)
-    tg.addColorStop(0, "#ff7a45")
-    tg.addColorStop(0.55, "#e0342f")
-    tg.addColorStop(1, "#9f1d1a")
-    ctx.shadowColor = "rgba(224,52,47,0.6)"
-    ctx.shadowBlur = 34
-    ctx.fillStyle = tg
-    ctx.font = "italic 900 78px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText("AUTODASH", W / 2, 180)
-    ctx.shadowBlur = 0
-    ctx.fillStyle = "rgba(255,255,255,0.25)"
-    ctx.font = "italic 900 78px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.save()
-    ctx.scale(1, -0.28)
-    ctx.globalAlpha = 0.18
-    ctx.fillText("AUTODASH", W / 2, -680) // reflexo espelhado sob o título
-    ctx.restore()
-    ctx.globalAlpha = 1
-    ctx.fillStyle = "rgba(248,250,252,0.85)"
-    ctx.font = "18px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText("costure o trânsito · respeite o câmbio · sobreviva", W / 2, 214)
-    ctx.textAlign = "left"
-    pill(this, "BORA CORRER  [ENTER]", W / 2 - 150, 286, 300, () => this.enterFromMenu("garage"), { primary: true, h: 46, font: 18 })
-    pill(this, "⚔ DUELO ONLINE  [D]", W / 2 - 150, 342, 300, () => this.enterFromMenu("duellobby"), { h: 38, font: 15 })
-    pill(this, "🏁 CORRIDA  [C]", W / 2 - 150, 388, 300, () => abrirRaceLobby(this), { h: 38, font: 15 })
-    ctx.textAlign = "center"
-    ctx.fillStyle = "rgba(248,250,252,0.6)"
-    ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText("🖱 esq acelera · dir freia · scroll troca marcha · botão do meio = neutro", W / 2, 440)
-    ctx.fillText("⌨ A/D ou ←→ dirigem · W/S gás/freio · Q/E marchas · ESPAÇO nitro · F farol alto", W / 2, 464)
-    if (this.cfg.pilotName) {
-      ctx.fillStyle = "rgba(148,197,255,0.85)"
-      ctx.fillText(`fala, ${this.cfg.pilotName}! bora?`, W / 2, 496)
-    }
-    const best = this.scores[0]
-    if (best) {
-      ctx.fillStyle = "rgba(253,224,71,0.9)"
-      ctx.fillText(`recorde: ${best.score.toLocaleString("pt-BR")} — ${best.name}`, W / 2, this.cfg.pilotName ? 520 : 500)
-    }
-    ctx.textAlign = "left"
-  }
 
 
 
   renderRaceLobby() {
     const ctx = this.ctx
-    this.dim(0.6)
+    dim(this, 0.6)
     ctx.textAlign = "center"
     ctx.fillStyle = "#f8fafc"
     ctx.font = "900 46px 'Space Grotesk', 'Segoe UI', sans-serif"
@@ -1137,7 +1088,7 @@ export class AutoDashEngine {
   /** Digitação do código de 4 letras. */
   renderRaceCode() {
     const ctx = this.ctx
-    this.dim(0.62)
+    dim(this, 0.62)
     ctx.textAlign = "center"
     ctx.fillStyle = "#f8fafc"
     ctx.font = "900 34px 'Space Grotesk', 'Segoe UI', sans-serif"
@@ -1155,7 +1106,7 @@ export class AutoDashEngine {
   renderRaceWait() {
     const ctx = this.ctx
     const r = this.race
-    this.dim(0.62)
+    dim(this, 0.62)
     ctx.textAlign = "center"
     ctx.fillStyle = "rgba(248,250,252,0.7)"
     ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
@@ -1402,186 +1353,9 @@ export class AutoDashEngine {
     }
   }
 
-  renderGarage() {
-    const ctx = this.ctx
-    this.dim(0.72)
-    const spec = CARS[this.cfg.carIdx]
-    const custom = this.cfg.customs[this.cfg.carIdx]
-    const save = () => saveConfig(this.cfg)
 
-    ctx.textAlign = "center"
-    ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 30px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText("GARAGEM", W / 2, 44)
-    ctx.fillStyle = "rgba(248,250,252,0.55)"
-    ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText(`${this.cfg.carIdx + 1} / ${CARS.length}`, 240, 78)
-    ctx.textAlign = "left"
 
-    pill(this, "← menu", 16, 16, 92, () => { this.state = "menu" }, { h: 26, font: 12 })
-    arrowBtn(this, 38, 206, -1, () => { this.cfg.carIdx = (this.cfg.carIdx + CARS.length - 1) % CARS.length; save(); this.audio.ui() })
-    arrowBtn(this, 396, 206, 1, () => { this.cfg.carIdx = (this.cfg.carIdx + 1) % CARS.length; save(); this.audio.ui() })
 
-    // plataforma + carro
-    const px = 240, py = 316
-    const pg = ctx.createRadialGradient(px, py, 10, px, py, 150)
-    const neon = NEONS[custom.neon]
-    pg.addColorStop(0, custom.neon > 0 ? neon + "55" : "rgba(148,163,184,0.25)")
-    pg.addColorStop(1, "rgba(0,0,0,0)")
-    ctx.fillStyle = pg
-    ctx.beginPath(); ctx.ellipse(px, py, 160, 46, 0, 0, Math.PI * 2); ctx.fill()
-    drawPlayerCar(ctx, px, py + 10, spec, custom, 0, false, 0.9, false, 1.5)
-
-    ctx.textAlign = "center"
-    ctx.fillStyle = PAINTS[custom.paint]
-    ctx.font = "bold 25px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText(spec.name, px, 392)
-    ctx.fillStyle = "rgba(248,250,252,0.7)"
-    ctx.font = "italic 13px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText(spec.desc, px, 414)
-    ctx.textAlign = "left"
-
-    pill(this, `piloto: ${this.cfg.pilotName || "?"} · trocar [N]`, 120, 430, 240, () => {
-      this.nameBuf = this.cfg.pilotName
-      this.afterName = "garage"
-      this.state = "nameentry"
-      this.audio.ui()
-    })
-    pill(this, "ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); startRace(this) }, { primary: true, h: 42, font: 17 })
-
-    // painel de specs e customização
-    glass(this, 486, 66, 456, 460, 18)
-    const sx = 510
-    const stat = (label: string, frac: number, x: number, y: number, invert = false) => {
-      ctx.fillStyle = "rgba(248,250,252,0.75)"
-      ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
-      ctx.fillText(label, x, y - 4)
-      ctx.fillStyle = "rgba(148,163,184,0.25)"
-      rr(ctx, x, y, 190, 9, 5)
-      ctx.fillStyle = invert ? "#fb923c" : "#4ade80"
-      rr(ctx, x, y, 190 * clamp(frac, 0.05, 1), 9, 5)
-    }
-    stat("POTÊNCIA", spec.power / 58, sx, 102)
-    stat("ADERÊNCIA (curvas)", spec.grip / 0.9, sx + 226, 102)
-    stat("VELOCIDADE FINAL", spec.topSpeed / 260, sx, 140)
-    stat("LARGURA (atrapalha no corredor)", spec.width / 0.31, sx + 226, 140, true)
-
-    // pintura e rodas — chips clicáveis
-    ctx.fillStyle = "rgba(248,250,252,0.75)"
-    ctx.font = "bold 11px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText("PINTURA [C]", sx, 176)
-    for (let i = 0; i < PAINTS.length; i++) {
-      const cxp = sx + 10 + i * 26, cyp = 196
-      ctx.fillStyle = PAINTS[i]
-      ctx.beginPath(); ctx.arc(cxp, cyp, 9, 0, Math.PI * 2); ctx.fill()
-      if (i === custom.paint) {
-        ctx.strokeStyle = "#f8fafc"; ctx.lineWidth = 2
-        ctx.beginPath(); ctx.arc(cxp, cyp, 12, 0, Math.PI * 2); ctx.stroke()
-      }
-      this.uiRegions.push({ x: cxp - 12, y: cyp - 12, w: 24, h: 24, act: () => { custom.paint = i; save(); this.audio.ui() } })
-    }
-    ctx.fillStyle = "rgba(248,250,252,0.75)"
-    ctx.fillText("RODAS [R]", sx + 300, 176)
-    for (let i = 0; i < WHEELS.length; i++) {
-      const cxp = sx + 310 + i * 26, cyp = 196
-      ctx.fillStyle = "#0a0a0c"
-      ctx.beginPath(); ctx.arc(cxp, cyp, 9, 0, Math.PI * 2); ctx.fill()
-      ctx.fillStyle = WHEELS[i]
-      ctx.beginPath(); ctx.arc(cxp, cyp, 5, 0, Math.PI * 2); ctx.fill()
-      if (i === custom.wheel) {
-        ctx.strokeStyle = "#f8fafc"; ctx.lineWidth = 2
-        ctx.beginPath(); ctx.arc(cxp, cyp, 12, 0, Math.PI * 2); ctx.stroke()
-      }
-      this.uiRegions.push({ x: cxp - 12, y: cyp - 12, w: 24, h: 24, act: () => { custom.wheel = i; save(); this.audio.ui() } })
-    }
-
-    // pills de opções
-    pill(this, `faixa: ${STRIPES[custom.stripe]} [V]`, sx, 222, 200, () => { custom.stripe = (custom.stripe + 1) % STRIPES.length; save(); this.audio.ui() })
-    pill(this, `aerofólio: ${WINGS[custom.wing]} [G]`, sx + 216, 222, 200, () => { custom.wing = (custom.wing + 1) % WINGS.length; save(); this.audio.ui() })
-    pill(this, `neon: ${NEON_NAMES[custom.neon]} [B]`, sx, 258, 200, () => { custom.neon = (custom.neon + 1) % NEONS.length; save(); this.audio.ui() })
-    pill(this, `direção: ${this.cfg.steering === "mouse" ? "mouse" : "teclado"} [Y]`, sx + 216, 258, 200, () => { this.cfg.steering = this.cfg.steering === "mouse" ? "keyboard" : "mouse"; save(); this.audio.ui() })
-    pill(this, `câmbio: ${this.cfg.transmission === "auto" ? "automático" : "sequencial (scroll)"} [T]`, sx, 294, 416, () => { this.cfg.transmission = this.cfg.transmission === "auto" ? "manual" : "auto"; save(); this.audio.ui() })
-
-    // leaderboard global
-    ctx.fillStyle = "rgba(253,224,71,0.9)"
-    ctx.font = "bold 12px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText("🌐 TOP 10 GLOBAL", sx, 348)
-    ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillStyle = "rgba(248,250,252,0.7)"
-    if (this.scores.length === 0) ctx.fillText("— ainda sem recordes, seja o primeiro —", sx, 368)
-    this.scores.slice(0, 10).forEach((s, i) => {
-      ctx.fillStyle = s.name === this.cfg.pilotName ? "rgba(253,224,71,0.95)" : "rgba(248,250,252,0.7)"
-      ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, sx, 368 + i * 15)
-    })
-  }
-
-  renderPause() {
-    const ctx = this.ctx
-    this.dim()
-    ctx.textAlign = "center"
-    ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 46px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText("PAUSADO", W / 2, H / 2 - 60)
-    ctx.textAlign = "left"
-    pill(this, "CONTINUAR  [ESC]", W / 2 - 115, H / 2 - 20, 230, () => { this.state = "racing" }, { primary: true, h: 38, font: 15 })
-    pill(this, "RECOMEÇAR  [R]", W / 2 - 115, H / 2 + 28, 230, () => startRace(this), { h: 32 })
-    pill(this, "MENU  [M]", W / 2 - 115, H / 2 + 68, 230, () => { this.state = "menu" }, { h: 32 })
-  }
-
-  renderGameOver() {
-    const ctx = this.ctx
-    this.dim(0.6)
-    ctx.textAlign = "center"
-    ctx.fillStyle = "#ef4444"
-    ctx.font = `900 ${this.crashByPolice ? 46 : 56}px 'Space Grotesk', 'Segoe UI', sans-serif`
-    ctx.fillText(this.crashByPolice ? "POLÍCIA TE PEGOU! 🚔" : "BATEU!", W / 2, 150)
-    ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 30px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText(`${Math.floor(this.score).toLocaleString("pt-BR")} pontos`, W / 2, 210)
-    ctx.font = "16px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillStyle = "rgba(248,250,252,0.7)"
-    ctx.fillText(`${this.km.toFixed(1)} km percorridos, ${this.cfg.pilotName || "PILOTO"}`, W / 2, 240)
-    if (this.newRecord) {
-      ctx.fillStyle = "#fde047"
-      ctx.font = "900 24px 'Space Grotesk', 'Segoe UI', sans-serif"
-      ctx.fillText("★ NOVO RECORDE! ★", W / 2, 272)
-    }
-
-    ctx.fillStyle = "rgba(253,224,71,0.9)"
-    ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText("— 🌐 TOP 10 GLOBAL —", W / 2, 300)
-    ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
-    this.scores.slice(0, 10).forEach((s, i) => {
-      ctx.fillStyle = s.name === this.cfg.pilotName ? "rgba(253,224,71,0.95)" : "rgba(248,250,252,0.8)"
-      ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, W / 2, 322 + i * 16)
-    })
-    ctx.textAlign = "left"
-
-    pill(this, "CORRER DE NOVO  [ENTER]", W / 2 - 250, 490, 250, () => startRace(this), { primary: true, h: 36, font: 14 })
-    pill(this, "GARAGEM  [G]", W / 2 + 16, 490, 130, () => { this.state = "garage" }, { h: 36 })
-    pill(this, "MENU  [M]", W / 2 + 160, 490, 100, () => { this.state = "menu" }, { h: 36 })
-  }
-
-  renderNameEntry() {
-    const ctx = this.ctx
-    this.dim(0.7)
-    glass(this, W / 2 - 230, 140, 460, 270, 20)
-    ctx.textAlign = "center"
-    ctx.fillStyle = "#fde047"
-    ctx.font = "900 38px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText("QUEM TÁ PILOTANDO?", W / 2, 200)
-    ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillStyle = "rgba(248,250,252,0.7)"
-    ctx.fillText("seu nome fica salvo neste navegador e assina seus recordes", W / 2, 232)
-    const cursor = Math.floor(performance.now() / 400) % 2 === 0 ? "▌" : " "
-    ctx.fillStyle = "#f8fafc"
-    ctx.font = "bold 36px 'Consolas', monospace"
-    ctx.fillText((this.nameBuf || "") + cursor, W / 2, 305)
-    ctx.fillStyle = "rgba(255,255,255,0.25)"
-    ctx.fillRect(W / 2 - 150, 320, 300, 2)
-    ctx.textAlign = "left"
-    pill(this, "CONFIRMAR  [ENTER]", W / 2 - 115, 352, 230, () => this.confirmName(), { primary: true, h: 36, font: 14 })
-  }
 
   // ---------- telas do duelo ----------
   toMenu() {
@@ -1593,7 +1367,7 @@ export class AutoDashEngine {
 
   renderDuelLobby() {
     const ctx = this.ctx
-    this.dim(0.62)
+    dim(this, 0.62)
     ctx.textAlign = "center"
     ctx.fillStyle = "#38bdf8"
     ctx.font = "900 44px 'Space Grotesk', sans-serif"
@@ -1610,7 +1384,7 @@ export class AutoDashEngine {
 
   renderDuelCode() {
     const ctx = this.ctx
-    this.dim(0.7)
+    dim(this, 0.7)
     glass(this, W / 2 - 210, 150, 420, 250, 20)
     ctx.textAlign = "center"
     ctx.fillStyle = "#38bdf8"
@@ -1630,7 +1404,7 @@ export class AutoDashEngine {
   renderDuelWaiting() {
     const ctx = this.ctx
     const d = this.duel
-    this.dim(0.66)
+    dim(this, 0.66)
     ctx.textAlign = "center"
     if (!d) { this.state = "duellobby"; return }
     if (d.startAtLocal === null) {
@@ -1673,7 +1447,7 @@ export class AutoDashEngine {
   renderDuelSpectate() {
     const ctx = this.ctx
     const d = this.duel
-    this.dim(0.55)
+    dim(this, 0.55)
     ctx.textAlign = "center"
     ctx.fillStyle = "#ef4444"
     ctx.font = "900 44px 'Space Grotesk', sans-serif"
@@ -1700,7 +1474,7 @@ export class AutoDashEngine {
   renderDuelResult() {
     const ctx = this.ctx
     const d = this.duel
-    this.dim(0.66)
+    dim(this, 0.66)
     ctx.textAlign = "center"
     const win = d?.result === "win"
     ctx.fillStyle = win ? "#4ade80" : "#ef4444"
