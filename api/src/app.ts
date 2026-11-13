@@ -2,7 +2,7 @@
 import { cors } from "hono/cors"
 import { logger } from "hono/logger"
 import { authMiddleware } from "./middleware/auth.ts"
-import { authRoutes } from "./routes/auth.ts"
+import { authRoutes } from "./routes/auth/credenciais.ts"
 import { veiculosRoutes } from "./routes/veiculos.ts"
 import { fasesRoutes } from "./routes/fases.ts"
 import { itensRoutes } from "./routes/itens.ts"
@@ -10,11 +10,11 @@ import { cotacoesRoutes } from "./routes/cotacoes.ts"
 import { publicoRoutes } from "./routes/publico.ts"
 import { socialRoutes } from "./routes/social.ts"
 import { colaboracoesRoutes } from "./routes/colaboracoes.ts"
-import { authV2Routes } from "./routes/auth-v2.ts"
+import { authV2Routes, authContaRoutes } from "./routes/auth/conta.ts"
 import { marketplacePublicoRoutes, marketplaceRoutes } from "./routes/marketplace.ts"
 import { lojasPublicoRoutes, lojasRoutes } from "./routes/lojas.ts"
 import { eventosPublicoRoutes, eventosRoutes } from "./routes/eventos-calendario.ts"
-import { googleAuthRoutes } from "./routes/auth-google.ts"
+import { googleAuthRoutes } from "./routes/auth/google.ts"
 import { comentariosPublicoRoutes, comentariosAuthRoutes } from "./routes/comentarios.ts"
 import { autodashRoutes } from "./routes/autodash.ts"
 import { sql } from "./db/client.ts"
@@ -104,6 +104,7 @@ api.route("/cotacoes", cotacoesRoutes)
 api.route("/social", socialRoutes)
 api.route("/colaboracoes", colaboracoesRoutes)
 api.route("/auth", authV2Routes)
+api.route("/auth", authContaRoutes)
 api.route("/marketplace", marketplaceRoutes)
 api.route("/lojas", lojasRoutes)
 api.route("/eventos-calendario", eventosRoutes)

@@ -1,9 +1,9 @@
 ﻿import { Hono } from "hono"
 import { z } from "zod"
 import bcrypt from "bcryptjs"
-import { sql } from "../db/client.ts"
-import { enviarVerificacaoEmail, enviarResetSenha } from "../lib/email.ts"
-import type { AppEnv } from "../types.ts"
+import { sql } from "../../db/client.ts"
+import { enviarVerificacaoEmail, enviarResetSenha } from "../../lib/email.ts"
+import type { AppEnv } from "../../types.ts"
 
 export const authV2Routes = new Hono<AppEnv>()
 
@@ -93,8 +93,12 @@ authV2Routes.post("/resetar-senha", async (c) => {
   return c.json({ ok: true })
 })
 
+// Rotas que exigem login: montadas só em /api/auth (com authMiddleware).
+// Ficam fora de authV2Routes para não existirem também em /auth público.
+export const authContaRoutes = new Hono<AppEnv>()
+
 // PATCH /api/auth/garagem — atualizar garagem (nome, bio, publica)
-authV2Routes.patch("/garagem", async (c) => {
+authContaRoutes.patch("/garagem", async (c) => {
   const userId = c.get("userId") as string
   const body = await c.req.json().catch(() => null)
   const schema = z.object({
@@ -119,7 +123,7 @@ authV2Routes.patch("/garagem", async (c) => {
 })
 
 // PATCH /api/auth/perfil — atualizar perfil do usuário
-authV2Routes.patch("/perfil", async (c) => {
+authContaRoutes.patch("/perfil", async (c) => {
   const userId = c.get("userId") as string
   const body = await c.req.json().catch(() => null)
   const schema = z.object({
