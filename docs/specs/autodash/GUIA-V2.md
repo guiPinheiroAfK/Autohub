@@ -151,10 +151,11 @@ Cada fase termina com parada para o usuário testar. Não começar a próxima se
 
 Critério de aceite: usuário aprova os ADRs e a lista.
 
-### Fase 1 — Biomas e camadas — `pendente`
-- [ ] Tabela de dados de bioma: nome, paleta, camadas, pesos de decoração, clima permitido.
-- [ ] Converter o cenário urbano atual no bioma "cidade", com 3 camadas (longe, meio, perto).
-- [ ] Bioma "costa" usando o mesmo sistema (horizonte com mar, palmeiras, píer).
+### Fase 1 — Biomas e camadas — `concluída` (hashes no log)
+- [x] Tabela de dados de bioma (`world/biomes.ts`): nome, céu, camadas, árvore de beira, climas. Peso de decoração fica para a Fase 3 (hoje só a árvore).
+- [x] Converter o cenário urbano atual no bioma "cidade", com 3 camadas (longe, meio, perto).
+- [x] Bioma "costa" usando o mesmo sistema (horizonte com mar, palmeiras, píer).
+- [x] Seletor de bioma na garagem (tecla X e pill).
 
 Critério de aceite: solo e corrida leem o bioma da tabela. Snapshot do golden muda só pela camada intencional, em commit próprio. Browser: menu, corrida e troca de bioma funcionam.
 
@@ -194,4 +195,8 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | Data | Commit | O que mudou | Snapshot do golden |
 |---|---|---|---|
 | 2026-11-13 | (esta spec) | Criação do guia vivo | não alterado |
+| 2026-11-13 | ea1e68f | Fase 1a: `BIOMES` como dados, cidade com desenho idêntico. | não alterado |
+| 2026-11-13 | c37ea84 | Fase 1b: camada perto da cidade (brilho urbano no horizonte, só à noite). | atualizado nas 2 cenas de corrida (noturnas). O replay solo não mudou (fato). O motivo escrito no commit ("trecho de dia") não foi verificado. |
+| 2026-11-13 | c6d8999 | Fase 1c-i: bioma costa (mar, palmeiras, píer, palmeira de beira). | não alterado |
+| 2026-11-13 | d0f8e39 | Fase 1c-ii: seletor de bioma na garagem (tecla X e pill). | atualizado no replay solo (+98 chamadas pela pill nova). Cenas de corrida não mudaram. |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |
