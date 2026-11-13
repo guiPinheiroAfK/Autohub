@@ -1,4 +1,6 @@
 // AutoDash — input/keyboard.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { duelRematch } from "../modes/duel"
+import { duelJoin } from "../modes/duel"
 import { AutoDashEngine, H } from "../engine"
 import { saveConfig, CARS, PAINTS, STRIPES, NEONS, WHEELS, WINGS } from "../data"
 import { shiftUp, shiftDown } from "../physics/gearbox"
@@ -38,7 +40,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
     return
   }
   if (eng.state === "duelcode") {
-    if (k === "enter") eng.duelJoin()
+    if (k === "enter") duelJoin(eng)
     else if (k === "escape") eng.state = "duellobby"
     else if (k === "backspace") eng.codeBuf = eng.codeBuf.slice(0, -1)
     else if (/^[a-z0-9]$/i.test(e.key) && eng.codeBuf.length < 4) eng.codeBuf += e.key.toUpperCase()
@@ -90,7 +92,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "escape") eng.toMenu()
       break
     case "duelresult":
-      if (k === "enter") eng.duelRematch()
+      if (k === "enter") duelRematch(eng)
       if (k === "m" || k === "escape") eng.toMenu()
       break
     case "garage": {

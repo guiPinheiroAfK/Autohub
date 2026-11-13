@@ -1,5 +1,5 @@
 import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, type BodyKind, CARS, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, SEG_LEN, RPM_PER_KMH, DRAW_DIST, submitScore, fetchLeaderboard, ROAD_WIDTH, PAINTS, type CarCustom, RPM_REDLINE, saveConfig, NEONS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "./data"
-import { type DuelTelemetry, postState, rematchRoom, pollRoom, createRoom, joinRoom } from "./net"
+import { type DuelTelemetry, postState } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic, KINDS } from "./traffic/types"
 import { RaceSession } from "./race/session"
@@ -8,6 +8,7 @@ import { buildTrack, segAt } from "./world/track"
 import { seedTraffic, updateTraffic, wrapDz } from "./traffic/spawner"
 import { clamp, mix, shade, hexToRgb } from "./math"
 import { updateEventSpawner } from "./world/events"
+import { duelNet, myTelemetry, duelFinish, duelCreate, duelJoin, duelRematch, startDuelLobby } from "./modes/duel"
 import { updateFx, emitSmoke, emitFlame, burst, initRain } from "./fx/particles"
 import { rpmFor, powerCurve } from "./physics/rpm"
 import { shiftUp, shiftDown } from "./physics/gearbox"
@@ -37,7 +38,7 @@ type GameState =
     | "duellobby" | "duelcode" | "duelwaiting" | "duelspectate" | "duelresult"
     | "racelobby" | "racecode" | "racewait" | "raceresult"
 
-interface DuelSession {
+export interface DuelSession {
   code: string
   seed: number
   role: "host" | "guest"
@@ -347,7 +348,7 @@ export class AutoDashEngine {
     const voice = AutoDashEngine.ENGINE_VOICE[spec.body] ?? [1, 1]
     this.audio.setEngine(voice[0], voice[1])
 
-    this.duelNet(dt)
+    duelNet(this, dt)
 
     // sala de espera: consulta quem entrou e detecta a largada dada pelo dono
     if (this.state === "racewait" && this.race) {
@@ -741,10 +742,10 @@ export class AutoDashEngine {
     if (this.mode === "duel" && this.duel) {
       const d = this.duel
       d.iCrashed = true
-      void postState(d.code, d.role, this.myTelemetry(true))
+      void postState(d.code, d.role, myTelemetry(this, true))
           .then((r) => { if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() } })
           .catch(() => { /* spectate segue tentando */ })
-      if (d.opp?.c) this.duelFinish(this.km > d.oppD)
+      if (d.opp?.c) duelFinish(this, this.km > d.oppD)
       else this.state = "duelspectate"
       return
     }
@@ -757,180 +758,13 @@ export class AutoDashEngine {
     if (!this.destroyed && scores.length) this.scores = scores
   }
 
-  // ---------- duelo online ----------
-  duelNet(dt: number) {
-    const d = this.duel
-    if (!d || this.mode !== "duel") return
-    d.postT -= dt
-    // extrapola a distância do rival entre polls
-    if (d.opp && !d.opp.c && !d.result) d.oppD += (d.opp.v / 3600) * dt
 
-    if (this.state === "duelwaiting") {
-      if (d.startAtLocal === null && d.postT <= 0 && !d.busy) {
-        d.postT = 1.5
-        d.busy = true
-        if (d.rematch) {
-          // revanche: mesma sala; quando o rival topar, vem seed nova + largada
-          rematchRoom(d.code, d.role).then((r) => {
-            if (r.startInMs !== null && r.startInMs > 300) {
-              d.seed = r.seed
-              d.startAtLocal = performance.now() + r.startInMs
-              d.opp = null; d.oppD = 0
-              d.result = null; d.iCrashed = false; d.scoreSent = false
-            }
-          }).catch(() => { /* tenta de novo no próximo tick */ }).finally(() => { d.busy = false })
-        } else {
-          pollRoom(d.code).then((r) => {
-            if (r.oppName && r.startInMs !== null) {
-              d.oppName = r.oppName
-              d.startAtLocal = performance.now() + r.startInMs
-            }
-          }).catch(() => { /* tenta de novo no próximo tick */ }).finally(() => { d.busy = false })
-        }
-      }
-      if (d.startAtLocal !== null && performance.now() >= d.startAtLocal - 3300) {
-        d.rematch = false
-        this.startRace(d.seed)
-        // compensa a latência do poll: o verde acende no instante combinado,
-        // mesmo que este cliente tenha descoberto a largada atrasado
-        const remaining = (d.startAtLocal - performance.now()) / 1000
-        this.countT = clamp(3.3 - remaining, 0, 3.2)
-      }
-      return
-    }
 
-    if (this.state === "racing" || this.state === "countdown") {
-      if (d.postT <= 0 && !d.busy) {
-        d.postT = 1.1
-        d.busy = true
-        postState(d.code, d.role, this.myTelemetry(false))
-            .then((r) => {
-              if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() }
-            })
-            .catch(() => { /* rede piscou */ })
-            .finally(() => { d.busy = false })
-      }
-      // rival bateu e você já passou a marca dele: vitória na hora
-      if (this.state === "racing" && d.opp?.c && this.km > d.oppD + 0.005) {
-        this.duelFinish(true, "seu rival bateu antes da sua marca")
-      }
-      // rival sumiu da corrida
-      if (d.opp && performance.now() - d.lastSeen > 20000) {
-        this.duelFinish(true, "seu rival caiu da conexão")
-      }
-      return
-    }
 
-    if (this.state === "duelspectate") {
-      if (d.postT <= 0 && !d.busy) {
-        d.postT = 1.3
-        d.busy = true
-        postState(d.code, d.role, this.myTelemetry(true))
-            .then((r) => {
-              if (r.opp) { d.opp = r.opp; d.oppD = r.opp.d; d.lastSeen = performance.now() }
-            })
-            .catch(() => { /* segue tentando */ })
-            .finally(() => { d.busy = false })
-      }
-      if (d.opp?.c) this.duelFinish(this.km > d.oppD)
-      else if (performance.now() - d.lastSeen > 20000) this.duelFinish(true, "seu rival caiu da conexão")
-    }
-  }
 
-  duelFinish(win: boolean, msg = "") {
-    const d = this.duel
-    if (!d || d.result) return
-    d.result = win ? "win" : "lose"
-    d.msg = msg
-    this.floaters = []
-    this.combo = 0
-    // aviso final pro rival: minha corrida acabou (senão ele espera à toa)
-    void postState(d.code, d.role, this.myTelemetry(true))
-        .catch(() => { /* melhor esforço */ })
-    if (!d.scoreSent && this.score > 300) {
-      d.scoreSent = true
-      void submitScore({
-        name: (this.cfg.pilotName || "PILOTO").trim(),
-        score: Math.floor(this.score),
-        km: Math.round(this.km * 10) / 10,
-      }).then((scores) => { if (!this.destroyed && scores.length) this.scores = scores })
-    }
-    this.state = "duelresult"
-    if (win) this.audio.levelUp(); else this.audio.bog()
-  }
 
-  startDuelLobby() {
-    this.mode = "duel"
-    this.duel = null
-    this.codeBuf = ""
-    this.state = "duellobby"
-    this.audio.ui()
-  }
 
-  newDuelSession(code: string, seed: number, role: "host" | "guest", oppName = "", startInMs: number | null = null): DuelSession {
-    return {
-      code, seed, role, oppName,
-      startAtLocal: startInMs === null ? null : performance.now() + startInMs,
-      opp: null, oppD: 0, postT: 0, busy: false,
-      lastSeen: performance.now(), iCrashed: false, scoreSent: false,
-      result: null, rematch: false, msg: "",
-    }
-  }
 
-  /** Minha telemetria atual (inclui o carro, pro fantasma do rival ser fiel). */
-  myTelemetry(crashed: boolean): DuelTelemetry {
-    return {
-      d: this.km,
-      s: Math.floor(this.score),
-      v: crashed ? 0 : this.speed,
-      x: this.playerX,
-      c: crashed,
-      car: this.cfg.carIdx,
-      paint: this.cfg.customs[this.cfg.carIdx].paint,
-    }
-  }
-
-  /** Revanche: mesma sala, pista nova — espera o rival topar. */
-  duelRematch() {
-    const d = this.duel
-    if (!d) { this.startDuelLobby(); return }
-    d.rematch = true
-    d.startAtLocal = null
-    d.postT = 0
-    this.state = "duelwaiting"
-    this.audio.ui()
-  }
-
-  duelCreate() {
-    const nome = this.cfg.pilotName || "PILOTO"
-    this.state = "duelwaiting"
-    this.duel = this.newDuelSession("....", 0, "host")
-    createRoom(nome).then((r) => {
-      if (this.destroyed || this.state !== "duelwaiting") return
-      this.duel = this.newDuelSession(r.code, r.seed, "host")
-    }).catch((e: Error) => {
-      this.state = "duellobby"
-      this.duel = null
-      this.floaters.push({ text: e.message || "erro ao criar sala", color: "#ef4444", y: H * 0.6, life: 2, big: false })
-    })
-  }
-
-  duelJoin() {
-    const code = this.codeBuf.trim().toUpperCase()
-    if (code.length !== 4) {
-      this.floaters.push({ text: "código tem 4 letras", color: "#ef4444", y: H * 0.68, life: 1.5, big: false })
-      return
-    }
-    const nome = this.cfg.pilotName || "PILOTO"
-    joinRoom(code, nome).then((r) => {
-      if (this.destroyed) return
-      this.duel = this.newDuelSession(code, r.seed, "guest", r.oppName, r.startInMs)
-      this.state = "duelwaiting"
-      this.audio.ui()
-    }).catch((e: Error) => {
-      this.floaters.push({ text: e.message || "não rolou entrar", color: "#ef4444", y: H * 0.68, life: 2, big: false })
-    })
-  }
 
   startRace(seed?: number) {
     const corrida = this.mode === "race"
@@ -3503,7 +3337,7 @@ export class AutoDashEngine {
     ctx.fillText("dois pilotos, mesma pista, largada junta.", W / 2, 186)
     ctx.fillText("quem for mais longe sem bater, leva.", W / 2, 208)
     ctx.textAlign = "left"
-    this.pill("CRIAR SALA", W / 2 - 150, 260, 300, () => this.duelCreate(), { primary: true, h: 44, font: 17 })
+    this.pill("CRIAR SALA", W / 2 - 150, 260, 300, () => duelCreate(this), { primary: true, h: 44, font: 17 })
     this.pill("TENHO UM CÓDIGO", W / 2 - 150, 316, 300, () => { this.codeBuf = ""; this.state = "duelcode"; this.audio.ui() }, { h: 38, font: 15 })
     this.pill("← voltar  [ESC]", W / 2 - 150, 368, 300, () => this.toMenu(), { h: 30 })
   }
@@ -3523,7 +3357,7 @@ export class AutoDashEngine {
     ctx.fillStyle = "rgba(255,255,255,0.25)"
     ctx.fillRect(W / 2 - 90, 296, 180, 2)
     ctx.textAlign = "left"
-    this.pill("ENTRAR  [ENTER]", W / 2 - 110, 330, 220, () => this.duelJoin(), { primary: true, h: 34, font: 14 })
+    this.pill("ENTRAR  [ENTER]", W / 2 - 110, 330, 220, () => duelJoin(this), { primary: true, h: 34, font: 14 })
     this.pill("← voltar", W / 2 - 110, 372, 220, () => { this.state = "duellobby" }, { h: 26 })
   }
 
@@ -3617,7 +3451,7 @@ export class AutoDashEngine {
       }
     }
     ctx.textAlign = "left"
-    this.pill("⚔ REVANCHE  [ENTER]", W / 2 - 240, 340, 240, () => this.duelRematch(), { primary: true, h: 40, font: 15 })
+    this.pill("⚔ REVANCHE  [ENTER]", W / 2 - 240, 340, 240, () => duelRematch(this), { primary: true, h: 40, font: 15 })
     this.pill("MENU", W / 2 + 20, 340, 220, () => this.toMenu(), { h: 40, font: 15 })
   }
 
@@ -3641,7 +3475,7 @@ export class AutoDashEngine {
       this.afterName = dest
       this.state = "nameentry"
     } else if (dest === "duellobby") {
-      this.startDuelLobby()
+      startDuelLobby(this)
     } else {
       // garage é a porta do SOLO — reseta o modo, senão uma corrida anterior
       // deixava mode="race" e o "bora correr" virava circuito
@@ -3655,7 +3489,7 @@ export class AutoDashEngine {
     this.cfg.pilotName = (this.nameBuf.trim() || "PILOTO").slice(0, 12)
     saveConfig(this.cfg)
     this.audio.ui()
-    if (this.afterName === "duellobby") this.startDuelLobby()
+    if (this.afterName === "duellobby") startDuelLobby(this)
     else { this.mode = "solo"; this.race = null; this.state = "garage" }
     this.afterName = "garage"
   }
