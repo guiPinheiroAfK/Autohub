@@ -1,4 +1,6 @@
 // AutoDash — render/menus/main.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { enterFromMenu } from "../../flow"
+import { confirmName } from "../../flow"
 import { AutoDashEngine, W, H } from "../../engine"
 import { pill, arrowBtn, glass } from "../../ui/widgets"
 import { abrirRaceLobby, startRace } from "../../modes/race"
@@ -32,8 +34,8 @@ export function renderMenu(eng: AutoDashEngine) {
   ctx.font = "18px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillText("costure o trânsito · respeite o câmbio · sobreviva", W / 2, 214)
   ctx.textAlign = "left"
-  pill(eng, "BORA CORRER  [ENTER]", W / 2 - 150, 286, 300, () => eng.enterFromMenu("garage"), { primary: true, h: 46, font: 18 })
-  pill(eng, "⚔ DUELO ONLINE  [D]", W / 2 - 150, 342, 300, () => eng.enterFromMenu("duellobby"), { h: 38, font: 15 })
+  pill(eng, "BORA CORRER  [ENTER]", W / 2 - 150, 286, 300, () => enterFromMenu(eng, "garage"), { primary: true, h: 46, font: 18 })
+  pill(eng, "⚔ DUELO ONLINE  [D]", W / 2 - 150, 342, 300, () => enterFromMenu(eng, "duellobby"), { h: 38, font: 15 })
   pill(eng, "🏁 CORRIDA  [C]", W / 2 - 150, 388, 300, () => abrirRaceLobby(eng), { h: 38, font: 15 })
   ctx.textAlign = "center"
   ctx.fillStyle = "rgba(248,250,252,0.6)"
@@ -230,7 +232,7 @@ export function renderNameEntry(eng: AutoDashEngine) {
   ctx.fillStyle = "rgba(255,255,255,0.25)"
   ctx.fillRect(W / 2 - 150, 320, 300, 2)
   ctx.textAlign = "left"
-  pill(eng, "CONFIRMAR  [ENTER]", W / 2 - 115, 352, 230, () => eng.confirmName(), { primary: true, h: 36, font: 14 })
+  pill(eng, "CONFIRMAR  [ENTER]", W / 2 - 115, 352, 230, () => confirmName(eng), { primary: true, h: 36, font: 14 })
 }
 
 export function dim(eng: AutoDashEngine, alpha = 0.55) {

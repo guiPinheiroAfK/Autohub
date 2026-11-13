@@ -1,4 +1,6 @@
 // AutoDash — input/pointer.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { enterFromMenu } from "../flow"
+import { ensureAudio } from "../flow"
 import { AutoDashEngine, W, H } from "../engine"
 import { toNeutral, tryShift } from "./keyboard"
 import { clamp } from "../math"
@@ -11,14 +13,14 @@ export function regionAt(eng: AutoDashEngine, x: number, y: number) {
 }
 
 export function onMouseDown(eng: AutoDashEngine, e: MouseEvent) {
-  eng.ensureAudio()
+  ensureAudio(eng)
   if (e.button === 0) {
     if (eng.state === "racing" || eng.state === "countdown") {
       eng.mouseGas = true
     } else {
       const hit = regionAt(eng, eng.mousePx.x, eng.mousePx.y)
       if (hit) hit.act()
-      else if (eng.state === "menu") eng.enterFromMenu()
+      else if (eng.state === "menu") enterFromMenu(eng)
     }
   }
   if (e.button === 2 && (eng.state === "racing" || eng.state === "countdown")) eng.mouseBrake = true

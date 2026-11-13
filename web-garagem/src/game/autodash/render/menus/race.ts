@@ -1,4 +1,5 @@
 // AutoDash — render/menus/race.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { toMenu } from "../../flow"
 import { AutoDashEngine, W, H } from "../../engine"
 import { dim } from "./main"
 import { arrowBtn, pill, glass } from "../../ui/widgets"
@@ -207,7 +208,7 @@ export function renderRaceResult(eng: AutoDashEngine) {
   }
   ctx.textAlign = "left"
   pill(eng, "CORRER DE NOVO  [ENTER]", W / 2 - 230, H - 56, 220, () => correrComBots(eng), { primary: true, h: 42, font: 16 })
-  pill(eng, "MENU  [M]", W / 2 + 10, H - 56, 220, () => eng.toMenu(), { h: 42, font: 16 })
+  pill(eng, "MENU  [M]", W / 2 + 10, H - 56, 220, () => toMenu(eng), { h: 42, font: 16 })
 }
 
 export function tracadoCompleto(eng: AutoDashEngine, cx: number, cy: number, cw: number, ch: number) {

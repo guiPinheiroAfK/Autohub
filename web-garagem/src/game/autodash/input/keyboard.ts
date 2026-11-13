@@ -1,4 +1,9 @@
 // AutoDash — input/keyboard.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { enterFromMenu } from "../flow"
+import { confirmName } from "../flow"
+import { toMenu } from "../flow"
+import { flashBeam } from "../flow"
+import { ensureAudio } from "../flow"
 import { startRace } from "../modes/race"
 import { abrirRaceLobby } from "../modes/race"
 import { correrComBots } from "../modes/race"
@@ -34,11 +39,11 @@ export function toNeutral(eng: AutoDashEngine) {
 export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
   const k = e.key.toLowerCase()
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault()
-  eng.ensureAudio()
+  ensureAudio(eng)
 
   if (eng.state === "nameentry") {
     if (k === "enter") {
-      eng.confirmName()
+      confirmName(eng)
     } else if (k === "backspace") eng.nameBuf = eng.nameBuf.slice(0, -1)
     else if (/^[a-z0-9 _-]$/i.test(e.key) && eng.nameBuf.length < 12) eng.nameBuf += e.key.toUpperCase()
     return
@@ -61,8 +66,8 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
 
   switch (eng.state) {
     case "menu":
-      if (k === "enter") eng.enterFromMenu("garage")
-      if (k === "d") eng.enterFromMenu("duellobby")
+      if (k === "enter") enterFromMenu(eng, "garage")
+      if (k === "d") enterFromMenu(eng, "duellobby")
       if (k === "c") abrirRaceLobby(eng)
       break
     case "racelobby":
@@ -73,7 +78,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "arrowright") { eng.cfg.carIdx = (eng.cfg.carIdx + 1) % CARS.length; saveConfig(eng.cfg); eng.audio.ui() }
       if (k === "arrowdown") eng.raceVoltas = Math.max(1, eng.raceVoltas - 1)
       if (k === "arrowup") eng.raceVoltas = Math.min(9, eng.raceVoltas + 1)
-      if (k === "escape") eng.toMenu()
+      if (k === "escape") toMenu(eng)
       break
     case "racecode":
       if (k === "enter") void eng.entrarSalaOnline()
@@ -87,17 +92,17 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       break
     case "raceresult":
       if (k === "enter") correrComBots(eng)
-      if (k === "m" || k === "escape") eng.toMenu()
+      if (k === "m" || k === "escape") toMenu(eng)
       break
     case "duellobby":
-      if (k === "escape") eng.toMenu()
+      if (k === "escape") toMenu(eng)
       break
     case "duelwaiting":
-      if (k === "escape") eng.toMenu()
+      if (k === "escape") toMenu(eng)
       break
     case "duelresult":
       if (k === "enter") duelRematch(eng)
-      if (k === "m" || k === "escape") eng.toMenu()
+      if (k === "m" || k === "escape") toMenu(eng)
       break
     case "garage": {
       const custom = eng.cfg.customs[eng.cfg.carIdx]
@@ -129,7 +134,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "q") tryShift(eng, -1)
       if (k === "e") tryShift(eng, 1)
       if (k === "n") toNeutral(eng)
-      if (k === "f") eng.flashBeam()
+      if (k === "f") flashBeam(eng)
       // (as teclas de debug de playtest — O perseguição, L nível, B/V/J/K/I/U
       // eventos — foram removidas: tudo isso agora é sorteado pelo próprio
       // jogo em updateEventSpawner)

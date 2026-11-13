@@ -1,4 +1,5 @@
 // AutoDash — render/menus/duel.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { toMenu } from "../../flow"
 import { AutoDashEngine, W } from "../../engine"
 import { dim } from "./main"
 import { pill, glass } from "../../ui/widgets"
@@ -18,7 +19,7 @@ export function renderDuelLobby(eng: AutoDashEngine) {
   ctx.textAlign = "left"
   pill(eng, "CRIAR SALA", W / 2 - 150, 260, 300, () => duelCreate(eng), { primary: true, h: 44, font: 17 })
   pill(eng, "TENHO UM CÓDIGO", W / 2 - 150, 316, 300, () => { eng.codeBuf = ""; eng.state = "duelcode"; eng.audio.ui() }, { h: 38, font: 15 })
-  pill(eng, "← voltar  [ESC]", W / 2 - 150, 368, 300, () => eng.toMenu(), { h: 30 })
+  pill(eng, "← voltar  [ESC]", W / 2 - 150, 368, 300, () => toMenu(eng), { h: 30 })
 }
 
 export function renderDuelCode(eng: AutoDashEngine) {
@@ -67,7 +68,7 @@ export function renderDuelWaiting(eng: AutoDashEngine) {
       ctx.fillText(`esperando oponente${dots}`, W / 2, 330)
     }
     ctx.textAlign = "left"
-    pill(eng, "cancelar  [ESC]", W / 2 - 100, 370, 200, () => eng.toMenu(), { h: 28 })
+    pill(eng, "cancelar  [ESC]", W / 2 - 100, 370, 200, () => toMenu(eng), { h: 28 })
   } else {
     const secs = Math.max(0, (d.startAtLocal - performance.now()) / 1000)
     ctx.fillStyle = "#4ade80"
@@ -131,5 +132,5 @@ export function renderDuelResult(eng: AutoDashEngine) {
   }
   ctx.textAlign = "left"
   pill(eng, "⚔ REVANCHE  [ENTER]", W / 2 - 240, 340, 240, () => duelRematch(eng), { primary: true, h: 40, font: 15 })
-  pill(eng, "MENU", W / 2 + 20, 340, 220, () => eng.toMenu(), { h: 40, font: 15 })
+  pill(eng, "MENU", W / 2 + 20, 340, 220, () => toMenu(eng), { h: 40, font: 15 })
 }

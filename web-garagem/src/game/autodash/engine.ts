@@ -1,4 +1,4 @@
-import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, type BodyKind, CARS, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, SEG_LEN, RPM_PER_KMH, DRAW_DIST, submitScore, fetchLeaderboard, saveConfig } from "./data"
+import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig, type ScoreEntry, cachedScores, RPM_IDLE, type BodyKind, CARS, KMH2UPS, RPM_LIMITER, GEAR_RATIOS, SEG_LEN, RPM_PER_KMH, DRAW_DIST, submitScore, fetchLeaderboard } from "./data"
 import { type DuelTelemetry, postState } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic } from "./traffic/types"
@@ -8,7 +8,7 @@ import { buildTrack, segAt } from "./world/track"
 import { seedTraffic, updateTraffic, wrapDz } from "./traffic/spawner"
 import { clamp, mix } from "./math"
 import { updateEventSpawner } from "./world/events"
-import { duelNet, myTelemetry, duelFinish, startDuelLobby } from "./modes/duel"
+import { duelNet, myTelemetry, duelFinish } from "./modes/duel"
 import { startRace } from "./modes/race"
 import { updateFx, emitSmoke, emitFlame, burst, initRain } from "./fx/particles"
 import { rpmFor, powerCurve } from "./physics/rpm"
@@ -1086,13 +1086,6 @@ export class AutoDashEngine {
 
 
 
-  // ---------- telas do duelo ----------
-  toMenu() {
-    this.mode = "solo"
-    this.duel = null
-    this.floaters = []
-    this.state = "menu"
-  }
 
 
 
@@ -1101,55 +1094,12 @@ export class AutoDashEngine {
 
   // ---------- input ----------
   audioInit = false
-  ensureAudio() {
-    this.audio.ensure()
-    if (!this.audioInit) {
-      this.audioInit = true
-      this.audio.setMuted(!this.cfg.sound)
-    }
-  }
 
   onKeyDown = (e: KeyboardEvent) => onKeyDown(this, e)
 
 
-  enterFromMenu(dest: "garage" | "duellobby" = "garage") {
-    this.audio.ui()
-    if (!this.cfg.pilotName) {
-      this.nameBuf = ""
-      this.afterName = dest
-      this.state = "nameentry"
-    } else if (dest === "duellobby") {
-      startDuelLobby(this)
-    } else {
-      // garage é a porta do SOLO — reseta o modo, senão uma corrida anterior
-      // deixava mode="race" e o "bora correr" virava circuito
-      this.mode = "solo"
-      this.race = null
-      this.state = "garage"
-    }
-  }
 
-  confirmName() {
-    this.cfg.pilotName = (this.nameBuf.trim() || "PILOTO").slice(0, 12)
-    saveConfig(this.cfg)
-    this.audio.ui()
-    if (this.afterName === "duellobby") startDuelLobby(this)
-    else { this.mode = "solo"; this.race = null; this.state = "garage" }
-    this.afterName = "garage"
-  }
 
-  /** Farol alto: pisca e pede passagem pra quem está na sua faixa. */
-  flashBeam() {
-    if (this.state !== "racing" || this.beamCdT > 0) return
-    this.beamCdT = 2.2
-    this.beamT = 0.55
-    this.audio.flash()
-    const playerZ = this.position + PLAYER_Z
-    for (const t of this.traffic) {
-      const d = wrapDz(this, t.z, playerZ)
-      if (d > 200 && d < 7000 && Math.abs(t.offset - this.playerX) < 0.35) t.yieldT = 1.4
-    }
-  }
 
 
 

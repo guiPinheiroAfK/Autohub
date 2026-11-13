@@ -1,4 +1,6 @@
 // AutoDash — input/touch.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { enterFromMenu } from "../flow"
+import { ensureAudio } from "../flow"
 import { AutoDashEngine, W, H } from "../engine"
 import { tryShift } from "./keyboard"
 import { regionAt } from "./pointer"
@@ -126,7 +128,7 @@ export function noCallout(_eng: AutoDashEngine, el: HTMLElement) {
 export function onTouchStart(eng: AutoDashEngine, e: TouchEvent) {
   const touch = e.touches[0]
   if (!touch) return
-  eng.ensureAudio()
+  ensureAudio(eng)
   const rect = eng.canvas.getBoundingClientRect()
   eng.mousePx.x = ((touch.clientX - rect.left) / rect.width) * W
   eng.mousePx.y = ((touch.clientY - rect.top) / rect.height) * H
@@ -135,7 +137,7 @@ export function onTouchStart(eng: AutoDashEngine, e: TouchEvent) {
   } else {
     const hit = regionAt(eng, eng.mousePx.x, eng.mousePx.y)
     if (hit) hit.act()
-    else if (eng.state === "menu") eng.enterFromMenu()
+    else if (eng.state === "menu") enterFromMenu(eng)
   }
 }
 
