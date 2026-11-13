@@ -13,22 +13,11 @@
 
 import { KMH2UPS } from "../data"
 import { corPorIndice, type Rival, type RaceTelemetry } from "./types"
+import { req } from "../net-http"
 
 const TICK = 0.3 // s entre envios de telemetria (o duelo usa 1s)
 const SUMIR_APOS = 6 // s sem notícia = tira da pista
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 5000)
-  try {
-    const res = await fetch(path, { ...init, signal: ctrl.signal })
-    const data = await res.json().catch(() => null)
-    if (!res.ok) throw new Error((data as { error?: string } | null)?.error ?? `HTTP ${res.status}`)
-    return data as T
-  } finally {
-    clearTimeout(timer)
-  }
-}
 const post = <T>(p: string, body: unknown) =>
   req<T>(p, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
 

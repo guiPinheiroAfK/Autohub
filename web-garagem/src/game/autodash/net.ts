@@ -1,3 +1,4 @@
+import { req } from "./net-http"
 // AutoDash — cliente de rede do duelo online (salas por código + polling).
 
 export interface DuelTelemetry {
@@ -18,18 +19,6 @@ export interface RoomJoined { seed: number; role: "guest"; oppName: string; star
 export interface RoomStatus { oppName: string | null; startInMs: number | null }
 export interface StateResponse { opp: DuelTelemetry | null; oppName: string | null; startInMs: number | null }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 5000)
-  try {
-    const res = await fetch(path, { ...init, signal: ctrl.signal })
-    const data = await res.json().catch(() => null)
-    if (!res.ok) throw new Error((data as { error?: string } | null)?.error ?? `HTTP ${res.status}`)
-    return data as T
-  } finally {
-    clearTimeout(timer)
-  }
-}
 
 export function createRoom(nome: string): Promise<RoomCreated> {
   return req("/api/autodash/room", {
