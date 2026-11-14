@@ -13,13 +13,10 @@
 
 import { KMH2UPS } from "../data"
 import { corPorIndice, type Rival, type RaceTelemetry } from "./types"
-import { req } from "../net-http"
+import { postJson, req } from "../net-http"
 
 const TICK = 0.3 // s entre envios de telemetria (o duelo usa 1s)
 const SUMIR_APOS = 6 // s sem notícia = tira da pista
-
-const post = <T>(p: string, body: unknown) =>
-  req<T>(p, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
 
 /** Id estável do dispositivo — permite reentrar na sala se a conexão cair. */
 export function meuPlayerId(): string {
@@ -43,18 +40,18 @@ export interface LobbyInfo {
 }
 
 export const criarSala = (nome: string, playerId: string, voltas: number, car: number, paint: number, seed?: number) =>
-  post<{ code: string; seed: number; voltas: number; owner: boolean }>(
+  postJson<{ code: string; seed: number; voltas: number; owner: boolean }>(
     "/api/autodash/race", { nome, playerId, voltas, car, paint, seed })
 
 export const entrarSala = (code: string, nome: string, playerId: string, car: number, paint: number) =>
-  post<{ seed: number; voltas: number; owner: boolean }>(
+  postJson<{ seed: number; voltas: number; owner: boolean }>(
     `/api/autodash/race/${encodeURIComponent(code)}/join`, { nome, playerId, car, paint })
 
 export const verLobby = (code: string) =>
   req<LobbyInfo>(`/api/autodash/race/${encodeURIComponent(code)}`)
 
 export const darLargada = (code: string, playerId: string) =>
-  post<{ startInMs: number }>(`/api/autodash/race/${encodeURIComponent(code)}/start`, { playerId })
+  postJson<{ startInMs: number }>(`/api/autodash/race/${encodeURIComponent(code)}/start`, { playerId })
 
 /**
  * Mantém a lista de rivais viva: envia a sua telemetria no ritmo do TICK e
@@ -115,7 +112,7 @@ export class RaceNet {
     if (this.t > 0 || this.enviando) return
     this.t = TICK
     this.enviando = true
-    post<{ voltas: number; startInMs: number | null; rivais: PilotoApi[] }>(
+    postJson<{ voltas: number; startInMs: number | null; rivais: PilotoApi[] }>(
       `/api/autodash/race/${encodeURIComponent(this.code)}/state`,
       { playerId: this.meuId, st: telemetria() },
     ).then(r => {
