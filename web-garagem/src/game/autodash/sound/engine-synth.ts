@@ -8,6 +8,7 @@
 // aparece no alto giro com o pé no fundo).
 
 import type { EngineSoundProfile } from "./profiles"
+import { Sorteio } from "./sorteio"
 
 interface Pulso { t: number; a: number; t1: number; t2: number; t3: number; asp: number }
 
@@ -35,7 +36,7 @@ export class EngineSynth {
   private pulsos: Pulso[] = []
   private rpm = 900
   private carga = 0
-  private seed: number
+  private aleatorio: Sorteio
   private sr: number
   private perfil: EngineSoundProfile
   st: EngineSynthState = { rpm: 900, carga: 0, ligado: true, corte: false }
@@ -43,7 +44,7 @@ export class EngineSynth {
   constructor(sr: number, perfil: EngineSoundProfile, seed = 1) {
     this.sr = sr
     this.perfil = perfil
-    this.seed = seed >>> 0 || 1
+    this.aleatorio = new Sorteio(seed, 1)
   }
 
   setPerfil(p: EngineSoundProfile) {
@@ -52,13 +53,7 @@ export class EngineSynth {
     this.prox = this.indiceApos(this.ang)
   }
 
-  private rnd(): number {
-    // mulberry32: determinístico pros testes
-    let t = (this.seed = (this.seed + 0x6d2b79f5) >>> 0)
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
+  private rnd(): number { return this.aleatorio.proximo() }
 
   private indiceApos(ang: number): number {
     const ev = this.perfil.eventos

@@ -20,6 +20,7 @@
 // DSP puro (sem WebAudio): roda no AudioWorklet e nos testes.
 
 import type { EngineSynthState } from "./engine-synth"
+import { Sorteio } from "./sorteio"
 
 /** Banco de grãos já decodificado na taxa de saída. */
 export interface BancoGraos {
@@ -62,7 +63,7 @@ export class MotorGravado {
   private hzTodos: Float32Array = new Float32Array(0)
   private rpm = 900
   private carga = 0
-  private seed: number
+  private aleatorio: Sorteio
   private amp = 0
   private prob = [0, 1, 0]        // probabilidade atual de cada classe
   /** cilindros do motor que está tocando (define a frequência de explosão alvo) */
@@ -70,18 +71,13 @@ export class MotorGravado {
 
   constructor(sr: number, seed = 7) {
     this.sr = sr
-    this.seed = seed >>> 0 || 7
+    this.aleatorio = new Sorteio(seed, 7)
   }
 
   get pronto(): boolean { return this.b !== null }
   get banco(): string { return this.b?.nome ?? "" }
 
-  private rnd(): number {
-    let t = (this.seed = (this.seed + 0x6d2b79f5) >>> 0)
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
+  private rnd(): number { return this.aleatorio.proximo() }
 
   setBanco(b: BancoGraos) {
     this.b = b

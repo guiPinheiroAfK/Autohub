@@ -15,6 +15,7 @@
 import type { EngineSoundProfile } from "./profiles"
 import type { EngineSynthState } from "./engine-synth"
 import { GANHOS_MOTOR } from "./ganhos-motor"
+import { Sorteio } from "./sorteio"
 
 const MAX_AMP = 20 // acima disso o duto "satura" (evita realimentação explodir)
 // nível de saída (RMS) de todo motor a 3500 rpm com pé no fundo
@@ -147,7 +148,7 @@ export class WaveguideSynth {
   private coletorEsc = 0
   private rpm = 900
   private carga = 0
-  private seed: number
+  private aleatorio: Sorteio
   private sorteio = () => this.rnd() // criado uma vez (não a cada amostra)
   private normalizar: boolean
   ganho = 1 // normaliza o volume entre motores e ao longo do giro (cada duto ressoa com força própria)
@@ -155,7 +156,7 @@ export class WaveguideSynth {
 
   constructor(sr: number, perfil: EngineSoundProfile, seed = 1, normalizar = true) {
     this.sr = sr
-    this.seed = seed >>> 0 || 1
+    this.aleatorio = new Sorteio(seed, 1)
     this.normalizar = normalizar
     this.setPerfil(perfil)
   }
@@ -166,12 +167,7 @@ export class WaveguideSynth {
     this.rpm = rpm; this.carga = carga
   }
 
-  private rnd(): number {
-    let t = (this.seed = (this.seed + 0x6d2b79f5) >>> 0)
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
+  private rnd(): number { return this.aleatorio.proximo() }
 
   setPerfil(p: EngineSoundProfile) {
     if (p.id === this.perfilId) return
