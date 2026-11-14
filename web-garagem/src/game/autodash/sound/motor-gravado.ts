@@ -29,8 +29,10 @@ export interface BancoGraos {
   dados: Float32Array
   /** 6 números por grão: centro (s), período à esquerda (s), à direita (s), Hz de explosão, classe, ganho */
   graos: Float32Array
-  /** cilindros do motor gravado (explosões por 2 voltas) */
-  cilindros: number
+  /** Voltas do virabrequim por grão: 0,5 = uma explosão de 4 em linha; 1 = uma
+   *  volta; 2 = o ciclo inteiro de 720° (guarda o padrão desigual de V8 cruzado
+   *  e boxer). A frequência do grão no giro r é r/60/voltasPorGrao. */
+  voltasPorGrao: number
 }
 
 /** Classe do grão: 0 = alívio (giro caindo, pé fora), 1 = carga (subindo), 2 = estável (meia carga). */
@@ -44,7 +46,7 @@ const ANEL = 8, LIMITE_GRAOS = 6
 // suavização (constante de tempo, s): giro, carga e liga/desliga
 const SUAVE_GIRO_S = 0.012, SUAVE_CARGA_S = 0.04, SUAVE_AMP_S = 0.03
 // frequência de explosão mínima (giro quase parado): limita o tamanho do grão
-const HZ_MIN = 8
+const HZ_MIN = 3
 
 // o alívio da gravação é giro caindo em ponto morto, ainda alto no cofre; no
 // carro andando, tirar o pé derruba bem mais o volume
@@ -81,10 +83,9 @@ export class MotorGravado {
   private aleatorio: Sorteio
   private amp = 0
   private prob = [0, 1, 0]        // probabilidade atual de cada classe
-  /** Cilindros que definem a frequência de explosão alvo. Fica em 4 mesmo sob
-   *  motores maiores: aí a gravação é só textura mecânica (válvulas, admissão)
-   *  e precisa tocar no MESMO giro do motor, não na frequência de explosão dele. */
-  cilindros = 4
+  private voltas = 0.5
+  private hzMin = 0
+  private hzMax = 0
 
   constructor(sr: number, seed = 7) {
     this.sr = sr
@@ -92,6 +93,10 @@ export class MotorGravado {
   }
 
   get pronto(): boolean { return this.b !== null }
+
+  /** Faixa de giro que a gravação cobre (rpm). Fora dela o grão é reamostrado
+   *  e soa "acelerado": quem mistura (audio.ts) devolve o motor à síntese. */
+  get faixaRpm(): [number, number] { return [this.hzMin * 60 * this.voltas, this.hzMax * 60 * this.voltas] }
   get banco(): string { return this.b?.nome ?? "" }
 
   private rnd(): number { return this.aleatorio.proximo() }
@@ -112,6 +117,10 @@ export class MotorGravado {
     }
     const [a, h] = ordenar(Array.from({ length: N }, (_, i) => i))
     this.todos = a; this.hzTodos = h
+    this.voltas = b.voltasPorGrao > 0 ? b.voltasPorGrao : 0.5
+    // faixa gravada (2% e 98% dos grãos: ignora os poucos fora da curva)
+    this.hzMin = h[Math.floor(h.length * 0.02)] ?? 0
+    this.hzMax = h[Math.floor(h.length * 0.98)] ?? 0
     this.gN = 0; this.ultimo = -1; this.passo = 0
   }
 
@@ -218,7 +227,7 @@ export class MotorGravado {
       this.rpm += (this.st.rpm - this.rpm) * kr
       this.carga += (this.st.carga - this.carga) * kc
       this.amp += ((this.st.ligado ? 1 : 0) - this.amp) * ka
-      const hz = Math.max(HZ_MIN, this.rpm / 60 * this.cilindros / 2)
+      const hz = Math.max(HZ_MIN, this.rpm / 60 / this.voltas)
       const T = this.sr / hz
       // primeiro grão: entra suave, um período à frente
       if (this.passo <= 0) { this.passo = T; this.proxCentro = this.n + T }

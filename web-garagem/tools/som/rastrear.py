@@ -1,6 +1,6 @@
 # Rastreia a frequência de explosão (ordem de ignição) de uma gravação de motor.
 # uso: python -P rastrear.py entrada.wav saida_prefixo fmin fmax f_inicial
-import sys, json, numpy as np
+import sys, os, json, numpy as np
 from scipy.io import wavfile
 from scipy.signal import stft, butter, sosfiltfilt
 import matplotlib
@@ -30,16 +30,36 @@ for k in range(1, NH + 1):
     idxm = np.clip(np.round(cands * (k - 0.5) / df).astype(int), 0, len(f) - 1)
     score -= 0.0 * w * L[idxm]
 score /= NH
+# MODO=pente: rastreia o ESPAÇAMENTO entre as linhas (todas as harmônicas até
+# ~1,2 kHz), descontando o meio entre elas. Não pula de linha quando a mais forte
+# muda ao longo da varredura (V8, boxer: linhas a cada meia ordem, muito juntas)
+if os.environ.get("MODO") == "pente":
+    score = np.zeros((len(cands), L.shape[1]))
+    for i, c in enumerate(cands):
+        h = np.arange(1, max(4, min(40, int(1200 / c))) + 1)
+        on = np.clip(np.round(h * c / df).astype(int), 0, len(f) - 1)
+        off = np.clip(np.round((h + 0.5) * c / df).astype(int), 0, len(f) - 1)
+        score[i] = L[on].mean(axis=0) - L[off].mean(axis=0)
 # restrições opcionais: argv[6] = "t0-t1:f0-f1;..."
 if len(sys.argv) > 6:
     for r in sys.argv[6].split(";"):
         tt, ff = r.split(":"); a, b = map(float, tt.split("-")); lo, hi = map(float, ff.split("-"))
         fr = (t >= a) & (t <= b); bad = (cands < lo) | (cands > hi)
         score[np.ix_(bad, fr)] = -50
+# PRIOR="t:hz,t:hz,...": trilha aproximada lida a olho no espectrograma; a busca
+# fica a ±BANDA (padrão 7%) dela. Resolve a ambiguidade entre linhas vizinhas.
+if os.environ.get("PRIOR"):
+    kp = np.array([[float(v) for v in par.split(":")] for par in os.environ["PRIOR"].split(",")])
+    fp = np.exp(np.interp(t, kp[:, 0], np.log(kp[:, 1])))
+    banda = float(os.environ.get("BANDA", "0.07"))
+    fora = np.abs(np.log(cands[:, None] / fp[None, :])) > banda
+    score[fora] = -50
 # Viterbi com salto máximo proporcional
 nT = score.shape[1]
 logc = np.log(cands)
-maxjump = 0.07  # 7% por quadro de 10 ms
+# salto máximo por quadro de 10 ms (SALTO=0.015 para varreduras lentas, onde a
+# linha vizinha está perto e o rastreador pularia de harmônica)
+maxjump = float(os.environ.get("SALTO", "0.07"))
 back = np.zeros((len(cands), nT), dtype=np.int32)
 acc = score[:, 0] - 4.0 * np.abs(logc - np.log(f_ini)) * 10
 for j in range(1, nT):

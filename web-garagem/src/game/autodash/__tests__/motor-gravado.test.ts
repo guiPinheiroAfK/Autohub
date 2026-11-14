@@ -25,7 +25,7 @@ function bancoSintetico(): BancoGraos {
     const classe = marcas[j] < 4 ? CARGA : marcas[j] < 8 ? ESTAVEL : ALIVIO
     graos.push([marcas[j], esq, dir, 2 / (esq + dir), classe, 1])
   }
-  return { nome: "teste", sr: SR, dados, graos: graosDoJson(graos), cilindros: 4 }
+  return { nome: "teste", sr: SR, dados, graos: graosDoJson(graos), voltasPorGrao: 0.5 }
 }
 
 function tocar(m: MotorGravado, rpm: number, carga: number, seg: number): Float32Array {
@@ -63,7 +63,7 @@ describe("motor gravado (grãos síncronos ao giro)", () => {
     expect(rms(tocar(m, 3000, 1, 0.2))).toBe(0)
   })
 
-  it("segue o giro pedido: explosão a giro/60 × cilindros/2", () => {
+  it("segue o giro pedido: explosão a giro/60 ÷ voltas por grão (0,5 = 4 em linha)", () => {
     const m = new MotorGravado(SR)
     m.setBanco(bancoSintetico())
     for (const rpm of [1500, 3000, 6000]) {
@@ -101,7 +101,7 @@ describe("motor gravado (grãos síncronos ao giro)", () => {
       graos.push([1 + 8 * i / 399, 1 / hz, 1 / hz, hz, CARGA, 1])
     }
     const m = new MotorGravado(SR)
-    m.setBanco({ nome: "dc", sr: SR, dados, graos: graosDoJson(graos), cilindros: 4 })
+    m.setBanco({ nome: "dc", sr: SR, dados, graos: graosDoJson(graos), voltasPorGrao: 0.5 })
     tocar(m, 3000, 1, 0.6) // volume (amp) assenta
     let pior = 0
     const blk = new Float32Array(128)

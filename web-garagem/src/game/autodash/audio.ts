@@ -34,7 +34,11 @@ interface Motor {
   // novo começa sem nenhum)
   bancos: Set<string>
   carregando: Set<string>
+  faixas: Map<string, { rpm: [number, number]; nivel: number }> // giro que cada gravação cobre e o nível dela
 }
+
+// nível de referência das gravações (RMS dos grãos de carga do Renault, tools/som/nivel.py)
+const NIVEL_REF = 0.135
 
 export class AudioBus {
   private ctx: AudioContext | null = null
@@ -319,7 +323,7 @@ export class AudioBus {
       for (let i = 0; i < len; i++) d[i] = d[i] / pk * 0.6
       return b
     })
-    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, synthGain, gravHp, gravGain, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops, bancos: new Set(), carregando: new Set() }
+    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, synthGain, gravHp, gravGain, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops, bancos: new Set(), carregando: new Set(), faixas: new Map() }
     this.aplicarPerfil()
     void this.carregarPartida()
     // o motor antigo sai de cena
@@ -385,7 +389,7 @@ export class AudioBus {
     m.carregando.add(nome)
     try {
       const [j, bin] = await Promise.all([
-        fetch(this.base(`${nome}.json`)).then(r => r.json() as Promise<{ arquivo: string; clique: number; graos: number[][] }>),
+        fetch(this.base(`${nome}.json`)).then(r => r.json() as Promise<{ arquivo: string; clique: number; voltasPorGrao?: number; nivel?: number; graos: number[][] }>),
         fetch(this.base(`${nome}.mp3`)).then(r => r.arrayBuffer()),
       ])
       const buf = await ctx.decodeAudioData(bin)
@@ -399,7 +403,15 @@ export class AudioBus {
       const desvio = pi / buf.sampleRate - j.clique
       const graos = graosDoJson(j.graos)
       for (let i = 0; i < graos.length; i += 6) graos[i] += desvio
-      m.node.port.postMessage({ banco: { nome, sr: buf.sampleRate, dados, graos, cilindros: 4 } }, [dados.buffer, graos.buffer])
+      const voltasPorGrao = j.voltasPorGrao ?? 0.5
+      // faixa gravada em rpm (2% e 98% dos grãos), para devolver à síntese fora dela
+      const hz = j.graos.map(g => g[3]).sort((a, b) => a - b)
+      m.faixas.set(nome, {
+        rpm: [hz[Math.floor(hz.length * 0.02)] * 60 * voltasPorGrao, hz[Math.floor(hz.length * 0.98)] * 60 * voltasPorGrao],
+        // gravações de níveis diferentes: iguala ao Renault (0,135 nos grãos de carga), a referência da mixagem
+        nivel: Math.min(3.5, Math.max(0.4, NIVEL_REF / (j.nivel ?? NIVEL_REF))),
+      })
+      m.node.port.postMessage({ banco: { nome, sr: buf.sampleRate, dados, graos, voltasPorGrao } }, [dados.buffer, graos.buffer])
       m.bancos.add(nome)
       this.aplicarPerfil()
     } catch {
@@ -437,6 +449,30 @@ export class AudioBus {
     this.partidaAte = t0 + 1.15 / r
   }
 
+  // gravação em uso: própria do motor ou só textura; mix e faixa de giro coberta
+  private grav: { proprio: boolean; mix: number; faixa: [number, number]; nivel: number } | null = null
+  private ultimoRpm = 2000
+
+  /** Mistura gravação × modelo físico. Dentro da faixa gravada vale o `mix` do
+   *  perfil; fora dela (giro que a gravação não alcança) a gravação sai aos
+   *  poucos e a síntese assume, em vez de tocar o grão reamostrado e esganiçado. */
+  private misturarGravacao(rpm: number, tau: number) {
+    const m = this.motor, ctx = this.ctx
+    if (!m || !ctx) return
+    const t = ctx.currentTime, gv = this.grav
+    if (!gv) {
+      m.gravGain.gain.setTargetAtTime(0, t, tau); m.synthGain.gain.setTargetAtTime(1, t, tau)
+      return
+    }
+    const [lo, hi] = gv.faixa
+    const sobe = Math.min(1, Math.max(0, (hi * 1.35 - rpm) / (hi * 0.27)))  // 1 até hi×1,08, 0 em hi×1,35
+    const desce = Math.min(1, Math.max(0, (rpm - lo * 0.7) / (lo * 0.2)))   // 1 a partir de lo×0,9
+    const cob = Math.min(sobe, desce)
+    // a gravação sai ~2× mais forte que o modelo físico no pé no fundo (medido offline)
+    m.gravGain.gain.setTargetAtTime(gv.mix * (gv.proprio ? 0.6 : 0.9) * gv.nivel * cob, t, tau)
+    m.synthGain.gain.setTargetAtTime(gv.proprio ? 1 - gv.mix * 0.7 * cob : 1, t, tau)
+  }
+
   private aplicarPerfil() {
     const m = this.motor, ctx = this.ctx
     if (!m || !ctx) return
@@ -446,11 +482,12 @@ export class AudioBus {
     const grav = GRAVACAO_DO_PERFIL[p.id], g = grav ?? TEXTURA
     const pronto = m.bancos.has(g.banco)
     if (!pronto) void this.carregarBanco(g.banco)
-    m.node.port.postMessage({ gravado: true })
+    else m.node.port.postMessage({ usar: g.banco })
+    m.node.port.postMessage({ gravado: pronto })
     m.gravHp.frequency.setTargetAtTime(grav ? 30 : 1800, t, 0.05)
-    // a gravação sai ~2× mais forte que o modelo físico no pé no fundo (medido offline)
-    m.gravGain.gain.setTargetAtTime(pronto ? g.mix * (grav ? 0.6 : 0.9) : 0, t, 0.1)
-    m.synthGain.gain.setTargetAtTime(grav && pronto ? 1 - grav.mix * 0.7 : 1, t, 0.1)
+    const fx = m.faixas.get(g.banco)
+    this.grav = pronto ? { proprio: !!grav, mix: g.mix, faixa: fx?.rpm ?? [0, 1e9], nivel: fx?.nivel ?? 1 } : null
+    this.misturarGravacao(this.ultimoRpm, 0.1)
     // o timbre agora vem dos dutos do modelo físico: os filtros só dão um toque
     m.boom.frequency.setTargetAtTime(p.boomHz, t, 0.05); m.boom.gain.setTargetAtTime(p.boomDb * 0.35, t, 0.05)
     m.coletor.frequency.setTargetAtTime(p.coletorHz, t, 0.05); m.coletor.gain.setTargetAtTime(0, t, 0.05)
@@ -504,6 +541,8 @@ export class AudioBus {
     // volume cresce com o giro (o pulso individual encolhe em giro alto; o motor
     // de verdade fica mais alto em cima). Calibrado para a mesma faixa do antigo.
     // motor de arranque girando: o ronco espera o motor pegar
+    this.ultimoRpm = rpm
+    if (this.grav && running) this.misturarGravacao(rpm, 0.05)
     const ligado = running && t >= this.partidaAte
     m.out.gain.setTargetAtTime(ligado ? 0.5 * (0.85 + 0.35 * Math.min(rpm, 8000) / 7000) : 0, t, ligado ? (this.partidaAte > t - 0.5 ? 0.12 : 0.05) : 0.15)
     if (!running) { this.lastGas = 0; return }

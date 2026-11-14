@@ -1,11 +1,14 @@
-# Monta o banco de grãos: recorta os trechos úteis, grava FLAC e o JSON de grãos.
-# uso: python -P banco.py entrada.wav prefixo "a-b,c-d" saida_dir nome sr_saida
+# Monta o banco de grãos: recorta os trechos úteis, grava o MP3 e o JSON de grãos.
+# uso: python -P banco.py entrada.wav prefixo "a-b,c-d" saida_dir nome sr_saida [voltas_por_grao] [classe_fixa]
 import sys, json, os, subprocess, numpy as np
 from scipy.io import wavfile
 from scipy.signal import resample_poly
 
 src, pref, faixas, outdir, nome = sys.argv[1:6]
 sr_out = int(sys.argv[6]) if len(sys.argv) > 6 else 32000
+# voltas do virabrequim por grão: 0,5 = uma explosão de 4 em linha; 2 = ciclo de 720°
+voltas = float(sys.argv[7]) if len(sys.argv) > 7 else 0.5
+classe_fixa = int(sys.argv[8]) if len(sys.argv) > 8 else -1  # força a classe (gravação só de carga, p.ex.)
 mk = np.load(pref + "_marcas.npz")
 sr, x = wavfile.read(src)
 x = x.astype(np.float64)
@@ -21,7 +24,8 @@ for a, b in segs:
     nf = int(FADE * sr)
     y[:nf] *= np.linspace(0, 1, nf); y[-nf:] *= np.linspace(1, 0, nf)
     pedacos.append(y)
-    idx = np.where((tm > a + 0.02) & (tm < b - 0.02))[0]
+    marg = np.maximum(0.02, 1.4 / np.maximum(f, 1.0))  # o grão lê até ~1,3 período para cada lado
+    idx = np.where((tm > a + marg) & (tm < b - marg))[0]
     for j in idx[1:-1]:
         if not (ok[j - 1] and ok[j] and ok[j + 1]): continue
         esq, dir_ = tm[j] - tm[j - 1], tm[j + 1] - tm[j]
@@ -29,7 +33,7 @@ for a, b in segs:
         c = tm[j] - a + off
         s0, s1 = int((tm[j - 1]) * sr), int((tm[j + 1]) * sr)
         rms = float(np.sqrt(np.mean(x[s0:s1] ** 2)))
-        graos.append([c, esq, dir_, 2 / (esq + dir_), int(classe[j]), rms])
+        graos.append([c, esq, dir_, 2 / (esq + dir_), int(classe[j]) if classe_fixa < 0 else classe_fixa, rms])
     off += (ib - ia) / sr
 # prefixo de alinhamento: 0,25 s com um clique em 0,1 s. Decodificadores de MP3
 # podem atrasar o áudio (atraso do codificador); o jogo acha o clique e corrige.
@@ -58,7 +62,7 @@ flac = os.path.join(outdir, nome + ".mp3")
 subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", wav, "-c:a", "libmp3lame", "-b:a", "112k", flac], check=True)
 os.remove(wav)
 saida = {
-    "arquivo": nome + ".mp3", "clique": CLIQUE, "sr": sr_out, "duracao": round(len(y2) / sr_out, 4),
+    "arquivo": nome + ".mp3", "clique": CLIQUE, "voltasPorGrao": voltas, "sr": sr_out, "duracao": round(len(y2) / sr_out, 4),
     # grão: [centro_s, periodo_esq_s, periodo_dir_s, freq_explosao_hz, classe(0 alivio,1 carga,2 estavel), ganho]
     "graos": [[round(a, 5), round(b, 6), round(c, 6), round(d, 3), int(e), round(float(h), 3)] for (a, b, c, d, e, _), h in zip(graos, ganho)],
 }

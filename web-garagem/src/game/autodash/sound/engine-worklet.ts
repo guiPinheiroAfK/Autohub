@@ -14,7 +14,7 @@ declare class AudioWorkletProcessor {
   readonly port: MessagePort
 }
 
-interface Msg { perfil?: string; st?: Partial<EngineSynthState>; banco?: BancoGraos; gravado?: boolean }
+interface Msg { perfil?: string; st?: Partial<EngineSynthState>; banco?: BancoGraos; usar?: string; gravado?: boolean }
 
 class MotorProcessor extends AudioWorkletProcessor {
   // modelo físico por guias de onda (sound/waveguide-synth.ts)
@@ -23,6 +23,8 @@ class MotorProcessor extends AudioWorkletProcessor {
   // gravação real (sound/motor-gravado.ts), na 2ª saída; só roda quando o perfil usa
   private gravado = new MotorGravado(sampleRate, 99)
   private usaGravado = false
+  // bancos já recebidos (cada um chega uma vez; trocar de carro só escolhe outro)
+  private bancos = new Map<string, BancoGraos>()
 
   constructor() {
     super()
@@ -30,7 +32,11 @@ class MotorProcessor extends AudioWorkletProcessor {
       const m = e.data
       if (m.perfil && ENGINE_PROFILES[m.perfil]) this.synth.setPerfil(ENGINE_PROFILES[m.perfil])
       if (m.st) { const st = estadoFinito(m.st); Object.assign(this.synth.st, st); Object.assign(this.gravado.st, st) }
-      if (m.banco) this.gravado.setBanco(m.banco)
+      if (m.banco) this.bancos.set(m.banco.nome, m.banco)
+      if (m.usar) {
+        const b = this.bancos.get(m.usar)
+        if (b && this.gravado.banco !== m.usar) this.gravado.setBanco(b)
+      }
       if (m.gravado !== undefined) this.usaGravado = m.gravado
     }
   }

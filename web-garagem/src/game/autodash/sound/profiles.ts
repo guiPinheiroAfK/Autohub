@@ -178,11 +178,29 @@ export const MOTOR_DO_CARRO: Record<string, string> = {
 // Perfil sem gravação própria usa a do 4 cilindros só como TEXTURA mecânica
 // (agudos de válvulas e admissão, sob o ronco sintetizado).
 export interface Gravacao { banco: string; mix: number }
+// Fora do giro que a gravação cobre, a síntese assume sozinha (audio.ts).
 export const GRAVACAO_DO_PERFIL: Record<string, Gravacao> = {
-  i4: { banco: "r19-i4", mix: 0.7 },
+  i4: { banco: "r19-i4", mix: 0.7 },                 // Renault 19, 750–7300 rpm
   "i4-pequeno": { banco: "r19-i4", mix: 0.75 },
   "i4-turbo": { banco: "r19-i4", mix: 0.6 },
+  "v8-cruzado": { banco: "v8-cruzado", mix: 0.7 },   // Studebaker 1953, 1700–5700 rpm
+  "v8-cruzado-ford": { banco: "v8-cruzado", mix: 0.7 },
+  "v8-plano": { banco: "v8-plano", mix: 0.65 },      // Ferrari 360, 830–4400 rpm
+  i6: { banco: "i6", mix: 0.75 },                    // Supra no dinamômetro, 1500–8400 rpm
+  "i6-corrida": { banco: "i6", mix: 0.7 },
+  boxer6: { banco: "boxer6", mix: 0.55 },            // Porsche 911, 670–3200 rpm
+  "boxer6-turbo": { banco: "boxer6", mix: 0.5 },
 }
+// Crédito de cada gravação (as CC BY exigem atribuição): a garagem mostra o do
+// motor escolhido. Lista completa em public/autodash/som/CREDITOS.md.
+export const CREDITO_GRAVACAO: Record<string, string> = {
+  "r19-i4": "Renault 19 · lovretta · CC0",
+  "v8-cruzado": "Studebaker 1953 · lonemonk · CC BY 4.0",
+  "v8-plano": "Ferrari 360 · PritzProductions · CC0",
+  i6: "Supra no dinamômetro · editboy23 · CC0",
+  boxer6: "Porsche 911 · jerry.berumen · CC BY 4.0",
+}
+
 export const TEXTURA: Gravacao = { banco: "r19-i4", mix: 0.22 }
 
 // duração da acelerada de amostra na garagem (s)

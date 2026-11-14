@@ -1,7 +1,7 @@
 // AutoDash — render/menus/main.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { enterFromMenu } from "../../flow"
 import { confirmName, trocarMotor } from "../../flow"
-import { perfilDoCarro } from "../../sound/profiles"
+import { perfilDoCarro, GRAVACAO_DO_PERFIL, CREDITO_GRAVACAO } from "../../sound/profiles"
 import { relacoes } from "../../physics/cambio"
 import { AutoDashEngine, W, H } from "../../engine"
 import { pill, arrowBtn, glass } from "../../ui/widgets"
@@ -82,6 +82,15 @@ export function renderGarage(eng: AutoDashEngine) {
   // som do motor: o original do carro ou qualquer outro perfil (salvo por carro)
   const motorNome = perfilDoCarro(spec.body, custom.motor).nome
   pill(eng, `motor: ${motorNome}${custom.motor ? "" : " (original)"} [E]`, 70, 108, 340, () => trocarMotor(eng), { h: 24, font: 11 })
+  // motor com gravação real: crédito de quem gravou (CC BY exige atribuição)
+  const gravacao = GRAVACAO_DO_PERFIL[perfilDoCarro(spec.body, custom.motor).id]
+  if (gravacao) {
+    ctx.textAlign = "center"
+    ctx.fillStyle = "rgba(248,250,252,0.45)"
+    ctx.font = "10px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`gravação real: ${CREDITO_GRAVACAO[gravacao.banco] ?? gravacao.banco}`, 240, 146)
+    ctx.textAlign = "left"
+  }
   arrowBtn(eng, 38, 206, -1, () => { eng.cfg.carIdx = (eng.cfg.carIdx + CARS.length - 1) % CARS.length; save(); eng.audio.ui() })
   arrowBtn(eng, 396, 206, 1, () => { eng.cfg.carIdx = (eng.cfg.carIdx + 1) % CARS.length; save(); eng.audio.ui() })
 
