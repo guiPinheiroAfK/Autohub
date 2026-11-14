@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom, forcaNoCorte, faseCorte, CORTE_DURO_HZ } from "../physics/motores"
+import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom, forcaNoCorte, faseCorte, CORTE_DURO_HZ, fatorSpool } from "../physics/motores"
 import { ENGINE_PROFILES } from "../sound/profiles"
 import { CARS, GEAR_RATIOS, RPM_PER_KMH, RPM_LIMITER, RPM_IDLE } from "../data"
 
@@ -116,6 +116,23 @@ describe("motores reais (faixa de giro e curva de força)", () => {
       ult = k
     }
     expect(forcaNoCorte(suave, suave.corte, 0)).toBe(0)
+  })
+  it("turbo enche mais rápido em giro alto (R5)", () => {
+    const m = MOTORES["i4-turbo"]
+    expect(fatorSpool(m)).toBe(1)                       // sem giro: como antes
+    expect(fatorSpool(m, m.turbo!.cheio)).toBe(1)
+    expect(fatorSpool(m, 5000)).toBeCloseTo(0.8)        // 5000 rpm: 20% mais rápido
+    expect(fatorSpool(m, 9000)).toBe(0.6)               // teto: 40% mais rápido
+    expect(fatorSpool(m, 1000)).toBe(2)                 // embaixo: no máximo 2× mais lento
+    expect(fatorSpool(MOTORES.v10, 8000)).toBe(1)       // aspirado: nada muda
+    const encher = (rpm: number) => {
+      let b = 0, t = 0
+      while (b < 0.6) { b = passoBoost(m, b, 1, 1 / 60, rpm); t += 1 / 60 }
+      return t
+    }
+    expect(encher(7000)).toBeLessThan(encher(4000))
+    // esvaziar continua igual (~0,2 s), com ou sem giro
+    expect(passoBoost(m, 1, 0, 1 / 60, 7000)).toBe(passoBoost(m, 1, 0, 1 / 60))
   })
 })
 

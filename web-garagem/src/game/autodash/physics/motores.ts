@@ -174,11 +174,21 @@ export function boostAlvo(m: MotorFisico, rpm: number, gas: number): number {
   return gas * Math.min(1, Math.max(0, (rpm - t.spool) / (t.cheio - t.spool)))
 }
 
+/**
+ * Quanto o giro acelera o enchimento do turbo: mais giro = mais energia no
+ * escape e o eixo acelera mais rápido. No giro de boost cheio vale 1; acima
+ * dele até 0,6 (40% mais rápido), abaixo até 2 (mais lento). Sem giro: 1.
+ */
+export function fatorSpool(m: MotorFisico, rpm?: number): number {
+  if (!m.turbo || rpm === undefined) return 1
+  return Math.min(2, Math.max(0.6, m.turbo.cheio / Math.max(1, rpm)))
+}
+
 /** Avança o boost (enche devagar = atraso; esvazia rápido ao aliviar). */
-export function passoBoost(m: MotorFisico, boost: number, alvo: number, dt: number): number {
+export function passoBoost(m: MotorFisico, boost: number, alvo: number, dt: number, rpm?: number): number {
   if (!m.turbo) return 0
   // esvazia em ~0,2 s ao aliviar (a válvula alivia, mas o eixo ainda gira)
-  const tau = alvo > boost ? m.turbo.lag : 0.2
+  const tau = alvo > boost ? m.turbo.lag * fatorSpool(m, rpm) : 0.2
   return boost + (alvo - boost) * Math.min(1, dt / tau)
 }
 

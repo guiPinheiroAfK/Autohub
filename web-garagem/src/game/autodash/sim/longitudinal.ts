@@ -58,7 +58,9 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   if (eng.gear >= 1 && eng.shiftT > 0) { /* segura o boost */ }
   else {
     const comCarga = eng.gear >= 1 ? throttle : throttle * 0.35
-    eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, giroDeForca(mf, eng.rpm, eng.gear), comCarga), dt)
+    const giroF = giroDeForca(mf, eng.rpm, eng.gear)
+    // giro alto enche o turbo mais rápido (energia do escape)
+    eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, giroF, comCarga), dt, giroF)
   }
 
   // câmbio automático
