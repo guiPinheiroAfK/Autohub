@@ -156,6 +156,7 @@ export class AutoDashEngine {
   traffic: Traffic[] = []
   obstacles: Obstacle[] = []
   zones: Zone[] = []
+  sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6

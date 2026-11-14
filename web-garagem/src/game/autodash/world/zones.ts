@@ -6,6 +6,13 @@ import { DRAW_DIST, SEG_LEN } from "../data"
 import { type TrafficKind, TRAFFIC_COLORS, KINDS } from "../traffic/types"
 
 export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
+  // embaixo do viaduto o ronco bate no concreto e volta (eco forte no áudio)
+  const sob = eng.zones.some(zn => {
+    if (zn.type !== "viaduct") return false
+    const d = wrapDz(eng, zn.z, playerZ)
+    return d < SEG_LEN * 1.5 && d > -SEG_LEN * 3
+  })
+  if (sob !== eng.sobViaduto) { eng.sobViaduto = sob; eng.audio.ambiente(sob ? "fechado" : "aberto") }
   for (const zn of eng.zones) {
     const toStart = wrapDz(eng, zn.z, playerZ) // >0: início à frente
     const toEnd = wrapDz(eng, zn.end, playerZ)

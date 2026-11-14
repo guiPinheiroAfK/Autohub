@@ -12,6 +12,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   // limpa ANTES de construir: no circuito o buildTrack semeia os cones das
   // curvas, e zerar depois apagaria justamente eles
   eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = corrida ? 1e9 : 12
+  if (eng.sobViaduto) { eng.sobViaduto = false; eng.audio.ambiente("aberto") }
   // a pista da corrida vem da seed: circuito fixo ou procedural (ADR 0014)
   const circuito = corrida && seed !== undefined ? circuitoDaSeed(seed) : null
   if (circuito) buildCircuit(eng, circuito)
@@ -73,6 +74,7 @@ export function reconhecerPista(eng: AutoDashEngine) {
   eng.mode = "race" // a pista é desenhada como a da corrida (zebra roxa, linha de largada)
   eng.race = null
   eng.obstacles = []; eng.zones = []; eng.roadSigns = []
+  if (eng.sobViaduto) { eng.sobViaduto = false; eng.audio.ambiente("aberto") }
   buildCircuit(eng, def)
   eng.traffic = []
   eng.position = 0
