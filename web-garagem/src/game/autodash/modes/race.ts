@@ -54,6 +54,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.combustivel = 1; eng.postoLimite = COMBUSTIVEL.chamaPosto; eng.abastecendo = false
   eng.racha = null; eng.rachaT = RACHA.primeiroConviteS
   eng.comboio = null; eng.oleoT = 0
+  eng.vacuo = 0; eng.vacuoS = 0; eng.estilingueT = 0
   eng.particles = []; eng.floaters = []
   eng.countT = 0
   // no duelo o verde é fixo pra manter os dois relógios alinhados

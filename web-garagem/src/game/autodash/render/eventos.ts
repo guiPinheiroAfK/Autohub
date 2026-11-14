@@ -173,6 +173,34 @@ export function desenharObstaculoEvento(eng: AutoDashEngine, o: Obstacle, x: num
   return false
 }
 
+/** Vácuo (E9): linhas de ar nas bordas e o selo "VÁCUO" (transparência, pesquisa 4.3). */
+export function renderVacuo(eng: AutoDashEngine) {
+  const f = eng.vacuo
+  if (f < 0.15 && eng.estilingueT <= 0) return
+  const ctx = eng.ctx
+  if (f >= 0.15) {
+    // linhas de ar: riscos claros correndo pelas bordas em direção ao centro
+    ctx.strokeStyle = `rgba(224,242,254,${0.12 + 0.25 * f})`
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    const t = performance.now() / 1000
+    for (let i = 0; i < 8; i++) {
+      const lado = i % 2 === 0 ? -1 : 1
+      const fase = (t * 2.2 + i * 0.37) % 1
+      const y = H * 0.35 + (i * 41) % (H * 0.45)
+      const x0 = W / 2 + lado * (W * 0.5 - fase * W * 0.18)
+      ctx.moveTo(x0, y)
+      ctx.lineTo(x0 - lado * W * 0.07 * f, y + 4)
+    }
+    ctx.stroke()
+  }
+  ctx.textAlign = "center"
+  ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillStyle = eng.estilingueT > 0 ? PERIGO.pisca : "#56B4E9"
+  ctx.fillText(eng.estilingueT > 0 ? "💨 ESTILINGUE" : `💨 VÁCUO +${Math.round(f * 4)}%`, W / 2, H * 0.6) // acima do carro, sem cobrir a placa
+  ctx.textAlign = "left"
+}
+
 /** Painel do racha: convite (como aceitar e quanto tempo falta) ou disputa (falta e vantagem). */
 export function renderRacha(eng: AutoDashEngine) {
   const r = eng.racha

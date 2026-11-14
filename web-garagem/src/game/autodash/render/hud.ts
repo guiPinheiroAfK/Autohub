@@ -14,7 +14,7 @@ import { ramalNoSeg } from "../world/ramais"
 import { CARS } from "../data"
 import { perfilDoCarro, GRAVACAO_DO_PERFIL, CREDITO_GRAVACAO } from "../sound/profiles"
 import { relacoes } from "../physics/cambio"
-import { renderCombustivel, renderRacha } from "./eventos"
+import { renderCombustivel, renderRacha, renderVacuo } from "./eventos"
 
 export function renderHud(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -89,6 +89,7 @@ export function renderHud(eng: AutoDashEngine) {
   ctx.fillText("NOS", nx + 1, ny + nh + 18)
   renderCombustivel(eng) // só no solo (Fase 5)
   renderRacha(eng)
+  renderVacuo(eng) // solo e corrida
 
   if (eng.mode === "duel" && eng.duel) renderDuelBar(eng)
   renderMinimap(eng)

@@ -222,7 +222,10 @@ export class AutoDashEngine {
   racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
   rachaT = 45 // s de solo até o próximo convite
   comboio: Comboio | null = null // comboio com fresta em andamento (world/comboio.ts)
-  oleoT = 0 // s restantes escorregando no óleo (world/oleo.ts) // acelerada de amostra na garagem ao trocar o motor
+  oleoT = 0 // s restantes escorregando no óleo (world/oleo.ts)
+  vacuo = 0       // força do vácuo, 0..1 (sim/vacuo.ts)
+  vacuoS = 0      // s seguidos no vácuo (o estilingue só vale depois de um tempo)
+  estilingueT = 0 // s restantes do estilingue ao sair do vácuo // acelerada de amostra na garagem ao trocar o motor
 
   // input
   keys = new Set<string>()

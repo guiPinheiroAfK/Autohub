@@ -25,6 +25,7 @@ import { atualizarRacha } from "../modes/racha"
 import { atualizarObras } from "../world/obra"
 import { atualizarComboio } from "../world/comboio"
 import { aderenciaOleo, passoOleo } from "../world/oleo"
+import { aplicarVacuo, specComVacuo, forcaTeto } from "./vacuo"
 
 export function update(eng: AutoDashEngine, dt: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -178,9 +179,12 @@ export function update(eng: AutoDashEngine, dt: number) {
 
   // ---------- motor, câmbio, força e velocidade (sim/longitudinal.ts) ----------
   const grade = (seg.y2 - seg.y1) / SEG_LEN // ~±0.13 nas ladeiras fortes
-  const nitroActive = passoLongitudinal(eng, spec, mf, { throttle, braking, centrif, grade, dt })
+  // vácuo (E9) do quadro anterior sobe o teto em até 4% (sim/vacuo.ts)
+  const nitroActive = passoLongitudinal(eng, specComVacuo(spec, forcaTeto(eng)), mf, { throttle, braking, centrif, grade, dt })
   // combustível (só no solo): gasta pelo pé, giro e nitro; abastece no posto
   atualizarCombustivel(eng, dt, eng.gasF, nitroActive)
+  // vácuo (E9): colado atrás de alguém rápido, empurrão até +4% da máxima
+  aplicarVacuo(eng, spec, throttle, dt)
 
   // no miolo do ramal o avanço rende mais (linha de dentro). Fora dele, ganho = 1.
   const ganho = ganhoRamal(ramal, eng.playerX)
