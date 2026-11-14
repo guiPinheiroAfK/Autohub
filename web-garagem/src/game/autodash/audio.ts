@@ -1,5 +1,6 @@
 // AutoDash — áudio 100% sintetizado via WebAudio (sem assets externos).
 import { type EngineSoundProfile, ENGINE_PROFILES } from "./sound/profiles"
+import type { Turbo } from "./physics/motores"
 
 // Motor por pulsos (sound/engine-synth.ts) rodando num AudioWorklet, com a
 // cadeia de mixagem do escape: corpo → coletor → abafador → saturação →
@@ -15,6 +16,8 @@ interface Motor {
   fx: GainNode            // estouros, flutter e blow-off
   apito: OscillatorNode   // eixo do turbo
   apito2: OscillatorNode
+  apitoB: OscillatorNode  // segunda turbina (biturbo/quadri), levemente desafinada
+  apitoBGain: GainNode
   apitoGain: GainNode
   sopro: BiquadFilterNode // "whoosh" do turbo
   soproGain: GainNode
@@ -37,7 +40,10 @@ export class AudioBus {
   private motor: Motor | null = null
   private perfil: EngineSoundProfile = ENGINE_PROFILES.i4
   private boost = 0
-  private eixo = 0          // rotação do eixo do turbo (atrasa o boost)
+  private eixo = 0          // rotação do eixo da turbina, 0..1 (tem inércia própria)
+  private turbo: Turbo | null = null
+  private vib = 0
+  private corteMotor = 7900
   private lastT = 0
   private lastGas = 0
   private gasAltoT = -1     // último instante com pé no fundo em giro alto
@@ -240,9 +246,12 @@ export class AudioBus {
     const apito = ctx.createOscillator(), apito2 = ctx.createOscillator(), apito2g = ctx.createGain(), apitoGain = ctx.createGain()
     apito.type = "sine"; apito2.type = "sine"; apito2g.gain.value = 0.18; apitoGain.gain.value = 0
     apito.connect(apitoGain); apito2.connect(apito2g); apito2g.connect(apitoGain); apitoGain.connect(out)
-    apito.start(); apito2.start()
+    const apitoB = ctx.createOscillator(), apitoBGain = ctx.createGain()
+    apitoB.type = "sine"; apitoBGain.gain.value = 0
+    apitoB.connect(apitoBGain); apitoBGain.connect(apitoGain)
+    apito.start(); apito2.start(); apitoB.start()
     const ruido = ctx.createBufferSource(); ruido.buffer = this.noiseBuffer(2); ruido.loop = true
-    const sopro = f("lowpass", 2600, 4), soproGain = ctx.createGain(); soproGain.gain.value = 0
+    const sopro = f("bandpass", 2600, 1.2), soproGain = ctx.createGain(); soproGain.gain.value = 0
     ruido.connect(sopro); sopro.connect(soproGain); soproGain.connect(out); ruido.start()
     // compressor mecânico (Roots/centrífugo): zumbido preso ao giro
     const whine = ctx.createOscillator(), whineBp = f("bandpass", 1500, 6), whineGain = ctx.createGain()
@@ -263,10 +272,16 @@ export class AudioBus {
       for (let i = 0; i < len; i++) d[i] = d[i] / pk * 0.6
       return b
     })
-    this.motor = { node, boom, coletor, lp, admBp, admGain, out, fx, apito, apito2, apitoGain, sopro, soproGain, whine, whineGain, pops }
+    this.motor = { node, boom, coletor, lp, admBp, admGain, out, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops }
     this.aplicarPerfil()
     // o motor antigo sai de cena
     this.engGain?.gain.setTargetAtTime(0, ctx.currentTime, 0.05)
+  }
+
+  /** Turbina do motor atual (physics/motores.ts) e o corte, que escala a energia do escape. */
+  setTurbo(t: Turbo | null | undefined, corte: number) {
+    this.turbo = t ?? null
+    this.corteMotor = corte
   }
 
   /** Troca o motor (perfil de som) do carro atual. Barato se não mudou. */
@@ -350,13 +365,32 @@ export class AudioBus {
       const alvo = gas * Math.min(1, Math.max(0, (rpm - 2200) / 2600))
       this.boost += (alvo - this.boost) * Math.min(1, dt / (alvo > this.boost ? 0.35 : 0.07))
     }
-    this.eixo += (this.boost - this.eixo) * Math.min(1, dt / (this.boost > this.eixo ? 0.25 : 0.35))
+    // EIXO DA TURBINA: gira com a energia do escape (giro × pé) e tem inércia
+    // própria — sobe com o atraso do motor e desce devagar ao aliviar. O apito
+    // segue o eixo, não a pressão: é por isso que ele "canta" subindo em cada
+    // marcha e desce assobiando depois do alívio, em vez de virar um zumbido fixo.
+    const tb = this.turbo
+    const energia = Math.min(1.2, rpm / this.corteMotor) * (0.15 + 0.85 * carga)
+    const alvoEixo = Math.min(1, energia * 1.3) // válvula de alívio do escape limita o eixo
+    const antes = this.eixo
+    const tau = alvoEixo > this.eixo ? (tb?.lag ?? 0.35) * 1.2 : (tb?.desce ?? 1.5)
+    this.eixo += (alvoEixo - this.eixo) * Math.min(1, dt / tau)
+    const subindo = Math.max(0, (this.eixo - antes) / Math.max(dt, 1e-3)) // eixo acelerando = apito mais forte
     if (turbo) {
-      const hz = 1100 + this.eixo * 2300, vib = 1 + 0.004 * Math.sin(t * 37)
-      m.apito.frequency.setTargetAtTime(hz * vib, t, 0.04); m.apito2.frequency.setTargetAtTime(hz * 2.27 * vib, t, 0.04)
-      m.apitoGain.gain.setTargetAtTime(this.eixo * this.eixo * (0.015 + 0.04 * gas), t, 0.05)
-      m.sopro.frequency.setTargetAtTime(2000 + this.boost * 1800, t, 0.08)
-      m.soproGain.gain.setTargetAtTime(this.boost * gas * 0.035 + (nitro ? 0.03 : 0), t, 0.06)
+      const [f0, f1] = tb?.apito ?? [1300, 5500]
+      // vibrato do eixo (folga do mancal) + leve variação aleatória
+      this.vib += (Math.random() - 0.5) * 0.002; this.vib *= 0.97
+      const vib = 1 + 0.003 * Math.sin(t * 31) + this.vib
+      const hz = f0 + (f1 - f0) * Math.pow(this.eixo, 1.25)
+      m.apito.frequency.setTargetAtTime(hz * vib, t, 0.03)
+      m.apito2.frequency.setTargetAtTime(hz * 2.27 * vib, t, 0.03)
+      m.apitoB.frequency.setTargetAtTime(hz * (1.013 + 0.004 * ((tb?.turbinas ?? 1) - 2)) * vib, t, 0.03)
+      m.apitoBGain.gain.setTargetAtTime((tb?.turbinas ?? 1) > 1 ? 0.7 : 0, t, 0.1)
+      const e2 = this.eixo * this.eixo
+      m.apitoGain.gain.setTargetAtTime(Math.min(0.09, e2 * (0.008 + 0.028 * carga) + subindo * 0.02), t, 0.04)
+      // sopro: ar entrando no compressor, sobe de tom com o eixo
+      m.sopro.frequency.setTargetAtTime(1800 + 3200 * this.eixo, t, 0.06)
+      m.soproGain.gain.setTargetAtTime(this.boost * carga * 0.03 + e2 * 0.012 + (nitro ? 0.03 : 0), t, 0.06)
       // tirou o pé com pressão no coletor: alivia (turbo simples = flutter, biturbo = blow-off)
       if (this.lastGas > 0.5 && gas < 0.3 && this.eixo > 0.35) this.alivio(Math.max(0.5, this.eixo), p.inducao === "turbo")
     } else {

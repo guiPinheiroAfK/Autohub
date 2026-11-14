@@ -26,6 +26,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.audio.setProfile(perfilDoCarro(spec.body, eng.cfg.customs[eng.cfg.carIdx]?.motor))
   // lado físico do mesmo motor: lenta, faixa vermelha, corte, curva e turbo
   const mf = motorDe(eng)
+  eng.audio.setTurbo(mf.turbo, mf.corte)
 
   duelNet(eng, dt)
 
