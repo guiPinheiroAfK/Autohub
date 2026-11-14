@@ -206,16 +206,16 @@ Decisões no [ADR 0013](../../adr/0013-autodash-relogio-em-ticks.md). Começada 
 - Próximo passo de fidelidade (precisa de aprovação para baixar arquivos): híbrido com gravações CC0 (pesquisa, seção 4) como textura e eventos (partida, pops reais).
 - Em aberto: inspiração do GT (V10), do NINJA (I4) e do ALTA (I4) foi palpite pelo nome; FANTASMA confirmado como Koenigsegg (V8 plano biturbo). Calibrar de ouvido: não foi ouvido, só medido offline.
 
-#### Fase 7 — parte visual (bodykit, efeitos, prévia, câmera, torque) — `em andamento`
+#### Fase 7 — parte visual (bodykit, efeitos, prévia, câmera, torque) — `implementada` (hashes no log; aguardando playtest)
 Fontes: D12, D16 e D17; `docs/pesquisa/visual-e-desafio.md` §1.4 (prévia da pintura contra a cena) e §2.2 (FOV dinâmico); `docs/pesquisa/fisica-carro.md` R2 (zoom ≤ 1,05, `PLAYER_Z` não pode mudar); ADR 0012 (torque no HUD). **Estética não muda a física**: nenhum campo novo é lido por `sim/`, `physics/` ou pela colisão.
 
 Checklist:
-- [ ] **Bodykit como dados** (`cosmetic/bodykit.ts`), salvo em `CarCustom` por carro: kit de carroceria (sem kit, saias laterais, saias + difusor, widebody), aerofólio (os 3 de antes + asa alta), aro (padrão, aro fundo, corrida, turbofan), altura (original, rebaixado, stance com cambagem). Desenhado no sprite do carro (`drawPlayerCar`) e na garagem. Configuração salva por versão antiga carrega com o padrão (sem kit, aro padrão, altura original), que desenha **igual** a antes.
-- [ ] **Efeitos**: cor da fumaça do escape (padrão, branca, preta, azul, rosa, verde) e cor da chama do nitro (laranja, azul, roxa, verde). Neon por baixo continua o de antes (`NEONS`). Padrão desenha igual.
-- [ ] **Garagem, aba estética** [H]: as opções novas ficam numa aba própria do painel, para não espremer a aba do carro. Teclas novas: [S] kit, [W] aro, [A] altura, [F] fumaça, [Q] chama, [D] câmera; as antigas ([C] [V] [B] [R] [G]) seguem valendo nas duas abas.
-- [ ] **Prévia na pista** [P]: esconde o painel e mostra o carro no tamanho do jogo, na pista do bioma escolhido, no horário e clima escolhidos (O, K e X trocam ao vivo). Mostra o contraste da pintura contra o asfalto da cena (razão WCAG, §1.4) e avisa quando a pintura "some" (< 2:1).
-- [ ] **FOV dinâmico** (só desenho): o campo de visão abre de 100° para até 104° entre 150 km/h e a máxima, com a câmera andando junto para o carro do jogador ficar no mesmo lugar e no mesmo tamanho ("dolly zoom"). `CAM_DEPTH` e `PLAYER_Z` não mudam; a colisão não muda. Opção na garagem para desligar ("câmera: fixa"), contra enjoo.
-- [ ] **Torque no HUD**: mini curva de força do motor ao lado do conta-giros, com um ponto no giro atual e a faixa de força máxima marcada (pendência do ADR 0012).
+- [x] **Bodykit como dados** (`cosmetic/bodykit.ts`), salvo em `CarCustom` por carro: kit de carroceria (sem kit, saias laterais, saias + difusor, widebody), aerofólio (os 3 de antes + asa alta), aro (padrão, aro fundo, corrida, turbofan), altura (original, rebaixado, stance com cambagem). Desenhado no sprite do carro (`drawPlayerCar`) e na garagem. Configuração salva por versão antiga carrega com o padrão (sem kit, aro padrão, altura original), que desenha **igual** a antes.
+- [x] **Efeitos**: cor da fumaça do escape (padrão, branca, preta, azul, rosa, verde) e cor da chama do nitro (laranja, azul, roxa, verde). Neon por baixo continua o de antes (`NEONS`). Padrão desenha igual.
+- [x] **Garagem, aba estética** [H]: as opções novas ficam numa aba própria do painel, para não espremer a aba do carro. Teclas novas: [S] kit, [W] aro, [A] altura, [F] fumaça, [Q] chama, [D] câmera; as antigas ([C] [V] [B] [R] [G]) seguem valendo nas duas abas.
+- [x] **Prévia na pista** [P]: esconde o painel e mostra o carro no tamanho do jogo, na pista do bioma escolhido, no horário e clima escolhidos (O, K e X trocam ao vivo). Mostra o contraste da pintura contra o asfalto da cena (razão WCAG, §1.4) e avisa quando a pintura "some" (< 2:1).
+- [x] **FOV dinâmico** (só desenho): o campo de visão abre de 100° para até 104° entre 150 km/h e a máxima, com a câmera andando junto para o carro do jogador ficar no mesmo lugar e no mesmo tamanho ("dolly zoom"). `CAM_DEPTH` e `PLAYER_Z` não mudam; a colisão não muda. Opção na garagem para desligar ("câmera: fixa"), contra enjoo.
+- [x] **Torque no HUD**: mini curva de força do motor ao lado do conta-giros, com um ponto no giro atual e a faixa de força máxima marcada (pendência do ADR 0012).
 
 Critério de aceite:
 - Carro com customização padrão desenha igual a antes: o golden só muda pelos itens novos de tela (aba da garagem, câmera, torque), cada um em commit `test:` próprio com linha no Log.
@@ -228,6 +228,14 @@ Decisões provisórias (a confirmar pelo dono, ver seção 7):
 - Na corrida online e nos bots, os outros veem só a pintura (a rede leva só `paint`); bodykit dos rivais fica para depois.
 - FOV dinâmico ligado por padrão, com teto de +4° (abaixo dos +6° da pesquisa) por ainda existir o zoom de velocidade do R2; os dois juntos ficam ≤ 1,05 de escala no carro.
 - Luz de recorte, grading (G2), bloom falso (G6) e a opção "Visual leve/completo" da pesquisa ficam fora desta leva.
+
+Pendente / não verificado:
+- Playtest: nada foi jogado por gente; os números (altura, abertura da lente, tamanho dos alargadores) são palpite a calibrar.
+- O FOV foi conferido por teste numérico da lente (`__tests__/fov.test.ts`) e por screenshot a ~210 km/h sem defeito, mas não lado a lado com a câmera fixa; enjoo só se mede jogando. No navegador, o painel ficou oculto e os quadros foram tocados por um laço de `MessageChannel` no lugar do `requestAnimationFrame` (ADR 0007).
+- Asa alta encosta de leve no texto de crédito da gravação na garagem (motor com gravação real).
+- Bodykit não vai para a rede: rivais online e o fantasma do duelo aparecem sem kit.
+- Torque no HUD fica fora no celular; sem lugar definido para ele com os botões de toque.
+- Estouro do escape (pop) com chama visual: depende do evento de estouro do som (`sound/`, outra sessão); não ligado.
 
 Fases 4 em diante só são detalhadas quando a anterior for aprovada.
 
@@ -270,4 +278,8 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-14 | 9f709ef … c5d95e7 | Feel da física (R1–R6, P4, P5 de `docs/pesquisa/fisica-carro.md`): giro na troca, limitador físico, patinada visível, câmera (zoom, trauma, chute), spool por giro, rampa do acelerador, eixo do turbo com memória, teto suave. Trava de equilíbrio em `__tests__/medidas.test.ts`. | atualizado em R1 e R3 (giro no hash), R2 (câmera nas 2 corridas), P5 (corrida com bots) e em 2904a91 (estado do áudio). Detalhe na seção "Aplicado" da pesquisa. |
 | 2026-11-14 | dc3a831 … e0b6a30 | Motor com gravação real CC0 (Renault 19, grãos síncronos ao giro, `sound/motor-gravado.ts`, `tools/som/`) nos 4 cilindros e como textura nos demais; partida com chave no grid; ambiente por convolução e eco sob o viaduto; revisão do som (janela com giro variando, falha do limitador, NaN, corrida no carregamento, folga antes da saturação). Pesquisa de gravações por família em `docs/pesquisa/gravacoes-motor.md` (baixar exige aprovação por arquivo). | atualizado em 2904a91 (estado do áudio). |
 | 2026-11-14 | (este) | Giro solto com velocidade máxima por motor (`giroSolto`); conta-giros e som seguem `giroSom`, que desliza até o giro da física (τ 45 ms) e não pula na troca; carga mínima de 0,45 na troca (som não corta); apito do turbo pela pressão da física. Modo de teste de motor: garagem [Z], pista vazia, `[ ]` troca o motor. | atualizado nos 3 cenários: conta-giros desenha `giroSom` e o giro do grid sobe mais devagar. |
+| 2026-11-14 | 64129fa, 4ad9eb5 | Fase 7 visual: guia detalhado; bodykit (kit, aro, altura, asa alta) e cor de fumaça e chama como dados em `CarCustom`, desenhados no sprite. Padrão desenha igual. | não alterado |
+| 2026-11-14 | 582df8a, a8f9843 | Garagem: aba estética [H] e prévia na pista [P] com contraste da pintura no asfalto. | atualizado no replay solo (pills das abas, +196 chamadas). |
+| 2026-11-14 | 32d23eb, 082980c | FOV dinâmico (dolly zoom, só desenho; `CAM_DEPTH`/`PLAYER_Z` iguais), desligável na garagem. | atualizado no replay solo e na corrida com bots (passam de 150 km/h). |
+| 2026-11-14 | f733ffd, fb74fe0 | Torque do motor no HUD (mini curva e ponto no giro). | atualizado nos 3 cenários que dirigem. |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |
