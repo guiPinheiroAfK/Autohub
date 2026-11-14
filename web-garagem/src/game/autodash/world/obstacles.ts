@@ -4,6 +4,7 @@ import { burst } from "../fx/particles"
 import { AutoDashEngine, W, H } from "../engine"
 import { CARS, SEG_LEN } from "../data"
 import { wrapDz } from "../traffic/spawner"
+import { furarPneu } from "./policia"
 
 export function updateObstacles(eng: AutoDashEngine, playerZ: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -18,7 +19,10 @@ export function updateObstacles(eng: AutoDashEngine, playerZ: number) {
     o.prevD = d
     const swept = prev > 0 && d <= 0 && prev < 1200 && prev - d < 2000
     if ((Math.abs(d) < o.len / 2 + 40 || swept) && Math.abs(o.offset - eng.playerX) < halfSum && !eng.crashed && eng.immuneT <= 0) {
-      if (o.kind === "cone") {
+      if (o.kind === "pregos") {
+        // tapete de pregos (Fase 6, E8): fura o pneu, não para o carro
+        furarPneu(eng)
+      } else if (o.kind === "cone") {
         // cone é perdoável: tranco, perde velocidade e combo — não mata
         o.dead = true
         eng.speed *= 0.78

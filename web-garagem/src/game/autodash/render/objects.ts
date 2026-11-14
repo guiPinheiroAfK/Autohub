@@ -4,6 +4,7 @@ import { shade, clamp } from "../math"
 import { CARS, type CarCustom, PAINTS } from "../data"
 import { drawPlayerCar, rr } from "./primitives"
 import { type Traffic, KINDS } from "../traffic/types"
+import { drawPregos, drawPlacaPolicia } from "./policia"
 
 export function drawPickup(eng: AutoDashEngine, p: Pickup, x: number, y: number, w: number, amb: number) {
   if (w < 2.5) return
@@ -76,6 +77,7 @@ export function drawGhost(eng: AutoDashEngine, x: number, y: number, w: number, 
 export function drawObstacle(eng: AutoDashEngine, o: Obstacle, x: number, y: number, w: number, amb: number) {
   if (w < 2) return
   const ctx = eng.ctx
+  if (o.kind === "pregos") { drawPregos(ctx, x, y, w, amb); return }
   if (o.kind === "cone") {
     const h = w * 1.5
     ctx.fillStyle = "rgba(0,0,0,0.3)"
@@ -165,6 +167,8 @@ export function drawRoadSign(eng: AutoDashEngine, sign: RoadSign, x: number, y: 
       ctx.lineTo(x + d * pw * 0.12, cy + ph * 0.26)
       ctx.stroke()
     }
+  } else if (sign.type === "policia") {
+    drawPlacaPolicia(ctx, x, cy, r, amb)
   } else if (sign.type === "bridgewarn") {
     // aviso de ponte: losango amarelo com o vão desenhado
     ctx.fillStyle = shade("#fbbf24", amb)

@@ -19,7 +19,7 @@ import { passoCamera } from "../render/camera"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
-import { atualizarPolicia } from "../world/policia"
+import { atualizarPolicia, aderenciaPolicia } from "../world/policia"
 import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro } from "../world/ramais"
 
 export function update(eng: AutoDashEngine, dt: number) {
@@ -115,7 +115,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   // ---------- racing ----------
-  const grip = spec.grip * tyreOf(spec).grip * climaAtual(eng).grip
+  const grip = spec.grip * tyreOf(spec).grip * climaAtual(eng).grip * aderenciaPolicia(eng)
   const playerZ = eng.position + PLAYER_Z
   const seg = segAt(eng, playerZ)
   // ramal (atalho) neste ponto da pista, se houver (ADR 0014). Sem ramais: null.

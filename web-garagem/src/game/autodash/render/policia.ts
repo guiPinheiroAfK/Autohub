@@ -1,8 +1,8 @@
 // AutoDash — render/policia.ts. Desenho da polícia por estrelas (Fase 6):
-// HUD de estrelas. As regras moram em world/policia.ts.
+// HUD de estrelas, pregos e placa. As regras moram em world/policia.ts.
 import { AutoDashEngine, W } from "../engine"
 import { glass } from "../ui/widgets"
-import { clamp } from "../math"
+import { clamp, shade } from "../math"
 import { estrelasDe, nivelDe, ESTRELAS, ESFRIA_S } from "../world/policia"
 
 const FONTE = "'Space Grotesk', 'Segoe UI', sans-serif"
@@ -25,6 +25,8 @@ function estrela(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numbe
  */
 export function renderEstrelas(eng: AutoDashEngine) {
   const p = eng.policia
+  const py = eng.mode === "duel" ? 62 : 10
+  avisos(eng, py + 58)
   if (p.calor <= 0) return
   const ctx = eng.ctx
   const n = estrelasDe(p.calor)
@@ -34,7 +36,7 @@ export function renderEstrelas(eng: AutoDashEngine) {
   // à direita do retrovisor (288 px no centro do topo, só na perseguição) e
   // abaixo da barra do duelo
   const pw = 196, ph = 50
-  const px = W / 2 + 156, py = eng.mode === "duel" ? 62 : 10
+  const px = W / 2 + 156
   const mx = px + pw / 2
   glass(eng, px, py, pw, ph, 12)
 
@@ -94,4 +96,71 @@ export function renderEstrelas(eng: AutoDashEngine) {
   ctx.textAlign = "left"
 }
 
+
+
+/** Avisos curtos sob o painel de estrelas (pneu furado). */
+function avisos(eng: AutoDashEngine, y: number) {
+  const ctx = eng.ctx
+  const p = eng.policia
+  const linhas: { t: string; c: string }[] = []
+  if (p.furadoT > 0) linhas.push({ t: `PNEU FURADO ${Math.ceil(p.furadoT)}s`, c: "#fb923c" })
+  if (!linhas.length) return
+  ctx.font = `bold 12px ${FONTE}`
+  ctx.textAlign = "center"
+  for (const l of linhas) {
+    ctx.fillStyle = l.c
+    ctx.fillText(l.t, W / 2 + 254, y + 10)
+    y += 16
+  }
+  ctx.textAlign = "left"
+}
+
+// ---------- mundo (chamados por render/objects.ts) ----------
+
+/**
+ * Tapete de pregos (E8): faixa prateada rente ao chão com reflexos âmbar
+ * piscando — o âmbar é a cor de perigo reservada (pesquisa visual 1.8) e
+ * aparece de longe mesmo à noite.
+ */
+export function drawPregos(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, amb: number) {
+  const h = Math.max(1.5, w * 0.05)
+  ctx.fillStyle = "rgba(0,0,0,0.35)"
+  ctx.fillRect(x - w / 2, y - h * 0.2, w, h * 0.9)
+  ctx.fillStyle = shade("#9ca3af", Math.max(0.55, amb))
+  ctx.fillRect(x - w / 2, y - h, w, h)
+  if (w < 8) return
+  // dentes e reflexo âmbar alternando (pisca em fase com a posição)
+  const n = Math.max(4, Math.floor(w / 9))
+  const fase = Math.floor(performance.now() / 160)
+  for (let i = 0; i < n; i++) {
+    const px = x - w / 2 + (i + 0.5) * (w / n)
+    ctx.fillStyle = shade("#e5e7eb", Math.max(0.6, amb))
+    ctx.beginPath()
+    ctx.moveTo(px - h * 0.5, y - h); ctx.lineTo(px, y - h * 2.1); ctx.lineTo(px + h * 0.5, y - h)
+    ctx.closePath(); ctx.fill()
+    if ((i + fase) % 3 === 0) {
+      ctx.fillStyle = "rgba(255,159,28,0.9)"
+      ctx.fillRect(px - h * 0.6, y - h * 0.8, h * 1.2, h * 0.6)
+    }
+  }
+}
+
+/** Placa de polícia: octógono vermelho "PARE" (usada por pregos e bloqueio). */
+export function drawPlacaPolicia(ctx: CanvasRenderingContext2D, x: number, cy: number, r: number, amb: number) {
+  ctx.fillStyle = shade("#dc2626", Math.max(0.55, amb))
+  ctx.beginPath()
+  for (let i = 0; i < 8; i++) {
+    const a = Math.PI / 8 + (i * Math.PI) / 4
+    const px = x + Math.cos(a) * r * 1.05, py = cy + Math.sin(a) * r * 1.05
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py)
+  }
+  ctx.closePath(); ctx.fill()
+  if (r > 6) {
+    ctx.fillStyle = "#f8fafc"
+    ctx.font = `bold ${Math.max(6, Math.round(r * 0.62))}px ${FONTE}`
+    ctx.textAlign = "center"
+    ctx.fillText("PARE", x, cy + r * 0.22)
+    ctx.textAlign = "left"
+  }
+}
 

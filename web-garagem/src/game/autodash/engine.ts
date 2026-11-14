@@ -75,7 +75,7 @@ export interface Seg { curve: number; y1: number; y2: number; sign?: number }
 // Obstáculo físico na pista (cones, barreiras). Cone é perdoável (tranco);
 // barreira é parede. Base do futuro modo corrida.
 // `fixo`: faz parte do circuito (não some quando fica para trás; vale a corrida toda).
-export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean }
+export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" | "pregos"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean }
 // Zona de evento no traçado:
 //  bridge    — ponte suspensa (estilo Golden Gate): você dirige EM CIMA, com
 //              guarda-corpo, torres e água dos dois lados
@@ -86,7 +86,7 @@ export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier";
 //  speedtrap — radar (placa 90): trânsito reduz, polícia observando; passar
 //              rápido demais = perseguição (o evento da conversa original)
 interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap"; z: number; end: number; spawnT: number; checked?: boolean }
-export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho"; label?: string; lado?: number }
+export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "policia"; label?: string; lado?: number }
 
 export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 export interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
