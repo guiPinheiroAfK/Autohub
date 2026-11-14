@@ -11,6 +11,14 @@ import { KMH2UPS } from "../data"
 import { KINDS, type Traffic, type TrafficRole, type WorldView } from "./types"
 import { RACHA } from "../world/racha"
 
+// E1 — caminhão trocando de faixa (Fase 5)
+export const CAMINHAO = {
+  chance: 0.0015,  // por quadro, por caminhão (~1 troca a cada 11 s a 60 fps)
+  setaS: 1.6,      // seta antes de sair (sai com 0,3 restante: 1,3 s de leitura)
+  leituraS: 1.2,   // janela mínima até o jogador chegar na traseira
+  ensaio: 0.05,    // quanto puxa pro lado antes de ir
+}
+
 function clamp(v: number, lo: number, hi: number) { return v < lo ? lo : v > hi ? hi : v }
 
 export abstract class Driver {
@@ -165,6 +173,20 @@ export class CivilianDriver extends Driver {
         // clearZ menor = moto costura mais entre carros; player clearance alto = não corta na sua frente
         this.tryLaneChange(self, world, sides, moto ? 700 : 1100, 0.8, true, moto ? 3000 : 2500)
       }
+    }
+    // E1 (Fase 5): caminhão às vezes troca de faixa sozinho, com seta longa
+    // (≥ 1,2 s de leitura antes de sair) e sem entrar na faixa do jogador se ele
+    // chegaria na traseira em menos de 1,2 s. Só fora da tela de atração.
+    if (self.kind === "truck" && !world.demo && self.blinkT <= 0 && self.targetOffset === self.offset
+        && Math.random() < CAMINHAO.chance) {
+      const fecha = Math.max(0, world.playerSpeed - self.speed) * KMH2UPS
+      const janela = Math.max(1500, fecha * CAMINHAO.leituraS)
+      const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
+      this.tryLaneChange(self, world, sides, 1300, CAMINHAO.setaS, true, janela)
+    }
+    // "ensaio": nos 0,4 s antes de sair, o caminhão já puxa 0,05 pro lado
+    if (self.kind === "truck" && self.targetOffset !== self.offset && self.blinkT > 0.3 && self.blinkT <= 0.7) {
+      self.offset += Math.sign(self.targetOffset - self.offset) * (CAMINHAO.ensaio / 0.4) * dt
     }
     // alguém colado atrás e mais rápido na mesma faixa: tenta liberar (sem cortar o jogador)
     if (beside && self.blinkT <= 0 && self.targetOffset === self.offset && Math.random() < 0.015) {
