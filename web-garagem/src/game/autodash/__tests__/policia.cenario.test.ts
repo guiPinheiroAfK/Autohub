@@ -4,7 +4,7 @@
 // sem render (a sonda desliga): o teste é de regra, não de desenho.
 import { describe, it, expect } from "vitest"
 import { runScenario } from "./harness"
-import { ESTRELAS, FURADO_TETO, ESFRIA_S } from "../world/policia"
+import { ESTRELAS, FURADO_TETO, ESFRIA_S, BONUS_FRESTA, INFRACOES } from "../world/policia"
 import { CARS } from "../data"
 
 const LARGADA = (i: number, api: { tap(k: string): void; down(k: string): void }) => {
@@ -49,7 +49,10 @@ describe("polícia por estrelas — cenário no engine", () => {
         fatos.viaturaAcostamento = eng.traffic.some((t: any) => t.parked && Math.abs(t.offset) > 1)
         fatos.mira = pregos[0].offset
       }
-      if (pregosZ !== null && furouEm < 0) eng.playerX = fatos.mira
+      if (pregosZ !== null && furouEm < 0) {
+        eng.playerX = fatos.mira
+        fatos.viaturaNaChegada = eng.traffic.some((t: any) => t.parked && Math.abs(t.offset) > 1)
+      }
       if (furouEm < 0 && eng.policia.furadoT > 0) furouEm = i
       if (furouEm > 0 && i === furouEm + 240) {
         fatos.velFurado = eng.speed
@@ -87,6 +90,7 @@ describe("polícia por estrelas — cenário no engine", () => {
     expect(fatos.pregos.livres).toBeGreaterThanOrEqual(1)
     expect(fatos.placas).toBe(3)
     expect(fatos.viaturaAcostamento).toBe(true)
+    expect(fatos.viaturaNaChegada).toBe(true) // não some antes de o carro chegar
     // pneu furado: o carro segue, mas abaixo do teto do furado
     expect(furouEm).toBeGreaterThan(0)
     expect(fatos.furadoT).toBeGreaterThan(0)
@@ -100,4 +104,53 @@ describe("polícia por estrelas — cenário no engine", () => {
     expect(fatos.calorEsfriou).toBe(fatos.calorDespiste - 1)
     expect(fatos.estadoFinal).toBe("racing")
   }, 180_000)
+
+  it("4★: bloqueio com fresta no meio, passar nela dá bônus e esquenta", async () => {
+    const O = 300
+    const fatos: Record<string, any> = {}
+    let bloqueio: { z: number; fresta: number } | null = null
+    let cruzou = -1
+    await runScenario(O + 60 * 30, 515151, (i, api) => {
+      LARGADA(i, api)
+      if (i >= O && i <= O + 3) api.tap("o")
+    }, (i, eng) => {
+      if (i === 0) eng.render = () => {}
+      eng.traffic = eng.traffic.filter((t: any) => t.role !== "civilian" && t.role !== "oncoming")
+      eng.eventTimer = 1e9
+      // sem encostão: as viaturas da caçada ficam longe (o teste é do bloqueio)
+      for (const t of viaturas(eng)) t.z = ((eng.position - 8000) % eng.trackLen + eng.trackLen) % eng.trackLen
+      if (!bloqueio && eng.policia.bloqueios.length) {
+        bloqueio = eng.policia.bloqueios[0]
+        const vs = eng.traffic.filter((t: any) => t.kind === "roadblock")
+        fatos.viaturas = vs.length
+        fatos.mesmaLinha = vs.every((t: any) => t.z === bloqueio!.z && t.parked)
+        fatos.frestaLivre = !vs.some((t: any) => t.offset === bloqueio!.fresta)
+        fatos.frestaNoMeio = Math.abs(bloqueio.fresta) < 0.5
+      }
+      // até cruzar: mira a fresta e guarda placar e calor do quadro anterior
+      if (bloqueio && cruzou < 0) {
+        if (eng.policia.bloqueios[0]?.checado ?? true) {
+          cruzou = i
+          fatos.ganho = eng.score - fatos.scoreAntes
+          fatos.esquentou = eng.policia.calor - fatos.calorAntes
+          fatos.estado = eng.state
+        } else {
+          eng.playerX = bloqueio.fresta
+          fatos.viaturasNaChegada = eng.traffic.filter((t: any) => t.kind === "roadblock").length
+          fatos.scoreAntes = eng.score
+          fatos.calorAntes = eng.policia.calor
+        }
+      }
+    })
+    expect(bloqueio).not.toBeNull()
+    expect(fatos.viaturas).toBe(3)
+    expect(fatos.mesmaLinha).toBe(true)
+    expect(fatos.frestaLivre).toBe(true)
+    expect(fatos.frestaNoMeio).toBe(true)
+    expect(cruzou).toBeGreaterThan(0)
+    expect(fatos.viaturasNaChegada).toBe(3) // continuam lá quando o carro chega
+    expect(fatos.estado).toBe("racing")
+    expect(fatos.ganho).toBeGreaterThanOrEqual(BONUS_FRESTA)
+    expect(fatos.esquentou).toBeGreaterThanOrEqual(INFRACOES.bloqueio)
+  }, 60_000)
 })

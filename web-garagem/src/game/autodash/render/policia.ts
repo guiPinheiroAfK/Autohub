@@ -1,8 +1,9 @@
 // AutoDash — render/policia.ts. Desenho da polícia por estrelas (Fase 6):
-// HUD de estrelas, pregos e placa. As regras moram em world/policia.ts.
+// HUD de estrelas, pregos, placa e bloqueio. As regras moram em world/policia.ts.
 import { AutoDashEngine, W } from "../engine"
 import { glass } from "../ui/widgets"
 import { clamp, shade } from "../math"
+import { rr } from "./primitives"
 import { estrelasDe, nivelDe, ESTRELAS, ESFRIA_S } from "../world/policia"
 
 const FONTE = "'Space Grotesk', 'Segoe UI', sans-serif"
@@ -11,8 +12,8 @@ function estrela(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numbe
   ctx.beginPath()
   for (let i = 0; i < 10; i++) {
     const a = -Math.PI / 2 + (i * Math.PI) / 5
-    const rr = i % 2 === 0 ? r : r * 0.45
-    const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr
+    const raio = i % 2 === 0 ? r : r * 0.45
+    const x = cx + Math.cos(a) * raio, y = cy + Math.sin(a) * raio
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
   }
   ctx.closePath()
@@ -164,3 +165,52 @@ export function drawPlacaPolicia(ctx: CanvasRenderingContext2D, x: number, cy: n
   }
 }
 
+
+/**
+ * Viatura ATRAVESSADA do bloqueio (E10): de lado para você, com rodas,
+ * faixa branca e giroflex. O giroflex é emissivo: aparece no horizonte antes
+ * do corpo do carro (leitura de longe, pesquisa visual seção 3).
+ */
+export function drawViaturaAtravessada(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, amb: number) {
+  const on = Math.floor(performance.now() / 110) % 2 === 0
+  // halo do giroflex primeiro: lava o asfalto em volta, mesmo longe
+  const barY = y - h * 1.05
+  if (w > 2) {
+    const c = on ? "239,68,68" : "59,130,246"
+    const gr = w * 0.9
+    const glow = ctx.createRadialGradient(x, barY, 0, x, barY, gr)
+    glow.addColorStop(0, `rgba(${c},${0.3 + (1 - amb) * 0.45})`)
+    glow.addColorStop(1, `rgba(${c},0)`)
+    ctx.fillStyle = glow
+    ctx.beginPath(); ctx.ellipse(x, barY, gr, gr * 0.55, 0, 0, Math.PI * 2); ctx.fill()
+  }
+  if (w < 4) {
+    ctx.fillStyle = on ? "#ef4444" : "#3b82f6"
+    ctx.fillRect(x - 1, barY - 1, 2, 2)
+    return
+  }
+  ctx.fillStyle = "rgba(0,0,0,0.35)"
+  ctx.beginPath(); ctx.ellipse(x, y, w * 0.58, w * 0.08, 0, 0, Math.PI * 2); ctx.fill()
+  // carroceria de perfil: caixa baixa + cabine
+  const bx = x - w / 2
+  ctx.fillStyle = shade("#1d4ed8", amb * 0.95)
+  rr(ctx, bx, y - h * 0.62, w, h * 0.45, h * 0.12)
+  ctx.fillStyle = shade("#1e3a8a", amb * 0.9)
+  rr(ctx, bx + w * 0.26, y - h * 0.95, w * 0.46, h * 0.36, h * 0.1)
+  ctx.fillStyle = shade("#0f172a", Math.max(0.5, amb))
+  rr(ctx, bx + w * 0.30, y - h * 0.9, w * 0.17, h * 0.26, h * 0.05)
+  rr(ctx, bx + w * 0.51, y - h * 0.9, w * 0.17, h * 0.26, h * 0.05)
+  // faixa branca da polícia
+  ctx.fillStyle = `rgba(241,245,249,${0.55 + amb * 0.35})`
+  ctx.fillRect(bx, y - h * 0.42, w, h * 0.09)
+  // rodas
+  ctx.fillStyle = "#0b0f19"
+  ctx.beginPath(); ctx.arc(bx + w * 0.2, y - h * 0.16, h * 0.17, 0, Math.PI * 2); ctx.fill()
+  ctx.beginPath(); ctx.arc(bx + w * 0.8, y - h * 0.16, h * 0.17, 0, Math.PI * 2); ctx.fill()
+  // giroflex
+  const barW = w * 0.34, barH = Math.max(2, h * 0.1)
+  ctx.fillStyle = on ? "#ef4444" : "#1e293b"
+  rr(ctx, x - barW / 2, barY, barW / 2, barH, barH * 0.35)
+  ctx.fillStyle = on ? "#1e293b" : "#3b82f6"
+  rr(ctx, x, barY, barW / 2, barH, barH * 0.35)
+}

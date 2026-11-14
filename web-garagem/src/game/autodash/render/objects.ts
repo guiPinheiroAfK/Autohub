@@ -4,7 +4,7 @@ import { shade, clamp } from "../math"
 import { CARS, type CarCustom, PAINTS } from "../data"
 import { drawPlayerCar, rr } from "./primitives"
 import { type Traffic, KINDS } from "../traffic/types"
-import { drawPregos, drawPlacaPolicia } from "./policia"
+import { drawPregos, drawPlacaPolicia, drawViaturaAtravessada } from "./policia"
 
 export function drawPickup(eng: AutoDashEngine, p: Pickup, x: number, y: number, w: number, amb: number) {
   if (w < 2.5) return
@@ -203,6 +203,8 @@ export function drawRoadSign(eng: AutoDashEngine, sign: RoadSign, x: number, y: 
 }
 
 export function drawTraffic(eng: AutoDashEngine, t: Traffic, x: number, y: number, w: number, amb: number) {
+  // viatura atravessada do bloqueio (Fase 6, E10): o giroflex aparece mesmo longe
+  if (t.kind === "roadblock") { drawViaturaAtravessada(eng.ctx, x, y, w, w * KINDS.roadblock.h, amb); return }
   if (w < 2) return
   const ctx = eng.ctx
   const k = KINDS[t.kind]

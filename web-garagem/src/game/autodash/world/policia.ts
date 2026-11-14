@@ -24,15 +24,15 @@ export interface NivelEstrela {
 }
 
 /** Eventos lançados à frente durante a caçada (pesquisa visual 4.5). */
-export type EventoPolicia = "pregos"
+export type EventoPolicia = "pregos" | "bloqueio"
 
 /** Uma linha por estrela (índice 0 = ★). Fonte: GUIA-V2, Fase 6. */
 export const ESTRELAS: readonly NivelEstrela[] = [
   { viaturas: 1, teto: 205, arrancada: 50, despisteS: 3, eventos: [], eventoCadaS: 0 },
   { viaturas: 2, teto: 215, arrancada: 55, despisteS: 4, eventos: [], eventoCadaS: 0 },
   { viaturas: 3, teto: 222, arrancada: 60, despisteS: 5, eventos: ["pregos"], eventoCadaS: 22 },
-  { viaturas: 4, teto: 228, arrancada: 65, despisteS: 6, eventos: ["pregos"], eventoCadaS: 20 },
-  { viaturas: 4, teto: 234, arrancada: 70, despisteS: 7, eventos: ["pregos"], eventoCadaS: 18 },
+  { viaturas: 4, teto: 228, arrancada: 65, despisteS: 6, eventos: ["bloqueio", "pregos"], eventoCadaS: 20 },
+  { viaturas: 4, teto: 234, arrancada: 70, despisteS: 7, eventos: ["bloqueio", "pregos"], eventoCadaS: 18 },
 ]
 
 export type Infracao = "radar" | "blitz" | "encostao" | "bloqueio" | "debug"
@@ -57,6 +57,7 @@ export const PNEU_FURADO_S = 8      // E8: duração do pneu furado
 export const FURADO_TETO = 0.75     // fração do topSpeed com o pneu furado
 export const FURADO_GRIP = 0.8      // aderência da direção com o pneu furado
 export const FURADO_FREIO = 90      // km/h/s: como o carro cai até o teto do furado
+export const BONUS_FRESTA = 2500    // E10: passar na fresta do bloqueio
 
 export interface Procurado {
   calor: number     // 0..MAX_CALOR
@@ -68,12 +69,16 @@ export interface Procurado {
   furadoT: number   // E8: s de pneu furado restantes
   faiscaT: number   // E8: s até a próxima faísca do aro
   ladoFurado: number // -1 ou 1: de que lado sai a faísca
+  bloqueios: Bloqueio[] // E10: bloqueios à frente (para o bônus da fresta)
 }
+
+export interface Bloqueio { z: number; fresta: number; checado: boolean }
 
 export function novoProcurado(): Procurado {
   return {
     calor: 0, visto: false, esfriaT: 0, sirene: 0,
     eventoT: PRIMEIRO_EVENTO_S, eventoIdx: 0, furadoT: 0, faiscaT: 0, ladoFurado: 1,
+    bloqueios: [],
   }
 }
 
@@ -150,6 +155,7 @@ export function infracao(eng: AutoDashEngine, inf: Infracao) {
 export function atualizarPolicia(eng: AutoDashEngine, dt: number, playerZ: number) {
   const p = eng.policia
   if (p.furadoT > 0) passoPneuFurado(eng, dt)
+  if (p.bloqueios.length) passoBloqueios(eng, playerZ)
   let nearest = Infinity
   let viaturas = 0
   let anyBackoff = false
@@ -196,6 +202,7 @@ export function atualizarPolicia(eng: AutoDashEngine, dt: number, playerZ: numbe
         const ev = nivel.eventos[p.eventoIdx++ % nivel.eventos.length]
         p.eventoT = nivel.eventoCadaS
         if (ev === "pregos") lancarPregos(eng, estrelasDe(p.calor) >= 4 ? 3 : 2)
+        else lancarBloqueio(eng)
       }
     }
   }
@@ -298,4 +305,52 @@ function passoPneuFurado(eng: AutoDashEngine, dt: number) {
 /** Fator de aderência da direção vindo da polícia (1 = normal). */
 export function aderenciaPolicia(eng: AutoDashEngine): number {
   return eng.policia.furadoT > 0 ? FURADO_GRIP : 1
+}
+
+/**
+ * E10 — bloqueio: três viaturas atravessadas e a FRESTA numa faixa do meio,
+ * mais o acostamento livre dos dois lados. O giroflex aparece no horizonte
+ * antes do corpo dos carros. Bater numa delas = preso (colisão do tráfego).
+ */
+export function lancarBloqueio(eng: AutoDashEngine) {
+  const fresta = 1 + Math.floor(Math.random() * 2) // faixa 1 ou 2: um vão ENTRE viaturas
+  const z = noTracado(eng, START)
+  for (let i = 0; i < 4; i++) if (i !== fresta) viaturaParada(eng, z, eng.laneCenters[i], "roadblock")
+  placas(eng, ["BLOQUEIO 2 km", "BLOQUEIO 1 km", "PARE"])
+  // civis no trecho do bloqueio somem: ele nasce além do horizonte, ninguém vê
+  for (const t of eng.traffic) {
+    if (t.role !== "civilian") continue
+    const d = wrapDz(eng, t.z, z)
+    if (d > -8000 && d < 1500) t.dead = true
+  }
+  eng.policia.bloqueios.push({ z, fresta: eng.laneCenters[fresta], checado: false })
+  eng.floaters.push({ text: "🚧 BLOQUEIO À FRENTE — ache a fresta!", color: "#fbbf24", y: H * 0.38, life: 1.8, big: false })
+}
+
+/** Civis que chegam ao bloqueio encostam na fresta; cruzar o bloqueio dá bônus ou esquenta. */
+function passoBloqueios(eng: AutoDashEngine, playerZ: number) {
+  const p = eng.policia
+  for (const b of p.bloqueios) {
+    if (wrapDz(eng, b.z, playerZ) > 0) {
+      for (const t of eng.traffic) {
+        if (t.role !== "civilian" || t.parked || t.blinkT > 0) continue
+        const d = wrapDz(eng, b.z, t.z)
+        if (d > 0 && d < 6000 && Math.abs(t.targetOffset - b.fresta) > 0.2) { t.targetOffset = b.fresta; t.blinkT = 0.6 }
+      }
+    } else if (!b.checado) {
+      b.checado = true
+      if (eng.crashed) continue
+      if (Math.abs(eng.playerX - b.fresta) < 0.3) {
+        eng.score += BONUS_FRESTA
+        eng.floaters.push({ text: `PASSOU NA FRESTA! +${BONUS_FRESTA}`, color: "#4ade80", y: H * 0.34, life: 2, big: true })
+        eng.audio.nearMiss()
+      } else if (Math.abs(eng.playerX) > 1) {
+        eng.floaters.push({ text: "PELO ACOSTAMENTO!", color: "#fbbf24", y: H * 0.34, life: 1.6, big: true })
+      }
+      infracao(eng, "bloqueio")
+    }
+  }
+  if (p.bloqueios.some(b => wrapDz(eng, b.z, playerZ) < -20000)) {
+    p.bloqueios = p.bloqueios.filter(b => wrapDz(eng, b.z, playerZ) >= -20000)
+  }
 }

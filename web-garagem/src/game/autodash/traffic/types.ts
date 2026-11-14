@@ -2,7 +2,7 @@
 // Separado do engine pra que as IAs (ver ./driver.ts) e o render compartilhem
 // o mesmo vocabulário sem depender da classe gigante do motor.
 
-export type TrafficKind = "car" | "moto" | "truck" | "bus" | "police"
+export type TrafficKind = "car" | "moto" | "truck" | "bus" | "police" | "roadblock"
 
 // Papel do veículo: define QUAL IA dirige ele (ver DRIVERS em ./driver.ts).
 //  - civilian: trânsito comum, respeita os outros e o jogador
@@ -18,6 +18,7 @@ export const KINDS: Record<TrafficKind, { w: number; len: number; h: number; spd
   truck:  { w: 0.34, len: 540, h: 1.55, spd: [66, 88] },
   bus:    { w: 0.33, len: 470, h: 1.45, spd: [76, 95] },
   police: { w: 0.22, len: 230, h: 0.82, spd: [200, 240] }, // menor e ágil (só via spawnPoliceChase)
+  roadblock: { w: 0.40, len: 200, h: 0.62, spd: [0, 0] },  // viatura atravessada do bloqueio (world/policia.ts, E10)
 }
 
 export const TRAFFIC_COLORS = ["#64748b", "#0ea5e9", "#84cc16", "#ec4899", "#eab308", "#e2e8f0", "#7c3aed", "#b45309"]
