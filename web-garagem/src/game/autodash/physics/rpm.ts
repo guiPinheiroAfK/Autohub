@@ -10,6 +10,16 @@ export function powerCurve(eng: AutoDashEngine, rpm: number) : number {
   return forcaEm(motorDe(eng), rpm, eng.boost ?? 0)
 }
 
+/**
+ * Giro que o jogador VÊ e OUVE: o da física mais o "giro solto" da patinada
+ * (eng.patina, 0..0,6), sem passar do corte. A física continua com eng.rpm.
+ */
+export function giroVisto(eng: AutoDashEngine): number {
+  const p = eng.patina ?? 0
+  if (p <= 0) return eng.rpm
+  return Math.min(motorDe(eng).corte, eng.rpm * (1 + 0.25 * p))
+}
+
 export function rpmFor(eng: AutoDashEngine, speed: number, gear: number) : number {
   if (gear <= 0) return eng.rpm
   const m = motorDe(eng)

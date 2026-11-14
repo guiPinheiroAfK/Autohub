@@ -6,7 +6,7 @@ exports[`AutoDash — cenários golden (corrida e duelo) > corrida com bots: lob
   "finalMode": "race",
   "finalState": "racing",
   "frames": 1500,
-  "hash": "08e8e86ac192d8d70077589b3cf3bd4c7f1c754989a395a0dd3530fe0ba86967",
+  "hash": "6269f3b229f4bf6f1e951586eaf38f1ab34d72ac4c0884250b474a22d5a66e30",
 }
 `;
 
@@ -16,7 +16,7 @@ exports[`AutoDash — cenários golden (corrida e duelo) > corrida por CLIQUE re
   "finalMode": "race",
   "finalState": "racing",
   "frames": 1200,
-  "hash": "576955dba5118f1c0ba70448720d77b5d2ae7ca848ae4404d550625e0ac66870",
+  "hash": "79957800032745e0ce0a5e3952068e623f973352c0e1b8684f7cea19b8ab31b5",
 }
 `;
 

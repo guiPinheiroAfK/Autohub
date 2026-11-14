@@ -12,7 +12,7 @@ import { perfilDoCarro, REV_AMOSTRA_S } from "../sound/profiles"
 import { motorDe, giroNaFrac, faixa, boostAlvo, passoBoost, taxaSolto, giroDoSom } from "../physics/motores"
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
-import { powerCurve } from "../physics/rpm"
+import { powerCurve, giroVisto } from "../physics/rpm"
 import { steerK, tyreOf } from "../physics/traction"
 import { passoLongitudinal } from "./longitudinal"
 import { updateEventSpawner } from "../world/events"
@@ -138,7 +138,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   const centrif = seg.curve * Math.pow(eng.speed / 240, 2.2) * (0.42 - grip * 0.22)
   eng.playerX -= centrif * dt
   const slip = Math.abs(centrif) * speedF
-  eng.audio.skid(slip > 0.3 ? slip : 0)
+  // chiado de curva ou de patinada no gás (eng.patina, do quadro anterior)
+  eng.audio.skid(Math.max(slip > 0.3 ? slip : 0, eng.patina))
   if (slip > 0.45 && Math.abs(eng.steerVel) > 0.3 && Math.random() < 0.5) emitSmoke(eng, 1, "#6b7280")
   eng.bgShift += seg.curve * eng.speed * dt * 0.6
 
@@ -355,7 +356,7 @@ export function update(eng: AutoDashEngine, dt: number) {
 
   updateFx(eng, dt)
   const noCorte = throttle > 0 && eng.rpm >= mf.corte - 60
-  eng.audio.engine(giroDoSom(mf, eng.rpm, throttle, noCorte, eng.somT), throttle, nitroActive, true, noCorte, eng.boost)
+  eng.audio.engine(giroDoSom(mf, giroVisto(eng), throttle, noCorte, eng.somT), throttle, nitroActive, true, noCorte, eng.boost)
 }
 
 // Acelerada de amostra na garagem: lenta, pé no fundo até ~6800 rpm e solta

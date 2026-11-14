@@ -61,6 +61,24 @@ export function wheelspinK(spec: CarSpec): number {
   return 1 - 1.4 * Math.min(f, 1 - f)
 }
 
+// Uso de tração do eixo mais exigido: demanda ÷ capacidade, a mesma conta de
+// accelK (transferência de carga, pneu, círculo de atrito). Acima de 1 o eixo
+// passa do limite. `mu` é a aderência do piso (1 = seco). Hoje só alimenta a
+// patinada VISÍVEL (fumaça, giro, chiado); a força continua vindo de accelK.
+export function usoTracao(spec: CarSpec, aN: number, centrif: number, mu = 1): number {
+  if (aN <= 0) return 0
+  const split = driveSplit(spec)
+  const traction = tyreOf(spec).traction * mu
+  const l = Math.min(LAT_CLAMP, Math.abs(centrif) / LAT_REF)
+  const lat = Math.sqrt(1 - l * l)
+  const capF = TRACTION_SCALE * (0.5 - LOAD_TRANSFER * aN) * traction * lat
+  const capR = TRACTION_SCALE * (0.5 + LOAD_TRANSFER * aN) * traction * lat
+  let u = 0
+  if (split.front > 0) u = Math.max(u, (split.front * aN) / capF)
+  if (split.rear > 0) u = Math.max(u, (split.rear * aN) / capR)
+  return u
+}
+
 // Multiplicador da aceleração de base.
 //   aN:      aceleração normalizada em reta, 0..1 (powerCurve × fator de marcha)
 //   centrif: força centrífuga atual (mesma unidade de sim/update.ts)

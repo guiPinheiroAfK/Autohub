@@ -8,6 +8,7 @@ import { rr } from "./primitives"
 import { renderRearView } from "./player"
 import { SEG_LEN } from "../data"
 import { motorDe, faixa } from "../physics/motores"
+import { giroVisto } from "../physics/rpm"
 import { wrapDz } from "../traffic/spawner"
 import { ramalNoSeg } from "../world/ramais"
 
@@ -272,10 +273,12 @@ export function renderTacho(eng: AutoDashEngine) {
   ctx.beginPath(); ctx.arc(cx, cy, r, a0, redStart); ctx.stroke()
   ctx.strokeStyle = "rgba(239,68,68,0.6)"
   ctx.beginPath(); ctx.arc(cx, cy, r, redStart, a1); ctx.stroke()
-  const jitter = eng.rpm >= verm - 150 ? (Math.random() - 0.5) * 0.03 : 0
-  const rpmA = a0 + (a1 - a0) * clamp(eng.rpm / escala + jitter, 0, 1)
+  // giro visto: o da física mais o giro solto da patinada (physics/rpm.ts)
+  const giro = giroVisto(eng)
+  const jitter = giro >= verm - 150 ? (Math.random() - 0.5) * 0.03 : 0
+  const rpmA = a0 + (a1 - a0) * clamp(giro / escala + jitter, 0, 1)
   // "glow" com traço duplo — shadowBlur por frame derruba o FPS
-  ctx.strokeStyle = eng.rpm > verm ? "#ef4444" : eng.rpm > laranja ? "#fb923c" : "#38bdf8"
+  ctx.strokeStyle = giro > verm ? "#ef4444" : giro > laranja ? "#fb923c" : "#38bdf8"
   ctx.globalAlpha = 0.28
   ctx.lineWidth = 13
   ctx.beginPath(); ctx.arc(cx, cy, r, a0, rpmA); ctx.stroke()
@@ -294,7 +297,7 @@ export function renderTacho(eng: AutoDashEngine) {
   }
   // agulha (com tremida na limitadora)
   const na = rpmA
-  ctx.strokeStyle = eng.rpm > verm ? "#ef4444" : "#f8fafc"
+  ctx.strokeStyle = giro > verm ? "#ef4444" : "#f8fafc"
   ctx.lineWidth = 3
   ctx.beginPath()
   ctx.moveTo(cx - Math.cos(na) * 10, cy - Math.sin(na) * 10)

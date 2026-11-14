@@ -122,6 +122,7 @@ export class AutoDashEngine {
   marchaDoGiro = 1 // marcha do giro do último quadro (sim/longitudinal.ts: detecta a redução)
   reduzindo = false // a troca em andamento é uma redução (blip no giro)
   wheelspinT = 0
+  patina = 0 // patinada visível, 0..0,6 (R3): fumaça, giro solto e chiado; não muda a força
   bogT = 0
   nitroMeter = 0
   nitroOn = false

@@ -10,7 +10,7 @@ import { climaAtual } from "./clima"
 import { type MotorFisico, forcaNoCorte, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
-import { accelK, finalDriveOf } from "../physics/traction"
+import { accelK, finalDriveOf, usoTracao } from "../physics/traction"
 import { autoShift } from "../physics/gearbox"
 import { giroNaTroca, cambioDe } from "../physics/troca"
 
@@ -62,18 +62,25 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   if (eng.cfg.transmission === "auto" && eng.gear >= 1 && eng.shiftT <= 0) autoShift(eng, throttle > 0)
 
   let accel = 0
+  let patina = 0
   if (eng.gear >= 1 && throttle && eng.shiftT <= 0) {
     const gearF = fatorMarcha(eng, eng.gear)
     const pc = powerCurve(eng, giroDeForca(mf, eng.rpm, eng.gear))
     accel = spec.power * pc * gearF
     // tração: o eixo motor limita a aceleração (ADR 0012). Padrão RWD = 1, sem efeito.
     accel *= accelK(spec, pc * gearF, centrif)
+    // patinada visível: o uso de tração passou de ~90% (1ª forte, saída de
+    // curva no gás). Só fumaça, giro e chiado; a força acima não muda.
+    patina = Math.min(0.6, Math.max(0, usoTracao(spec, pc * gearF, centrif) - 0.9))
+    if (patina > 0) emitSmoke(eng, Math.ceil(patina * 8), "#e2e8f0")
     // limitador: corte duro pulsa com o som, corte suave segura o giro em rampa
     accel *= forcaNoCorte(mf, eng.rpm, eng.somT)
     if (eng.rpm >= mf.corte - 50 && Math.random() < 0.4) eng.audio.limiter()
-    if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0") }
+    if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0"); patina = Math.max(patina, 0.3) }
     if (eng.bogT > 0) accel *= 0.5
   }
+  // suaviza para o giro e o chiado não piscarem quadro a quadro
+  eng.patina += (patina - eng.patina) * Math.min(1, dt * 10)
   if (eng.nitroOn && eng.nitroMeter > 1 && eng.gear >= 1) {
     accel += 42
     eng.nitroMeter = Math.max(0, eng.nitroMeter - 38 * dt)

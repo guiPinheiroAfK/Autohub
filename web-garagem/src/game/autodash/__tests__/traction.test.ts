@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { accelK, driveSplit, LAT_CLAMP, steerK, wheelspinK, driveLabel } from "../physics/traction"
+import { accelK, driveSplit, LAT_CLAMP, steerK, wheelspinK, driveLabel, usoTracao, DRIVE_LOSS, MIN_TRACTION } from "../physics/traction"
 import { CARS, type CarSpec } from "../data"
 
 // Carro base de teste: mesmos números do AUTOHUB GT, tração e pneu por parâmetro.
@@ -128,5 +128,31 @@ describe("direção e patinada por tração", () => {
   it("rótulo de tração legível", () => {
     expect(driveLabel(base)).toBe("tração traseira (RWD) · pneu padrão")
     expect(driveLabel(car({ drive: "AWD", frontBias: 0.3 }))).toBe("tração integral 30/70 (AWD) · pneu padrão")
+  })
+})
+
+describe("uso de tração (R3: patinada visível)", () => {
+  it("RWD com pneu padrão no seco nunca passa de 1 em reta", () => {
+    for (let a = 0; a <= 1.3; a += 0.05) expect(usoTracao(base, a, 0)).toBeLessThanOrEqual(1)
+    expect(usoTracao(base, 0, 0.3)).toBe(0)
+  })
+
+  it("é a mesma conta de accelK: acima de 1, accelK vale 1/uso (com piso)", () => {
+    for (const over of [{ drive: "FWD" as const }, { drive: "AWD" as const, frontBias: 0.3 }, {}]) {
+      const c = car(over)
+      for (const a of [0.4, 0.8, 1, 1.2]) {
+        for (const lat of [0, 0.2, 0.5]) {
+          const u = usoTracao(c, a, lat)
+          const k = accelK(c, a, lat) / (1 - DRIVE_LOSS[c.drive ?? "RWD"])
+          expect(k).toBeCloseTo(u <= 1 ? 1 : Math.max(MIN_TRACTION, 1 / u), 10)
+        }
+      }
+    }
+  })
+
+  it("curva e piso molhado aumentam o uso; o accelK do carro padrão não muda", () => {
+    expect(usoTracao(base, 1, 0.3)).toBeGreaterThan(usoTracao(base, 1, 0))
+    expect(usoTracao(base, 1, 0, 0.62)).toBeGreaterThan(1)
+    expect(accelK(base, 1, 0)).toBe(1)
   })
 })
