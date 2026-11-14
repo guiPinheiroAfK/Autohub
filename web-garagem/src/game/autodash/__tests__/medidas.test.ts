@@ -28,7 +28,7 @@ function engDeTeste(carIdx: number): AutoDashEngine {
     cfg: { carIdx, transmission: "auto", customs: [] },
     state: "racing", clima: "limpo",
     speed: 0, rpm: 0, gear: 1, boost: 0,
-    shiftT: 0, wheelspinT: 0, bogT: 0,
+    shiftT: 0, marchaDoGiro: 1, reduzindo: false, wheelspinT: 0, bogT: 0,
     nitroOn: false, nitroMeter: 0,
     particles: [], audio: mudo,
   } as unknown as AutoDashEngine

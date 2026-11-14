@@ -12,6 +12,7 @@ import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
 import { accelK, finalDriveOf } from "../physics/traction"
 import { autoShift } from "../physics/gearbox"
+import { giroNaTroca, cambioDe } from "../physics/troca"
 
 export interface EntradaLongitudinal {
   throttle: number  // 0 ou 1 (teclado, mouse, toque)
@@ -30,8 +31,19 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   if (eng.wheelspinT > 0) eng.wheelspinT -= dt
   if (eng.bogT > 0) eng.bogT -= dt
 
-  if (eng.gear >= 1) eng.rpm = rpmFor(eng, eng.speed, eng.gear)
-  else {
+  // marcha mudou desde o último quadro: anota se foi redução (para o blip)
+  if (eng.gear !== eng.marchaDoGiro) { eng.reduzindo = eng.gear < eng.marchaDoGiro; eng.marchaDoGiro = eng.gear }
+  if (eng.gear >= 1) {
+    const alvo = rpmFor(eng, eng.speed, eng.gear)
+    // na troca a embreagem está aberta: o giro cai (ou sobe, com blip na
+    // redução) na rapidez do motor, sem saltar. Com a embreagem fechada o giro
+    // volta a ser o da velocidade. Durante a troca a força é zero e nada da
+    // física lê o giro: muda só o conta-giros e o som.
+    if (eng.shiftT > 0) {
+      const blip = eng.reduzindo && eng.shiftT > (spec.shiftMs / 1000) * 2 / 3
+      eng.rpm = giroNaTroca(mf, eng.rpm, alvo, dt, cambioDe(spec), blip)
+    } else eng.rpm = alvo
+  } else {
     const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
     // giro solto: motor leve sobe e cai rápido, motor pesado é preguiçoso
     eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * taxaSolto(mf, targetRpm > eng.rpm))

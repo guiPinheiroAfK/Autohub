@@ -32,6 +32,10 @@ export type BodyKind =
 // que é a referência do modelo (multiplicador de tração exatamente 1).
 export type Drive = "FWD" | "RWD" | "AWD"
 export type TyreId = "padrao" | "esportivo" | "macio" | "misto"
+// Tipo de câmbio: por enquanto só muda a SENSAÇÃO da troca (giro livre e chute
+// da câmera, physics/troca.ts). Torque e boost durante a troca são iguais para
+// todos (P3 em docs/pesquisa/fisica-carro.md fica para o playtest).
+export type CambioTipo = "H" | "seq" | "dct" | "conv"
 
 export const TYRES: Record<TyreId, { name: string; grip: number; traction: number }> = {
   padrao: { name: "padrão", grip: 1, traction: 1 },
@@ -55,11 +59,12 @@ export interface CarSpec {
   tyre?: TyreId      // pneu (padrão "padrao")
   finalDrive?: number // relação final (1 = padrão; maior = mais torque e menos velocidade final)
   marchas?: number   // número de marchas (padrão 6); 1ª e última iguais para todos (physics/cambio.ts)
+  cambio?: CambioTipo // tipo de câmbio (padrão "H", manual); só cosmético por enquanto
 }
 
 export const CARS: CarSpec[] = [
   {
-    id: "gt", name: "AUTOHUB GT", body: "gt",
+    id: "gt", name: "AUTOHUB GT", body: "gt", cambio: "seq",
     power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220,
     desc: "Equilibrado. O clássico da casa.",
   },
@@ -74,7 +79,7 @@ export const CARS: CarSpec[] = [
     desc: "Estreito e grudado no chão. Costura qualquer comboio.",
   },
   {
-    id: "ghost", marchas: 9, name: "FANTASMA X", body: "ghost",
+    id: "ghost", marchas: 9, cambio: "dct", name: "FANTASMA X", body: "ghost",
     power: 50, grip: 0.78, topSpeed: 256, width: 0.25, shiftMs: 240,
     desc: "Final de reta assustador. Exige mão calma.",
   },
@@ -118,7 +123,7 @@ export const CARS: CarSpec[] = [
     desc: "Sedã de faróis retráteis. Equilibrado e previsível.",
   },
   {
-    id: "flat6", marchas: 8, name: "TARGA 992", body: "flat6",
+    id: "flat6", marchas: 8, cambio: "dct", name: "TARGA 992", body: "flat6",
     power: 54, grip: 0.90, topSpeed: 258, width: 0.26, shiftMs: 150,
     desc: "Motor traseiro boxer. Câmbio relâmpago e aderência de trilho.",
   },
