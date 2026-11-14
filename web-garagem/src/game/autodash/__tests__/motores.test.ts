@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom, forcaNoCorte, faseCorte, CORTE_DURO_HZ, fatorSpool } from "../physics/motores"
+import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom, forcaNoCorte, faseCorte, CORTE_DURO_HZ, fatorSpool, rampaGas, respostaDe, RESPOSTA_PADRAO, MOTOR_PADRAO } from "../physics/motores"
 import { ENGINE_PROFILES } from "../sound/profiles"
 import { CARS, GEAR_RATIOS, RPM_PER_KMH, RPM_LIMITER, RPM_IDLE } from "../data"
 
@@ -133,6 +133,28 @@ describe("motores reais (faixa de giro e curva de força)", () => {
     expect(encher(7000)).toBeLessThan(encher(4000))
     // esvaziar continua igual (~0,2 s), com ou sem giro
     expect(passoBoost(m, 1, 0, 1 / 60, 7000)).toBe(passoBoost(m, 1, 0, 1 / 60))
+  })
+  it("acelerador com rampa curta por motor (R6)", () => {
+    expect(respostaDe(MOTORES.v10)).toBe(0.04)
+    expect(respostaDe(MOTORES["v8-cruzado-ford"])).toBe(0.11)
+    expect(respostaDe(MOTOR_PADRAO)).toBe(RESPOSTA_PADRAO)
+    for (const m of Object.values(MOTORES)) {
+      expect(respostaDe(m)).toBeGreaterThanOrEqual(0.04)
+      expect(respostaDe(m)).toBeLessThanOrEqual(0.11)
+    }
+    const ate = (m: typeof MOTORES.i4, s: number) => {
+      let g = 0
+      for (let t = 0; t < s - 1e-9; t += 1 / 120) g = rampaGas(m, g, 1, 1 / 120)
+      return g
+    }
+    // em τ chega perto de 63%; em 0,5 s está no fundo
+    expect(ate(MOTORES.v10, 0.04)).toBeGreaterThan(0.55)
+    expect(ate(MOTORES.v10, 0.04)).toBeLessThan(0.7)
+    expect(ate(MOTORES["v8-cruzado-ford"], 0.5)).toBeGreaterThan(0.98)
+    // borboletas individuais respondem antes do carburador de 71
+    expect(ate(MOTORES["i6-corrida"], 0.05)).toBeGreaterThan(ate(MOTORES["v8-cruzado-ford"], 0.05))
+    // pé já no fundo fica no fundo (largada: o grid deixa o gás em 1)
+    expect(rampaGas(MOTORES.w16, 1, 1, 1 / 60)).toBe(1)
   })
 })
 

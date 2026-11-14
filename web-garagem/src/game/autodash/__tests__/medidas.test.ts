@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from "vitest"
 import { CARS } from "../data"
-import { motorFisico, giroNaFrac, boostAlvo } from "../physics/motores"
+import { motorFisico, giroNaFrac, boostAlvo, respostaDe } from "../physics/motores"
 import { passoLongitudinal } from "../sim/longitudinal"
 import type { AutoDashEngine } from "../engine"
 
@@ -31,6 +31,7 @@ function engDeTeste(carIdx: number): AutoDashEngine {
     shiftT: 0, marchaDoGiro: 1, reduzindo: false, wheelspinT: 0, bogT: 0, patina: 0,
     nitroOn: false, nitroMeter: 0,
     particles: [], audio: mudo, somT: 0, pitchY: 0, trauma: 0,
+    gasF: 1, // pé no fundo desde o grid
   } as unknown as AutoDashEngine
 }
 
@@ -58,6 +59,23 @@ export function medir(carIdx: number): Medida {
   }
   m.v60 = eng.speed
   return m
+}
+
+/** Retomada: de 100 a 160 km/h numa marcha de força, saindo do pé solto (gás efetivo 0) ou já no fundo. */
+export function retomada(carIdx: number, gasInicial: number): number {
+  const spec = CARS[carIdx]
+  const mf = motorFisico(spec)
+  const eng = engDeTeste(carIdx)
+  eng.speed = 100
+  eng.gear = 3
+  eng.marchaDoGiro = 3
+  eng.gasF = gasInicial
+  let t = 0
+  while (eng.speed < 160 && t < 30) {
+    passoLongitudinal(eng, spec, mf, { throttle: 1, braking: false, centrif: 0, grade: 0, dt: DT })
+    t += DT
+  }
+  return t
 }
 
 // Referência medida antes das melhorias de feel (commit do teste), dt = 1/60.
@@ -109,5 +127,19 @@ describe("medidas de equilíbrio (0–100, 0–160, 0–200, máxima)", () => {
   }
   it("tabela", () => {
     if (process.env.MEDIDAS) console.log(tabela.join("\n"))
+  })
+})
+
+describe("rampa do acelerador (R6) na retomada", () => {
+  it("sair do pé solto custa pouco: no 100–160, no máximo 1,5 × o atraso do motor", () => {
+    const linhas: string[] = []
+    for (let ci = 0; ci < CARS.length; ci++) {
+      const solto = retomada(ci, 0), fundo = retomada(ci, 1)
+      const tau = respostaDe(motorFisico(CARS[ci]))
+      linhas.push(`  ${CARS[ci].id}: +${(solto - fundo).toFixed(3)} s (τ ${tau})`)
+      expect(solto - fundo, CARS[ci].name).toBeGreaterThanOrEqual(0)
+      expect(solto - fundo, CARS[ci].name).toBeLessThanOrEqual(1.5 * tau + 1e-9)
+    }
+    if (process.env.MEDIDAS) console.log(linhas.join("\n"))
   })
 })

@@ -9,7 +9,7 @@ import { updateTraffic, wrapDz } from "../traffic/spawner"
 import { updateFx, emitSmoke, burst } from "../fx/particles"
 import { climaAtual, tickTempo } from "./clima"
 import { perfilDoCarro, REV_AMOSTRA_S } from "../sound/profiles"
-import { motorDe, giroNaFrac, faixa, boostAlvo, passoBoost, taxaSolto, giroDoSom } from "../physics/motores"
+import { motorDe, giroNaFrac, faixa, boostAlvo, passoBoost, taxaSolto, giroDoSom, rampaGas } from "../physics/motores"
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
 import { powerCurve, giroVisto } from "../physics/rpm"
@@ -82,6 +82,7 @@ export function update(eng: AutoDashEngine, dt: number) {
 
   if (eng.state === "countdown") {
     eng.countT += dt
+    eng.gasF = rampaGas(mf, eng.gasF, throttle, dt) // pé no fundo no grid: no verde já está em 1
     // rev livre no grid
     const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
     // giro solto: motor leve sobe e cai rápido, motor pesado é preguiçoso

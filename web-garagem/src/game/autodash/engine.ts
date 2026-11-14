@@ -120,6 +120,7 @@ export class AutoDashEngine {
   somT = 0 // tempo do som do motor (s): limitador e lenta irregular
   boost = 0 // pressão do turbo, 0..1 (physics/motores.ts); motor aspirado fica em 0
   shiftT = 0
+  gasF = 0 // pé efetivo 0..1: segue o acelerador com o atraso do motor (physics/motores.ts, rampaGas)
   marchaDoGiro = 1 // marcha do giro do último quadro (sim/longitudinal.ts: detecta a redução)
   reduzindo = false // a troca em andamento é uma redução (blip no giro)
   wheelspinT = 0

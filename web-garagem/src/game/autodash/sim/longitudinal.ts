@@ -7,7 +7,7 @@ import type { CarSpec } from "../data"
 import { relacao, fatorMarcha } from "../physics/cambio"
 import { emitSmoke, emitFlame } from "../fx/particles"
 import { climaAtual } from "./clima"
-import { type MotorFisico, forcaNoCorte, faseCorte, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
+import { type MotorFisico, forcaNoCorte, faseCorte, rampaGas, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
 import { accelK, finalDriveOf, usoTracao } from "../physics/traction"
@@ -27,6 +27,8 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   const { throttle, braking, centrif, grade, dt } = e
 
   // ---------- motor ----------
+  // pé efetivo: segue o acelerador com o atraso do motor (só força e turbo usam)
+  eng.gasF = rampaGas(mf, eng.gasF, throttle, dt)
   const emTroca = eng.shiftT > 0
   if (eng.shiftT > 0) eng.shiftT -= dt
   // fim da troca com o pé no fundo: a força volta e o carro cabeceia (só desenho)
@@ -57,7 +59,7 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   // em ponto morto quase não enche (sem carga).
   if (eng.gear >= 1 && eng.shiftT > 0) { /* segura o boost */ }
   else {
-    const comCarga = eng.gear >= 1 ? throttle : throttle * 0.35
+    const comCarga = eng.gear >= 1 ? eng.gasF : throttle * 0.35
     const giroF = giroDeForca(mf, eng.rpm, eng.gear)
     // giro alto enche o turbo mais rápido (energia do escape)
     eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, giroF, comCarga), dt, giroF)
@@ -71,7 +73,7 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   if (eng.gear >= 1 && throttle && eng.shiftT <= 0) {
     const gearF = fatorMarcha(eng, eng.gear)
     const pc = powerCurve(eng, giroDeForca(mf, eng.rpm, eng.gear))
-    accel = spec.power * pc * gearF
+    accel = spec.power * pc * gearF * eng.gasF
     // tração: o eixo motor limita a aceleração (ADR 0012). Padrão RWD = 1, sem efeito.
     accel *= accelK(spec, pc * gearF, centrif)
     // patinada visível: o uso de tração passou de ~90% (1ª forte, saída de
