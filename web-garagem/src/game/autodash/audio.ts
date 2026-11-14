@@ -15,6 +15,7 @@ interface Motor {
   admBp: BiquadFilterNode
   admGain: GainNode
   out: GainNode
+  ambGain: GainNode       // eco do ambiente (aberto x viaduto/túnel)
   synthGain: GainNode     // modelo físico (guias de onda)
   gravHp: BiquadFilterNode // gravação real: banda cheia (motor gravado) ou só agudos (textura)
   gravGain: GainNode
@@ -252,6 +253,13 @@ export class AudioBus {
     const out = ctx.createGain()
     out.gain.value = 0
     mix.connect(sh); sh.connect(comp); comp.connect(out); out.connect(this.master)
+    // ambiente: reflexo no asfalto + ecos curtos (guard-rail, prédios). Embaixo do
+    // viaduto/túnel o eco cresce (ambiente()); o motor seco soa "de estúdio"
+    const amb = ctx.createConvolver(), ambGain = ctx.createGain()
+    amb.normalize = false
+    amb.buffer = this.respostaAmbiente()
+    ambGain.gain.value = 0.18
+    out.connect(amb); amb.connect(ambGain); ambGain.connect(this.master)
     // efeitos de alívio passam pela mesma saturação (soam "do escape")
     const fx = ctx.createGain()
     fx.connect(sh)
@@ -285,11 +293,45 @@ export class AudioBus {
       for (let i = 0; i < len; i++) d[i] = d[i] / pk * 0.6
       return b
     })
-    this.motor = { node, boom, coletor, lp, admBp, admGain, out, synthGain, gravHp, gravGain, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops }
+    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, synthGain, gravHp, gravGain, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops }
     this.aplicarPerfil()
     void this.carregarPartida()
     // o motor antigo sai de cena
     this.engGain?.gain.setTargetAtTime(0, ctx.currentTime, 0.05)
+  }
+
+  /** Resposta ao impulso do ambiente: chão a ~1,5 ms (abafado) + ecos esparsos
+   *  de 12 a 90 ms que decaem, e uma cauda curta de ruído. Gerada uma vez. */
+  private respostaAmbiente(): AudioBuffer {
+    const ctx = this.ctx!, sr = ctx.sampleRate, len = Math.floor(sr * 0.6)
+    const b = ctx.createBuffer(2, len, sr)
+    let seed = 0x5eed
+    const rnd = () => { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 4294967296 }
+    for (let c = 0; c < 2; c++) {
+      const d = b.getChannelData(c)
+      // reflexo do asfalto: atraso curto, ganho alto, agudos perdidos
+      const chao = Math.floor(sr * (0.0014 + c * 0.0002))
+      for (let k = 0; k < 12; k++) d[chao + k] += 0.35 * Math.exp(-k / 3) / 2.2
+      // ecos discretos (cada lado diferente: abre o estéreo)
+      for (let e = 0; e < 9; e++) {
+        const t = 0.012 + rnd() * 0.08, i = Math.floor(t * sr)
+        d[i] += (rnd() < 0.5 ? -1 : 1) * 0.22 * Math.exp(-t / 0.05)
+      }
+      // cauda difusa, escura (passa-baixa simples)
+      let lp = 0
+      for (let i = Math.floor(sr * 0.02); i < len; i++) {
+        lp += ((rnd() * 2 - 1) - lp) * 0.25
+        d[i] += lp * 0.05 * Math.exp(-(i / sr - 0.02) / 0.12)
+      }
+    }
+    return b
+  }
+
+  /** Ambiente acústico: "aberto" (estrada) ou "fechado" (viaduto, túnel: eco forte). */
+  ambiente(tipo: "aberto" | "fechado") {
+    const m = this.motor, ctx = this.ctx
+    if (!m || !ctx) return
+    m.ambGain.gain.setTargetAtTime(tipo === "fechado" ? 0.75 : 0.18, ctx.currentTime, 0.25)
   }
 
   /** Turbina do motor atual (physics/motores.ts) e o corte, que escala a energia do escape. */
