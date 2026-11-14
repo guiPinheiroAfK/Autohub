@@ -143,7 +143,7 @@ export class AudioBus {
       // chimbal nos contratempos
       if (step % 4 === 2) {
         const src = ctx.createBufferSource()
-        src.buffer = this.noiseBuffer(0.06)
+        src.buffer = this.ruido()
         const hp = ctx.createBiquadFilter()
         hp.type = "highpass"
         hp.frequency.value = 7000
@@ -151,7 +151,7 @@ export class AudioBus {
         hg.gain.setValueAtTime(0.25, t)
         hg.gain.exponentialRampToValueAtTime(0.01, t + 0.05)
         src.connect(hp); hp.connect(hg); hg.connect(g)
-        src.start(t)
+        src.start(t, this.trechoRuido(0.06)); src.stop(t + 0.06)
       }
     }
 
@@ -184,9 +184,21 @@ export class AudioBus {
     // o motor e os instantes marcados pertencem ao contexto fechado: um ensure()
     // depois daqui começa do zero (senão o relógio novo, que volta a 0, ficaria
     // mudo até alcançar o `partidaAte` antigo)
-    this.motor = null
+    this.motor = null; this.ruidoFx = null
     this.partidaAte = 0; this.cortaCargaAte = 0; this.estouroAte = 0; this.proxEstouro = 0
     this.lastT = 0; this.gasAltoT = -1
+  }
+
+  // ruído compartilhado pelos efeitos curtos (estalo, alívio, chimbal): cada
+  // disparo toca um trecho sorteado em vez de gerar um buffer novo
+  private ruidoFx: AudioBuffer | null = null
+  private static readonly RUIDO_FX_S = 2
+  private ruido(): AudioBuffer {
+    return this.ruidoFx ??= this.noiseBuffer(AudioBus.RUIDO_FX_S)
+  }
+  /** Início sorteado no ruído compartilhado para tocar `dur` segundos. */
+  private trechoRuido(dur: number): number {
+    return Math.random() * Math.max(0, AudioBus.RUIDO_FX_S - dur)
   }
 
   private noiseBuffer(seconds: number): AudioBuffer {
@@ -449,14 +461,14 @@ export class AudioBus {
     const m = this.motor, ctx = this.ctx
     if (!m || !ctx) return
     const t0 = ctx.currentTime
-    const ruido = this.noiseBuffer(0.6)
+    const ruido = this.ruido()
     if (!flutter) {
       const src = ctx.createBufferSource(); src.buffer = ruido
       const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 3000
       const pk = ctx.createBiquadFilter(); pk.type = "peaking"; pk.frequency.value = 6500; pk.gain.value = 4; pk.Q.value = 0.8
       const g = ctx.createGain(), d = 0.15 + 0.15 * nivel
       g.gain.setValueAtTime(0.3 * nivel, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d)
-      src.connect(hp); hp.connect(pk); pk.connect(g); g.connect(m.fx); src.start(t0); src.stop(t0 + d + 0.05)
+      src.connect(hp); hp.connect(pk); pk.connect(g); g.connect(m.fx); src.start(t0, this.trechoRuido(d + 0.05)); src.stop(t0 + d + 0.05)
       return
     }
     let at = t0 + 0.015, hz = 13
@@ -632,8 +644,8 @@ export class AudioBus {
   private burst(ms: number, vol: number, freq = 1000, type: BiquadFilterType = "lowpass") {
     if (!this.ctx || !this.master || !this.enabled) return
     const ctx = this.ctx
-    const src = ctx.createBufferSource()
-    src.buffer = this.noiseBuffer(ms / 1000 + 0.05)
+    const src = ctx.createBufferSource(), dur = ms / 1000 + 0.05
+    src.buffer = this.ruido()
     const filter = ctx.createBiquadFilter()
     filter.type = type
     filter.frequency.value = freq
@@ -643,8 +655,8 @@ export class AudioBus {
     src.connect(filter)
     filter.connect(g)
     g.connect(this.master)
-    src.start()
-    src.stop(ctx.currentTime + ms / 1000 + 0.05)
+    src.start(0, this.trechoRuido(dur))
+    src.stop(ctx.currentTime + dur)
   }
 
   ui() { this.blip(880, 70, 0.15) }
