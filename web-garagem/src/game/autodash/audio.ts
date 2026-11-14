@@ -324,10 +324,10 @@ export class AudioBus {
   }
 
   /** Motor por pulsos: chamado a cada quadro por engine(). */
-  private motorFrame(rpm: number, gas: number, nitro: boolean, running: boolean) {
+  private motorFrame(rpm: number, gas: number, nitro: boolean, running: boolean, noCorte: boolean, boostFisico: number) {
     const m = this.motor!, ctx = this.ctx!, p = this.perfil, t = ctx.currentTime
     const dt = Math.min(0.1, Math.max(0, t - this.lastT)); this.lastT = t
-    const corte = rpm >= 7850 && gas > 0.5
+    const corte = noCorte && gas > 0.5
     const carga = t < this.cortaCargaAte ? 0 : gas
     m.node.port.postMessage({ st: { rpm, carga, ligado: running, corte } })
     // volume cresce com o giro (o pulso individual encolhe em giro alto; o motor
@@ -342,8 +342,11 @@ export class AudioBus {
 
     // indução: boost sobe com giro e pé (atraso do turbo), cai rápido ao aliviar
     const turbo = p.inducao === "turbo" || p.inducao === "biturbo"
-    const alvo = gas * Math.min(1, Math.max(0, (rpm - 2200) / 2600))
-    this.boost += (alvo - this.boost) * Math.min(1, dt / (alvo > this.boost ? 0.35 : 0.07))
+    if (boostFisico >= 0) this.boost = boostFisico // mesmo atraso que o jogador sente
+    else {
+      const alvo = gas * Math.min(1, Math.max(0, (rpm - 2200) / 2600))
+      this.boost += (alvo - this.boost) * Math.min(1, dt / (alvo > this.boost ? 0.35 : 0.07))
+    }
     this.eixo += (this.boost - this.eixo) * Math.min(1, dt / (this.boost > this.eixo ? 0.25 : 0.35))
     if (turbo) {
       const hz = 1100 + this.eixo * 2300, vib = 1 + 0.004 * Math.sin(t * 37)
@@ -410,8 +413,10 @@ export class AudioBus {
   }
 
   /** Chamado a cada frame: afina o ronco do motor pelo RPM. */
-  engine(rpm: number, throttle: number, nitro: boolean, running: boolean) {
-    if (this.motor && this.ctx) { this.motorFrame(rpm, throttle, nitro, running); return }
+  // `corte`: o motor está no limitador (cada motor corta num giro, physics/motores.ts).
+  // `boost`: pressão do turbo vinda da física (0..1); −1 = o áudio estima sozinho.
+  engine(rpm: number, throttle: number, nitro: boolean, running: boolean, corte = false, boost = -1) {
+    if (this.motor && this.ctx) { this.motorFrame(rpm, throttle, nitro, running, corte, boost); return }
     if (!this.ctx || !this.engOsc1 || !this.engOsc2 || !this.engGain || !this.engFilter) return
     const t = this.ctx.currentTime
     if (!running) {

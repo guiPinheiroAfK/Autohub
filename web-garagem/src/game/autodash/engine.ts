@@ -116,6 +116,7 @@ export class AutoDashEngine {
   playerX = 0          // -1..1 (fração da meia-pista)
   gear = 1             // 0 = neutro
   rpm = RPM_IDLE
+  boost = 0 // pressão do turbo, 0..1 (physics/motores.ts); motor aspirado fica em 0
   shiftT = 0
   wheelspinT = 0
   bogT = 0

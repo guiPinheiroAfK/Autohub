@@ -1,17 +1,16 @@
-// AutoDash — physics/rpm.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+// AutoDash — physics/rpm.ts. Giro e força do motor do carro atual (physics/motores.ts).
 import { AutoDashEngine } from "../engine"
-import { RPM_LIMITER, RPM_IDLE, GEAR_RATIOS, RPM_PER_KMH, CARS } from "../data"
+import { GEAR_RATIOS, CARS } from "../data"
 import { finalDriveOf } from "./traction"
+import { motorDe, forcaEm, rpmPorKmh } from "./motores"
 
-export function powerCurve(_eng: AutoDashEngine, rpm: number) : number {
-  if (rpm >= RPM_LIMITER) return 0
-  if (rpm < 1400) return 0.25
-  if (rpm < 4500) return 0.5 + 0.5 * ((rpm - 1400) / 3100)
-  if (rpm < 7000) return 1.0
-  return 1.0 - 0.45 * ((rpm - 7000) / (RPM_LIMITER - 7000))
+/** Fração da potência máxima neste giro, já com o boost atual do turbo. */
+export function powerCurve(eng: AutoDashEngine, rpm: number) : number {
+  return forcaEm(motorDe(eng), rpm, eng.boost ?? 0)
 }
 
 export function rpmFor(eng: AutoDashEngine, speed: number, gear: number) : number {
   if (gear <= 0) return eng.rpm
-  return RPM_IDLE + speed * GEAR_RATIOS[gear - 1] * RPM_PER_KMH * finalDriveOf(CARS[eng.cfg.carIdx])
+  const m = motorDe(eng)
+  return m.idle + speed * GEAR_RATIOS[gear - 1] * rpmPorKmh(m) * finalDriveOf(CARS[eng.cfg.carIdx])
 }

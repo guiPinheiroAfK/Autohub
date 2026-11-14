@@ -1,67 +1,68 @@
 import { describe, it, expect } from "vitest"
-import { autoGearTarget, AUTO_UPSHIFT_RPM, KICKDOWN_RPM, COAST_RPM } from "../physics/gearbox"
+import { autoGearTarget, limitesAuto } from "../physics/gearbox"
 import { rpmFor } from "../physics/rpm"
+import { motorDe } from "../physics/motores"
+import { CARS } from "../data"
 import type { AutoDashEngine } from "../engine"
 
-// Só o que o câmbio lê do engine: marcha, velocidade, giro e o carro (carIdx 0).
-function eng(gear: number, speed: number): AutoDashEngine {
-  const e = { gear, speed, rpm: 0, cfg: { carIdx: 0 } } as unknown as AutoDashEngine
+// Só o que o câmbio lê do engine: marcha, velocidade, giro e o carro.
+function eng(gear: number, speed: number, carIdx = 0): AutoDashEngine {
+  const e = { gear, speed, rpm: 0, boost: 0, cfg: { carIdx } } as unknown as AutoDashEngine
   e.rpm = rpmFor(e, speed, gear)
   return e
 }
 
+// um carro de cada família de motor (V10, V8 de 71, VTEC, rotativo, boxer 6)
+const carros = ["gt", "muscle", "ninja", "rotor", "flat6"].map(b => CARS.findIndex(c => c.body === b))
+
 describe("câmbio automático", () => {
-  it("bug corrigido: freando na 6ª ele reduz bem antes de 42 km/h", () => {
-    // antes: só reduzia com rpm < 2000 (6ª abaixo de ~42 km/h)
-    const e = eng(6, 45)
-    expect(e.rpm).toBeLessThan(COAST_RPM)
-    expect(autoGearTarget(e, false)).toBeLessThan(6)
-  })
+  for (const ci of carros) {
+    const nome = CARS[ci].name
+    const L = limitesAuto(motorDe(eng(1, 0, ci)))
 
-  it("sem gás, desce marcha até manter o giro acima do mínimo de rodagem", () => {
-    for (let v = 20; v <= 250; v += 5) {
-      for (let g = 2; g <= 6; g++) {
-        const e = eng(g, v)
-        const t = autoGearTarget(e, false)
-        expect(t).toBeLessThanOrEqual(g)
-        if (t < g) expect(rpmFor(e, v, t) >= COAST_RPM || t === 1).toBe(true)
+    it(`${nome}: freando na 6ª ele reduz (não fica preso na marcha alta)`, () => {
+      let v = 120
+      while (rpmFor(eng(6, v, ci), v, 6) >= L.rodagem) v -= 1
+      expect(autoGearTarget(eng(6, v, ci), false)).toBeLessThan(6)
+    })
+
+    it(`${nome}: sem gás, desce até manter o giro de rodagem`, () => {
+      for (let v = 20; v <= 250; v += 5) {
+        for (let g = 2; g <= 6; g++) {
+          const t = autoGearTarget(eng(g, v, ci), false)
+          expect(t).toBeLessThanOrEqual(g)
+          if (t < g) expect(rpmFor(eng(g, v, ci), v, t) >= L.rodagem || t === 1).toBe(true)
+        }
       }
-    }
-  })
+    })
 
-  it("kickdown: retomada a 120 km/h na 6ª pula direto pra uma marcha de força", () => {
-    const e = eng(6, 120)
-    const t = autoGearTarget(e, true)
-    expect(t).toBeLessThanOrEqual(4)
-    expect(rpmFor(e, 120, t)).toBeLessThanOrEqual(KICKDOWN_RPM)
-  })
+    it(`${nome}: kickdown a 120 km/h na 6ª pula pra uma marcha de força`, () => {
+      const t = autoGearTarget(eng(6, 120, ci), true)
+      expect(t).toBeLessThanOrEqual(4)
+      expect(rpmFor(eng(6, 120, ci), 120, t)).toBeLessThanOrEqual(L.kickdown)
+    })
 
-  it("no gás em velocidade de cruzeiro alta não reduz à toa", () => {
-    expect(autoGearTarget(eng(6, 210), true)).toBe(6)
-  })
+    it(`${nome}: sobe antes da faixa vermelha e não fica caçando marcha`, () => {
+      for (let g = 1; g <= 5; g++) {
+        let v = 1
+        while (rpmFor(eng(g, v, ci), v, g) <= L.sobe) v += 0.5
+        expect(autoGearTarget(eng(g, v, ci), true)).toBe(g + 1)
+        expect(autoGearTarget(eng(g + 1, v, ci), true)).toBe(g + 1)
+      }
+    })
 
-  it("sobe no corte e não fica caçando marcha depois da troca", () => {
-    for (let g = 1; g <= 5; g++) {
-      // velocidade em que a marcha g bate o giro de troca
-      let v = 1
-      while (rpmFor(eng(g, v), v, g) <= AUTO_UPSHIFT_RPM) v += 0.5
-      expect(autoGearTarget(eng(g, v), true)).toBe(g + 1)
-      // já na marcha de cima, a mesma velocidade não pede kickdown de volta
-      expect(autoGearTarget(eng(g + 1, v), true)).toBe(g + 1)
-    }
-  })
+    it(`${nome}: chega na 6ª e volta a reduzir quando desacelera`, () => {
+      let g = 1
+      for (let v = 5; v <= 240; v += 1) g = autoGearTarget(eng(g, v, ci), true)
+      expect(g).toBe(6)
+      for (let v = 240; v >= 10; v -= 1) g = autoGearTarget(eng(g, v, ci), false)
+      expect(g).toBeLessThanOrEqual(2)
+    })
+  }
 
-  it("chega na 6ª e volta a reduzir quando desacelera", () => {
-    let g = 1
-    for (let v = 5; v <= 240; v += 1) {
-      const t = autoGearTarget(eng(g, v), true)
-      if (t !== g) g = t
-    }
-    expect(g).toBe(6)
-    for (let v = 240; v >= 10; v -= 1) {
-      const t = autoGearTarget(eng(g, v), false)
-      if (t !== g) g = t
-    }
-    expect(g).toBeLessThanOrEqual(2)
+  it("cada motor troca num giro diferente (V8 de 71 bem antes do VTEC)", () => {
+    const sobe = (b: string) => limitesAuto(motorDe(eng(1, 0, CARS.findIndex(c => c.body === b)))).sobe
+    expect(sobe("muscle")).toBeLessThan(5600)
+    expect(sobe("ninja")).toBeGreaterThan(7500)
   })
 })

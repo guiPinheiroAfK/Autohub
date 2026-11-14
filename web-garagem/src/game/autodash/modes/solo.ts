@@ -3,22 +3,25 @@ import { AutoDashEngine, H, W } from "../engine"
 import { burst } from "../fx/particles"
 import { CARS, type ScoreEntry, submitScore } from "../data"
 import { wheelspinK } from "../physics/traction"
+import { motorDe, fracGiro } from "../physics/motores"
 import { postState } from "../net"
 import { myTelemetry, duelFinish } from "./duel"
 
 export function launch(eng: AutoDashEngine) {
   // qualidade da largada pela zona de RPM segurada no verde
   eng.gear = 1
-  if (eng.rpm >= 3600 && eng.rpm <= 6300) {
+  // janela pela fração da faixa do motor (antes 3600–6300 de um motor 900–7900)
+  const f = fracGiro(motorDe(eng), eng.rpm)
+  if (f >= 0.386 && f <= 0.771) {
     eng.speed = 52
     eng.nitroMeter = Math.min(100, eng.nitroMeter + 30)
     eng.floaters.push({ text: "LARGADA PERFEITA!", color: "#fde047", y: H * 0.35, life: 1.6, big: true })
     eng.audio.perfectLaunch()
-  } else if (eng.rpm > 6800) {
+  } else if (f > 0.843) {
     eng.speed = 18
     eng.wheelspinT = 1.3 * wheelspinK(CARS[eng.cfg.carIdx])
     eng.floaters.push({ text: "PATINOU!", color: "#fb923c", y: H * 0.35, life: 1.4, big: true })
-  } else if (eng.rpm < 2200) {
+  } else if (f < 0.186) {
     eng.speed = 10
     eng.bogT = 1.1
     eng.floaters.push({ text: "ENGASGOU...", color: "#94a3b8", y: H * 0.35, life: 1.4, big: true })

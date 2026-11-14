@@ -3,7 +3,7 @@ import { AutoDashEngine } from "../engine"
 import { buildTrack } from "../world/track"
 import { buildCircuit, circuitoDaSeed, CIRCUITS } from "../world/circuits"
 import { seedTraffic } from "../traffic/spawner"
-import { RPM_IDLE } from "../data"
+import { motorDe } from "../physics/motores"
 import { RaceSession } from "../race/session"
 import { iniciarTempo, seedDoTracado } from "../sim/clima"
 
@@ -22,7 +22,8 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.playerX = 0
   eng.steerVel = 0
   eng.gear = 0
-  eng.rpm = RPM_IDLE
+  eng.rpm = motorDe(eng).idle
+  eng.boost = 0
   eng.score = 0; eng.km = 0; eng.combo = 0; eng.comboT = 0
   eng.nitroMeter = 0; eng.nitroOn = false
   eng.shield = false; eng.immuneT = 0; eng.policeHitT = 0; eng.policeEscapeT = 0; eng.policeChaseT = 0; eng.mult2T = 0

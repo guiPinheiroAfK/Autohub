@@ -1,6 +1,6 @@
 // AutoDash — sim/update.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine, PLAYER_Z, H, W, PU_NITRO, PU_SHIELD, PU_X2 } from "../engine"
-import { CARS, KMH2UPS, RPM_IDLE, RPM_LIMITER, GEAR_RATIOS, SEG_LEN, RPM_PER_KMH, DRAW_DIST } from "../data"
+import { CARS, KMH2UPS, GEAR_RATIOS, SEG_LEN, DRAW_DIST } from "../data"
 import { duelNet } from "../modes/duel"
 import { startRace } from "../modes/race"
 import { segAt } from "../world/track"
@@ -8,6 +8,7 @@ import { updateTraffic, wrapDz } from "../traffic/spawner"
 import { updateFx, emitSmoke, emitFlame, burst } from "../fx/particles"
 import { climaAtual, tickTempo } from "./clima"
 import { perfilDoCarro, REV_AMOSTRA_S } from "../sound/profiles"
+import { motorDe, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca } from "../physics/motores"
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
@@ -23,6 +24,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   const voice = AutoDashEngine.ENGINE_VOICE[spec.body] ?? [1, 1]
   eng.audio.setEngine(voice[0], voice[1])
   eng.audio.setProfile(perfilDoCarro(spec.body, eng.cfg.customs[eng.cfg.carIdx]?.motor))
+  // lado físico do mesmo motor: lenta, faixa vermelha, corte, curva e turbo
+  const mf = motorDe(eng)
 
   duelNet(eng, dt)
 
@@ -75,11 +78,13 @@ export function update(eng: AutoDashEngine, dt: number) {
   if (eng.state === "countdown") {
     eng.countT += dt
     // rev livre no grid
-    const targetRpm = RPM_IDLE + throttle * (7500 - RPM_IDLE)
+    const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
     eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * 5)
-    if (eng.rpm > RPM_LIMITER) eng.rpm = RPM_LIMITER - Math.random() * 300
+    if (eng.rpm > mf.corte) eng.rpm = mf.corte - Math.random() * 0.043 * faixa(mf)
+    // em ponto morto o turbo quase não enche (sem carga)
+    eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, eng.rpm, throttle) * 0.35, dt)
     // burnout no grid: acelerando no ponto morto, pneu fuma (só na corrida)
-    if (eng.mode === "race" && throttle > 0.5 && eng.rpm > 4500 && Math.random() < 0.6) {
+    if (eng.mode === "race" && throttle > 0.5 && eng.rpm > giroNaFrac(mf, 0.514) && Math.random() < 0.6) {
       emitSmoke(eng, 2, "#d8dbe2")
     }
     if (eng.countT >= eng.greenAt) {
@@ -93,7 +98,7 @@ export function update(eng: AutoDashEngine, dt: number) {
         if (eng.countT >= tl && eng.countT - dt < tl) eng.audio.semaphoreRed()
       }
     }
-    eng.audio.engine(eng.rpm, throttle, false, true)
+    eng.audio.engine(eng.rpm, throttle, false, true, eng.rpm >= mf.corte - 60, eng.boost)
     updateFx(eng, dt)
     return
   }
@@ -158,8 +163,17 @@ export function update(eng: AutoDashEngine, dt: number) {
 
   if (eng.gear >= 1) eng.rpm = rpmFor(eng, eng.speed, eng.gear)
   else {
-    const targetRpm = RPM_IDLE + throttle * (7500 - RPM_IDLE)
+    const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
     eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * 5)
+  }
+  // turbo: enche com giro e pé, com atraso; esvazia na troca e ao aliviar.
+  // É aqui que nasce o "lag": sai de curva em giro baixo e a força demora a vir.
+  // Na troca de marcha o boost se segura (troca curta, eixo ainda girando);
+  // em ponto morto quase não enche (sem carga).
+  if (eng.gear >= 1 && eng.shiftT > 0) { /* segura o boost */ }
+  else {
+    const comCarga = eng.gear >= 1 ? throttle : throttle * 0.35
+    eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, giroDeForca(mf, eng.rpm, eng.gear), comCarga), dt)
   }
 
   // câmbio automático
@@ -168,11 +182,11 @@ export function update(eng: AutoDashEngine, dt: number) {
   let accel = 0
   if (eng.gear >= 1 && throttle && eng.shiftT <= 0) {
     const gearF = Math.pow(GEAR_RATIOS[eng.gear - 1] / GEAR_RATIOS[0], 0.9)
-    const pc = powerCurve(eng, eng.rpm)
+    const pc = powerCurve(eng, giroDeForca(mf, eng.rpm, eng.gear))
     accel = spec.power * pc * gearF
     // tração: o eixo motor limita a aceleração (ADR 0012). Padrão RWD = 1, sem efeito.
     accel *= accelK(spec, pc * gearF, centrif)
-    if (eng.rpm >= RPM_LIMITER - 50) { accel = 0; if (Math.random() < 0.4) eng.audio.limiter() }
+    if (eng.rpm >= mf.corte - 50) { accel = 0; if (Math.random() < 0.4) eng.audio.limiter() }
     if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0") }
     if (eng.bogT > 0) accel *= 0.5
   }
@@ -198,7 +212,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.speed = clamp(eng.speed, 0, maxSpd)
   // limite por marcha (estourou o giro = não anda mais) — e freio motor na descida
   if (eng.gear >= 1) {
-    const gearTop = (RPM_LIMITER - RPM_IDLE) / (GEAR_RATIOS[eng.gear - 1] * RPM_PER_KMH * finalDriveOf(spec))
+    // igual para todo motor: o giro por km/h escala com a faixa (physics/motores.ts)
+    const gearTop = faixa(mf) / (GEAR_RATIOS[eng.gear - 1] * rpmPorKmh(mf) * finalDriveOf(spec))
     eng.speed = Math.min(eng.speed, gearTop)
   }
 
@@ -391,7 +406,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   updateFx(eng, dt)
-  eng.audio.engine(eng.rpm, throttle, nitroActive, true)
+  eng.audio.engine(eng.rpm, throttle, nitroActive, true, throttle > 0 && eng.rpm >= mf.corte - 60, eng.boost)
 }
 
 // Acelerada de amostra na garagem: lenta, pé no fundo até ~6800 rpm e solta
@@ -399,8 +414,9 @@ export function update(eng: AutoDashEngine, dt: number) {
 function acelerarAmostra(eng: AutoDashEngine, dt: number) {
   eng.revAmostraT = Math.max(0, eng.revAmostraT - dt)
   const e = REV_AMOSTRA_S - eng.revAmostraT
-  let rpm = RPM_IDLE, gas = 0
-  if (e > 0.15 && e < 0.8) { gas = 1; rpm = RPM_IDLE + (6800 - RPM_IDLE) * Math.pow((e - 0.15) / 0.65, 0.8) }
-  else if (e >= 0.8) rpm = RPM_IDLE + (6800 - RPM_IDLE) * Math.exp(-(e - 0.8) * 3.2)
+  const m = motorDe(eng), topo = giroNaFrac(m, 0.85)
+  let rpm = m.idle, gas = 0
+  if (e > 0.15 && e < 0.8) { gas = 1; rpm = m.idle + (topo - m.idle) * Math.pow((e - 0.15) / 0.65, 0.8) }
+  else if (e >= 0.8) rpm = m.idle + (topo - m.idle) * Math.exp(-(e - 0.8) * 3.2)
   eng.audio.engine(rpm, gas, false, true)
 }

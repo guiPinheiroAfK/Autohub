@@ -6,7 +6,8 @@ import { skyNow } from "./backdrop"
 import { formatHour } from "../world/clock"
 import { rr } from "./primitives"
 import { renderRearView } from "./player"
-import { SEG_LEN, RPM_REDLINE } from "../data"
+import { SEG_LEN } from "../data"
+import { motorDe, faixa } from "../physics/motores"
 import { wrapDz } from "../traffic/spawner"
 import { ramalNoSeg } from "../world/ramais"
 
@@ -261,16 +262,20 @@ export function renderTacho(eng: AutoDashEngine) {
 
   const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25
   // arco de giro preenchido até o RPM atual
-  const redStart = a0 + (a1 - a0) * (RPM_REDLINE / 8000)
+  // escala e faixa vermelha do motor do carro (V8 de 71 vai até 7, V12 até 10)
+  const mot = motorDe(eng)
+  const escala = Math.ceil((mot.corte + 300) / 1000) * 1000
+  const verm = mot.redline, laranja = mot.redline - 0.2 * faixa(mot)
+  const redStart = a0 + (a1 - a0) * (verm / escala)
   ctx.strokeStyle = "rgba(148,163,184,0.35)"
   ctx.lineWidth = 7
   ctx.beginPath(); ctx.arc(cx, cy, r, a0, redStart); ctx.stroke()
   ctx.strokeStyle = "rgba(239,68,68,0.6)"
   ctx.beginPath(); ctx.arc(cx, cy, r, redStart, a1); ctx.stroke()
-  const jitter = eng.rpm >= RPM_REDLINE - 150 ? (Math.random() - 0.5) * 0.03 : 0
-  const rpmA = a0 + (a1 - a0) * clamp(eng.rpm / 8000 + jitter, 0, 1)
+  const jitter = eng.rpm >= verm - 150 ? (Math.random() - 0.5) * 0.03 : 0
+  const rpmA = a0 + (a1 - a0) * clamp(eng.rpm / escala + jitter, 0, 1)
   // "glow" com traço duplo — shadowBlur por frame derruba o FPS
-  ctx.strokeStyle = eng.rpm > RPM_REDLINE ? "#ef4444" : eng.rpm > 6200 ? "#fb923c" : "#38bdf8"
+  ctx.strokeStyle = eng.rpm > verm ? "#ef4444" : eng.rpm > laranja ? "#fb923c" : "#38bdf8"
   ctx.globalAlpha = 0.28
   ctx.lineWidth = 13
   ctx.beginPath(); ctx.arc(cx, cy, r, a0, rpmA); ctx.stroke()
@@ -280,15 +285,16 @@ export function renderTacho(eng: AutoDashEngine) {
   // ticks
   ctx.fillStyle = "rgba(248,250,252,0.7)"
   ctx.font = "10px 'Space Grotesk', 'Segoe UI', sans-serif"
-  for (let i = 0; i <= 8; i++) {
-    const a = a0 + (a1 - a0) * (i / 8)
+  const marcas = escala / 1000
+  for (let i = 0; i <= marcas; i++) {
+    const a = a0 + (a1 - a0) * (i / marcas)
     const tx = cx + Math.cos(a) * (r - 16), ty = cy + Math.sin(a) * (r - 16)
     ctx.textAlign = "center"
     ctx.fillText(String(i), tx, ty + 3)
   }
   // agulha (com tremida na limitadora)
   const na = rpmA
-  ctx.strokeStyle = eng.rpm > RPM_REDLINE ? "#ef4444" : "#f8fafc"
+  ctx.strokeStyle = eng.rpm > verm ? "#ef4444" : "#f8fafc"
   ctx.lineWidth = 3
   ctx.beginPath()
   ctx.moveTo(cx - Math.cos(na) * 10, cy - Math.sin(na) * 10)
