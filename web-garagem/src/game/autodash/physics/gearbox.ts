@@ -3,6 +3,7 @@ import { AutoDashEngine, W, H } from "../engine"
 import { rpmFor } from "./rpm"
 import { CARS } from "../data"
 import { motorDe, giroNaFrac, faixa, type MotorFisico } from "./motores"
+import { nMarchas } from "./cambio"
 
 export function shiftUp(eng: AutoDashEngine) {
   if (eng.gear === 0) {
@@ -10,18 +11,19 @@ export function shiftUp(eng: AutoDashEngine) {
     // (antes 1800–6500 fixos; agora as mesmas frações da faixa de cada motor)
     const m = motorDe(eng), lo = giroNaFrac(m, 0.129), hi = giroNaFrac(m, 0.8)
     let best = 1
-    for (let g = 6; g >= 1; g--) {
+    const n = nMarchas(eng)
+    for (let g = n; g >= 1; g--) {
       const r = rpmFor(eng, eng.speed, g)
       if (r >= lo && r <= hi) { best = g; break }
       if (r < lo) best = Math.max(1, g - 0)
     }
-    eng.gear = Math.max(1, Math.min(6, best))
+    eng.gear = Math.max(1, Math.min(n, best))
     eng.shiftT = CARS[eng.cfg.carIdx].shiftMs / 1000
     eng.audio.shift()
     popExhaust(eng)
     return
   }
-  if (eng.gear >= 6) return
+  if (eng.gear >= nMarchas(eng)) return
   eng.gear++
   eng.shiftT = CARS[eng.cfg.carIdx].shiftMs / 1000
   if (rpmFor(eng, eng.speed, eng.gear) < giroNaFrac(motorDe(eng), 0.086)) eng.audio.bog()
@@ -58,7 +60,7 @@ export function autoGearTarget(eng: AutoDashEngine, throttle: boolean) : number 
   const g = eng.gear
   const L = limitesAuto(motorDe(eng))
   if (throttle) {
-    if (eng.rpm > L.sobe && g < 6) return g + 1
+    if (eng.rpm > L.sobe && g < nMarchas(eng)) return g + 1
     for (let t = 1; t < g; t++) if (rpmFor(eng, eng.speed, t) <= L.kickdown) return t
     return g
   }

@@ -54,6 +54,7 @@ export interface CarSpec {
   frontBias?: number // só AWD: fração do torque na dianteira (0.5 = 50/50, 0.3 = 30/70)
   tyre?: TyreId      // pneu (padrão "padrao")
   finalDrive?: number // relação final (1 = padrão; maior = mais torque e menos velocidade final)
+  marchas?: number   // número de marchas (padrão 6); 1ª e última iguais para todos (physics/cambio.ts)
 }
 
 export const CARS: CarSpec[] = [
@@ -63,7 +64,7 @@ export const CARS: CarSpec[] = [
     desc: "Equilibrado. O clássico da casa.",
   },
   {
-    id: "muscle", name: "MUSCLE 71", body: "muscle",
+    id: "muscle", marchas: 4, name: "MUSCLE 71", body: "muscle",
     power: 58, grip: 0.55, topSpeed: 260, width: 0.31, shiftMs: 300,
     desc: "Torque bruto e traseira solta. Largo demais pro corredor.",
   },
@@ -73,7 +74,7 @@ export const CARS: CarSpec[] = [
     desc: "Estreito e grudado no chão. Costura qualquer comboio.",
   },
   {
-    id: "ghost", name: "FANTASMA X", body: "ghost",
+    id: "ghost", marchas: 9, name: "FANTASMA X", body: "ghost",
     power: 50, grip: 0.78, topSpeed: 256, width: 0.25, shiftMs: 240,
     desc: "Final de reta assustador. Exige mão calma.",
   },
@@ -87,7 +88,7 @@ export const CARS: CarSpec[] = [
     desc: "O meio-termo honesto. Bom em tudo, imbatível em nada.",
   },
   {
-    id: "rotor", name: "ROTOR FD", body: "rotor",
+    id: "rotor", marchas: 5, name: "ROTOR FD", body: "rotor",
     power: 47, grip: 0.88, topSpeed: 244, width: 0.24, shiftMs: 170,
     desc: "Leve e de giro solto. Troca marcha antes de todo mundo.",
   },
@@ -97,7 +98,7 @@ export const CARS: CarSpec[] = [
     desc: "Dono das retas. Pesado nas curvas, largo no trânsito.",
   },
   {
-    id: "kaiju", name: "KAIJU R32", body: "kaiju",
+    id: "kaiju", marchas: 5, name: "KAIJU R32", body: "kaiju",
     power: 52, grip: 0.92, topSpeed: 240, width: 0.28, shiftMs: 200,
     desc: "Grudado no chão. Perde na reta, devolve na curva.",
   },
@@ -107,7 +108,7 @@ export const CARS: CarSpec[] = [
     desc: "Estreito e ágil. Costura onde os outros não cabem.",
   },
   {
-    id: "roadster", name: "ROADSTER MK1", body: "roadster",
+    id: "roadster", marchas: 5, name: "ROADSTER MK1", body: "roadster",
     power: 38, grip: 0.95, topSpeed: 220, width: 0.19, shiftMs: 160,
     desc: "O menor e mais leve. Carrega velocidade em curva como ninguém.",
   },
@@ -117,7 +118,7 @@ export const CARS: CarSpec[] = [
     desc: "Sedã de faróis retráteis. Equilibrado e previsível.",
   },
   {
-    id: "flat6", name: "TARGA 992", body: "flat6",
+    id: "flat6", marchas: 8, name: "TARGA 992", body: "flat6",
     power: 54, grip: 0.90, topSpeed: 258, width: 0.26, shiftMs: 150,
     desc: "Motor traseiro boxer. Câmbio relâmpago e aderência de trilho.",
   },

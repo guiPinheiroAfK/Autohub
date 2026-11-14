@@ -1,6 +1,7 @@
 // AutoDash — sim/update.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine, PLAYER_Z, H, W, PU_NITRO, PU_SHIELD, PU_X2 } from "../engine"
-import { CARS, KMH2UPS, GEAR_RATIOS, SEG_LEN, DRAW_DIST } from "../data"
+import { CARS, KMH2UPS, SEG_LEN, DRAW_DIST } from "../data"
+import { relacao, fatorMarcha } from "../physics/cambio"
 import { duelNet } from "../modes/duel"
 import { startRace } from "../modes/race"
 import { segAt } from "../world/track"
@@ -124,7 +125,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   // tração na direção: dianteira com torque abre a curva no gás e fecha ao aliviar
   // (ADR 0012). Usa o giro do quadro anterior; RWD devolve 1 e nada muda.
   const aNdir = throttle && eng.gear >= 1 && eng.shiftT <= 0
-    ? powerCurve(eng, eng.rpm) * Math.pow(GEAR_RATIOS[eng.gear - 1] / GEAR_RATIOS[0], 0.9) : 0
+    ? powerCurve(eng, eng.rpm) * fatorMarcha(eng, eng.gear) : 0
   const maxSteer = (0.95 + grip * 0.85) * (1 - 0.38 * speedF) * (0.35 + 0.65 * Math.min(1, eng.speed / 55)) * steerK(spec, aNdir)
   eng.steerVel += (steerInput * maxSteer - eng.steerVel) * Math.min(1, dt * 9)
   if (eng.levelUpT > 0) eng.steerVel += Math.sin(eng.levelUpT * 22) * 0.9 * dt // rabeio da virada de nível
@@ -182,7 +183,7 @@ export function update(eng: AutoDashEngine, dt: number) {
 
   let accel = 0
   if (eng.gear >= 1 && throttle && eng.shiftT <= 0) {
-    const gearF = Math.pow(GEAR_RATIOS[eng.gear - 1] / GEAR_RATIOS[0], 0.9)
+    const gearF = fatorMarcha(eng, eng.gear)
     const pc = powerCurve(eng, giroDeForca(mf, eng.rpm, eng.gear))
     accel = spec.power * pc * gearF
     // tração: o eixo motor limita a aceleração (ADR 0012). Padrão RWD = 1, sem efeito.
@@ -214,7 +215,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   // limite por marcha (estourou o giro = não anda mais) — e freio motor na descida
   if (eng.gear >= 1) {
     // igual para todo motor: o giro por km/h escala com a faixa (physics/motores.ts)
-    const gearTop = faixa(mf) / (GEAR_RATIOS[eng.gear - 1] * rpmPorKmh(mf) * finalDriveOf(spec))
+    const gearTop = faixa(mf) / (relacao(eng, eng.gear) * rpmPorKmh(mf) * finalDriveOf(spec))
     eng.speed = Math.min(eng.speed, gearTop)
   }
 

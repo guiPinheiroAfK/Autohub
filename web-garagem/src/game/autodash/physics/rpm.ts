@@ -1,6 +1,7 @@
 // AutoDash — physics/rpm.ts. Giro e força do motor do carro atual (physics/motores.ts).
 import { AutoDashEngine } from "../engine"
-import { GEAR_RATIOS, CARS } from "../data"
+import { CARS } from "../data"
+import { relacao } from "./cambio"
 import { finalDriveOf } from "./traction"
 import { motorDe, forcaEm, rpmPorKmh } from "./motores"
 
@@ -12,5 +13,5 @@ export function powerCurve(eng: AutoDashEngine, rpm: number) : number {
 export function rpmFor(eng: AutoDashEngine, speed: number, gear: number) : number {
   if (gear <= 0) return eng.rpm
   const m = motorDe(eng)
-  return m.idle + speed * GEAR_RATIOS[gear - 1] * rpmPorKmh(m) * finalDriveOf(CARS[eng.cfg.carIdx])
+  return m.idle + speed * relacao(eng, gear) * rpmPorKmh(m) * finalDriveOf(CARS[eng.cfg.carIdx])
 }

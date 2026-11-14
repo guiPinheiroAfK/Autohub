@@ -2,6 +2,7 @@
 import { enterFromMenu } from "../../flow"
 import { confirmName, trocarMotor } from "../../flow"
 import { perfilDoCarro } from "../../sound/profiles"
+import { relacoes } from "../../physics/cambio"
 import { AutoDashEngine, W, H } from "../../engine"
 import { pill, arrowBtn, glass } from "../../ui/widgets"
 import { abrirRaceLobby, startRace } from "../../modes/race"
@@ -74,7 +75,7 @@ export function renderGarage(eng: AutoDashEngine) {
   ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillText(`${eng.cfg.carIdx + 1} / ${CARS.length}`, 240, 78)
   ctx.font = "12px 'Space Grotesk', 'Segoe UI', sans-serif"
-  ctx.fillText(driveLabel(spec), 240, 98)
+  ctx.fillText(`${driveLabel(spec)} · ${relacoes(spec).length} marchas`, 240, 98)
   ctx.textAlign = "left"
 
   pill(eng, "← menu", 16, 16, 92, () => { eng.state = "menu" }, { h: 26, font: 12 })
