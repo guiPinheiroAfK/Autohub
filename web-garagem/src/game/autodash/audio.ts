@@ -265,15 +265,20 @@ export class AudioBus {
     // saturação leve (tanh) + compressor: cola os pulsos num ronco só
     const mix = ctx.createGain()
     brilho.connect(synthGain); synthGain.connect(mix); admGain.connect(mix); gravGain.connect(mix)
-    const sh = ctx.createWaveShaper()
-    const curva = new Float32Array(2048)
-    for (let i = 0; i < 2048; i++) { const x = i / 1024 - 1; curva[i] = Math.tanh(0.8 * x) / Math.tanh(0.8) }
+    // o WaveShaper só aceita ±1 e corta seco acima (os transientes de W16/V12 ao
+    // pisar passam de 2): entra pela metade numa curva que cobre ±2. Até ±1 é a
+    // mesma tanh de antes; acima, satura macio em vez de ceifar
+    const sh = ctx.createWaveShaper(), pre = ctx.createGain()
+    pre.gain.value = 0.5
+    const curva = new Float32Array(4096)
+    for (let i = 0; i < 4096; i++) { const x = 2 * (i / 2048 - 1); curva[i] = Math.tanh(0.8 * x) / Math.tanh(0.8) }
     sh.curve = curva
+    sh.oversample = "2x"
     const comp = ctx.createDynamicsCompressor()
     comp.threshold.value = -20; comp.ratio.value = 3; comp.knee.value = 12; comp.attack.value = 0.015; comp.release.value = 0.3
     const out = ctx.createGain()
     out.gain.value = 0
-    mix.connect(sh); sh.connect(comp); comp.connect(out); out.connect(this.master)
+    mix.connect(pre); pre.connect(sh); sh.connect(comp); comp.connect(out); out.connect(this.master)
     // ambiente: reflexo no asfalto + ecos curtos (guard-rail, prédios). Embaixo do
     // viaduto/túnel o eco cresce (ambiente()); o motor seco soa "de estúdio"
     const amb = ctx.createConvolver(), ambGain = ctx.createGain()
@@ -283,7 +288,7 @@ export class AudioBus {
     out.connect(amb); amb.connect(ambGain); ambGain.connect(this.master)
     // efeitos de alívio passam pela mesma saturação (soam "do escape")
     const fx = ctx.createGain()
-    fx.connect(sh)
+    fx.connect(pre)
     // turbo: apito do eixo (seno + harmônico inarmônico) e sopro filtrado
     const apito = ctx.createOscillator(), apito2 = ctx.createOscillator(), apito2g = ctx.createGain(), apitoGain = ctx.createGain()
     apito.type = "sine"; apito2.type = "sine"; apito2g.gain.value = 0.18; apitoGain.gain.value = 0
@@ -421,10 +426,15 @@ export class AudioBus {
     src.buffer = this.partidaBuf
     // motor grande: arranque mais pesado
     src.playbackRate.value = this.perfil.eventos.length >= 8 ? 0.88 : this.perfil.eventos.length >= 6 ? 0.94 : 1
-    g.gain.value = 0.55
+    // a gravação pega por volta de 1,2 s e segue em lenta até 2,6 s: o ronco do
+    // jogo assume logo depois da pegada e a lenta gravada sai (sem duas lentas)
+    const r = src.playbackRate.value, t0 = ctx.currentTime
+    g.gain.setValueAtTime(0.55, t0)
+    g.gain.setValueAtTime(0.55, t0 + 1.2 / r)
+    g.gain.linearRampToValueAtTime(0, t0 + 1.75 / r)
     src.connect(g); g.connect(this.master!)
-    src.start()
-    this.partidaAte = ctx.currentTime + 1.0 / src.playbackRate.value
+    src.start(); src.stop(t0 + 1.8 / r)
+    this.partidaAte = t0 + 1.15 / r
   }
 
   private aplicarPerfil() {

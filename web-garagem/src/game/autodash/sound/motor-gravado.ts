@@ -81,7 +81,9 @@ export class MotorGravado {
   private aleatorio: Sorteio
   private amp = 0
   private prob = [0, 1, 0]        // probabilidade atual de cada classe
-  /** cilindros do motor que está tocando (define a frequência de explosão alvo) */
+  /** Cilindros que definem a frequência de explosão alvo. Fica em 4 mesmo sob
+   *  motores maiores: aí a gravação é só textura mecânica (válvulas, admissão)
+   *  e precisa tocar no MESMO giro do motor, não na frequência de explosão dele. */
   cilindros = 4
 
   constructor(sr: number, seed = 7) {
