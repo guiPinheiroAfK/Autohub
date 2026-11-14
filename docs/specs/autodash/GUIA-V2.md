@@ -220,9 +220,18 @@ Feita em paralelo com a Fase 5 por pedido do usuário. Insumo: `docs/pesquisa/vi
 - [x] E10 bloqueio com fresta (≥4★): três viaturas atravessadas (tipo `roadblock`), a fresta numa faixa do meio e o acostamento livre. Civis que chegam encostam na fresta. Fresta dá bônus; acostamento perde velocidade no chão; bater = preso.
 - [x] E13 helicóptero (5★): holofote no asfalto logo à frente do carro, segue com atraso; dentro dele você é visto. Teto 230 (sempre 10 abaixo do carro). Embaixo do viaduto ele te perde por 4 s. Sprite no céu com facho e farol.
 - [x] Tecla de debug **O** (só solo, correndo): sobe uma estrela. Volta para a lista O L B V J K I U.
+- [x] Atalho de teste **[P] na garagem** (como o [Z] do motor): larga já perseguido em 1★, sem evento de mapa sorteado; correndo, **0–5** põem a caçada direto na estrela (0 encerra) e o calor não sobe sozinho. A garagem mostra "testes: [Z] motor · [P] polícia".
 - [x] Gancho da sirene: `eng.policia.sirene` (0..1, pela viatura mais perto). **TODO (sessão do som):** tocar a sirene com pan pela viatura; aqui só o valor é calculado.
 
 Critério de aceite: sem perseguição o jogo é idêntico (golden inalterado, ou muda só em commit próprio e justificado). No navegador: furar o radar dá 1★ e uma viatura; a estrela sobe com o tempo; 3★ traz pregos, 4★ bloqueio, 5★ helicóptero; despistar zera as viaturas e as estrelas esfriam. Build, lint e test verdes.
+
+**Como testar** (garagem → **[P]**; segure W):
+1. **1★** (largada): uma viatura chega por trás; o painel à direita do retrovisor diz "TE VIRAM" e o aviso "TESTE · estrelas nas teclas 0–5". Abra distância em reta: a barra "DESPISTANDO" enche, as viaturas desistem (+pontos) e a estrela esfria piscando.
+2. **2★** (tecla 2): duas viaturas, o ritmo de perseguição de antes.
+3. **3★** (tecla 3): três viaturas; em ~2 s, três placas PARE ("PREGOS 2 km/1 km") e um tapete prateado com reflexo âmbar em 2 faixas, viatura parada no acostamento. Ache a faixa livre; se passar por cima: "PNEU FURADO", faísca no aro, carro preso em 75% da velocidade final por 8 s.
+4. **4★** (tecla 4): quatro viaturas; giroflex no horizonte e placas "BLOQUEIO"; três viaturas atravessadas com a fresta numa faixa do meio. Fresta = "PASSOU NA FRESTA! +2500"; acostamento passa mas freia na grama; bater = "POLÍCIA TE PEGOU". Os eventos alternam bloqueio e pregos.
+5. **5★** (tecla 5): "HELICÓPTERO!", facho e círculo de luz no capô ("NO HOLOFOTE"). Pé no fundo em reta (acima de 230 km/h) deixa a luz para trás ("FORA DO HOLOFOTE"); embaixo de viaduto: "TE PERDEU DE VISTA".
+6. **0** encerra a caçada. Fora do teste, o caminho natural é radar (1★) ou blitz (2★) a partir do nível 4, e a tecla **O** sobe uma estrela.
 
 **Resultado (14/11):** golden inalterado em todos os commits. Conferido no navegador (porta 5182, quadro a quadro, porque o painel do navegador estava oculto e o `requestAnimationFrame` parava): HUD ao lado do retrovisor; 3★ com três viaturas no retrovisor; placa PARE de longe; tapete com faixa livre; bloqueio com giroflex visível de longe e "PASSOU NA FRESTA! +2500"; helicóptero com holofote no capô, que perde o carro acima de 230 km/h e deixa despistar.
 - **Bug antigo corrigido no caminho** (380d989): as viaturas paradas da blitz e do radar morriam no quadro em que nasciam (o tráfego matava parado a mais de `DRAW_DIST + 140` segmentos, e os eventos nascem a 1,7 × `DRAW_DIST`). Agora aparecem.
@@ -289,4 +298,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-14 | 606bfc6, aeac94c, ad362c4, e29459e, e334e16 | Fase 6: GUIA detalhado; nível de procurado (calor, infrações, despiste, esfriamento, viaturas por estrela, tecla O); HUD de estrelas; tapete de pregos (E8); teste de cenário com sonda no harness. | não alterado |
 | 2026-11-14 | 380d989 | Viaturas paradas da blitz e do radar morriam ao nascer (limite à frente menor que o ponto de nascimento dos eventos). | não alterado (os replays não chegam à blitz) |
 | 2026-11-14 | cdabbe9, 221bdd3, f124c6f | Fase 6: bloqueio com fresta (E10), helicóptero com holofote (E13), anúncio de estrela sem empilhar. | não alterado |
+| 2026-11-14 | 6d3adc8, (este) | Atalho de teste de polícia: garagem [P], estrelas 0–5. Texto "testes: [Z] motor · [P] polícia" na garagem. | atualizado no replay solo (+35 chamadas: o texto na garagem). Cenas de corrida e duelo não mudaram. |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

@@ -120,6 +120,12 @@ export function renderGarage(eng: AutoDashEngine) {
     eng.audio.ui()
   })
   pill(eng, "ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); eng.testeMotor = false; eng.testePolicia = false; startRace(eng) }, { primary: true, h: 42, font: 17 })
+  // atalhos de teste (playtest): pista vazia para ouvir o motor e perseguição direta
+  ctx.fillStyle = "rgba(248,250,252,0.45)"
+  ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.textAlign = "center"
+  ctx.fillText("testes: [Z] motor · [P] polícia (estrelas 0–5)", px, 528)
+  ctx.textAlign = "left"
 
   // painel de specs e customização
   glass(eng, 486, 66, 456, 460, 18)
