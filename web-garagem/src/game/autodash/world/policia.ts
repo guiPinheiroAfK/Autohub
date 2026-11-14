@@ -8,7 +8,7 @@
 // As viaturas continuam sendo tráfego com a IA PoliceDriver (ADR 0008); aqui só
 // se decide QUANTAS existem e com que teto e arrancada elas andam.
 import { AutoDashEngine, H, W, PLAYER_Z } from "../engine"
-import { CARS, DRAW_DIST, SEG_LEN } from "../data"
+import { CARS, DRAW_DIST, SEG_LEN, KMH2UPS } from "../data"
 import { burst } from "../fx/particles"
 import { wrapDz } from "../traffic/spawner"
 import { type Traffic } from "../traffic/types"
@@ -21,6 +21,7 @@ export interface NivelEstrela {
   despisteS: number  // segundos sem ser visto para despistar
   eventos: readonly EventoPolicia[] // eventos da estrela, em rodízio
   eventoCadaS: number // intervalo entre eventos (s)
+  helicoptero: boolean // E13: helicóptero com holofote
 }
 
 /** Eventos lançados à frente durante a caçada (pesquisa visual 4.5). */
@@ -28,11 +29,11 @@ export type EventoPolicia = "pregos" | "bloqueio"
 
 /** Uma linha por estrela (índice 0 = ★). Fonte: GUIA-V2, Fase 6. */
 export const ESTRELAS: readonly NivelEstrela[] = [
-  { viaturas: 1, teto: 205, arrancada: 50, despisteS: 3, eventos: [], eventoCadaS: 0 },
-  { viaturas: 2, teto: 215, arrancada: 55, despisteS: 4, eventos: [], eventoCadaS: 0 },
-  { viaturas: 3, teto: 222, arrancada: 60, despisteS: 5, eventos: ["pregos"], eventoCadaS: 22 },
-  { viaturas: 4, teto: 228, arrancada: 65, despisteS: 6, eventos: ["bloqueio", "pregos"], eventoCadaS: 20 },
-  { viaturas: 4, teto: 234, arrancada: 70, despisteS: 7, eventos: ["bloqueio", "pregos"], eventoCadaS: 18 },
+  { viaturas: 1, teto: 205, arrancada: 50, despisteS: 3, eventos: [], eventoCadaS: 0, helicoptero: false },
+  { viaturas: 2, teto: 215, arrancada: 55, despisteS: 4, eventos: [], eventoCadaS: 0, helicoptero: false },
+  { viaturas: 3, teto: 222, arrancada: 60, despisteS: 5, eventos: ["pregos"], eventoCadaS: 22, helicoptero: false },
+  { viaturas: 4, teto: 228, arrancada: 65, despisteS: 6, eventos: ["bloqueio", "pregos"], eventoCadaS: 20, helicoptero: false },
+  { viaturas: 4, teto: 234, arrancada: 70, despisteS: 7, eventos: ["bloqueio", "pregos"], eventoCadaS: 18, helicoptero: true },
 ]
 
 export type Infracao = "radar" | "blitz" | "encostao" | "bloqueio" | "debug"
@@ -58,6 +59,12 @@ export const FURADO_TETO = 0.75     // fração do topSpeed com o pneu furado
 export const FURADO_GRIP = 0.8      // aderência da direção com o pneu furado
 export const FURADO_FREIO = 90      // km/h/s: como o carro cai até o teto do furado
 export const BONUS_FRESTA = 2500    // E10: passar na fresta do bloqueio
+export const HELI_TETO = 230        // E13: km/h do helicóptero (antes do limite do carro)
+export const HELI_MARGEM = 10       // km/h: o helicóptero nunca alcança o teto do carro
+export const HELI_ALVO = 1000       // u: o holofote mira logo à frente do carro (cai no capô)
+export const HOLOFOTE_Z = 1600      // u: meia-profundidade do círculo de luz
+export const HOLOFOTE_X = 0.42      // meia-largura do círculo (fração da meia-pista)
+export const HELI_CEGO_S = 4        // s sem te ver depois de passar embaixo do viaduto
 
 export interface Procurado {
   calor: number     // 0..MAX_CALOR
@@ -70,7 +77,12 @@ export interface Procurado {
   faiscaT: number   // E8: s até a próxima faísca do aro
   ladoFurado: number // -1 ou 1: de que lado sai a faísca
   bloqueios: Bloqueio[] // E10: bloqueios à frente (para o bônus da fresta)
+  heli: Heli | null // E13: helicóptero (só em 5★)
+  holofote: boolean // E13: o carro está dentro do círculo de luz
 }
+
+/** z e x são do PONTO DE LUZ no asfalto; o helicóptero voa sobre ele. */
+export interface Heli { z: number; x: number; v: number; cegoT: number }
 
 export interface Bloqueio { z: number; fresta: number; checado: boolean }
 
@@ -78,7 +90,7 @@ export function novoProcurado(): Procurado {
   return {
     calor: 0, visto: false, esfriaT: 0, sirene: 0,
     eventoT: PRIMEIRO_EVENTO_S, eventoIdx: 0, furadoT: 0, faiscaT: 0, ladoFurado: 1,
-    bloqueios: [],
+    bloqueios: [], heli: null, holofote: false,
   }
 }
 
@@ -169,6 +181,8 @@ export function atualizarPolicia(eng: AutoDashEngine, dt: number, playerZ: numbe
 
   if (!viaturas) {
     p.visto = false
+    p.heli = null
+    p.holofote = false
     eng.policeEscapeT = 0
     eng.policeChaseT = 0
     // esfriamento: sem caçada, perde uma estrela a cada ESFRIA_S
@@ -183,7 +197,13 @@ export function atualizarPolicia(eng: AutoDashEngine, dt: number, playerZ: numbe
   }
 
   eng.policeChaseT += dt
-  p.visto = nearest <= VISAO
+  // E13: em 5★ o helicóptero chega por trás; dentro do holofote você é visto
+  if (nivelDe(estrelasDe(p.calor))?.helicoptero && !p.heli) {
+    p.heli = { z: ((playerZ - 2500) % eng.trackLen + eng.trackLen) % eng.trackLen, x: eng.playerX, v: Math.max(150, eng.speed), cegoT: 0 }
+    eng.floaters.push({ text: "🚁 HELICÓPTERO!", color: "#fde047", y: H * 0.3, life: 2, big: true })
+  }
+  p.holofote = p.heli ? passoHeli(eng, dt, playerZ) : false
+  p.visto = nearest <= VISAO || p.holofote
   // sendo visto, a caçada esquenta com o tempo
   if (p.visto) {
     const antes = estrelasDe(p.calor)
@@ -231,6 +251,8 @@ function despistar(eng: AutoDashEngine) {
   p.calor = n // perde o progresso fracionário
   p.esfriaT = ESFRIA_S
   p.visto = false
+  p.heli = null
+  p.holofote = false
 }
 
 // ---------- eventos por estrela ----------
@@ -353,4 +375,25 @@ function passoBloqueios(eng: AutoDashEngine, playerZ: number) {
   if (p.bloqueios.some(b => wrapDz(eng, b.z, playerZ) < -20000)) {
     p.bloqueios = p.bloqueios.filter(b => wrapDz(eng, b.z, playerZ) >= -20000)
   }
+}
+
+/**
+ * E13 — o ponto de luz persegue um alvo logo à frente do carro, com atraso
+ * (rampa de velocidade) e teto abaixo do carro: em reta limpa e pé no fundo
+ * o círculo fica para trás. Embaixo do viaduto o helicóptero te perde por
+ * HELI_CEGO_S. Devolve se o carro está dentro do círculo.
+ */
+function passoHeli(eng: AutoDashEngine, dt: number, playerZ: number): boolean {
+  const h = eng.policia.heli!
+  const dz = wrapDz(eng, playerZ + HELI_ALVO, h.z) // >0: o alvo está à frente da luz
+  const teto = Math.min(HELI_TETO, CARS[eng.cfg.carIdx].topSpeed - HELI_MARGEM)
+  const vAlvo = clamp(eng.speed + dz / 30, 0, teto)
+  h.v += clamp(vAlvo - h.v, -80 * dt, 60 * dt)
+  h.z = ((h.z + h.v * KMH2UPS * dt) % eng.trackLen + eng.trackLen) % eng.trackLen
+  h.x += clamp(eng.playerX - h.x, -0.6 * dt, 0.6 * dt)
+  if (eng.sobViaduto) h.cegoT = HELI_CEGO_S
+  else if (h.cegoT > 0) h.cegoT = Math.max(0, h.cegoT - dt)
+  return h.cegoT <= 0
+    && Math.abs(wrapDz(eng, playerZ, h.z)) < HOLOFOTE_Z
+    && Math.abs(eng.playerX - h.x) < HOLOFOTE_X
 }

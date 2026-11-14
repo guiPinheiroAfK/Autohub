@@ -16,6 +16,7 @@ import { CLIMAS } from "../world/weather"
 import { type Traffic, KINDS } from "../traffic/types"
 import { poly } from "./primitives"
 import { drawRamalSeg } from "./ramal"
+import { drawHolofote, drawHelicoptero, type PontoTela } from "./policia"
 
 const PLACA_ATALHO_DIR: RoadSign = { z: 0, type: "atalho", lado: 1 }
 const PLACA_ATALHO_ESQ: RoadSign = { z: 0, type: "atalho", lado: -1 }
@@ -135,6 +136,10 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     const arr = puBySeg.get(si)
     if (arr) arr.push(p); else puBySeg.set(si, [p])
   }
+  // holofote do helicóptero (Fase 6, E13): segmento do ponto de luz e onde ele cai na tela
+  const heli = eng.policia.heli
+  const heliIdx = heli ? Math.floor(heli.z / SEG_LEN) % N : -1
+  let luz: PontoTela | null = null
   // bordas da pista acumuladas para o passe de brilho do asfalto
   const edgeL: number[] = []
   const edgeR: number[] = []
@@ -337,6 +342,11 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         sprites.push({ kind: "car", t, x: sx + sw * t.offset, y: sy, w: sw * KINDS[t.kind].w, dz: dz1 + SEG_LEN * pct })
       }
     }
+    if (idx === heliIdx && !nearField) {
+      const pct = (heli!.z - z1) / SEG_LEN
+      const sw = sw1 + (sw2 - sw1) * pct
+      luz = { x: sx1 + (sx2 - sx1) * pct + sw * heli!.x, y: sy1 + (sy2 - sy1) * pct, w: sw }
+    }
     // do campo próximo só saem VEÍCULOS: cenário e pickups ali ficariam
     // gigantes e sem leitura, e não é informação que o jogador precise
     if (nearField) continue
@@ -449,6 +459,9 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     ctx.fill()
   }
 
+  // o círculo de luz fica no asfalto, embaixo dos carros
+  if (luz && heli && heli.cegoT <= 0) drawHolofote(ctx, luz)
+
   // desenha do fundo pro primeiro plano
   for (let i = sprites.length - 1; i >= 0; i--) {
     const s = sprites[i]
@@ -494,4 +507,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     ctx.fillStyle = g
     ctx.fillRect(0, top, W, alto)
   }
+
+  // helicóptero por cima de tudo (até da neblina: é luz no céu)
+  if (heli) drawHelicoptero(eng, luz)
 }

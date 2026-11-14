@@ -1,10 +1,11 @@
 // AutoDash — render/policia.ts. Desenho da polícia por estrelas (Fase 6):
-// HUD de estrelas, pregos, placa e bloqueio. As regras moram em world/policia.ts.
-import { AutoDashEngine, W } from "../engine"
+// HUD de estrelas, pregos, placa, bloqueio e helicóptero. As regras moram em world/policia.ts.
+import { AutoDashEngine, W, H, PLAYER_Z } from "../engine"
 import { glass } from "../ui/widgets"
 import { clamp, shade } from "../math"
 import { rr } from "./primitives"
-import { estrelasDe, nivelDe, ESTRELAS, ESFRIA_S } from "../world/policia"
+import { estrelasDe, nivelDe, ESTRELAS, ESFRIA_S, HOLOFOTE_X } from "../world/policia"
+import { wrapDz } from "../traffic/spawner"
 
 const FONTE = "'Space Grotesk', 'Segoe UI', sans-serif"
 
@@ -99,12 +100,16 @@ export function renderEstrelas(eng: AutoDashEngine) {
 
 
 
-/** Avisos curtos sob o painel de estrelas (pneu furado). */
+/** Avisos curtos sob o painel de estrelas (pneu furado, helicóptero). */
 function avisos(eng: AutoDashEngine, y: number) {
   const ctx = eng.ctx
   const p = eng.policia
   const linhas: { t: string; c: string }[] = []
   if (p.furadoT > 0) linhas.push({ t: `PNEU FURADO ${Math.ceil(p.furadoT)}s`, c: "#fb923c" })
+  if (p.heli) {
+    const t = p.holofote ? "🚁 NO HOLOFOTE" : p.heli.cegoT > 0 ? "🚁 TE PERDEU DE VISTA" : "🚁 FORA DO HOLOFOTE"
+    linhas.push({ t, c: p.holofote ? "#fde047" : "#cbd5e1" })
+  }
   if (!linhas.length) return
   ctx.font = `bold 12px ${FONTE}`
   ctx.textAlign = "center"
@@ -213,4 +218,78 @@ export function drawViaturaAtravessada(ctx: CanvasRenderingContext2D, x: number,
   rr(ctx, x - barW / 2, barY, barW / 2, barH, barH * 0.35)
   ctx.fillStyle = on ? "#1e293b" : "#3b82f6"
   rr(ctx, x, barY, barW / 2, barH, barH * 0.35)
+}
+
+// ---------- helicóptero (chamados por render/road.ts) ----------
+
+export interface PontoTela { x: number; y: number; w: number }
+
+/**
+ * Círculo do holofote no asfalto (E13). Somado com "lighter": clareia o que
+ * já está lá em vez de pintar por cima. Um gradiente por quadro, só em 5★.
+ */
+export function drawHolofote(ctx: CanvasRenderingContext2D, s: PontoTela) {
+  const rx = s.w * HOLOFOTE_X * 1.15, ry = Math.max(3, rx * 0.32)
+  if (rx < 3) return
+  ctx.save()
+  ctx.globalCompositeOperation = "lighter"
+  ctx.translate(s.x, s.y)
+  ctx.scale(1, ry / rx)
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx)
+  g.addColorStop(0, "rgba(255,250,215,0.42)")
+  g.addColorStop(0.7, "rgba(255,250,215,0.22)")
+  g.addColorStop(1, "rgba(255,250,215,0)")
+  ctx.fillStyle = g
+  ctx.beginPath(); ctx.arc(0, 0, rx, 0, Math.PI * 2); ctx.fill()
+  ctx.restore()
+}
+
+/**
+ * Helicóptero no céu sobre o ponto de luz, com o facho até o asfalto. Quando
+ * a luz ficou para trás (você fugiu dela), ele sai da tela por cima.
+ */
+export function drawHelicoptero(eng: AutoDashEngine, luz: PontoTela | null) {
+  const h = eng.policia.heli
+  if (!h) return
+  const ctx = eng.ctx
+  const dz = wrapDz(eng, h.z, eng.position + PLAYER_Z)
+  if (dz < -1500) return // passou por cima e ficou para trás
+  const agora = performance.now()
+  const x = luz ? luz.x : W / 2 + (h.x - eng.playerX) * 260
+  const y = H * 0.22 + Math.sin(agora / 420) * 3 // abaixo do retrovisor (topo, 10..96)
+  // facho: trapézio translúcido do helicóptero até o círculo
+  if (luz && h.cegoT <= 0) {
+    const rx = luz.w * HOLOFOTE_X * 1.15
+    ctx.save()
+    ctx.globalCompositeOperation = "lighter"
+    const g = ctx.createLinearGradient(0, y, 0, luz.y)
+    g.addColorStop(0, "rgba(255,250,215,0.12)")
+    g.addColorStop(1, "rgba(255,250,215,0.05)")
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.moveTo(x - 3, y + 6); ctx.lineTo(x + 3, y + 6)
+    ctx.lineTo(luz.x + rx, luz.y); ctx.lineTo(luz.x - rx, luz.y)
+    ctx.closePath(); ctx.fill()
+    ctx.restore()
+  }
+  // corpo, cauda, esquis e rotor borrado
+  ctx.fillStyle = "#0b1020"
+  ctx.beginPath(); ctx.ellipse(x, y, 17, 8, 0, 0, Math.PI * 2); ctx.fill()
+  ctx.fillRect(x + 12, y - 2, 26, 3)
+  ctx.fillRect(x + 36, y - 7, 3, 9)
+  ctx.fillRect(x - 12, y + 11, 24, 2)
+  ctx.fillRect(x - 8, y + 7, 2, 5); ctx.fillRect(x + 6, y + 7, 2, 5)
+  ctx.fillStyle = "rgba(148,163,184,0.55)"
+  const giro = (agora / 30) % 2 < 1 ? 1 : 0.6
+  ctx.fillRect(x - 34 * giro, y - 11, 68 * giro, 2)
+  // farol do holofote aceso embaixo do corpo: é o que se lê no céu escuro
+  if (h.cegoT <= 0) {
+    ctx.fillStyle = "#fff7d6"
+    ctx.beginPath(); ctx.arc(x - 4, y + 6, 2.6, 0, Math.PI * 2); ctx.fill()
+  }
+  // luz anticolisão piscando
+  if (Math.floor(agora / 400) % 2 === 0) {
+    ctx.fillStyle = "#ef4444"
+    ctx.beginPath(); ctx.arc(x, y - 9, 2.2, 0, Math.PI * 2); ctx.fill()
+  }
 }

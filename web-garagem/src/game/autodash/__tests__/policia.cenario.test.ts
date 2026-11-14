@@ -153,4 +153,35 @@ describe("polícia por estrelas — cenário no engine", () => {
     expect(fatos.ganho).toBeGreaterThanOrEqual(BONUS_FRESTA)
     expect(fatos.esquentou).toBeGreaterThanOrEqual(INFRACOES.bloqueio)
   }, 60_000)
+
+  it("5★: o helicóptero vê pelo holofote, e pé no fundo em reta tira o carro da luz", async () => {
+    const O = 300
+    const fatos: Record<string, any> = { heliVeio: -1, vistoSoPeloHeli: false, saiuDaLuz: false, despiste: -1 }
+    await runScenario(O + 60 * 70, 616161, (i, api) => {
+      LARGADA(i, api)
+      if (i >= O && i <= O + 4) api.tap("o")
+    }, (i, eng) => {
+      if (i === 0) eng.render = () => {}
+      eng.traffic = eng.traffic.filter((t: any) => t.role !== "civilian" && t.role !== "oncoming")
+      eng.eventTimer = 1e9
+      eng.obstacles = eng.obstacles.filter((o: any) => o.kind !== "pregos")
+      eng.traffic = eng.traffic.filter((t: any) => t.kind !== "roadblock")
+      eng.playerX = 0
+      // as viaturas ficam longe: quem te vê é só o helicóptero
+      for (const t of viaturas(eng)) t.z = ((eng.position - 30000) % eng.trackLen + eng.trackLen) % eng.trackLen
+      const p = eng.policia
+      if (p.heli && fatos.heliVeio < 0) fatos.heliVeio = i
+      if (p.holofote && p.visto) fatos.vistoSoPeloHeli = true
+      if (fatos.vistoSoPeloHeli && p.heli && !p.holofote) fatos.saiuDaLuz = true
+      if (i > O + 5 && fatos.despiste < 0 && viaturas(eng).length === 0) {
+        fatos.despiste = i
+        fatos.heliDepois = p.heli
+      }
+    })
+    expect(fatos.heliVeio).toBeGreaterThan(O)
+    expect(fatos.vistoSoPeloHeli).toBe(true)
+    expect(fatos.saiuDaLuz).toBe(true)
+    expect(fatos.despiste).toBeGreaterThan(fatos.heliVeio)
+    expect(fatos.heliDepois).toBeNull()
+  }, 60_000)
 })
