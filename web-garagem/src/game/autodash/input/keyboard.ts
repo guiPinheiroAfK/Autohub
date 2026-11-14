@@ -17,6 +17,7 @@ import { duelJoin } from "../modes/duel"
 import { AutoDashEngine, H } from "../engine"
 import { saveConfig, CARS, PAINTS, STRIPES, NEONS, WHEELS, WINGS } from "../data"
 import { shiftUp, shiftDown } from "../physics/gearbox"
+import { teclaEstetica } from "../render/menus/estetica"
 
 export function toggleMute(eng: AutoDashEngine) {
   eng.cfg.sound = !eng.cfg.sound
@@ -116,6 +117,8 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "m" || k === "escape") toMenu(eng)
       break
     case "garage": {
+      // Fase 7: aba estética, prévia na pista e as teclas novas (S W A F Q D H P)
+      if (teclaEstetica(eng, k)) break
       const custom = eng.cfg.customs[eng.cfg.carIdx]
       if (k === "arrowleft") { eng.cfg.carIdx = (eng.cfg.carIdx + CARS.length - 1) % CARS.length; eng.audio.ui() }
       if (k === "arrowright") { eng.cfg.carIdx = (eng.cfg.carIdx + 1) % CARS.length; eng.audio.ui() }

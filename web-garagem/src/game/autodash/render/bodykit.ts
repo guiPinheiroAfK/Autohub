@@ -128,13 +128,13 @@ export function saiasEDifusor(ctx: CanvasRenderingContext2D, w: number, h: numbe
 
 /** Asa alta ("pescoço de cisne"): plano bem acima do teto, preso por cima. */
 export function asaAlta(ctx: CanvasRenderingContext2D, w: number, h: number, bx: number, by: number) {
-  // suportes curvos
-  ctx.fillRect(bx + w * 0.22, by - h * 0.26, w * 0.035, h * 0.40)
-  ctx.fillRect(bx + w * 0.745, by - h * 0.26, w * 0.035, h * 0.40)
+  // suportes presos por cima do plano
+  ctx.fillRect(bx + w * 0.22, by - h * 0.10, w * 0.035, h * 0.24)
+  ctx.fillRect(bx + w * 0.745, by - h * 0.10, w * 0.035, h * 0.24)
   // plano principal e flap
-  rr(ctx, bx - w * 0.06, by - h * 0.34, w * 1.12, h * 0.08, w * 0.03)
-  rr(ctx, bx - w * 0.02, by - h * 0.40, w * 1.04, h * 0.05, w * 0.02)
+  rr(ctx, bx - w * 0.06, by - h * 0.13, w * 1.12, h * 0.065, w * 0.03)
+  rr(ctx, bx - w * 0.02, by - h * 0.165, w * 1.04, h * 0.04, w * 0.02)
   // placas laterais
-  ctx.fillRect(bx - w * 0.07, by - h * 0.44, w * 0.025, h * 0.20)
-  ctx.fillRect(bx + w * 1.045, by - h * 0.44, w * 0.025, h * 0.20)
+  ctx.fillRect(bx - w * 0.07, by - h * 0.18, w * 0.025, h * 0.15)
+  ctx.fillRect(bx + w * 1.045, by - h * 0.18, w * 0.025, h * 0.15)
 }

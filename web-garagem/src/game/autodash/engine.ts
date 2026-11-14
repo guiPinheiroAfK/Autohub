@@ -25,6 +25,7 @@ import { renderTrackPreview, renderRaceLobby, renderRaceCode, renderRaceWait, re
 import { renderRaceHud } from "./render/race-hud"
 import { renderDuelLobby, renderDuelCode, renderDuelWaiting, renderDuelSpectate, renderDuelResult } from "./render/menus/duel"
 import { onKeyDown, onKeyUp } from "./input/keyboard"
+import { type AbaGaragem } from "./render/menus/estetica"
 import { onMouseDown, onMouseUp, onMouseMove, onWheel, onCtx } from "./input/pointer"
 
 // AutoDash — engine pseudo-3D (estilo NFS de PSP) em Canvas 2D puro.
@@ -206,6 +207,9 @@ export class AutoDashEngine {
   trechos: TrechoInfo[] = []
   demoT = 0
   revAmostraT = 0 // acelerada de amostra na garagem ao trocar o motor
+  // garagem da Fase 7 (render/menus/estetica.ts)
+  abaGaragem: AbaGaragem = "carro"
+  previaPista = false // carro na pista do bioma escolhido, sem o painel
 
   // input
   keys = new Set<string>()
