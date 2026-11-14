@@ -2,11 +2,11 @@
 
 exports[`AutoDash — cenários golden (corrida e duelo) > corrida com bots: lobby -> largada -> pilotagem -> pausa 1`] = `
 {
-  "calls": 22830775,
+  "calls": 22809273,
   "finalMode": "race",
   "finalState": "racing",
   "frames": 1500,
-  "hash": "42bb2ac5c090c53b16f30f7cc7bfb8be48ec6bb40a73b222f257acb9b2ef14d0",
+  "hash": "2f2dfead704c8d8970b5d39147b0991943c35418f263436bf881edccaf557326",
 }
 `;
 
