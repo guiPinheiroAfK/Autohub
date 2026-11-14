@@ -217,6 +217,17 @@ Checklist:
 
 Critério de aceite: build, lint e testes verdes. Golden muda só em commits próprios (HUD do combustível; caminhão e vácuo mudam o trânsito e a corrida). No navegador: o posto aparece e abastece; a pane seca não encerra a rodada; o convite de racha aparece, aceita com [F] e termina com resultado; obra, comboio e óleo aparecem e se leem a tempo; vácuo aparece no HUD atrás de um carro.
 
+**Como testar** (solo, `http://localhost:5173/autodash`):
+1. Menu → [ENTER] → garagem → **[H]** ("testar racha + posto"). Largada normal com o tanque em 40%.
+2. Logo depois do verde: medidor **COMB** ao lado do NOS e "⛽ … m" acima dele; placas azuis com bomba (POSTO, À DIREITA, ENTRADA).
+3. Pegue a faixa da direita que descola da pista e passe pela cobertura "POSTO 24h" a **até 70 km/h**: "ABASTECENDO", a barra sobe ~20% por segundo. Acima de 70 aparece "reduza pra 70".
+4. ~4 s depois do verde (acima de 70 km/h) um desafiante encosta ao lado com **pisca-alerta** e o painel "te chamou pro racha". Pisque o farol **[F]** em até 7 s para aceitar (ou ignore: ele buzina e vai embora).
+5. Na disputa: painel com "faltam … m" e a vantagem (▲ azul na frente, ▼ laranja atrás). Fique atrás dele numa faixa vizinha: ele acende o freio, balança e **fecha a sua faixa** 0,5 s depois. Finta (troca de lado) funciona. Encostar empurra, não mata.
+6. Fim: placa quadriculada CHEGADA; vencer mostra "+1 REP" (a reputação fica salva na config).
+7. Cole atrás de qualquer carro rápido na mesma faixa: "💨 VÁCUO +n%" acima do carro e linhas de ar; ao sair, "ESTILINGUE".
+8. Durante o solo, teclas **3** obra, **4** comboio, **5** óleo, **6** tanque na reserva, **1** posto, **2** racha. Observe: seta âmbar piscando e trânsito saindo do lado fechado (obra); fresta que anda com seta de 1,3 s e "FRESTA!" ao passar (comboio); carro batido com pisca-alerta e "ÓLEO!" com o carro dançando (óleo); caminhões dando seta longa e "ensaiando" antes de trocar de faixa.
+9. Pane seca: tecla 6, depois passe reto pelo posto. Com o tanque a zero o carro engasga, não acaba a rodada, e outro posto abre.
+
 Como ficou (diferenças do plano):
 - Vácuo passa da máxima porque `sim/update.ts` entrega ao passo longitudinal um `topSpeed` até 4% maior (`specComVacuo`); `sim/longitudinal.ts` não mudou. Medido em reta atrás de um caminhão (força 0,9): 246 → 253 km/h em 12 s. O teto desce em 1 s ao sair (estilingue), sem degrau.
 - Desafiante do racha acelera ~10–13 km/h/s (o carro padrão faz ~8–12 entre 120 e 200). O primeiro valor (30–40) deixava o jogador para trás sem chance.

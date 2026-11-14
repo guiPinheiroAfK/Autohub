@@ -9,6 +9,7 @@ import { iniciarTempo, seedDoTracado } from "../sim/clima"
 import { mulberry32 } from "../math"
 import { COMBUSTIVEL } from "../world/combustivel"
 import { RACHA } from "../world/racha"
+import { prepararTesteFase5 } from "../world/debug-eventos"
 
 export function startRace(eng: AutoDashEngine, seed?: number) {
   const corrida = eng.mode === "race"
@@ -55,6 +56,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.racha = null; eng.rachaT = RACHA.primeiroConviteS
   eng.comboio = null; eng.oleoT = 0
   eng.vacuo = 0; eng.vacuoS = 0; eng.estilingueT = 0
+  if (eng.testeFase5 && eng.mode === "solo") prepararTesteFase5(eng)
   eng.particles = []; eng.floaters = []
   eng.countT = 0
   // no duelo o verde é fixo pra manter os dois relógios alinhados

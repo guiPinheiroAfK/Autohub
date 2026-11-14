@@ -34,6 +34,7 @@ export function confirmName(eng: AutoDashEngine) {
 
 export function toMenu(eng: AutoDashEngine) {
   eng.testeMotor = false
+  eng.testeFase5 = false
   eng.mode = "solo"
   eng.duel = null
   eng.floaters = []

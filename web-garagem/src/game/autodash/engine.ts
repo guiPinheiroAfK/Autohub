@@ -166,6 +166,7 @@ export class AutoDashEngine {
   zones: Zone[] = []
   sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto
   testeMotor = false   // pista vazia para ouvir os motores (garagem → Z)
+  testeFase5 = false   // atalho de teste da Fase 5: racha e posto logo de cara (garagem → H)
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6

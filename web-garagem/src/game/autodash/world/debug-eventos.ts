@@ -2,9 +2,31 @@
 // (só no solo, correndo). Ficam ativas, como as outras de debug (GUIA, seção 3).
 import { type AutoDashEngine, H } from "../engine"
 import { COMBUSTIVEL } from "./combustivel"
+import { saveConfig } from "../data"
+import { startRace } from "../modes/race"
 import { spawnPosto } from "./posto"
 import { convidarRacha } from "../modes/racha"
 import { spawnEvent } from "./events"
+
+/**
+ * Atalho de teste da Fase 5 (garagem → H), como o [Z] do teste de motor: largada
+ * normal no solo com o tanque em 40% (o posto abre já no primeiro quadro), o
+ * convite de racha 4 s depois do verde e o primeiro evento sorteado aos 25 s.
+ */
+export function iniciarTesteFase5(eng: AutoDashEngine) {
+  eng.testeMotor = false
+  eng.testeFase5 = true
+  saveConfig(eng.cfg)
+  startRace(eng)
+}
+
+/** Chamado pela largada (modes/race.ts) quando o atalho está ligado. */
+export function prepararTesteFase5(eng: AutoDashEngine) {
+  eng.combustivel = 0.4
+  eng.rachaT = 4
+  eng.eventTimer = 25
+  eng.floaters.push({ text: "TESTE DA FASE 5: posto e racha logo à frente", color: "#94a3b8", y: H * 0.5, life: 2.4, big: false })
+}
 
 export function teclaDebugEvento(eng: AutoDashEngine, k: string) {
   // no dev server, a primeira tecla de debug expõe o engine para inspeção no console
