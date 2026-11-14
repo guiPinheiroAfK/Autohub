@@ -9,7 +9,8 @@ export type TrafficKind = "car" | "moto" | "truck" | "bus" | "police"
 //  - police:   perseguição — agressivo de propósito
 //  - oncoming: contramão — vem no sentido oposto, reto na faixa (speed negativa)
 //  - racha:    desafiante do convite de racha (Fase 5, modes/racha.ts)
-export type TrafficRole = "civilian" | "police" | "oncoming" | "racha"
+//  - comboio:  membro de um comboio com fresta (Fase 5, world/comboio.ts)
+export type TrafficRole = "civilian" | "police" | "oncoming" | "racha" | "comboio"
 
 // Estado do desafiante do racha (a IA é stateless: o estado mora no veículo).
 export interface RivalRacha {

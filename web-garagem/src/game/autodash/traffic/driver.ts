@@ -377,10 +377,23 @@ export class RachaDriver extends Driver {
   }
 }
 
+/**
+ * Comboio (E6): segue reto no ritmo do grupo. Quem decide a troca de faixa (a
+ * fresta andando) é world/comboio.ts; aqui só a trava de não entrar em ninguém.
+ */
+export class ComboioDriver extends Driver {
+  drive(self: Traffic, world: WorldView, dt: number): number {
+    const spd = this.antiOverlap(self, world, this.nearestAhead(self, world), self.speed)
+    this.applyMovement(self, world, spd, dt)
+    return spd
+  }
+}
+
 // Registro papel -> IA. Instâncias únicas compartilhadas (drivers são stateless).
 export const DRIVERS: Record<TrafficRole, Driver> = {
   civilian: new CivilianDriver(),
   police: new PoliceDriver(),
   oncoming: new OncomingDriver(),
   racha: new RachaDriver(),
+  comboio: new ComboioDriver(),
 }

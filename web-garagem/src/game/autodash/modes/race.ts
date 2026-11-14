@@ -53,6 +53,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.rngEv = mulberry32((eng.climaSeed ^ 0x5f3759df) >>> 0)
   eng.combustivel = 1; eng.postoLimite = COMBUSTIVEL.chamaPosto; eng.abastecendo = false
   eng.racha = null; eng.rachaT = RACHA.primeiroConviteS
+  eng.comboio = null; eng.oleoT = 0
   eng.particles = []; eng.floaters = []
   eng.countT = 0
   // no duelo o verde é fixo pra manter os dois relógios alinhados

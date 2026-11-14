@@ -4,6 +4,7 @@ import { burst } from "../fx/particles"
 import { AutoDashEngine, W, H } from "../engine"
 import { CARS, SEG_LEN } from "../data"
 import { wrapDz } from "../traffic/spawner"
+import { pisarNoOleo } from "./oleo"
 
 export function updateObstacles(eng: AutoDashEngine, playerZ: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -17,6 +18,11 @@ export function updateObstacles(eng: AutoDashEngine, playerZ: number) {
     const prev = o.prevD ?? d
     o.prevD = d
     const swept = prev > 0 && d <= 0 && prev < 1200 && prev - d < 2000
+    // óleo não é sólido: vale a mancha inteira e não depende de imunidade
+    if (o.kind === "oleo") {
+      if ((Math.abs(d) < o.len / 2 || swept) && Math.abs(o.offset - eng.playerX) < halfSum && !eng.crashed) pisarNoOleo(eng, o)
+      continue
+    }
     if ((Math.abs(d) < o.len / 2 + 40 || swept) && Math.abs(o.offset - eng.playerX) < halfSum && !eng.crashed && eng.immuneT <= 0) {
       if (o.kind === "cone") {
         // cone é perdoável: tranco, perde velocidade e combo — não mata

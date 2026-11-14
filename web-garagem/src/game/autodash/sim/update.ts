@@ -22,6 +22,9 @@ import { updateObstacles } from "../world/obstacles"
 import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro } from "../world/ramais"
 import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
 import { atualizarRacha } from "../modes/racha"
+import { atualizarObras } from "../world/obra"
+import { atualizarComboio } from "../world/comboio"
+import { aderenciaOleo, passoOleo } from "../world/oleo"
 
 export function update(eng: AutoDashEngine, dt: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -118,7 +121,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   // ---------- racing ----------
-  const grip = spec.grip * tyreOf(spec).grip * climaAtual(eng).grip
+  // óleo (E15): aderência cai por um instante em cima da mancha
+  const grip = spec.grip * tyreOf(spec).grip * climaAtual(eng).grip * aderenciaOleo(eng)
   const playerZ = eng.position + PLAYER_Z
   const seg = segAt(eng, playerZ)
   // ramal (atalho) neste ponto da pista, se houver (ADR 0014). Sem ramais: null.
@@ -148,7 +152,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.playerX -= centrif * dt
   const slip = Math.abs(centrif) * speedF
   // chiado de curva ou de patinada no gás (eng.patina, do quadro anterior)
-  eng.audio.skid(Math.max(slip > 0.3 ? slip : 0, eng.patina))
+  eng.audio.skid(Math.max(slip > 0.3 ? slip : 0, eng.patina, eng.oleoT > 0 ? 0.6 : 0))
+  passoOleo(eng, dt)
   if (slip > 0.45 && Math.abs(eng.steerVel) > 0.3 && Math.random() < 0.5) emitSmoke(eng, 1, "#6b7280")
   eng.bgShift += seg.curve * eng.speed * dt * 0.6
 
@@ -335,6 +340,8 @@ export function update(eng: AutoDashEngine, dt: number) {
 
   updateTraffic(eng, dt, playerZ, false)
   updateZones(eng, dt, playerZ)
+  atualizarObras(eng, dt, playerZ)              // E4: trânsito sai do lado fechado
+  atualizarComboio(eng, dt, playerZ, eng.rngEv) // E6: a fresta anda
   updateObstacles(eng, playerZ)
 
   // aviso de curva fechada à frente

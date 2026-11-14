@@ -8,6 +8,7 @@ import { buildTrack } from "./world/track"
 import { seedTraffic } from "./traffic/spawner"
 import { clamp, mix, mulberry32 } from "./math"
 import { type Racha } from "./modes/racha"
+import { type Comboio } from "./world/comboio"
 import { update } from "./sim/update"
 import { skyNow, renderBackdrop } from "./render/backdrop"
 import { type BiomeDef, biomeById } from "./world/biomes"
@@ -75,7 +76,10 @@ export interface Seg { curve: number; y1: number; y2: number; sign?: number }
 // Obstáculo físico na pista (cones, barreiras). Cone é perdoável (tranco);
 // barreira é parede. Base do futuro modo corrida.
 // `fixo`: faz parte do circuito (não some quando fica para trás; vale a corrida toda).
-export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean }
+// Fase 5: `seta` = painel de seta luminosa da obra (sólido, como barreira);
+// `oleo` = mancha de óleo (não é sólida: escorrega, world/oleo.ts). `lado` = lado
+// fechado da obra ou lado do acidente. `pisado`: o jogador já passou na mancha.
+export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" | "seta" | "oleo"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean; lado?: number; pisado?: boolean }
 // Zona de evento no traçado:
 //  bridge    — ponte suspensa (estilo Golden Gate): você dirige EM CIMA, com
 //              guarda-corpo, torres e água dos dois lados
@@ -86,8 +90,9 @@ export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier";
 //  speedtrap — radar (placa 90): trânsito reduz, polícia observando; passar
 //              rápido demais = perseguição (o evento da conversa original)
 //  posto     — reta com posto de combustível (Fase 5, world/posto.ts)
-export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto"; z: number; end: number; spawnT: number; checked?: boolean }
-export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto" | "chegada"; label?: string; lado?: number }
+//  obra      — obra com estreitamento: `lado` fecha duas faixas (world/obra.ts)
+export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto" | "obra"; z: number; end: number; spawnT: number; checked?: boolean; lado?: number }
+export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto" | "chegada" | "acidente"; label?: string; lado?: number }
 
 export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 export interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
@@ -215,7 +220,9 @@ export class AutoDashEngine {
   postoLimite = 0.45 // abaixo disso abre o próximo posto (world/posto.ts)
   abastecendo = false
   racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
-  rachaT = 45 // s de solo até o próximo convite // acelerada de amostra na garagem ao trocar o motor
+  rachaT = 45 // s de solo até o próximo convite
+  comboio: Comboio | null = null // comboio com fresta em andamento (world/comboio.ts)
+  oleoT = 0 // s restantes escorregando no óleo (world/oleo.ts) // acelerada de amostra na garagem ao trocar o motor
 
   // input
   keys = new Set<string>()

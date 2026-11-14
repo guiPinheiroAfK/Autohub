@@ -4,6 +4,7 @@ import { type AutoDashEngine, H } from "../engine"
 import { COMBUSTIVEL } from "./combustivel"
 import { spawnPosto } from "./posto"
 import { convidarRacha } from "../modes/racha"
+import { spawnEvent } from "./events"
 
 export function teclaDebugEvento(eng: AutoDashEngine, k: string) {
   // no dev server, a primeira tecla de debug expõe o engine para inspeção no console
@@ -12,5 +13,8 @@ export function teclaDebugEvento(eng: AutoDashEngine, k: string) {
   const aviso = (t: string) => eng.floaters.push({ text: t, color: "#94a3b8", y: H * 0.5, life: 1, big: false })
   if (k === "1" && !spawnPosto(eng)) aviso("posto não coube agora")
   if (k === "2" && !convidarRacha(eng)) aviso("racha não coube agora")
+  if (k === "3") spawnEvent(eng, "obra")
+  if (k === "4") spawnEvent(eng, "comboio")
+  if (k === "5") spawnEvent(eng, "oleo")
   if (k === "6") { eng.combustivel = Math.min(eng.combustivel, COMBUSTIVEL.reserva + 0.01); aviso("tanque na reserva") }
 }

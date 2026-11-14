@@ -4,7 +4,7 @@ import { shade, clamp } from "../math"
 import { CARS, type CarCustom, PAINTS } from "../data"
 import { drawPlayerCar, rr } from "./primitives"
 import { type Traffic, KINDS } from "../traffic/types"
-import { desenharPlacaEvento } from "./eventos"
+import { desenharPlacaEvento, desenharObstaculoEvento } from "./eventos"
 
 export function drawPickup(eng: AutoDashEngine, p: Pickup, x: number, y: number, w: number, amb: number) {
   if (w < 2.5) return
@@ -76,6 +76,7 @@ export function drawGhost(eng: AutoDashEngine, x: number, y: number, w: number, 
 
 export function drawObstacle(eng: AutoDashEngine, o: Obstacle, x: number, y: number, w: number, amb: number) {
   if (w < 2) return
+  if (desenharObstaculoEvento(eng, o, x, y, w, amb)) return // seta da obra e óleo (render/eventos.ts)
   const ctx = eng.ctx
   if (o.kind === "cone") {
     const h = w * 1.5

@@ -1,7 +1,7 @@
 // AutoDash — render/eventos.ts. Desenho dos eventos da Fase 5: posto, placas
 // novas e o medidor de combustível. Cores de perigo da pesquisa visual-e-desafio
 // 1.8 (âmbar #FF9F1C, branco #FFF4E0, preto #14110F, pisca #FFC23D ↔ #FF9F1C).
-import { type AutoDashEngine, type RoadSign, H, W, PLAYER_Z } from "../engine"
+import { type AutoDashEngine, type RoadSign, type Obstacle, H, W, PLAYER_Z } from "../engine"
 import { KMH2UPS, SEG_LEN } from "../data"
 import { shade } from "../math"
 import { rr } from "./primitives"
@@ -90,6 +90,19 @@ export function desenharPlacaEvento(eng: AutoDashEngine, sign: RoadSign, x: numb
     }
     return true
   }
+  if (sign.type === "acidente") {
+    // aviso de acidente: triângulo âmbar com "!" (paleta de perigo)
+    ctx.fillStyle = shade(PERIGO.ambar, Math.max(0.6, amb))
+    ctx.beginPath()
+    ctx.moveTo(x, cy - r * 1.05); ctx.lineTo(x + r * 1.1, cy + r * 0.85); ctx.lineTo(x - r * 1.1, cy + r * 0.85)
+    ctx.closePath(); ctx.fill()
+    if (r > 5) {
+      ctx.fillStyle = PERIGO.preto
+      ctx.fillRect(x - r * 0.08, cy - r * 0.45, r * 0.16, r * 0.75)
+      ctx.fillRect(x - r * 0.08, cy + r * 0.45, r * 0.16, r * 0.16)
+    }
+    return true
+  }
   if (sign.type === "chegada") {
     // linha de chegada do racha: bandeira quadriculada
     const bw = r * 2.6, bh = r * 1.3, cols = 6, rows = 3
@@ -98,6 +111,62 @@ export function desenharPlacaEvento(eng: AutoDashEngine, sign: RoadSign, x: numb
         ctx.fillStyle = (i + j) % 2 === 0 ? shade("#f8fafc", Math.max(0.6, amb)) : "#0f172a"
         ctx.fillRect(x - bw / 2 + (bw / cols) * i, cy - bh / 2 + (bh / rows) * j, bw / cols + 0.5, bh / rows + 0.5)
       }
+    }
+    return true
+  }
+  return false
+}
+
+/**
+ * Obstáculos dos eventos novos. Devolve false para os antigos (cone, barreira).
+ * `w` já é a largura do obstáculo na tela.
+ */
+export function desenharObstaculoEvento(eng: AutoDashEngine, o: Obstacle, x: number, y: number, w: number, amb: number): boolean {
+  const ctx = eng.ctx
+  if (o.kind === "seta") {
+    // reboque com painel de seta luminosa: chevrons âmbar piscando para o lado livre
+    const ph = w * 0.62, py = y - w * 0.95
+    ctx.fillStyle = "rgba(0,0,0,0.3)"
+    ctx.beginPath(); ctx.ellipse(x, y, w * 0.55, w * 0.08, 0, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = shade("#475569", amb)
+    ctx.fillRect(x - w * 0.04, py + ph, w * 0.08, y - py - ph)          // mastro
+    ctx.fillRect(x - w * 0.42, y - w * 0.16, w * 0.84, w * 0.12)         // reboque
+    ctx.fillStyle = PERIGO.preto
+    ctx.fillRect(x - w / 2, py, w, ph)
+    const aceso = piscaAlerta()
+    if (aceso && w > 6) {
+      const dir = -(o.lado ?? 1) // aponta para o lado livre
+      ctx.strokeStyle = PERIGO.pisca
+      ctx.lineWidth = Math.max(1.5, w * 0.06)
+      ctx.beginPath()
+      for (let i = -1; i <= 1; i++) {
+        const cx = x + i * w * 0.24
+        ctx.moveTo(cx - dir * w * 0.08, py + ph * 0.2)
+        ctx.lineTo(cx + dir * w * 0.08, py + ph * 0.5)
+        ctx.lineTo(cx - dir * w * 0.08, py + ph * 0.8)
+      }
+      ctx.stroke()
+    }
+    // halo: a seta acesa atravessa a névoa (emissivo, pesquisa 1.2)
+    if (aceso && amb < 0.75) {
+      ctx.fillStyle = "rgba(255,159,28,0.18)"
+      ctx.beginPath(); ctx.ellipse(x, py + ph / 2, w * 0.9, ph, 0, 0, Math.PI * 2); ctx.fill()
+    }
+    return true
+  }
+  if (o.kind === "oleo") {
+    // mancha escura achatada com reflexo arco-íris
+    const rh = Math.max(1, w * 0.12)
+    ctx.fillStyle = "rgba(10,10,14,0.72)"
+    ctx.beginPath(); ctx.ellipse(x, y, w * 0.55, rh, 0, 0, Math.PI * 2); ctx.fill()
+    if (w > 8) {
+      const g = ctx.createLinearGradient(x - w * 0.4, y, x + w * 0.4, y)
+      g.addColorStop(0, "rgba(168,85,247,0.35)")
+      g.addColorStop(0.35, "rgba(34,211,238,0.35)")
+      g.addColorStop(0.65, "rgba(250,204,21,0.3)")
+      g.addColorStop(1, "rgba(236,72,153,0.3)")
+      ctx.fillStyle = g
+      ctx.beginPath(); ctx.ellipse(x + w * 0.05, y - rh * 0.2, w * 0.36, rh * 0.45, 0, 0, Math.PI * 2); ctx.fill()
     }
     return true
   }

@@ -162,7 +162,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
     // ultrapassar. Quem perde a perseguição some pelo despiste, ali embaixo.
     // Estacionados (blitz) e contramão também não reciclam: cenografia que
     // ficou pra trás simplesmente some.
-    if (t.parked || t.role === "oncoming") {
+    if (t.parked || t.role === "oncoming" || t.role === "comboio") {
       const rel = wrapDz(eng, t.z, eng.position)
       if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 140) * SEG_LEN) t.dead = true
     } else if (t.role !== "police" && t.role !== "racha") {
