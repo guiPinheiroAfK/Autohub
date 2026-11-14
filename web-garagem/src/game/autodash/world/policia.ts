@@ -117,6 +117,8 @@ export function somarCalor(calor: number, inf: Infracao): number {
 const ehViatura = (t: Traffic) => t.role === "police" && !t.parked
 
 function anunciarEstrelas(eng: AutoDashEngine, n: number) {
+  // estrela nova substitui o anúncio anterior (subidas seguidas não se empilham)
+  eng.floaters = eng.floaters.filter(f => !f.text.endsWith("PROCURADO"))
   eng.floaters.push({ text: `${"★".repeat(n)}  PROCURADO`, color: "#f87171", y: H * 0.26, life: 2.2, big: true })
 }
 
