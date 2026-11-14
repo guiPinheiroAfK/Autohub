@@ -16,6 +16,9 @@ import { CLIMAS } from "../world/weather"
 import { type Traffic, KINDS } from "../traffic/types"
 import { poly } from "./primitives"
 import { drawRamalSeg } from "./ramal"
+import { drawPosto } from "./eventos"
+import { postoMeio, naFaixaDoPosto } from "../world/posto"
+import { type Ramal } from "../world/ramais"
 
 const PLACA_ATALHO_DIR: RoadSign = { z: 0, type: "atalho", lado: 1 }
 const PLACA_ATALHO_ESQ: RoadSign = { z: 0, type: "atalho", lado: -1 }
@@ -52,7 +55,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // "escondido por morro" — aí sim o segmento some inteiro.
   let roadStarted = false
 
-  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; x: number; y: number; w: number; dz?: number }
+  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
   const sprites: SpriteDraw[] = []
   // buckets de tráfego, obstáculos, placas e powerups por segmento
   const obsBySeg = new Map<number, Obstacle[]>()
@@ -378,6 +381,10 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     }
     // placas de atalho antes da entrada de cada ramal, do lado dele
     for (const r of eng.ramais) {
+      if (r.posto) { // posto: cobertura com bombas no miolo da faixa de acesso
+        if (idx === postoMeio(r)) sprites.push({ kind: "posto", x: sx1, y: sy1, w: sw1, ramal: r })
+        continue
+      }
       if (idx === r.a - 50 || idx === r.a - 12) {
         sprites.push({ kind: "sign", sign: r.lado > 0 ? PLACA_ATALHO_DIR : PLACA_ATALHO_ESQ, x: sx1 + sw1 * 1.35 * r.lado, y: sy1, w: sw1 * 0.11 })
       }
@@ -395,10 +402,13 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       // beira limpa na corrida (só a zebra roxa marca a pista)
     } else if (idx % 4 === 0) {
       const side = idx % 8 === 0 ? -1 : 1
-      sprites.push({ kind: "deco", deco: eng.bioma.arvore, x: sx1 + sw1 * side * (1.55 + ((idx * 7) % 5) * 0.14), y: sy1, w: sw1 * 0.22 })
+      // nada de árvore em cima da faixa do posto (ela ocupa a beira direita)
+      if (side < 0 || !naFaixaDoPosto(eng.ramais, idx)) {
+        sprites.push({ kind: "deco", deco: eng.bioma.arvore, x: sx1 + sw1 * side * (1.55 + ((idx * 7) % 5) * 0.14), y: sy1, w: sw1 * 0.22 })
+      }
     } else if (idx % 10 === 5) {
       sprites.push({ kind: "deco", deco: 1, x: sx1 - sw1 * 1.28, y: sy1, w: sw1 * 0.05 })
-    } else if (idx % 51 === 17) {
+    } else if (idx % 51 === 17 && !naFaixaDoPosto(eng.ramais, idx)) {
       sprites.push({ kind: "deco", deco: 2, x: sx1 + sw1 * 1.75, y: sy1, w: sw1 * 0.55 })
     }
   }
@@ -467,6 +477,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     else if (s.kind === "sign") drawRoadSign(eng, s.sign!, s.x, s.y, s.w, amb)
     else if (s.kind === "bridge") drawBridge(eng, s.x, s.y, s.w, amb)
     else if (s.kind === "gate") drawTower(eng, s.x, s.y, s.w, amb)
+    else if (s.kind === "posto") drawPosto(eng, s.ramal!, s.x, s.y, s.w, amb)
     else drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
   }
 

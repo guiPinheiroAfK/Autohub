@@ -17,6 +17,7 @@ import { duelJoin } from "../modes/duel"
 import { AutoDashEngine, H } from "../engine"
 import { saveConfig, CARS, PAINTS, STRIPES, NEONS, WHEELS, WINGS } from "../data"
 import { shiftUp, shiftDown } from "../physics/gearbox"
+import { teclaDebugEvento } from "../world/debug-eventos"
 
 export function toggleMute(eng: AutoDashEngine) {
   eng.cfg.sound = !eng.cfg.sound
@@ -154,6 +155,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "f") flashBeam(eng)
       if (eng.testeMotor && (k === "]" || k === ".")) trocarMotorTeste(eng, 1)
       if (eng.testeMotor && (k === "[" || k === ",")) trocarMotorTeste(eng, -1)
+      teclaDebugEvento(eng, k) // 1–6: eventos da Fase 5 (world/debug-eventos.ts)
       // (as teclas de debug de playtest — O perseguição, L nível, B/V/J/K/I/U
       // eventos — foram removidas: tudo isso agora é sorteado pelo próprio
       // jogo em updateEventSpawner)

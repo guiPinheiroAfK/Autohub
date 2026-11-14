@@ -6,7 +6,7 @@ import { RaceSession } from "./race/session"
 import { noCallout, buildTouchControls, onTouchStart, onTouchMove } from "./input/touch"
 import { buildTrack } from "./world/track"
 import { seedTraffic } from "./traffic/spawner"
-import { clamp, mix } from "./math"
+import { clamp, mix, mulberry32 } from "./math"
 import { update } from "./sim/update"
 import { skyNow, renderBackdrop } from "./render/backdrop"
 import { type BiomeDef, biomeById } from "./world/biomes"
@@ -84,8 +84,9 @@ export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier";
 //  blitz     — bloqueio policial: TODO MUNDO desce pra ~60; furar = perseguição
 //  speedtrap — radar (placa 90): trânsito reduz, polícia observando; passar
 //              rápido demais = perseguição (o evento da conversa original)
-interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap"; z: number; end: number; spawnT: number; checked?: boolean }
-export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho"; label?: string; lado?: number }
+//  posto     — reta com posto de combustível (Fase 5, world/posto.ts)
+export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto"; z: number; end: number; spawnT: number; checked?: boolean }
+export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto"; label?: string; lado?: number }
 
 export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 export interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
@@ -205,7 +206,13 @@ export class AutoDashEngine {
   ramais: Ramal[] = []
   trechos: TrechoInfo[] = []
   demoT = 0
-  revAmostraT = 0 // acelerada de amostra na garagem ao trocar o motor
+  revAmostraT = 0
+
+  // Fase 5 (eventos novos). A lógica mora em world/ e sim/; aqui só o estado.
+  rngEv: () => number = mulberry32(1) // sorteio dos eventos novos (semeado na largada)
+  combustivel = 1   // tanque, 0..1 (world/combustivel.ts; só no solo)
+  postoLimite = 0.45 // abaixo disso abre o próximo posto (world/posto.ts)
+  abastecendo = false // acelerada de amostra na garagem ao trocar o motor
 
   // input
   keys = new Set<string>()

@@ -4,6 +4,7 @@ import { DRAW_DIST, SEG_LEN } from "../data"
 import { TRAFFIC_COLORS } from "../traffic/types"
 import { wrapDz } from "../traffic/spawner"
 import { clamp } from "../math"
+import { postoPedido } from "./posto"
 
 export function spawnEvent(eng: AutoDashEngine, kind: "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap") {
   const at = (d: number) => ((eng.position + d) % eng.trackLen + eng.trackLen) % eng.trackLen
@@ -154,6 +155,9 @@ export function updateEventSpawner(eng: AutoDashEngine, dt: number, playerZ: num
   const atras = (z: number) => wrapDz(eng, z, playerZ) < -60 * SEG_LEN
   if (eng.zones.some(z => atras(z.end))) eng.zones = eng.zones.filter(z => !atras(z.end))
   if (eng.roadSigns.some(s => atras(s.z))) eng.roadSigns = eng.roadSigns.filter(s => !atras(s.z))
+
+  // tanque pedindo posto (Fase 5): segura os eventos sorteados até ele abrir
+  if (postoPedido(eng)) return
 
   eng.eventTimer -= dt
   if (eng.eventTimer > 0) return

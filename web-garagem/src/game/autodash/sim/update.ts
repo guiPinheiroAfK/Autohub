@@ -20,6 +20,7 @@ import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
 import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro } from "../world/ramais"
+import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
 
 export function update(eng: AutoDashEngine, dt: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -79,6 +80,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   // desaceleração e não pode mais acelerar (bug: a física acelerava antes de
   // o bloco de chegada zerar a marcha)
   if (eng.raceFinished) throttle = 0
+  // pane seca (Fase 5): sem combustível o motor engasga e o pé efetivo cai
+  throttle *= peDoCombustivel(eng)
 
   if (eng.state === "countdown") {
     eng.countT += dt
@@ -170,6 +173,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   // ---------- motor, câmbio, força e velocidade (sim/longitudinal.ts) ----------
   const grade = (seg.y2 - seg.y1) / SEG_LEN // ~±0.13 nas ladeiras fortes
   const nitroActive = passoLongitudinal(eng, spec, mf, { throttle, braking, centrif, grade, dt })
+  // combustível (só no solo): gasta pelo pé, giro e nitro; abastece no posto
+  atualizarCombustivel(eng, dt, eng.gasF, nitroActive)
 
   // no miolo do ramal o avanço rende mais (linha de dentro). Fora dele, ganho = 1.
   const ganho = ganhoRamal(ramal, eng.playerX)

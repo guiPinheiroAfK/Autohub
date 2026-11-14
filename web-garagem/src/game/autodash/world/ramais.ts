@@ -14,6 +14,7 @@ export interface Ramal {
   afast: number    // faixa de grama entre a pista e o ramal no miolo (meias-pistas)
   larg: number     // largura do ramal (meias-pistas; a pista inteira vale 2)
   ganho: number    // multiplicador do avanço de quem anda no miolo do ramal
+  posto?: boolean  // faixa de acesso de um posto de combustível (Fase 5, world/posto.ts)
 }
 
 // Perfil ao longo do ramal, das pontas para o miolo (em segmentos):

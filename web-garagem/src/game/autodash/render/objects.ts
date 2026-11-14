@@ -4,6 +4,7 @@ import { shade, clamp } from "../math"
 import { CARS, type CarCustom, PAINTS } from "../data"
 import { drawPlayerCar, rr } from "./primitives"
 import { type Traffic, KINDS } from "../traffic/types"
+import { desenharPlacaEvento } from "./eventos"
 
 export function drawPickup(eng: AutoDashEngine, p: Pickup, x: number, y: number, w: number, amb: number) {
   if (w < 2.5) return
@@ -178,6 +179,8 @@ export function drawRoadSign(eng: AutoDashEngine, sign: RoadSign, x: number, y: 
       ctx.fillRect(x - r * 0.38, cy + r * 0.08, r * 0.1, r * 0.3)  // pilares
       ctx.fillRect(x + r * 0.28, cy + r * 0.08, r * 0.1, r * 0.3)
     }
+  } else if (desenharPlacaEvento(eng, sign, x, cy, r, amb)) {
+    // placas dos eventos da Fase 5 (render/eventos.ts)
   } else {
     // mão dupla/contramão: proibido (círculo vermelho, barra branca)
     ctx.fillStyle = shade("#dc2626", amb)
