@@ -92,6 +92,28 @@ describe("motor gravado (grãos síncronos ao giro)", () => {
     expect(fora).toBeGreaterThan(0)
   })
 
+  it("janelas somam 1 mesmo com o giro mudando rápido (sem tremor de volume)", () => {
+    // gravação "DC": toda amostra vale 1, então a saída é a própria soma das janelas
+    const dur = 10, dados = new Float32Array(SR * dur).fill(1)
+    const graos: number[][] = []
+    for (let i = 0; i < 400; i++) {
+      const hz = 20 * Math.pow(300 / 20, i / 399)
+      graos.push([1 + 8 * i / 399, 1 / hz, 1 / hz, hz, CARGA, 1])
+    }
+    const m = new MotorGravado(SR)
+    m.setBanco({ nome: "dc", sr: SR, dados, graos: graosDoJson(graos), cilindros: 4 })
+    tocar(m, 3000, 1, 0.6) // volume (amp) assenta
+    let pior = 0
+    const blk = new Float32Array(128)
+    for (let i = 0; i < SR * 2; i += 128) {
+      // troca de marcha e pé: o giro pula entre 1500 e 7000 a cada 50 ms
+      m.st.rpm = Math.floor(i / (SR * 0.05)) % 2 ? 7000 : 1500
+      m.render(blk, 128)
+      for (const v of blk) pior = Math.max(pior, Math.abs(v - 1))
+    }
+    expect(pior).toBeLessThan(1e-3)
+  })
+
   it("desligado, some", () => {
     const m = new MotorGravado(SR)
     m.setBanco(bancoSintetico())

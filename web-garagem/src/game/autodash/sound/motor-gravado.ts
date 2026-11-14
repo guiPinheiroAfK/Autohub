@@ -9,6 +9,9 @@
 //   2. o grão escolhido é o da gravação com giro mais próximo (de preferência o
 //      seguinte ao anterior, para manter a variação real entre cilindros);
 //   3. os grãos se sobrepõem pela metade com janela de Hann (soma constante).
+//      Cada metade da janela tem o comprimento do espaço até o grão vizinho:
+//      se o giro muda entre um grão e outro, a descida de um e a subida do
+//      seguinte continuam do mesmo tamanho e a soma segue 1 (sem tremor).
 // Como o espaçamento dos grãos segue o giro alvo e o conteúdo de cada grão não é
 // esticado (TD-PSOLA), as ressonâncias do escape e do cofre ficam no lugar —
 // som de motor de verdade, não uma fita acelerada. Só fora da faixa gravada o
@@ -33,7 +36,8 @@ export interface BancoGraos {
 export const ALIVIO = 0, CARGA = 1, ESTAVEL = 2
 const CAMPOS = 6
 
-interface Grao { centro: number; meio: number; rho: number; ganho: number; fonte: number }
+// esq/dir: meia janela antes e depois do centro (amostras de saída)
+interface Grao { centro: number; esq: number; dir: number; rho: number; ganho: number; fonte: number }
 
 // o alívio da gravação é giro caindo em ponto morto, ainda alto no cofre; no
 // carro andando, tirar o pé derruba bem mais o volume
@@ -48,6 +52,7 @@ export class MotorGravado {
   private b: BancoGraos | null = null
   private n = 0                   // amostra de saída atual
   private proxCentro = 0
+  private passo = 0               // distância do último centro ao próximo (0 = ainda sem grão)
   private ativos: Grao[] = []
   private ultimo = -1             // índice do último grão usado
   private classeAtual = CARGA
@@ -94,7 +99,7 @@ export class MotorGravado {
     }
     const [a, h] = ordenar(Array.from({ length: N }, (_, i) => i))
     this.todos = a; this.hzTodos = h
-    this.ativos = []; this.ultimo = -1; this.proxCentro = this.n
+    this.ativos = []; this.ultimo = -1; this.passo = 0
   }
 
   /** Pula a suavização (testes e medição). */
@@ -168,7 +173,7 @@ export class MotorGravado {
     return i
   }
 
-  private novoGrao(meio: number, hz: number) {
+  private novoGrao(esq: number, dir: number, hz: number) {
     const b = this.b!, g = b.graos
     const i = this.escolher(hz)
     if (i < 0) return
@@ -178,7 +183,7 @@ export class MotorGravado {
     const rho = Math.exp(lr - Math.max(-FOLGA, Math.min(FOLGA, lr)))
     // grão de alívio no limitador entra mais baixo (falha de ignição)
     const falha = this.st.corte && g[o + 4] === ALIVIO ? 0.55 : 1
-    this.ativos.push({ centro: this.proxCentro, meio, rho, ganho: g[o + 5] * falha * NIVEL_CLASSE[g[o + 4]], fonte: g[o] * b.sr })
+    this.ativos.push({ centro: this.proxCentro, esq, dir, rho, ganho: g[o + 5] * falha * NIVEL_CLASSE[g[o + 4]], fonte: g[o] * b.sr })
   }
 
   render(out: Float32Array, len: number) {
@@ -193,9 +198,14 @@ export class MotorGravado {
       this.amp += ((this.st.ligado ? 1 : 0) - this.amp) * ka
       const hz = Math.max(8, this.rpm / 60 * this.cilindros / 2)
       const T = this.sr / hz
-      // nasce o grão cujo centro é o próximo período (começa meio período antes)
-      while (this.n >= this.proxCentro - T) {
-        this.novoGrao(T, hz)
+      // primeiro grão: entra suave, um período à frente
+      if (this.passo <= 0) { this.passo = T; this.proxCentro = this.n + T }
+      // o grão seguinte nasce quando o atual chega ao centro: sobe enquanto o
+      // atual desce, no mesmo trecho (`passo`); o período de agora define o
+      // espaço até o próximo
+      while (this.n >= this.proxCentro - this.passo) {
+        this.novoGrao(this.passo, T, hz)
+        this.passo = T
         this.proxCentro += T
         if (this.ativos.length > 6) this.ativos.shift()
       }
@@ -203,8 +213,8 @@ export class MotorGravado {
       for (let k = 0; k < this.ativos.length; k++) {
         const a = this.ativos[k]
         const u = this.n - a.centro
-        if (u >= a.meio) continue
-        const w = 0.5 * (1 + Math.cos(Math.PI * u / a.meio))
+        if (u >= a.dir) continue
+        const w = 0.5 * (1 + Math.cos(Math.PI * u / (u < 0 ? a.esq : a.dir)))
         const x = a.fonte + u * a.rho
         const xi = Math.floor(x)
         if (xi < 0 || xi + 1 >= nd) continue
@@ -213,8 +223,9 @@ export class MotorGravado {
       }
       out[s] = y * this.amp
       this.n++
-      // descarta os grãos que já terminaram
-      if (this.ativos.length && this.n - this.ativos[0].centro >= this.ativos[0].meio) this.ativos.shift()
+      // descarta os grãos que já terminaram (terminam na ordem em que nasceram:
+      // o fim de cada um é o centro do seguinte)
+      if (this.ativos.length && this.n - this.ativos[0].centro >= this.ativos[0].dir) this.ativos.shift()
     }
   }
 }
