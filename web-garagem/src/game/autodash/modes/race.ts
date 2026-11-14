@@ -8,6 +8,7 @@ import { RaceSession } from "../race/session"
 import { iniciarTempo, seedDoTracado } from "../sim/clima"
 import { mulberry32 } from "../math"
 import { COMBUSTIVEL } from "../world/combustivel"
+import { RACHA } from "../world/racha"
 
 export function startRace(eng: AutoDashEngine, seed?: number) {
   const corrida = eng.mode === "race"
@@ -51,6 +52,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   // eventos da Fase 5: sorteio próprio (não mexe na sequência do Math.random) e tanque cheio
   eng.rngEv = mulberry32((eng.climaSeed ^ 0x5f3759df) >>> 0)
   eng.combustivel = 1; eng.postoLimite = COMBUSTIVEL.chamaPosto; eng.abastecendo = false
+  eng.racha = null; eng.rachaT = RACHA.primeiroConviteS
   eng.particles = []; eng.floaters = []
   eng.countT = 0
   // no duelo o verde é fixo pra manter os dois relógios alinhados

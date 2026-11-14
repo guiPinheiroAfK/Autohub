@@ -330,7 +330,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         // pra ela que isso existe, pra não "teleportar" ao vir de trás. Pro
         // trânsito comum era regressão — um carro colado atrás na sua faixa
         // era desenhado com 3x a largura do seu carro, englobando você.
-        if (nearField && t.role !== "police") continue
+        if (nearField && t.role !== "police" && t.role !== "racha") continue
         const pct = (t.z - z1) / SEG_LEN
         const sx = sx1 + (sx2 - sx1) * pct
         const sy = sy1 + (sy2 - sy1) * pct

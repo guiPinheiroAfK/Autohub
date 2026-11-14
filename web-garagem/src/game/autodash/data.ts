@@ -201,6 +201,7 @@ export interface GameConfig {
   climaCorrida: ClimaModo // clima da corrida com bots
   sound: boolean
   pilotName: string
+  reputacao: number    // vitórias de racha (Fase 5): reputação, não moeda
 }
 
 export interface ScoreEntry {
@@ -225,6 +226,7 @@ export function defaultConfig(): GameConfig {
     climaCorrida: "sorteio",
     sound: true,
     pilotName: "",
+    reputacao: 0,
   }
 }
 

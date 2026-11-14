@@ -315,6 +315,20 @@ export function drawTraffic(eng: AutoDashEngine, t: Traffic, x: number, y: numbe
       ctx.textAlign = "left"
     }
   }
+  // luz de freio (o rival "olhando" antes de fechar): lanternas fortes
+  if (t.freioT && t.freioT > 0) {
+    ctx.fillStyle = "#ff1a1a"
+    const fh = Math.max(2, h * 0.1)
+    rr(ctx, bx + w * 0.04, y - fh * 2, w * 0.26, fh, fh / 2)
+    rr(ctx, bx + w * 0.70, y - fh * 2, w * 0.26, fh, fh / 2)
+  }
+  // pisca-alerta: as duas setas juntas
+  if (t.alerta && Math.floor(performance.now() / 250) % 2 === 0) {
+    ctx.fillStyle = "#FFC23D"
+    const rs = Math.max(2, w * 0.07)
+    ctx.beginPath(); ctx.arc(x - w * 0.52, y - h * 0.28, rs, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x + w * 0.52, y - h * 0.28, rs, 0, Math.PI * 2); ctx.fill()
+  }
   // seta
   if (t.blinkT > 0 && Math.floor(t.blinkT * 6) % 2 === 0) {
     ctx.fillStyle = "#fb923c"

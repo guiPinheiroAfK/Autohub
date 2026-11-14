@@ -1,7 +1,7 @@
 // AutoDash — render/eventos.ts. Desenho dos eventos da Fase 5: posto, placas
 // novas e o medidor de combustível. Cores de perigo da pesquisa visual-e-desafio
 // 1.8 (âmbar #FF9F1C, branco #FFF4E0, preto #14110F, pisca #FFC23D ↔ #FF9F1C).
-import { type AutoDashEngine, type RoadSign, H, PLAYER_Z } from "../engine"
+import { type AutoDashEngine, type RoadSign, H, W, PLAYER_Z } from "../engine"
 import { KMH2UPS, SEG_LEN } from "../data"
 import { shade } from "../math"
 import { rr } from "./primitives"
@@ -10,6 +10,8 @@ import { type Ramal, ramalBordas, ramalPerfilOuZero } from "../world/ramais"
 import { COMBUSTIVEL } from "../world/combustivel"
 import { combustivelAtivo, postoAFrente, postoMeio } from "../world/posto"
 import { wrapDz } from "../traffic/spawner"
+import { RACHA } from "../world/racha"
+import { vantagemM } from "../modes/racha"
 
 export const PERIGO = { ambar: "#FF9F1C", branco: "#FFF4E0", preto: "#14110F", pisca: "#FFC23D" }
 
@@ -88,7 +90,46 @@ export function desenharPlacaEvento(eng: AutoDashEngine, sign: RoadSign, x: numb
     }
     return true
   }
+  if (sign.type === "chegada") {
+    // linha de chegada do racha: bandeira quadriculada
+    const bw = r * 2.6, bh = r * 1.3, cols = 6, rows = 3
+    for (let i = 0; i < cols; i++) {
+      for (let j = 0; j < rows; j++) {
+        ctx.fillStyle = (i + j) % 2 === 0 ? shade("#f8fafc", Math.max(0.6, amb)) : "#0f172a"
+        ctx.fillRect(x - bw / 2 + (bw / cols) * i, cy - bh / 2 + (bh / rows) * j, bw / cols + 0.5, bh / rows + 0.5)
+      }
+    }
+    return true
+  }
   return false
+}
+
+/** Painel do racha: convite (como aceitar e quanto tempo falta) ou disputa (falta e vantagem). */
+export function renderRacha(eng: AutoDashEngine) {
+  const r = eng.racha
+  if (!r || eng.mode !== "solo") return
+  const ctx = eng.ctx
+  const bw = 420, bx = W / 2 - bw / 2, by = 100
+  glass(eng, bx, by, bw, 50, 12)
+  ctx.textAlign = "center"
+  ctx.font = "bold 16px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillStyle = r.def.cor
+  if (r.fase === "convite") {
+    const resta = Math.max(0, Math.ceil(RACHA.conviteS - r.t))
+    ctx.fillText(`🏁 ${r.def.nome} te chamou pro racha`, W / 2, by + 21)
+    ctx.font = "bold 13px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillStyle = piscaAlerta() ? PERIGO.pisca : "#f8fafc"
+    ctx.fillText(`pisca o farol [F] pra aceitar · ${resta}s · reputação ${eng.cfg.reputacao ?? 0}`, W / 2, by + 40)
+  } else {
+    const faltaM = Math.max(0, Math.round((r.meta - r.eu) * 1000))
+    ctx.fillText(`RACHA vs ${r.def.nome} · faltam ${faltaM} m`, W / 2, by + 21)
+    // azul à frente, laranja atrás, com seta (legível para daltônico, pesquisa 1.6)
+    const v = vantagemM(r)
+    ctx.font = "bold 13px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillStyle = v >= 0 ? "#56B4E9" : "#E69F00"
+    ctx.fillText(v >= 0 ? `▲ você na frente · ${v} m` : `▼ você atrás · ${-v} m`, W / 2, by + 40)
+  }
+  ctx.textAlign = "left"
 }
 
 /** Medidor de combustível ao lado do NOS, reserva piscando e distância até o posto. */

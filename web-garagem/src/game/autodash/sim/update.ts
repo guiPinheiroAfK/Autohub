@@ -21,6 +21,7 @@ import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
 import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro } from "../world/ramais"
 import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
+import { atualizarRacha } from "../modes/racha"
 
 export function update(eng: AutoDashEngine, dt: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -299,6 +300,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   updateEventSpawner(eng, dt, playerZ)
+  atualizarRacha(eng, dt) // convite de racha (Fase 5, só no solo)
 
   // powerups na pista
   eng.puTimer -= dt
