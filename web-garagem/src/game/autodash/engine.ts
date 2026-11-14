@@ -2,6 +2,7 @@ import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig,
 import { type DuelTelemetry } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic } from "./traffic/types"
+import { type Procurado, novoProcurado } from "./world/policia"
 import { RaceSession } from "./race/session"
 import { noCallout, buildTouchControls, onTouchStart, onTouchMove } from "./input/touch"
 import { buildTrack } from "./world/track"
@@ -173,6 +174,7 @@ export class AutoDashEngine {
   policeHitT = 0 // cooldown pós-encostão — vale SÓ contra viatura
   policeEscapeT = 0 // tempo mantendo distância da polícia (protótipo do "despiste")
   policeChaseT = 0 // duração da perseguição atual — despiste só vale após o aquecimento
+  policia: Procurado = novoProcurado() // nível de procurado (world/policia.ts, Fase 6)
   particles: Particle[] = []
   floaters: Floater[] = []
   drops: Drop[] = []

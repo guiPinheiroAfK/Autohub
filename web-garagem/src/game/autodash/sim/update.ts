@@ -19,6 +19,7 @@ import { passoCamera } from "../render/camera"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
+import { atualizarPolicia } from "../world/policia"
 import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro } from "../world/ramais"
 
 export function update(eng: AutoDashEngine, dt: number) {
@@ -329,6 +330,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   updateTraffic(eng, dt, playerZ, false)
   updateZones(eng, dt, playerZ)
   updateObstacles(eng, playerZ)
+  atualizarPolicia(eng, dt, playerZ)
 
   // aviso de curva fechada à frente
   eng.curveWarn = 0

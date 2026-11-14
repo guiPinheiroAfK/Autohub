@@ -41,6 +41,8 @@ export interface Traffic {
   parked?: boolean     // estacionado (blitz): sem IA, sem reciclagem, colisão normal
   label?: string       // nome exibido em cima do carro (rivais do modo corrida)
   accent?: string      // cor de destaque do rival (teto/faixa), pra distinguir na pista
+  top?: number         // viatura: teto de velocidade (km/h) da estrela atual (world/policia.ts)
+  accel?: number       // viatura: arrancada (km/h/s) da estrela atual
 }
 
 // Visão read-only do mundo que uma IA precisa pra decidir. O engine constrói

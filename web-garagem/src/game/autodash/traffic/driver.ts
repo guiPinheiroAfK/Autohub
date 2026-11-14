@@ -234,6 +234,9 @@ export class PoliceDriver extends Driver {
     // garante que quem corre mais que 215 simplesmente vai embora — sem isso
     // vira rubber-band e a fuga fica impossível.
     const atras = -gap // >0 quando a viatura está atrás de você
+    // teto e arrancada vêm da estrela (world/policia.ts); sem eles, os de sempre
+    const TOP = self.top ?? PoliceDriver.TOP
+    const ACCEL = self.accel ?? PoliceDriver.ACCEL
     // marcos da perseguição, por entidade:
     // engaged = já te ACERTOU um encostão · wasAhead/beaten = você a ultrapassou
     // (limiares folgados: durante o encostão o gap oscila em ±150 e disparava
@@ -248,21 +251,21 @@ export class PoliceDriver extends Driver {
     let target: number
     if (self.beaten) {
       // JÁ FOI ULTRAPASSADA: desiste de vez e recua até o despiste limpar.
-      target = Math.min(PoliceDriver.TOP, Math.max(0, world.playerSpeed - 40))
+      target = Math.min(TOP, Math.max(0, world.playerSpeed - 40))
     } else if (gap > 300) {
       // bem à FRENTE de você: alivia e deixa você passar — o lugar dela é
       // atrás/do lado, nunca de parede na frente
-      target = Math.min(PoliceDriver.TOP, Math.max(0, world.playerSpeed - 25))
+      target = Math.min(TOP, Math.max(0, world.playerSpeed - 25))
     } else if (self.engaged) {
       // JÁ COLOU UMA VEZ: daqui em diante é a REGRA DA VELOCIDADE, sem mola.
       // Ela corre no próprio limite, constante. Você mais rápido = vai deixando
       // pra trás, linear. A folga proporcional que existia aqui era uma mola
       // (longe acelera, perto afrouxa, contato recua) — a "gangorra" relatada.
-      target = PoliceDriver.TOP
+      target = TOP
     } else {
       // primeira aproximação por trás: vem com tudo, folga encolhendo com a
       // distância pra chegar desacelerando e encostar em vez de passar reto
-      target = Math.min(PoliceDriver.TOP, world.playerSpeed + clamp(atras / 60, 4, 85))
+      target = Math.min(TOP, world.playerSpeed + clamp(atras / 60, 4, 85))
     }
     // acabou de dar um encostão: RECUA e abre distância antes de voltar pra cima.
     // Sem isso ela fica moendo o jogador em loop assim que o cooldown expira.
@@ -277,7 +280,7 @@ export class PoliceDriver extends Driver {
     // ACELERAÇÃO LIMITADA: rampa self.speed até o alvo — é isso que faz ela não
     // grudar. Ela persegue o alvo, mas a arrancada fraca deixa o jogador abrir gap.
     const dv = target - self.speed
-    self.speed += clamp(dv, -PoliceDriver.DECEL * dt, PoliceDriver.ACCEL * dt)
+    self.speed += clamp(dv, -PoliceDriver.DECEL * dt, ACCEL * dt)
     this.applyMovement(self, world, self.speed, dt)
     return self.speed
   }

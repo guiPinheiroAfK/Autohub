@@ -5,6 +5,7 @@ import { AutoDashEngine, PLAYER_Z, W, H } from "../engine"
 import { DRAW_DIST, SEG_LEN, CARS } from "../data"
 import { type TrafficKind, KINDS, TRAFFIC_COLORS, type WorldView } from "./types"
 import { DRIVERS } from "./driver"
+import { infracao } from "../world/policia"
 
 export function seedTraffic(eng: AutoDashEngine, count: number) {
   eng.traffic = []
@@ -103,6 +104,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           for (const o of eng.traffic) if (o.role === "police") o.backoffT = 1.3
           // acabou de levar encostão: obviamente não despistou ninguém
           eng.policeEscapeT = 0
+          infracao(eng, "encostao") // resistir esquenta (Fase 6)
           eng.audio.crash()
           burst(eng, W / 2 + dir * 60, H - 110, 14, ["#60a5fa", "#e2e8f0"])
           eng.floaters.push({ text: "ENCOSTÃO! 🚔", color: "#60a5fa", y: H * 0.42, life: 1, big: false })
@@ -117,7 +119,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           burst(eng, W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
           eng.floaters.push({ text: "ESCUDO QUEBROU!", color: "#60a5fa", y: H * 0.4, life: 1.3, big: false })
         } else {
-          crash(eng)
+          crash(eng, t.role === "police") // viatura parada (blitz, bloqueio) = preso
         }
       }
       // near miss: acabou de passar por ele
@@ -162,40 +164,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
       }
     }
   }
-  // despiste da polícia (protótipo do sistema tipo "estrelas" do GTA): se o
-  // jogador mantém distância grande de TODAS as viaturas por alguns segundos,
-  // elas desistem. Fugir = abrir gap em reta limpa ou perder eles no trânsito.
-  if (!demo) {
-    let nearestPolice = Infinity
-    let hasPolice = false
-    let anyBackoff = false
-    for (const t of eng.traffic) {
-      if (t.role !== "police" || t.parked) continue // estacionada não é perseguição
-      hasPolice = true
-      if (t.backoffT && t.backoffT > 0) anyBackoff = true
-      nearestPolice = Math.min(nearestPolice, Math.abs(wrapDz(eng, t.z, playerZ)))
-    }
-    if (hasPolice) {
-      eng.policeChaseT += dt
-      // aquecimento: nos primeiros segundos a caçada não pode ser despistada —
-      // elas acabaram de chegar, insistem. Recuo pós-encostão também não conta
-      // como fuga: elas aliviaram, você não escapou.
-      if (nearestPolice > 10000 && !anyBackoff && eng.policeChaseT > 6) {
-        eng.policeEscapeT += dt
-        if (eng.policeEscapeT >= 3) {
-          for (const t of eng.traffic) if (t.role === "police") t.dead = true
-          eng.floaters.push({ text: "DESPISTOU A POLÍCIA! 🚔💨", color: "#4ade80", y: H * 0.34, life: 2.4, big: true })
-          eng.audio.levelUp()
-          eng.policeEscapeT = 0
-        }
-      } else {
-        eng.policeEscapeT = Math.max(0, eng.policeEscapeT - dt * 0.5)
-      }
-    } else {
-      eng.policeEscapeT = 0
-      eng.policeChaseT = 0
-    }
-  }
+  // despiste, calor e estrelas da polícia: world/policia.ts (atualizarPolicia)
 
   if (eng.traffic.some(t => t.dead)) eng.traffic = eng.traffic.filter(t => !t.dead)
 }

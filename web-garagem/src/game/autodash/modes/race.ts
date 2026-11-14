@@ -6,6 +6,7 @@ import { seedTraffic } from "../traffic/spawner"
 import { motorDe } from "../physics/motores"
 import { RaceSession } from "../race/session"
 import { iniciarTempo, seedDoTracado } from "../sim/clima"
+import { novoProcurado } from "../world/policia"
 
 export function startRace(eng: AutoDashEngine, seed?: number) {
   const corrida = eng.mode === "race"
@@ -31,6 +32,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.score = 0; eng.km = 0; eng.combo = 0; eng.comboT = 0
   eng.nitroMeter = 0; eng.nitroOn = false
   eng.shield = false; eng.immuneT = 0; eng.policeHitT = 0; eng.policeEscapeT = 0; eng.policeChaseT = 0; eng.mult2T = 0
+  eng.policia = novoProcurado()
   eng.level = 0; eng.levelUpT = 0
   eng.powerups = []; eng.puTimer = eng.testeMotor ? 1e9 : 6
   eng.curveWarn = 0; eng.collWarn = null

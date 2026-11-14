@@ -2,6 +2,7 @@
 import { biomeById, proximoBioma } from "../world/biomes"
 import { proximaHora } from "../world/clock"
 import { proximoClima } from "../world/weather"
+import { infracao } from "../world/policia"
 import { enterFromMenu } from "../flow"
 import { confirmName } from "../flow"
 import { toMenu } from "../flow"
@@ -154,9 +155,10 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "f") flashBeam(eng)
       if (eng.testeMotor && (k === "]" || k === ".")) trocarMotorTeste(eng, 1)
       if (eng.testeMotor && (k === "[" || k === ",")) trocarMotorTeste(eng, -1)
-      // (as teclas de debug de playtest — O perseguição, L nível, B/V/J/K/I/U
-      // eventos — foram removidas: tudo isso agora é sorteado pelo próprio
-      // jogo em updateEventSpawner)
+      // (as teclas de debug de playtest — L nível, B/V/J/K/I/U eventos — foram
+      // removidas: tudo isso agora é sorteado pelo próprio jogo em
+      // updateEventSpawner). O voltou na Fase 6: sobe uma estrela de procurado.
+      if (k === "o" && eng.mode === "solo" && eng.state === "racing" && !eng.testeMotor) infracao(eng, "debug")
       break
     case "paused":
       if (k === "escape" || k === "p" || k === "enter") eng.state = "racing"
