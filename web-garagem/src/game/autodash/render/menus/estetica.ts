@@ -42,6 +42,43 @@ export const OPCOES: Opcao[] = [
   { tecla: "d", rotulo: e => `câmera: ${e.cfg.camera === "fixa" ? "fixa" : "FOV dinâmico"} [D]`, acao: e => { e.cfg.camera = e.cfg.camera === "fixa" ? "dinamica" : "fixa" } },
 ]
 
+// ---------- vitrine: presets prontos para comparar rápido (tecla [1]) ----------
+// Atalho de teste da customização, no espírito do [Z] do teste de motor: cada
+// toque troca o carro inteiro por um visual pronto (a pintura fica a sua), e a
+// volta ao início devolve exatamente o que você tinha. Funciona na prévia, para
+// comparar contra o bioma.
+type Visual = Pick<CarCustom, "stripe" | "neon" | "wing" | "kit" | "aro" | "altura" | "fumaca" | "chama">
+export const VITRINE: { nome: string; v: Visual }[] = [
+  { nome: "rua limpa", v: { stripe: 0, neon: 0, wing: 1, kit: 0, aro: 1, altura: 1, fumaca: 0, chama: 0 } },
+  { nome: "drift JDM", v: { stripe: 3, neon: 2, wing: 2, kit: 1, aro: 2, altura: 2, fumaca: 1, chama: 1 } },
+  { nome: "time attack", v: { stripe: 2, neon: 1, wing: 3, kit: 3, aro: 3, altura: 1, fumaca: 2, chama: 2 } },
+  { nome: "neon noturno", v: { stripe: 1, neon: 4, wing: 0, kit: 2, aro: 1, altura: 2, fumaca: 4, chama: 3 } },
+]
+// estado da vitrine por engine: índice atual (-1 = o seu) e o seu visual guardado
+const vitrine = new WeakMap<AutoDashEngine, { i: number; seu: Visual; carro: number }>()
+
+function visualDe(c: CarCustom): Visual {
+  return { stripe: c.stripe, neon: c.neon, wing: c.wing, kit: c.kit, aro: c.aro, altura: c.altura, fumaca: c.fumaca, chama: c.chama }
+}
+
+/** Nome do visual da vitrine em uso ("o seu" fora dela). */
+export function nomeVitrine(eng: AutoDashEngine): string {
+  const st = vitrine.get(eng)
+  return st && st.i >= 0 && st.carro === eng.cfg.carIdx ? VITRINE[st.i].nome : "o seu"
+}
+
+/** Próximo visual da vitrine; depois do último, volta ao seu. */
+export function proximaVitrine(eng: AutoDashEngine) {
+  const c = custom(eng)
+  let st = vitrine.get(eng)
+  if (!st || st.carro !== eng.cfg.carIdx || st.i < 0) st = { i: -1, seu: visualDe(c), carro: eng.cfg.carIdx }
+  st.i = st.i + 1 >= VITRINE.length ? -1 : st.i + 1
+  Object.assign(c, st.i < 0 ? st.seu : VITRINE[st.i].v)
+  vitrine.set(eng, st)
+  saveConfig(eng.cfg)
+  eng.audio.ui()
+}
+
 function aplicar(eng: AutoDashEngine, o: Opcao) {
   o.acao(eng)
   saveConfig(eng.cfg)
@@ -100,14 +137,16 @@ export function renderAbaEstetica(eng: AutoDashEngine, sx: number) {
     pill(eng, o.rotulo(eng), x, y, 200, () => aplicar(eng, o), { h: 28, font: 11 })
   })
 
+  pill(eng, `vitrine: ${nomeVitrine(eng)}  [1]  · visuais prontos para comparar`, sx, 344, 416, () => proximaVitrine(eng), { h: 28, font: 11 })
+
   // leitura da pintura na cena de trás da garagem
   const amb = skyNow(eng).amb
   const lp = leituraPintura(PAINTS[c.paint], amb)
   ctx.fillStyle = lp.nota === "some" ? "#f87171" : lp.nota === "fraca" ? "#fbbf24" : "#4ade80"
   ctx.font = "12px 'Space Grotesk', 'Segoe UI', sans-serif"
-  ctx.fillText(`pintura no asfalto desta cena: ${lp.razao.toFixed(1).replace(".", ",")}:1 (${notaTexto(lp.nota)})`, sx, 368)
+  ctx.fillText(`pintura no asfalto desta cena: ${lp.razao.toFixed(1).replace(".", ",")}:1 (${notaTexto(lp.nota)})`, sx, 390)
 
-  pill(eng, "VER NA PISTA  [P]", sx, 386, 416, () => entrarPrevia(eng), { primary: true, h: 38, font: 15 })
+  pill(eng, "VER NA PISTA  [P]", sx, 400, 416, () => entrarPrevia(eng), { primary: true, h: 34, font: 15 })
   ctx.fillStyle = "rgba(248,250,252,0.5)"
   ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillText("o carro no tamanho do jogo, no bioma, horário e clima escolhidos", sx, 446)
@@ -203,6 +242,7 @@ export function renderPreviaPista(eng: AutoDashEngine) {
   const y = H - 46
   pill(eng, "voltar [P]", 16, y, 110, () => sairPrevia(eng), { h: 30, font: 12 })
   pill(eng, "pintura [C]", 134, y, 110, () => { c.paint = (c.paint + 1) % PAINTS.length; saveConfig(eng.cfg); eng.audio.ui() }, { h: 30, font: 12 })
+  pill(eng, `vitrine: ${nomeVitrine(eng)} [1]`, 252, y, 170, () => proximaVitrine(eng), { h: 30, font: 12 })
   pill(eng, `bioma [X]`, W - 362, y, 110, () => { eng.cfg.biome = proximoBioma(eng.cfg.biome); saveConfig(eng.cfg); eng.audio.ui() }, { h: 30, font: 12 })
   pill(eng, `horário [O]`, W - 244, y, 110, () => { eng.cfg.hora = proximaHora(eng.cfg.hora); saveConfig(eng.cfg); eng.audio.ui() }, { h: 30, font: 12 })
   pill(eng, `clima [K]`, W - 126, y, 110, () => { eng.cfg.clima = proximoClima(eng.cfg.clima); saveConfig(eng.cfg); eng.audio.ui() }, { h: 30, font: 12 })
@@ -217,10 +257,12 @@ export function teclaEstetica(eng: AutoDashEngine, k: string): boolean {
     if (k === "p" || k === "escape") { sairPrevia(eng); return true }
     if (k === "enter") { eng.previaPista = false; return false } // larga normalmente
     if (k === "w" || k === "s" || k === " ") return true // aceleram e freiam a prévia
+    if (k === "1") { proximaVitrine(eng); return true }
     return false
   }
   if (k === "h") { eng.abaGaragem = eng.abaGaragem === "estetica" ? "carro" : "estetica"; eng.audio.ui(); return true }
   if (k === "p") { entrarPrevia(eng); return true }
+  if (k === "1") { proximaVitrine(eng); return true }
   // teclas novas valem nas duas abas; as antigas seguem no fluxo de sempre
   const o = OPCOES.find(op => op.tecla === k && "swaqfd".includes(k))
   if (o) { aplicar(eng, o); return true }
