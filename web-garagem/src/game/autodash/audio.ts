@@ -1,5 +1,7 @@
-// AutoDash — áudio 100% sintetizado via WebAudio (sem assets externos).
-import { type EngineSoundProfile, ENGINE_PROFILES } from "./sound/profiles"
+// AutoDash — áudio via WebAudio: motor por modelo físico + gravações reais CC0
+// (public/autodash/som/, créditos em CREDITOS.md); o resto é sintetizado.
+import { type EngineSoundProfile, ENGINE_PROFILES, GRAVACAO_DO_PERFIL, TEXTURA } from "./sound/profiles"
+import { graosDoJson } from "./sound/motor-gravado"
 import type { Turbo } from "./physics/motores"
 
 // Motor por pulsos (sound/engine-synth.ts) rodando num AudioWorklet, com a
@@ -13,6 +15,9 @@ interface Motor {
   admBp: BiquadFilterNode
   admGain: GainNode
   out: GainNode
+  synthGain: GainNode     // modelo físico (guias de onda)
+  gravHp: BiquadFilterNode // gravação real: banda cheia (motor gravado) ou só agudos (textura)
+  gravGain: GainNode
   fx: GainNode            // estouros, flutter e blow-off
   apito: OscillatorNode   // eixo do turbo
   apito2: OscillatorNode
@@ -50,6 +55,9 @@ export class AudioBus {
   private estouroAte = 0
   private proxEstouro = 0
   private cortaCargaAte = 0
+  private bancos = new Set<string>()   // bancos de grãos já enviados ao worklet
+  private partidaBuf: AudioBuffer | null = null
+  private partidaAte = 0               // motor mudo enquanto o motor de arranque gira
 
   // loops de ruído (derrapagem / chuva)
   private skidGain: GainNode | null = null
@@ -216,20 +224,25 @@ export class AudioBus {
       if (gain !== undefined) b.gain.value = gain
       return b
     }
-    const node = new AudioWorkletNode(ctx, "autodash-motor", { numberOfInputs: 0, outputChannelCount: [2] })
+    // saída 0: modelo físico (escape, admissão); saída 1: gravação real
+    const node = new AudioWorkletNode(ctx, "autodash-motor", { numberOfInputs: 0, numberOfOutputs: 2, outputChannelCount: [2, 1] })
     const split = ctx.createChannelSplitter(2)
     node.connect(split)
     // escape: tira DC, corpo, coletor, abafador e brilho
     const hp = f("highpass", 35, 0.7), boom = f("peaking", 90, 1, 6), coletor = f("peaking", 360, 1.4, 3)
     const lp = f("lowpass", 2000, 0.5), brilho = f("highshelf", 2400, undefined, 3)
     split.connect(hp, 0); hp.connect(boom); boom.connect(coletor); coletor.connect(lp); lp.connect(brilho)
+    // gravação: não passa pelo "escape" do sintetizador (o timbre já é real)
+    const gravHp = f("highpass", 30, 0.7), gravGain = ctx.createGain(), synthGain = ctx.createGain()
+    gravGain.gain.value = 0
+    node.connect(gravHp, 1); gravHp.connect(gravGain)
     // admissão: só aparece no alto giro com pé no fundo
     const admHp = f("highpass", 300, 0.7), admBp = f("bandpass", 1000, 1.4), admGain = ctx.createGain()
     admGain.gain.value = 0
     split.connect(admHp, 1); admHp.connect(admBp); admBp.connect(admGain)
     // saturação leve (tanh) + compressor: cola os pulsos num ronco só
     const mix = ctx.createGain()
-    brilho.connect(mix); admGain.connect(mix)
+    brilho.connect(synthGain); synthGain.connect(mix); admGain.connect(mix); gravGain.connect(mix)
     const sh = ctx.createWaveShaper()
     const curva = new Float32Array(2048)
     for (let i = 0; i < 2048; i++) { const x = i / 1024 - 1; curva[i] = Math.tanh(0.8 * x) / Math.tanh(0.8) }
@@ -272,8 +285,9 @@ export class AudioBus {
       for (let i = 0; i < len; i++) d[i] = d[i] / pk * 0.6
       return b
     })
-    this.motor = { node, boom, coletor, lp, admBp, admGain, out, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops }
+    this.motor = { node, boom, coletor, lp, admBp, admGain, out, synthGain, gravHp, gravGain, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops }
     this.aplicarPerfil()
+    void this.carregarPartida()
     // o motor antigo sai de cena
     this.engGain?.gain.setTargetAtTime(0, ctx.currentTime, 0.05)
   }
@@ -291,11 +305,74 @@ export class AudioBus {
     this.aplicarPerfil()
   }
 
+  private base(arq: string): string {
+    return `${import.meta.env.BASE_URL ?? "/"}autodash/som/${arq}`
+  }
+
+  /** Baixa e decodifica um banco de grãos (tools/som) e manda para o worklet. */
+  private async carregarBanco(nome: string) {
+    const ctx = this.ctx, m = this.motor
+    if (!ctx || !m || this.bancos.has(nome)) return
+    this.bancos.add(nome)
+    try {
+      const [j, bin] = await Promise.all([
+        fetch(this.base(`${nome}.json`)).then(r => r.json() as Promise<{ arquivo: string; clique: number; graos: number[][] }>),
+        fetch(this.base(`${nome}.mp3`)).then(r => r.arrayBuffer()),
+      ])
+      const buf = await ctx.decodeAudioData(bin)
+      const dados = buf.getChannelData(0).slice()
+      // o MP3 pode chegar atrasado (atraso do codificador): acha o clique de
+      // alinhamento e desloca os grãos para bater com o áudio decodificado
+      let pk = 0, pi = 0
+      const ate = Math.min(dados.length, Math.floor(buf.sampleRate * (j.clique + 0.08)))
+      for (let i = 0; i < ate; i++) if (Math.abs(dados[i]) > pk) { pk = Math.abs(dados[i]); pi = i }
+      const desvio = pi / buf.sampleRate - j.clique
+      const graos = graosDoJson(j.graos)
+      for (let i = 0; i < graos.length; i += 6) graos[i] += desvio
+      m.node.port.postMessage({ banco: { nome, sr: buf.sampleRate, dados, graos, cilindros: 4 } }, [dados.buffer, graos.buffer])
+      this.aplicarPerfil()
+    } catch {
+      this.bancos.delete(nome) // fica só o modelo físico; tenta de novo na próxima troca
+    }
+  }
+
+  private async carregarPartida() {
+    const ctx = this.ctx
+    if (!ctx || this.partidaBuf) return
+    try {
+      const bin = await fetch(this.base("partida.mp3")).then(r => r.arrayBuffer())
+      this.partidaBuf = await ctx.decodeAudioData(bin)
+    } catch { /* sem partida: o motor só liga */ }
+  }
+
+  /** Motor de arranque + pegada (gravação real). O ronco entra quando o motor pega. */
+  partida() {
+    const ctx = this.ctx, m = this.motor
+    if (!ctx || !m || !this.partidaBuf || !this.enabled) return
+    const src = ctx.createBufferSource(), g = ctx.createGain()
+    src.buffer = this.partidaBuf
+    // motor grande: arranque mais pesado
+    src.playbackRate.value = this.perfil.eventos.length >= 8 ? 0.88 : this.perfil.eventos.length >= 6 ? 0.94 : 1
+    g.gain.value = 0.55
+    src.connect(g); g.connect(this.master!)
+    src.start()
+    this.partidaAte = ctx.currentTime + 1.0 / src.playbackRate.value
+  }
+
   private aplicarPerfil() {
     const m = this.motor, ctx = this.ctx
     if (!m || !ctx) return
     const p = this.perfil, t = ctx.currentTime
     m.node.port.postMessage({ perfil: p.id })
+    // gravação real: motor gravado (mesma família) ou só a textura mecânica
+    const grav = GRAVACAO_DO_PERFIL[p.id], g = grav ?? TEXTURA
+    const pronto = this.bancos.has(g.banco)
+    if (!pronto) void this.carregarBanco(g.banco)
+    m.node.port.postMessage({ gravado: true })
+    m.gravHp.frequency.setTargetAtTime(grav ? 30 : 1800, t, 0.05)
+    // a gravação sai ~2× mais forte que o modelo físico no pé no fundo (medido offline)
+    m.gravGain.gain.setTargetAtTime(pronto ? g.mix * (grav ? 0.6 : 0.9) : 0, t, 0.1)
+    m.synthGain.gain.setTargetAtTime(grav && pronto ? 1 - grav.mix * 0.7 : 1, t, 0.1)
     // o timbre agora vem dos dutos do modelo físico: os filtros só dão um toque
     m.boom.frequency.setTargetAtTime(p.boomHz, t, 0.05); m.boom.gain.setTargetAtTime(p.boomDb * 0.35, t, 0.05)
     m.coletor.frequency.setTargetAtTime(p.coletorHz, t, 0.05); m.coletor.gain.setTargetAtTime(0, t, 0.05)
@@ -348,7 +425,9 @@ export class AudioBus {
     m.node.port.postMessage({ st: { rpm, carga, ligado: running, corte } })
     // volume cresce com o giro (o pulso individual encolhe em giro alto; o motor
     // de verdade fica mais alto em cima). Calibrado para a mesma faixa do antigo.
-    m.out.gain.setTargetAtTime(running ? 0.5 * (0.85 + 0.35 * Math.min(rpm, 8000) / 7000) : 0, t, running ? 0.05 : 0.15)
+    // motor de arranque girando: o ronco espera o motor pegar
+    const ligado = running && t >= this.partidaAte
+    m.out.gain.setTargetAtTime(ligado ? 0.5 * (0.85 + 0.35 * Math.min(rpm, 8000) / 7000) : 0, t, ligado ? (this.partidaAte > t - 0.5 ? 0.12 : 0.05) : 0.15)
     if (!running) { this.lastGas = 0; return }
     // abafador abre com o giro e com o pé
     // abafador mais aberto: o modelo físico já tem o próprio abafador

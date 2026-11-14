@@ -172,6 +172,19 @@ export const MOTOR_DO_CARRO: Record<string, string> = {
   flat6: "boxer6-turbo",        // 992: boxer 6 biturbo
 }
 
+// GRAVAÇÃO REAL (sound/motor-gravado.ts): bancos de grãos em
+// public/autodash/som/ (créditos em CREDITOS.md). O motor gravado entra
+// misturado ao modelo físico: `mix` é a parte da gravação (0..1).
+// Perfil sem gravação própria usa a do 4 cilindros só como TEXTURA mecânica
+// (agudos de válvulas e admissão, sob o ronco sintetizado).
+export interface Gravacao { banco: string; mix: number }
+export const GRAVACAO_DO_PERFIL: Record<string, Gravacao> = {
+  i4: { banco: "r19-i4", mix: 0.7 },
+  "i4-pequeno": { banco: "r19-i4", mix: 0.75 },
+  "i4-turbo": { banco: "r19-i4", mix: 0.6 },
+}
+export const TEXTURA: Gravacao = { banco: "r19-i4", mix: 0.22 }
+
 // duração da acelerada de amostra na garagem (s)
 export const REV_AMOSTRA_S = 2.8
 

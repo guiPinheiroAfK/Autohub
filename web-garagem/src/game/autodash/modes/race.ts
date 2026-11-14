@@ -47,6 +47,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   // no duelo o verde é fixo pra manter os dois relógios alinhados
   eng.greenAt = eng.mode === "duel" ? 3.3 : 2.4 + 0.7 + Math.random() * 0.9
   eng.greenFired = false
+  eng.audio.partida() // motor de arranque (gravação real); o ronco entra quando pega
   eng.state = "countdown"
 }
 
