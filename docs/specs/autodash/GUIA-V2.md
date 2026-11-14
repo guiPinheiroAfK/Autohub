@@ -212,6 +212,7 @@ Fontes: D12, D16 e D17; `docs/pesquisa/visual-e-desafio.md` §1.4 (prévia da pi
 Checklist:
 - [x] **Bodykit como dados** (`cosmetic/bodykit.ts`), salvo em `CarCustom` por carro: kit de carroceria (sem kit, saias laterais, saias + difusor, widebody), aerofólio (os 3 de antes + asa alta), aro (padrão, aro fundo, corrida, turbofan), altura (original, rebaixado, stance com cambagem). Desenhado no sprite do carro (`drawPlayerCar`) e na garagem. Configuração salva por versão antiga carrega com o padrão (sem kit, aro padrão, altura original), que desenha **igual** a antes.
 - [x] **Efeitos**: cor da fumaça do escape (padrão, branca, preta, azul, rosa, verde) e cor da chama do nitro (laranja, azul, roxa, verde). Neon por baixo continua o de antes (`NEONS`). Padrão desenha igual.
+- [x] **Atalho de vitrine** [1] (garagem e prévia): presets prontos de bodykit, neon e escape para comparar; volta ao seu no fim do ciclo.
 - [x] **Garagem, aba estética** [H]: as opções novas ficam numa aba própria do painel, para não espremer a aba do carro. Teclas novas: [S] kit, [W] aro, [A] altura, [F] fumaça, [Q] chama, [D] câmera; as antigas ([C] [V] [B] [R] [G]) seguem valendo nas duas abas.
 - [x] **Prévia na pista** [P]: esconde o painel e mostra o carro no tamanho do jogo, na pista do bioma escolhido, no horário e clima escolhidos (O, K e X trocam ao vivo). Mostra o contraste da pintura contra o asfalto da cena (razão WCAG, §1.4) e avisa quando a pintura "some" (< 2:1).
 - [x] **FOV dinâmico** (só desenho): o campo de visão abre de 100° para até 104° entre 150 km/h e a máxima, com a câmera andando junto para o carro do jogador ficar no mesmo lugar e no mesmo tamanho ("dolly zoom"). `CAM_DEPTH` e `PLAYER_Z` não mudam; a colisão não muda. Opção na garagem para desligar ("câmera: fixa"), contra enjoo.
@@ -229,9 +230,17 @@ Decisões provisórias (a confirmar pelo dono, ver seção 7):
 - FOV dinâmico ligado por padrão, com teto de +4° (abaixo dos +6° da pesquisa) por ainda existir o zoom de velocidade do R2; os dois juntos ficam ≤ 1,05 de escala no carro.
 - Luz de recorte, grading (G2), bloom falso (G6) e a opção "Visual leve/completo" da pesquisa ficam fora desta leva.
 
+Como testar (garagem do solo, `/autodash` → ENTER):
+1. **[H]** abre a aba estética. **[1]** é o atalho de vitrine: cada toque troca o carro inteiro por um visual pronto (rua limpa, drift JDM, time attack, neon noturno; a pintura fica a sua) e, depois do último, volta exatamente ao seu. Observe: saias, difusor, alargadores com rebites, aro, carro mais baixo com roda inclinada (stance), asa alta.
+2. **[S] [W] [A] [G]** trocam kit, aro, altura e aerofólio uma peça por vez; **[F] [Q]** a cor da fumaça e da chama; **[C]** a pintura. A linha "pintura no asfalto desta cena" fica vermelha quando a pintura some (< 2:1).
+3. **[P]** prévia na pista: o carro no tamanho do jogo. **[X] [O] [K]** trocam bioma, horário e clima ao vivo; **[1]** continua trocando o visual. Segure **[espaço]** (chama do nitro) e **[W]** (fumaça). Observe se a pintura e o neon aparecem à noite e na chuva. **[P]** ou **[ESC]** volta.
+4. **FOV e câmera:** **ENTER** (ou **[Z]**, pista vazia), acelere até passar de 150 km/h e segure; depois o nitro. Observe: o fundo e a pista "abrem" devagar (uns 7% no longe) sem o carro mudar de lugar nem de tamanho, e sem tremor novo; numa batida a lente fecha em ~0,6 s, sem tranco. Compare com **[D]** na aba estética (câmera: fixa). Se der enjoo, anote a velocidade.
+5. **Torque:** ao lado do conta-giros (só no PC). O ponto deve andar pela curva com o giro; nos turbo, a curva azul sobe até a cinza quando o turbo enche. A faixa verde é o pico de força: trocar perto dela.
+
 Pendente / não verificado:
 - Playtest: nada foi jogado por gente; os números (altura, abertura da lente, tamanho dos alargadores) são palpite a calibrar.
 - O FOV foi conferido por teste numérico da lente (`__tests__/fov.test.ts`) e por screenshot a ~210 km/h sem defeito, mas não lado a lado com a câmera fixa; enjoo só se mede jogando. No navegador, o painel ficou oculto e os quadros foram tocados por um laço de `MessageChannel` no lugar do `requestAnimationFrame` (ADR 0007).
+- Vitrine [1]: o "seu" visual guardado vive só na sessão; recarregar a página no meio do ciclo faz o preset atual virar o seu. Trocar de carro no meio deixa o carro anterior com o preset aplicado.
 - Asa alta encosta de leve no texto de crédito da gravação na garagem (motor com gravação real).
 - Bodykit não vai para a rede: rivais online e o fantasma do duelo aparecem sem kit.
 - Torque no HUD fica fora no celular; sem lugar definido para ele com os botões de toque.
