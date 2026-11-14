@@ -76,6 +76,7 @@ export interface Procurado {
   furadoT: number   // E8: s de pneu furado restantes
   faiscaT: number   // E8: s até a próxima faísca do aro
   ladoFurado: number // -1 ou 1: de que lado sai a faísca
+  testeLargou: boolean // teste de polícia: a caçada inicial já foi chamada
   bloqueios: Bloqueio[] // E10: bloqueios à frente (para o bônus da fresta)
   heli: Heli | null // E13: helicóptero (só em 5★)
   holofote: boolean // E13: o carro está dentro do círculo de luz
@@ -90,7 +91,7 @@ export function novoProcurado(): Procurado {
   return {
     calor: 0, visto: false, esfriaT: 0, sirene: 0,
     eventoT: PRIMEIRO_EVENTO_S, eventoIdx: 0, furadoT: 0, faiscaT: 0, ladoFurado: 1,
-    bloqueios: [], heli: null, holofote: false,
+    bloqueios: [], heli: null, holofote: false, testeLargou: false,
   }
 }
 
@@ -168,6 +169,8 @@ export function infracao(eng: AutoDashEngine, inf: Infracao) {
 /** Um quadro da polícia: calor por tempo, despiste, esfriamento e sirene. */
 export function atualizarPolicia(eng: AutoDashEngine, dt: number, playerZ: number) {
   const p = eng.policia
+  // teste de polícia (garagem → P): já larga perseguido em 1★
+  if (eng.testePolicia && !p.testeLargou) { p.testeLargou = true; definirEstrelas(eng, 1) }
   if (p.furadoT > 0) passoPneuFurado(eng, dt)
   if (p.bloqueios.length) passoBloqueios(eng, playerZ)
   let nearest = Infinity
@@ -206,8 +209,8 @@ export function atualizarPolicia(eng: AutoDashEngine, dt: number, playerZ: numbe
   }
   p.holofote = p.heli ? passoHeli(eng, dt, playerZ) : false
   p.visto = nearest <= VISAO || p.holofote
-  // sendo visto, a caçada esquenta com o tempo
-  if (p.visto) {
+  // sendo visto, a caçada esquenta com o tempo (no teste, só as teclas mudam a estrela)
+  if (p.visto && !eng.testePolicia) {
     const antes = estrelasDe(p.calor)
     p.calor = Math.min(MAX_CALOR, p.calor + dt / SOBE_POR_TEMPO_S)
     const depois = estrelasDe(p.calor)
@@ -398,4 +401,31 @@ function passoHeli(eng: AutoDashEngine, dt: number, playerZ: number): boolean {
   return h.cegoT <= 0
     && Math.abs(wrapDz(eng, playerZ, h.z)) < HOLOFOTE_Z
     && Math.abs(eng.playerX - h.x) < HOLOFOTE_X
+}
+
+/**
+ * Teste de polícia (garagem → P): põe a caçada direto em `n` estrelas (0 encerra).
+ * Viaturas a mais saem, as que faltam chegam por trás, o helicóptero só fica
+ * em 5★, e o próximo evento da estrela vem logo.
+ */
+export function definirEstrelas(eng: AutoDashEngine, n: number) {
+  const p = eng.policia
+  n = clamp(Math.floor(n), 0, 5)
+  if (n === 0) {
+    eng.traffic = eng.traffic.filter(t => !ehViatura(t))
+    p.calor = 0; p.esfriaT = 0; p.heli = null; p.holofote = false; p.visto = false
+    eng.policeChaseT = 0; eng.policeEscapeT = 0
+    eng.floaters.push({ text: "teste: sem polícia", color: "#94a3b8", y: H * 0.34, life: 1.2, big: false })
+    return
+  }
+  const nivel = nivelDe(n)!
+  let sobra = eng.traffic.filter(ehViatura).length - nivel.viaturas
+  if (sobra > 0) eng.traffic = eng.traffic.filter(t => !(ehViatura(t) && sobra-- > 0))
+  if (!nivel.helicoptero) { p.heli = null; p.holofote = false }
+  if (!eng.traffic.some(ehViatura)) { eng.policeChaseT = 0; eng.policeEscapeT = 0 }
+  p.calor = n
+  p.esfriaT = 0
+  p.eventoT = Math.min(p.eventoT, 2)
+  anunciarEstrelas(eng, n)
+  aplicarNivel(eng, n)
 }

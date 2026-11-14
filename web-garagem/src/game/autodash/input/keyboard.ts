@@ -2,7 +2,7 @@
 import { biomeById, proximoBioma } from "../world/biomes"
 import { proximaHora } from "../world/clock"
 import { proximoClima } from "../world/weather"
-import { infracao } from "../world/policia"
+import { infracao, definirEstrelas } from "../world/policia"
 import { enterFromMenu } from "../flow"
 import { confirmName } from "../flow"
 import { toMenu } from "../flow"
@@ -133,9 +133,11 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "k") { eng.cfg.clima = proximoClima(eng.cfg.clima); eng.audio.ui() }
       if (k === "n") { eng.nameBuf = eng.cfg.pilotName; eng.afterName = "garage"; eng.state = "nameentry"; eng.audio.ui() }
       if (["c", "v", "b", "r", "g", "t", "y", "x"].includes(k) || k.startsWith("arrow")) saveConfig(eng.cfg)
-      if (k === "enter") { eng.testeMotor = false; startAndSave(eng) }
+      if (k === "enter") { eng.testeMotor = false; eng.testePolicia = false; startAndSave(eng) }
       // teste de motor: pista vazia, sem trânsito; [ e ] (ou , e .) trocam o motor andando
-      if (k === "z") { eng.testeMotor = true; startAndSave(eng) }
+      if (k === "z") { eng.testeMotor = true; eng.testePolicia = false; startAndSave(eng) }
+      // teste de polícia: larga já perseguido, sem eventos de mapa; 0–5 definem as estrelas
+      if (k === "p") { eng.testeMotor = false; eng.testePolicia = true; startAndSave(eng) }
       if (k === "escape") eng.state = "menu"
       break
     }
@@ -159,6 +161,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       // removidas: tudo isso agora é sorteado pelo próprio jogo em
       // updateEventSpawner). O voltou na Fase 6: sobe uma estrela de procurado.
       if (k === "o" && eng.mode === "solo" && eng.state === "racing" && !eng.testeMotor) infracao(eng, "debug")
+      if (eng.testePolicia && eng.state === "racing" && /^[0-5]$/.test(k)) definirEstrelas(eng, Number(k))
       break
     case "paused":
       if (k === "escape" || k === "p" || k === "enter") eng.state = "racing"
@@ -167,7 +170,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       break
     case "gameover":
       if (k === "enter") startRace(eng)
-      if (k === "g") { eng.testeMotor = false; eng.state = "garage" }
+      if (k === "g") { eng.testeMotor = false; eng.testePolicia = false; eng.state = "garage" }
       if (k === "m") eng.state = "menu"
       break
   }

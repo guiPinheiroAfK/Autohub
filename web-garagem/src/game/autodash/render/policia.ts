@@ -105,6 +105,7 @@ function avisos(eng: AutoDashEngine, y: number) {
   const ctx = eng.ctx
   const p = eng.policia
   const linhas: { t: string; c: string }[] = []
+  if (eng.testePolicia) linhas.push({ t: "TESTE · estrelas nas teclas 0–5", c: "#94a3b8" })
   if (p.furadoT > 0) linhas.push({ t: `PNEU FURADO ${Math.ceil(p.furadoT)}s`, c: "#fb923c" })
   if (p.heli) {
     const t = p.holofote ? "🚁 NO HOLOFOTE" : p.heli.cegoT > 0 ? "🚁 TE PERDEU DE VISTA" : "🚁 FORA DO HOLOFOTE"

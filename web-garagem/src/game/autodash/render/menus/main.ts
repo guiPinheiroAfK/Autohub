@@ -119,7 +119,7 @@ export function renderGarage(eng: AutoDashEngine) {
     eng.state = "nameentry"
     eng.audio.ui()
   })
-  pill(eng, "ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); eng.testeMotor = false; startRace(eng) }, { primary: true, h: 42, font: 17 })
+  pill(eng, "ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); eng.testeMotor = false; eng.testePolicia = false; startRace(eng) }, { primary: true, h: 42, font: 17 })
 
   // painel de specs e customização
   glass(eng, 486, 66, 456, 460, 18)

@@ -19,6 +19,7 @@ export function enterFromMenu(eng: AutoDashEngine, dest: "garage" | "duellobby" 
     eng.mode = "solo"
     eng.race = null
     eng.testeMotor = false
+    eng.testePolicia = false
     eng.state = "garage"
   }
 }
@@ -34,6 +35,7 @@ export function confirmName(eng: AutoDashEngine) {
 
 export function toMenu(eng: AutoDashEngine) {
   eng.testeMotor = false
+  eng.testePolicia = false
   eng.mode = "solo"
   eng.duel = null
   eng.floaters = []

@@ -20,6 +20,8 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   else buildTrack(eng, seed, corrida)
   // teste de motor: pista vazia (sem trânsito, eventos, polícia nem powerups)
   if (eng.testeMotor) { eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = 1e9 }
+  // teste de polícia: sem evento de mapa sorteado (só os da polícia), estrelas pelas teclas 0–5
+  if (eng.testePolicia) eng.eventTimer = 1e9
   seedTraffic(eng, eng.testeMotor ? 0 : corrida ? 5 : 14)
   eng.position = 0
   eng.speed = 0

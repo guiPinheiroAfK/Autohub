@@ -184,4 +184,34 @@ describe("polícia por estrelas — cenário no engine", () => {
     expect(fatos.despiste).toBeGreaterThan(fatos.heliVeio)
     expect(fatos.heliDepois).toBeNull()
   }, 60_000)
+
+  it("atalho de teste: garagem [P] larga em 1★ e as teclas 0–5 definem as estrelas", async () => {
+    const f: Record<string, any> = {}
+    await runScenario(1500, 717171, (i, api) => {
+      if (i === 10) api.tap("Enter")
+      if (i >= 12 && i <= 16) api.tap("TESTE"[i - 12])
+      if (i === 18) api.tap("Enter")
+      if (i === 25) api.tap("p")      // garagem -> teste de polícia
+      if (i === 27) api.down("w")
+      if (i === 400) api.tap("3")
+      if (i === 1000) api.tap("5")
+      if (i === 1300) api.tap("0")
+    }, (i, eng) => {
+      if (i === 0) eng.render = () => {}
+      eng.traffic = eng.traffic.filter((t: any) => t.role !== "civilian")
+      const snap = () => ({ estrelas: Math.floor(eng.policia.calor), viaturas: viaturas(eng).length, heli: !!eng.policia.heli, semEventos: eng.eventTimer > 1e8 })
+      if (i === 399) f.largada = snap()
+      if (i === 401) f.tres = snap()
+      if (i === 999) f.tresDepois = snap() // 10 s depois: o calor não sobe sozinho no teste
+      if (i === 1100) f.cinco = snap()
+      if (i === 1301) f.zero = snap()
+      f.estado = eng.state
+    })
+    expect(f.largada).toMatchObject({ estrelas: 1, viaturas: 1, semEventos: true })
+    expect(f.tres).toMatchObject({ estrelas: 3, viaturas: 3, heli: false })
+    expect(f.tresDepois.estrelas).toBeLessThanOrEqual(3)
+    expect(f.cinco).toMatchObject({ estrelas: 5, viaturas: 4, heli: true })
+    expect(f.zero).toMatchObject({ estrelas: 0, viaturas: 0, heli: false })
+    expect(f.estado).toBe("racing")
+  }, 60_000)
 })

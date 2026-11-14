@@ -160,6 +160,7 @@ export class AutoDashEngine {
   zones: Zone[] = []
   sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto
   testeMotor = false   // pista vazia para ouvir os motores (garagem → Z)
+  testePolicia = false // perseguição direta, estrelas nas teclas 0–5 (garagem → P)
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6
