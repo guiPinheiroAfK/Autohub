@@ -114,12 +114,14 @@ const STUBBED = ["window", "navigator", "localStorage", "performance", "fetch", 
 
 /**
  * Executa um cenário completo. `script(i, api)` é chamado antes de cada quadro i.
- * Restaura Math.random e os globais ao final.
+ * `sonda(i, engine)`, opcional, roda depois de cada quadro: lê (ou ajusta) o
+ * estado do engine em testes de regra. Restaura Math.random e os globais ao final.
  */
 export async function runScenario(
   frames: number,
   seed: number,
   script: (i: number, api: ScenarioApi) => void,
+  sonda?: (i: number, engine: any) => void,
 ): Promise<ScenarioResult> {
   const originalRandom = Math.random
   const originalDescriptors: Record<string, PropertyDescriptor | undefined> = {}
@@ -197,6 +199,7 @@ export async function runScenario(
       cb?.(clock.now)
       hash.update(JSON.stringify([engine.state, String(engine.speed), String(engine.rpm), String(engine.gear)]))
       hash.update(`|f${i}\n`)
+      sonda?.(i, engine)
     }
 
     engine.destroy?.()
