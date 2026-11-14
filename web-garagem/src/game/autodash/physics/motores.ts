@@ -194,10 +194,13 @@ export function passoBoost(m: MotorFisico, boost: number, alvo: number, dt: numb
 
 // Limitador na FÍSICA, na mesma batida do som (giroDoSom): o corte duro tira a
 // força inteira em pulsos de 13 Hz ("bate-volta", brap-brap); o suave de
-// fábrica tira aos poucos nos últimos 2% da faixa e segura o giro sem bater.
+// fábrica tira aos poucos nos últimos 50 rpm e segura o giro sem bater.
+// A rampa começa onde o limitador antigo zerava a força (corte − 50): uma
+// rampa de 2% da faixa (a da pesquisa) tirava força abaixo disso e baixava a
+// máxima do ÁPEX de 262 para 260,7 km/h (o 262 dele fica perto do corte da 6ª).
 export const CORTE_DURO_HZ = 13
 export const CORTE_DURO_FASE = 0.55 // fração de cada pulso sem força
-export const CORTE_SUAVE_FRAC = 0.02
+export const CORTE_SUAVE_RPM = 50
 
 /** Fase do pulso do corte duro (0..1) no tempo `t` (s): a mesma do som. */
 export function faseCorte(t: number): number {
@@ -210,7 +213,7 @@ export function forcaNoCorte(m: MotorFisico, rpm: number, t: number): number {
     if (rpm < m.corte - 50) return 1
     return faseCorte(t) < CORTE_DURO_FASE ? 0 : 1
   }
-  return Math.min(1, Math.max(0, (m.corte - rpm) / (CORTE_SUAVE_FRAC * faixa(m))))
+  return Math.min(1, Math.max(0, (m.corte - rpm) / CORTE_SUAVE_RPM))
 }
 
 /** Fração do giro dentro da faixa do motor (0 = lenta, 1 = corte). */

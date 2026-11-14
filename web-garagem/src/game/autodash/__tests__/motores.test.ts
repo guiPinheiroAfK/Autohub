@@ -94,7 +94,7 @@ describe("motores reais (faixa de giro e curva de força)", () => {
     expect(suave.corteDuro).toBeFalsy()
     // abaixo do corte nada muda
     expect(forcaNoCorte(duro, duro.corte - 200, 0.01)).toBe(1)
-    expect(forcaNoCorte(suave, suave.corte - 0.03 * faixa(suave), 0.01)).toBe(1)
+    expect(forcaNoCorte(suave, suave.corte - 50, 0.01)).toBe(1) // onde o limitador antigo zerava
     // corte duro: em 1 s no limitador, ~45% do tempo com força, em 13 pulsos
     let com = 0, pulsos = 0, antes = 1
     for (let i = 0; i < 1000; i++) {
@@ -110,7 +110,7 @@ describe("motores reais (faixa de giro e curva de força)", () => {
     expect(faseCorte(0.5 / CORTE_DURO_HZ)).toBeCloseTo(0.5)
     // corte suave: rampa contínua e decrescente até zero no corte
     let ult = 1
-    for (let r = suave.corte - 0.02 * faixa(suave); r <= suave.corte; r += 10) {
+    for (let r = suave.corte - 50; r <= suave.corte; r += 5) {
       const k = forcaNoCorte(suave, r, 0)
       expect(k).toBeLessThanOrEqual(ult)
       ult = k

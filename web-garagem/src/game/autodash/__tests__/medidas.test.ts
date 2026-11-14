@@ -61,24 +61,24 @@ export function medir(carIdx: number): Medida {
 }
 
 // Referência medida antes das melhorias de feel (commit do teste), dt = 1/60.
-// [0–100, 0–160, 0–200, até 95% do topo] em s; v40 em km/h.
-const REFERENCIA: Record<string, [number, number, number, number, number]> = {
-  gt: [2.650, 8.617, 18.117, 28.083, 244.0],
-  muscle: [2.033, 7.633, 13.700, 25.600, 260.0],
-  ninja: [2.750, 9.300, 22.217, 29.300, 228.0],
-  ghost: [2.800, 8.733, 16.550, 31.667, 255.4],
-  zcoupe: [2.500, 8.067, 16.067, 24.450, 248.0],
-  rotor: [2.683, 8.333, 17.967, 28.683, 244.0],
-  apex: [2.333, 6.933, 12.500, 22.033, 262.0],
-  kaiju: [2.467, 7.183, 14.167, 19.750, 240.0],
-  sylva: [2.817, 9.400, 20.783, 32.417, 235.8],
-  roadster: [3.317, 12.100, 52.067, NaN, 190.3], // não chega a 95% de 220 em 60 s
-  alta: [2.333, 7.250, 14.017, 19.967, 242.0],
-  flat6: [2.317, 6.933, 13.367, 24.700, 258.0],
-  "test-fwd": [2.850, 9.017, 19.250, 30.200, 244.0],
-  "test-rwd": [2.650, 8.617, 18.117, 28.083, 244.0],
-  "test-awd5050": [2.800, 9.333, 20.933, 33.767, 244.0],
-  "test-awd3070": [2.800, 9.333, 20.933, 33.767, 244.0],
+// [0–100, 0–160, 0–200, até 95% do topo] em s; v40 e v60 em km/h.
+const REFERENCIA: Record<string, [number, number, number, number, number, number]> = {
+  gt: [2.650, 8.617, 18.117, 28.083, 244.0, 244.0],
+  muscle: [2.033, 7.633, 13.700, 25.600, 260.0, 260.0],
+  ninja: [2.750, 9.300, 22.217, 29.300, 228.0, 228.0],
+  ghost: [2.800, 8.733, 16.550, 31.667, 255.4, 256.0],
+  zcoupe: [2.500, 8.067, 16.067, 24.450, 248.0, 248.0],
+  rotor: [2.683, 8.333, 17.967, 28.683, 244.0, 244.0],
+  apex: [2.333, 6.933, 12.500, 22.033, 262.0, 262.0],
+  kaiju: [2.467, 7.183, 14.167, 19.750, 240.0, 240.0],
+  sylva: [2.817, 9.400, 20.783, 32.417, 235.8, 238.0],
+  roadster: [3.317, 12.100, 52.067, NaN, 190.3, 206.5], // não chega a 95% de 220 em 60 s
+  alta: [2.333, 7.250, 14.017, 19.967, 242.0, 242.0],
+  flat6: [2.317, 6.933, 13.367, 24.700, 258.0, 258.0],
+  "test-fwd": [2.850, 9.017, 19.250, 30.200, 244.0, 244.0],
+  "test-rwd": [2.650, 8.617, 18.117, 28.083, 244.0, 244.0],
+  "test-awd5050": [2.800, 9.333, 20.933, 33.767, 244.0, 244.0],
+  "test-awd3070": [2.800, 9.333, 20.933, 33.767, 244.0, 244.0],
 }
 
 const TOL = 0.03
@@ -89,10 +89,10 @@ describe("medidas de equilíbrio (0–100, 0–160, 0–200, máxima)", () => {
     const spec = CARS[ci]
     it(`${spec.name}: tempos a ±3% da referência`, () => {
       const m = medir(ci)
-      tabela.push(`  ${JSON.stringify(spec.id)}: [${[m.t100, m.t160, m.t200, m.t95].map(x => isNaN(x) ? "NaN" : x.toFixed(3)).join(", ")}, ${m.v40.toFixed(1)}], // v60 ${m.v60.toFixed(1)}`)
+      tabela.push(`  ${JSON.stringify(spec.id)}: [${[m.t100, m.t160, m.t200, m.t95].map(x => isNaN(x) ? "NaN" : x.toFixed(3)).join(", ")}, ${m.v40.toFixed(1)}, ${m.v60.toFixed(1)}],`)
       const ref = REFERENCIA[spec.id]
       expect(ref, `sem referência para ${spec.id}`).toBeDefined()
-      const [r100, r160, r200, r95, rv40] = ref
+      const [r100, r160, r200, r95, rv40, rv60] = ref
       const perto = (v: number, r: number, nome: string) => {
         if (isNaN(r)) { expect(isNaN(v), `${nome}: antes não chegava`).toBe(true); return }
         expect(Math.abs(v / r - 1), `${nome}: ${v.toFixed(3)} contra ${r}`).toBeLessThanOrEqual(TOL)
@@ -103,6 +103,8 @@ describe("medidas de equilíbrio (0–100, 0–160, 0–200, máxima)", () => {
       perto(m.t95, r95, "até 95% do topo")
       // velocidade aos 40 s: a ±1% (o teto suave só mexe nos últimos 4%)
       expect(Math.abs(m.v40 / rv40 - 1), `v40: ${m.v40.toFixed(1)} contra ${rv40}`).toBeLessThanOrEqual(0.01)
+      // velocidade aos 60 s (a máxima de fato): a ±0,3%
+      expect(Math.abs(m.v60 / rv60 - 1), `v60: ${m.v60.toFixed(1)} contra ${rv60}`).toBeLessThanOrEqual(0.003)
     })
   }
   it("tabela", () => {
