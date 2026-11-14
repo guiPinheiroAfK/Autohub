@@ -9,7 +9,7 @@ import { updateTraffic, wrapDz } from "../traffic/spawner"
 import { updateFx, emitSmoke, emitFlame, burst } from "../fx/particles"
 import { climaAtual, tickTempo } from "./clima"
 import { perfilDoCarro, REV_AMOSTRA_S } from "../sound/profiles"
-import { motorDe, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca } from "../physics/motores"
+import { motorDe, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto, giroDoSom } from "../physics/motores"
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
@@ -28,6 +28,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   // lado físico do mesmo motor: lenta, faixa vermelha, corte, curva e turbo
   const mf = motorDe(eng)
   eng.audio.setTurbo(mf.turbo, mf.corte)
+  eng.somT += dt // relógio do som (limitador batendo, lenta irregular)
 
   duelNet(eng, dt)
 
@@ -81,7 +82,8 @@ export function update(eng: AutoDashEngine, dt: number) {
     eng.countT += dt
     // rev livre no grid
     const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
-    eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * 5)
+    // giro solto: motor leve sobe e cai rápido, motor pesado é preguiçoso
+    eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * taxaSolto(mf, targetRpm > eng.rpm))
     if (eng.rpm > mf.corte) eng.rpm = mf.corte - Math.random() * 0.043 * faixa(mf)
     // em ponto morto o turbo quase não enche (sem carga)
     eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, eng.rpm, throttle) * 0.35, dt)
@@ -100,7 +102,8 @@ export function update(eng: AutoDashEngine, dt: number) {
         if (eng.countT >= tl && eng.countT - dt < tl) eng.audio.semaphoreRed()
       }
     }
-    eng.audio.engine(eng.rpm, throttle, false, true, eng.rpm >= mf.corte - 60, eng.boost)
+    const corteGrid = eng.rpm >= mf.corte - 60
+    eng.audio.engine(giroDoSom(mf, eng.rpm, throttle, corteGrid, eng.somT), throttle, false, true, corteGrid, eng.boost)
     updateFx(eng, dt)
     return
   }
@@ -166,7 +169,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   if (eng.gear >= 1) eng.rpm = rpmFor(eng, eng.speed, eng.gear)
   else {
     const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
-    eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * 5)
+    // giro solto: motor leve sobe e cai rápido, motor pesado é preguiçoso
+    eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * taxaSolto(mf, targetRpm > eng.rpm))
   }
   // turbo: enche com giro e pé, com atraso; esvazia na troca e ao aliviar.
   // É aqui que nasce o "lag": sai de curva em giro baixo e a força demora a vir.
@@ -408,7 +412,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   updateFx(eng, dt)
-  eng.audio.engine(eng.rpm, throttle, nitroActive, true, throttle > 0 && eng.rpm >= mf.corte - 60, eng.boost)
+  const noCorte = throttle > 0 && eng.rpm >= mf.corte - 60
+  eng.audio.engine(giroDoSom(mf, eng.rpm, throttle, noCorte, eng.somT), throttle, nitroActive, true, noCorte, eng.boost)
 }
 
 // Acelerada de amostra na garagem: lenta, pé no fundo até ~6800 rpm e solta
@@ -416,9 +421,13 @@ export function update(eng: AutoDashEngine, dt: number) {
 function acelerarAmostra(eng: AutoDashEngine, dt: number) {
   eng.revAmostraT = Math.max(0, eng.revAmostraT - dt)
   const e = REV_AMOSTRA_S - eng.revAmostraT
-  const m = motorDe(eng), topo = giroNaFrac(m, 0.85)
-  let rpm = m.idle, gas = 0
-  if (e > 0.15 && e < 0.8) { gas = 1; rpm = m.idle + (topo - m.idle) * Math.pow((e - 0.15) / 0.65, 0.8) }
-  else if (e >= 0.8) rpm = m.idle + (topo - m.idle) * Math.exp(-(e - 0.8) * 3.2)
-  eng.audio.engine(rpm, gas, false, true)
+  // lenta → pé no fundo até o corte (na rapidez de giro do motor) → segura no
+  // limitador → solta e o giro cai na rapidez do motor
+  const m = motorDe(eng), solto = m.solto ?? [5, 5]
+  const sobe = 0.15 + 3.2 / solto[0], segura = sobe + 0.45
+  let rpm = m.idle, gas = 0, corte = false
+  if (e > 0.15 && e < sobe) { gas = 1; rpm = m.idle + (m.corte - m.idle) * Math.pow((e - 0.15) / (sobe - 0.15), 0.85) }
+  else if (e >= sobe && e < segura) { gas = 1; rpm = m.corte; corte = true }
+  else if (e >= segura) rpm = m.idle + (m.corte - m.idle) * Math.exp(-(e - segura) * solto[1] * 0.8)
+  eng.audio.engine(giroDoSom(m, rpm, gas, corte, eng.somT), gas, false, true, corte, -1)
 }

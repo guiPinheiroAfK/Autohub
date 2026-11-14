@@ -173,7 +173,7 @@ export const MOTOR_DO_CARRO: Record<string, string> = {
 }
 
 // duração da acelerada de amostra na garagem (s)
-export const REV_AMOSTRA_S = 1.9
+export const REV_AMOSTRA_S = 2.8
 
 // Ordem do seletor da garagem (todos os perfis)
 export const MOTOR_IDS = Object.keys(ENGINE_PROFILES)

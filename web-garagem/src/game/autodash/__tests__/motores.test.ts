@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico } from "../physics/motores"
+import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom } from "../physics/motores"
 import { ENGINE_PROFILES } from "../sound/profiles"
 import { CARS, GEAR_RATIOS, RPM_PER_KMH, RPM_LIMITER, RPM_IDLE } from "../data"
 
@@ -61,4 +61,32 @@ describe("motores reais (faixa de giro e curva de força)", () => {
     expect(motorFisico(muscle).corte).toBe(6000)
     expect(motorFisico(muscle, "v12").corte).toBe(9250)
   })
+
+  it("giro solto: motor leve sobe bem mais rápido que o big block de 71", () => {
+    expect(taxaSolto(MOTORES.i4, true)).toBeGreaterThan(taxaSolto(MOTORES["v8-cruzado-ford"], true) * 2.5)
+    expect(taxaSolto(MOTORES.rotativo, false)).toBeGreaterThan(taxaSolto(MOTORES.w16, false) * 2.5)
+  })
+
+  it("limitador: corte duro bate mais fundo que o suave; fora do corte o giro do som é o da física", () => {
+    const fundo = (m: typeof MOTORES.i4) => {
+      let min = Infinity
+      for (let t = 0; t < 1; t += 0.001) min = Math.min(min, giroDoSom(m, m.corte, 1, true, t))
+      return m.corte - min
+    }
+    expect(fundo(MOTORES.i4)).toBeGreaterThan(fundo(MOTORES.v12) * 2)
+    expect(giroDoSom(MOTORES.v12, 5000, 1, false, 0.37)).toBe(5000)
+  })
+
+  it("lenta irregular só no comando bravo e no rotativo, e só perto da lenta", () => {
+    const osc = (m: typeof MOTORES.i4, rpm: number) => {
+      let a = Infinity, b = -Infinity
+      for (let t = 0; t < 2; t += 0.01) { const r = giroDoSom(m, rpm, 0, false, t); a = Math.min(a, r); b = Math.max(b, r) }
+      return b - a
+    }
+    const v8 = MOTORES["v8-cruzado-ford"]
+    expect(osc(v8, v8.idle)).toBeGreaterThan(100)
+    expect(osc(v8, 4000)).toBe(0)
+    expect(osc(MOTORES.v12, MOTORES.v12.idle)).toBe(0)
+  })
 })
+

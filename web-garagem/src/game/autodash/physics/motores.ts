@@ -27,58 +27,61 @@ export interface MotorFisico {
   corte: number            // limitador
   curva: [number, number][] // (rpm, fração da potência máxima) com boost cheio
   turbo?: Turbo
+  solto?: [number, number] // giro livre: rapidez para subir e para cair (padrão 5/5); motor leve = alto
+  corteDuro?: boolean      // limitador de corte seco ("brap-brap") em vez do suave de fábrica
+  lope?: number            // lenta irregular (rpm de oscilação): comando bravo, rotativo
 }
 
 // Faixas e curvas aproximadas de motores reais da mesma família (estimativa a
 // partir de curvas de dinamômetro publicadas; calibrar no playtest).
 export const MOTORES: Record<string, MotorFisico> = {
   // 1.0 turbo de 3 cilindros: cheio cedo, morre em cima
-  i3: { idle: 850, redline: 6200, corte: 6500, curva: [[850, 0.3], [2000, 0.7], [3500, 0.95], [5000, 1], [6500, 0.78]],
+  i3: { idle: 850, redline: 6200, corte: 6500, curva: [[850, 0.3], [2000, 0.7], [3500, 0.95], [5000, 1], [6500, 0.78]], solto: [6, 5],
     turbo: { spool: 1500, cheio: 2600, lag: 0.3, peso: 0.35, apito: [1800, 7500], desce: 1.1 } },
   // 4 em linha de giro alto com comando variável: fraco embaixo, acorda depois de 5800
-  i4: { idle: 900, redline: 8600, corte: 8800, curva: [[900, 0.22], [3000, 0.48], [5000, 0.62], [5800, 0.82], [7500, 1], [8800, 0.9]] },
+  i4: { idle: 900, redline: 8600, corte: 8800, curva: [[900, 0.22], [3000, 0.48], [5000, 0.62], [5800, 0.82], [7500, 1], [8800, 0.9]], solto: [10, 7], corteDuro: true },
   // 4 em linha 2.0 turbo de rua: atraso até ~3500
-  "i4-turbo": { idle: 850, redline: 7200, corte: 7500, curva: [[850, 0.25], [2500, 0.55], [4000, 0.95], [6400, 1], [7500, 0.82]],
+  "i4-turbo": { idle: 850, redline: 7200, corte: 7500, curva: [[850, 0.25], [2500, 0.55], [4000, 0.95], [6400, 1], [7500, 0.82]], solto: [6, 5], corteDuro: true,
     turbo: { spool: 2600, cheio: 4000, lag: 0.45, peso: 0.4, apito: [1400, 6000] } },
   // 1.6 aspirado pequeno: linear, gira solto, pouca força
-  "i4-pequeno": { idle: 850, redline: 7000, corte: 7200, curva: [[850, 0.3], [3000, 0.6], [5000, 0.85], [6500, 1], [7200, 0.92]] },
+  "i4-pequeno": { idle: 850, redline: 7000, corte: 7200, curva: [[850, 0.3], [3000, 0.6], [5000, 0.85], [6500, 1], [7200, 0.92]], solto: [8, 6] },
   // boxer 2.5 turbo: atraso e depois uma pancada no meio
-  boxer4: { idle: 800, redline: 6700, corte: 7000, curva: [[800, 0.25], [2500, 0.5], [3800, 0.98], [5800, 1], [7000, 0.8]],
+  boxer4: { idle: 800, redline: 6700, corte: 7000, curva: [[800, 0.25], [2500, 0.5], [3800, 0.98], [5800, 1], [7000, 0.8]], solto: [5, 4], corteDuro: true,
     turbo: { spool: 2400, cheio: 3800, lag: 0.45, peso: 0.4, apito: [1300, 5600] } },
   // 5 em linha 2.5 turbo: cheio cedo e largo
-  i5: { idle: 800, redline: 6800, corte: 7000, curva: [[800, 0.3], [2200, 0.75], [3000, 0.97], [6000, 1], [7000, 0.88]],
+  i5: { idle: 800, redline: 6800, corte: 7000, curva: [[800, 0.3], [2200, 0.75], [3000, 0.97], [6000, 1], [7000, 0.88]], solto: [5, 4],
     turbo: { spool: 1700, cheio: 2800, lag: 0.35, peso: 0.35, apito: [1200, 5200], desce: 1.7 } },
   // 6 em linha 3.0 biturbo sequencial: primário cedo, secundário perto de 4000
-  i6: { idle: 750, redline: 6800, corte: 7200, curva: [[750, 0.28], [2500, 0.62], [3800, 0.8], [4300, 0.98], [6000, 1], [7200, 0.84]],
+  i6: { idle: 750, redline: 6800, corte: 7200, curva: [[750, 0.28], [2500, 0.62], [3800, 0.8], [4300, 0.98], [6000, 1], [7200, 0.84]], solto: [5, 4],
     turbo: { spool: 2000, cheio: 4200, lag: 0.4, peso: 0.4, apito: [1300, 5500], turbinas: 2 } },
   // 6 em linha 2.6 biturbo de corrida: preguiçoso embaixo, gira até 8000
-  "i6-corrida": { idle: 900, redline: 8000, corte: 8200, curva: [[900, 0.22], [3000, 0.48], [4500, 0.85], [6800, 1], [8200, 0.86]],
+  "i6-corrida": { idle: 900, redline: 8000, corte: 8200, curva: [[900, 0.22], [3000, 0.48], [4500, 0.85], [6800, 1], [8200, 0.86]], solto: [7, 5], corteDuro: true,
     turbo: { spool: 3200, cheio: 4600, lag: 0.5, peso: 0.4, apito: [1500, 6200], turbinas: 2 } },
   // boxer 6 aspirado de pista: tudo em cima, gira até 9000
-  boxer6: { idle: 900, redline: 9000, corte: 9200, curva: [[900, 0.25], [3500, 0.55], [6000, 0.82], [8400, 1], [9200, 0.93]] },
+  boxer6: { idle: 900, redline: 9000, corte: 9200, curva: [[900, 0.25], [3500, 0.55], [6000, 0.82], [8400, 1], [9200, 0.93]], solto: [11, 8], corteDuro: true },
   // boxer 6 3.0 biturbo: torque plano no meio, perde fôlego depois de 6500
-  "boxer6-turbo": { idle: 800, redline: 7200, corte: 7500, curva: [[800, 0.3], [2000, 0.7], [3000, 0.92], [6500, 1], [7500, 0.86]],
+  "boxer6-turbo": { idle: 800, redline: 7200, corte: 7500, curva: [[800, 0.3], [2000, 0.7], [3000, 0.92], [6500, 1], [7500, 0.86]], solto: [6, 5],
     turbo: { spool: 1700, cheio: 2800, lag: 0.3, peso: 0.3, apito: [1500, 6000], turbinas: 2 } },
   // V6 3.5 aspirado: meio forte e largo
-  v6: { idle: 700, redline: 6600, corte: 7000, curva: [[700, 0.32], [3000, 0.7], [4800, 0.92], [6200, 1], [7000, 0.85]] },
-  "v6-biturbo": { idle: 700, redline: 6800, corte: 7000, curva: [[700, 0.3], [2000, 0.72], [3000, 0.97], [6200, 1], [7000, 0.86]],
+  v6: { idle: 700, redline: 6600, corte: 7000, curva: [[700, 0.32], [3000, 0.7], [4800, 0.92], [6200, 1], [7000, 0.85]], solto: [5, 4] },
+  "v6-biturbo": { idle: 700, redline: 6800, corte: 7000, curva: [[700, 0.3], [2000, 0.72], [3000, 0.97], [6200, 1], [7000, 0.86]], solto: [5, 4],
     turbo: { spool: 1500, cheio: 2800, lag: 0.3, peso: 0.3, apito: [1500, 6200], turbinas: 2 } },
   // V8 com compressor Roots: força na hora, sem atraso; corte baixo
-  "v8-cruzado": { idle: 700, redline: 6200, corte: 6400, curva: [[700, 0.45], [2000, 0.8], [3500, 0.95], [5800, 1], [6400, 0.9]] },
+  "v8-cruzado": { idle: 700, redline: 6200, corte: 6400, curva: [[700, 0.45], [2000, 0.8], [3500, 0.95], [5800, 1], [6400, 0.9]], solto: [4, 3], corteDuro: true, lope: 60 },
   // V8 big block de 71: torque de caminhão embaixo, morre em cima, corta em 6000
-  "v8-cruzado-ford": { idle: 650, redline: 5800, corte: 6000, curva: [[650, 0.5], [2000, 0.85], [3200, 1], [4800, 0.97], [6000, 0.78]] },
+  "v8-cruzado-ford": { idle: 650, redline: 5800, corte: 6000, curva: [[650, 0.5], [2000, 0.85], [3200, 1], [4800, 0.97], [6000, 0.78]], solto: [3, 2.2], corteDuro: true, lope: 90 },
   // V8 plano biturbo de hiperesportivo: absurdo em todo lugar depois que enche
-  "v8-plano": { idle: 900, redline: 8250, corte: 8500, curva: [[900, 0.3], [2800, 0.7], [4000, 0.96], [7500, 1], [8500, 0.9]],
+  "v8-plano": { idle: 900, redline: 8250, corte: 8500, curva: [[900, 0.3], [2800, 0.7], [4000, 0.96], [7500, 1], [8500, 0.9]], solto: [8, 6], corteDuro: true,
     turbo: { spool: 2500, cheio: 4000, lag: 0.4, peso: 0.35, apito: [1200, 5000], turbinas: 2, desce: 1.8 } },
   // V10 aspirado: sobe até 8700 cantando
-  v10: { idle: 900, redline: 8500, corte: 8700, curva: [[900, 0.25], [3500, 0.6], [6000, 0.86], [8000, 1], [8700, 0.94]] },
+  v10: { idle: 900, redline: 8500, corte: 8700, curva: [[900, 0.25], [3500, 0.6], [6000, 0.86], [8000, 1], [8700, 0.94]], solto: [10, 7] },
   // V12 aspirado: o mais alto de todos
-  v12: { idle: 950, redline: 9000, corte: 9250, curva: [[950, 0.28], [3500, 0.6], [6000, 0.84], [8500, 1], [9250, 0.95]] },
+  v12: { idle: 950, redline: 9000, corte: 9250, curva: [[950, 0.28], [3500, 0.6], [6000, 0.84], [8500, 1], [9250, 0.95]], solto: [9, 6] },
   // W16 quadriturbo: enche cedo e corta cedo (motor enorme)
-  w16: { idle: 800, redline: 6700, corte: 6800, curva: [[800, 0.35], [2200, 0.85], [3000, 0.98], [6000, 1], [6800, 0.92]],
+  w16: { idle: 800, redline: 6700, corte: 6800, curva: [[800, 0.35], [2200, 0.85], [3000, 0.98], [6000, 1], [6800, 0.92]], solto: [3, 2.5],
     turbo: { spool: 1800, cheio: 3000, lag: 0.45, peso: 0.35, apito: [1100, 4600], turbinas: 4, desce: 2.2 } },
   // rotativo biturbo sequencial: fraco embaixo, gira solto até 8300
-  rotativo: { idle: 800, redline: 8000, corte: 8300, curva: [[800, 0.2], [3000, 0.5], [4500, 0.88], [6500, 1], [8300, 0.9]],
+  rotativo: { idle: 800, redline: 8000, corte: 8300, curva: [[800, 0.2], [3000, 0.5], [4500, 0.88], [6500, 1], [8300, 0.9]], solto: [12, 9], corteDuro: true, lope: 70,
     turbo: { spool: 2800, cheio: 4500, lag: 0.45, peso: 0.4, apito: [1600, 6400], turbinas: 2 } },
 }
 
@@ -187,4 +190,28 @@ export function fracGiro(m: MotorFisico, rpm: number): number {
 /** Giro numa fração da faixa (para regras que antes usavam números fixos). */
 export function giroNaFrac(m: MotorFisico, f: number): number {
   return m.idle + f * faixa(m)
+}
+
+/** Rapidez do giro livre (ponto morto, grid): sobe/cai por segundo, em fração do que falta. */
+export function taxaSolto(m: MotorFisico, subindo: boolean): number {
+  const [s, d] = m.solto ?? [5, 5]
+  return subindo ? s : d
+}
+
+/**
+ * Giro que vai para o SOM (a física não muda): no limitador o giro "bate" num
+ * dente de serra — corte duro cai mais e mais rápido, o suave de fábrica é
+ * macio — e na lenta o comando bravo / rotativo oscila. `t` é o tempo em s.
+ */
+export function giroDoSom(m: MotorFisico, rpm: number, gas: number, noCorte: boolean, t: number): number {
+  let r = rpm
+  if (noCorte) {
+    const hz = m.corteDuro ? 13 : 8, amp = (m.corteDuro ? 0.05 : 0.018) * faixa(m)
+    r -= amp * (t * hz - Math.floor(t * hz))
+  }
+  if (m.lope && gas < 0.2 && rpm < m.idle + 500) {
+    const k = 1 - Math.max(0, rpm - m.idle) / 500
+    r += m.lope * k * (Math.sin(t * 2 * Math.PI * 1.6) + 0.6 * Math.sin(t * 2 * Math.PI * 0.55 + 1.3))
+  }
+  return r
 }
