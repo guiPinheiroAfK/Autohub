@@ -35,8 +35,8 @@ class Linha {
   private buf: Float32Array
   private pos = 0
   constructor(amostras: number) { this.buf = new Float32Array(Math.max(2, Math.round(amostras))) }
-  ler(): number { return this.buf[(this.pos + 1) % this.buf.length] }
-  escrever(v: number) { this.buf[this.pos] = v; this.pos = (this.pos + 1) % this.buf.length }
+  ler(): number { const i = this.pos + 1; return this.buf[i === this.buf.length ? 0 : i] }
+  escrever(v: number) { this.buf[this.pos] = v; if (++this.pos === this.buf.length) this.pos = 0 }
 }
 
 class Duto {
@@ -46,15 +46,20 @@ class Duto {
   private c1Out = 0
   alpha: number
   beta: number
+  // saídas do último pop(): sem devolver array (roda milhões de vezes por segundo
+  // na thread de áudio, e cada array novo vira lixo para o coletor)
+  saiA = 0 // lado alpha
+  saiB = 0 // lado beta
   constructor(atrasoS: number, sr: number, alpha: number, beta: number) {
     this.c0 = new Linha(atrasoS * sr); this.c1 = new Linha(atrasoS * sr)
     this.alpha = alpha; this.beta = beta
   }
-  /** a = saída do lado alpha, b = saída do lado beta */
-  pop(): [number, number] {
+  /** Lê as saídas: `saiA` (lado alpha) e `saiB` (lado beta). */
+  pop() {
     this.c1Out = dampen(this.c1.ler())
     this.c0Out = dampen(this.c0.ler())
-    return [this.c1Out * (1 - Math.abs(this.alpha)), this.c0Out * (1 - Math.abs(this.beta))]
+    this.saiA = this.c1Out * (1 - Math.abs(this.alpha))
+    this.saiB = this.c0Out * (1 - Math.abs(this.beta))
   }
   push(x0: number, x1: number) {
     this.c0.escrever(this.c1Out * this.alpha + x0)
@@ -90,6 +95,8 @@ export interface MotorGuias {
 class Cilindro {
   esc: Duto; adm: Duto; col: Duto
   som = 0
+  saiAdm = 0 // saída da admissão no último pop()
+  saiEsc = 0 // saída do coletor do escape no último pop()
   private saidaColetor = 0
   corta = false // limitador: esta volta o cilindro não queima
   private ultimo = 0
@@ -101,7 +108,8 @@ class Cilindro {
     this.adm = new Duto(c.admissao, sr, m.admFechada, m.admissaoBeta)
     this.col = new Duto(c.coletor, sr, 0, m.coletorBeta)
   }
-  pop(manivela: number, escPrev: number, carga: number, sorteio: () => number, corte: boolean): [number, number, number] {
+  /** Avança o cilindro: preenche `saiAdm`, `saiEsc` e `som`. */
+  pop(manivela: number, escPrev: number, carga: number, sorteio: () => number, corte: boolean) {
     const m = this.m
     const cr = fract(manivela + this.c.offset)
     if (cr < this.ultimo) this.corta = corte && sorteio() < 0.7 // nova volta: sorteia se queima
@@ -112,10 +120,10 @@ class Cilindro {
     const ev = valvulaEscape(fract(cr + m.desvioEsc)), av = valvulaAdmissao(fract(cr + m.desvioAdm))
     this.esc.alpha = m.escFechada + (m.escAberta - m.escFechada) * ev
     this.adm.alpha = m.admFechada + (m.admAberta - m.admFechada) * av
-    const e = this.esc.pop(), a = this.adm.pop(), k = this.col.pop()
-    this.saidaColetor = k[0]
-    this.col.push(e[1], escPrev)
-    return [a[1], k[1], this.som]
+    this.esc.pop(); this.adm.pop(); this.col.pop()
+    this.saidaColetor = this.col.saiA
+    this.col.push(this.esc.saiB, escPrev)
+    this.saiAdm = this.adm.saiB; this.saiEsc = this.col.saiB
   }
   push(entradaAdm: number) {
     this.esc.push((1 - Math.abs(this.esc.alpha)) * this.som * 0.5, this.saidaColetor)
@@ -140,6 +148,7 @@ export class WaveguideSynth {
   private rpm = 900
   private carga = 0
   private seed: number
+  private sorteio = () => this.rnd() // criado uma vez (não a cada amostra)
   private normalizar: boolean
   ganho = 1 // normaliza o volume entre motores e ao longo do giro (cada duto ressoa com força própria)
   perfilId = ""
@@ -216,16 +225,17 @@ export class WaveguideSynth {
       const flut = this.flutLp.passo(this.rnd() * 2 - 1)
       const pos = this.manivela + m.flutuacao * flut
       for (const c of this.cil) {
-        const r = c.pop(pos, escPrev, this.st.ligado ? this.carga : 0, () => this.rnd(), this.st.corte)
-        coletorAdm += r[0]; this.coletorEsc += r[1]; vib += r[2]
+        c.pop(pos, escPrev, this.st.ligado ? this.carga : 0, this.sorteio, this.st.corte)
+        coletorAdm += c.saiAdm; this.coletorEsc += c.saiEsc; vib += c.som
       }
-      const reto = this.cano.pop()
+      this.cano.pop()
+      const retoA = this.cano.saiA, retoB = this.cano.saiB
       let abA = 0, abB = 0
-      for (const e of this.abaf) { const r = e.pop(); abA += r[0]; abB += r[1] }
+      for (const e of this.abaf) { e.pop(); abA += e.saiA; abB += e.saiB }
       for (const c of this.cil) c.push(coletorAdm / N + ruido * c.valvulaAdm(this.manivela))
       this.cano.push(this.coletorEsc, abA)
-      this.coletorEsc += reto[0]
-      for (const e of this.abaf) e.push(reto[1] / M, 0)
+      this.coletorEsc += retoA
+      for (const e of this.abaf) e.push(retoB / M, 0)
       vib = this.vibLp.passo(vib)
       const mix = (coletorAdm * m.volAdmissao + vib * m.volVibracao + abB * m.volEscape) * 0.1
       const out = mix - this.dcLp.passo(mix)
