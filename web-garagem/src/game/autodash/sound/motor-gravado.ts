@@ -151,10 +151,12 @@ export class MotorGravado {
   private escolher(hz: number): number {
     const g = this.b!.graos
     let classe = this.sortearClasse()
-    // no limitador, metade das explosões falha: grão de alívio no lugar
-    if (this.st.corte && this.rnd() < 0.5) classe = ALIVIO
+    // no limitador, metade das explosões falha: grão de alívio no lugar (a
+    // falha vale mesmo quando daria para seguir a gravação)
+    const falha = this.st.corte && this.rnd() < 0.5
+    if (falha) classe = ALIVIO
     const j = this.ultimo + 1
-    if (this.ultimo >= 0 && j < g.length / CAMPOS) {
+    if (!falha && this.ultimo >= 0 && j < g.length / CAMPOS) {
       const o = this.ultimo * CAMPOS, p = j * CAMPOS
       const seguido = Math.abs(g[p] - g[o] - g[o + 2]) < 0.15 * g[o + 2]
       // segue a gravação enquanto o giro bate e a classe do próximo ainda serve

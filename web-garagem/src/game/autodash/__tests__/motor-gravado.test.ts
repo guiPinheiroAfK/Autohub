@@ -114,6 +114,28 @@ describe("motor gravado (grãos síncronos ao giro)", () => {
     expect(pior).toBeLessThan(1e-3)
   })
 
+  it("no limitador metade das explosões falha (grão de alívio), mesmo seguindo a gravação", () => {
+    const b = bancoSintetico()
+    // fração de grãos de alívio tocados em 1 s
+    const falhas = (corte: boolean) => {
+      const m = new MotorGravado(SR, 3)
+      m.setBanco(b)
+      m.fixar(3000, 1); m.st.corte = corte
+      const um = new Float32Array(1)
+      let ant = -1, n = 0, alivio = 0
+      for (let i = 0; i < SR; i++) {
+        m.render(um, 1)
+        const u = m["ultimo"]
+        if (u !== ant && u >= 0) { n++; if (b.graos[u * 6 + 4] === ALIVIO) alivio++; ant = u }
+      }
+      return alivio / n
+    }
+    expect(falhas(false)).toBeLessThan(0.05)
+    const f = falhas(true)
+    expect(f).toBeGreaterThan(0.35)
+    expect(f).toBeLessThan(0.65)
+  })
+
   it("desligado, some", () => {
     const m = new MotorGravado(SR)
     m.setBanco(bancoSintetico())
