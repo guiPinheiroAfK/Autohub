@@ -30,7 +30,7 @@ function engDeTeste(carIdx: number): AutoDashEngine {
     speed: 0, rpm: 0, gear: 1, boost: 0,
     shiftT: 0, marchaDoGiro: 1, reduzindo: false, wheelspinT: 0, bogT: 0,
     nitroOn: false, nitroMeter: 0,
-    particles: [], audio: mudo,
+    particles: [], audio: mudo, somT: 0,
   } as unknown as AutoDashEngine
 }
 

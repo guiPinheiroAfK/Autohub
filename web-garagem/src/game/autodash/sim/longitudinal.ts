@@ -7,7 +7,7 @@ import type { CarSpec } from "../data"
 import { relacao, fatorMarcha } from "../physics/cambio"
 import { emitSmoke, emitFlame } from "../fx/particles"
 import { climaAtual } from "./clima"
-import { type MotorFisico, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
+import { type MotorFisico, forcaNoCorte, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
 import { accelK, finalDriveOf } from "../physics/traction"
@@ -68,7 +68,9 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
     accel = spec.power * pc * gearF
     // tração: o eixo motor limita a aceleração (ADR 0012). Padrão RWD = 1, sem efeito.
     accel *= accelK(spec, pc * gearF, centrif)
-    if (eng.rpm >= mf.corte - 50) { accel = 0; if (Math.random() < 0.4) eng.audio.limiter() }
+    // limitador: corte duro pulsa com o som, corte suave segura o giro em rampa
+    accel *= forcaNoCorte(mf, eng.rpm, eng.somT)
+    if (eng.rpm >= mf.corte - 50 && Math.random() < 0.4) eng.audio.limiter()
     if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0") }
     if (eng.bogT > 0) accel *= 0.5
   }

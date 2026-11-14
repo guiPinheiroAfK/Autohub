@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom } from "../physics/motores"
+import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom, forcaNoCorte, faseCorte, CORTE_DURO_HZ } from "../physics/motores"
 import { ENGINE_PROFILES } from "../sound/profiles"
 import { CARS, GEAR_RATIOS, RPM_PER_KMH, RPM_LIMITER, RPM_IDLE } from "../data"
 
@@ -87,6 +87,35 @@ describe("motores reais (faixa de giro e curva de força)", () => {
     expect(osc(v8, v8.idle)).toBeGreaterThan(100)
     expect(osc(v8, 4000)).toBe(0)
     expect(osc(MOTORES.v12, MOTORES.v12.idle)).toBe(0)
+  })
+  it("limitador físico: corte duro pulsa com o som, corte suave segura em rampa (R4)", () => {
+    const duro = MOTORES.i4, suave = MOTORES.v10
+    expect(duro.corteDuro).toBe(true)
+    expect(suave.corteDuro).toBeFalsy()
+    // abaixo do corte nada muda
+    expect(forcaNoCorte(duro, duro.corte - 200, 0.01)).toBe(1)
+    expect(forcaNoCorte(suave, suave.corte - 0.03 * faixa(suave), 0.01)).toBe(1)
+    // corte duro: em 1 s no limitador, ~45% do tempo com força, em 13 pulsos
+    let com = 0, pulsos = 0, antes = 1
+    for (let i = 0; i < 1000; i++) {
+      const k = forcaNoCorte(duro, duro.corte, i / 1000)
+      expect(k === 0 || k === 1).toBe(true)
+      if (k === 0 && antes === 1) pulsos++
+      com += k; antes = k
+    }
+    expect(com / 1000).toBeGreaterThan(0.4)
+    expect(com / 1000).toBeLessThan(0.5)
+    expect(Math.abs(pulsos - CORTE_DURO_HZ)).toBeLessThanOrEqual(1)
+    // o som e a física batem juntos: força zero no começo do dente do som
+    expect(faseCorte(0.5 / CORTE_DURO_HZ)).toBeCloseTo(0.5)
+    // corte suave: rampa contínua e decrescente até zero no corte
+    let ult = 1
+    for (let r = suave.corte - 0.02 * faixa(suave); r <= suave.corte; r += 10) {
+      const k = forcaNoCorte(suave, r, 0)
+      expect(k).toBeLessThanOrEqual(ult)
+      ult = k
+    }
+    expect(forcaNoCorte(suave, suave.corte, 0)).toBe(0)
   })
 })
 
