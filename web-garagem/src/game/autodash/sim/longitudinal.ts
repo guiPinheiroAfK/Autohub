@@ -12,6 +12,7 @@ import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
 import { accelK, finalDriveOf, usoTracao } from "../physics/traction"
 import { autoShift } from "../physics/gearbox"
+import { arrasto, arrastoExcedente, tetoSuave } from "../physics/arrasto"
 import { giroNaTroca, cambioDe, KICK } from "../physics/troca"
 
 export interface EntradaLongitudinal {
@@ -96,6 +97,8 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
     if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0"); patina = Math.max(patina, 0.3) }
     if (eng.bogT > 0) accel *= 0.5
   }
+  // teto suave: perto do topSpeed a sobra de força some aos poucos (P5)
+  accel = tetoSuave(accel, eng.speed, spec.topSpeed)
   // suaviza para o giro e o chiado não piscarem quadro a quadro
   eng.patina += (patina - eng.patina) * Math.min(1, dt * 10)
   if (eng.nitroOn && eng.nitroMeter > 1 && eng.gear >= 1) {
@@ -107,7 +110,9 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
 
   eng.speed += accel * dt
   if (braking) eng.speed -= 105 * climaAtual(eng).freio * dt
-  eng.speed -= (5 + eng.speed * 0.028) * dt // arrasto
+  eng.speed -= arrasto(eng.speed) * dt
+  // acima do topo (nitro, descida) o ar cobra caro: equilibra em vez de bater no teto
+  eng.speed -= arrastoExcedente(eng.speed, spec.topSpeed) * dt
 
   // FÍSICA DE LADEIRA: descida empurra o carro (dá pra passar do top speed —
   // segura no freio), subida cobra potência. O limite por marcha logo abaixo
@@ -115,6 +120,7 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   if (grade < 0) eng.speed += -grade * 210 * dt
   else eng.speed -= grade * 120 * dt
 
+  // trava antiga, agora só de segurança (o arrasto excedente segura antes)
   const maxSpd = spec.topSpeed * (nitroActive ? 1.12 : 1) + (grade < 0 ? -grade * 420 : 0)
   eng.speed = clamp(eng.speed, 0, maxSpd)
   // limite por marcha (estourou o giro = não anda mais) — e freio motor na descida
