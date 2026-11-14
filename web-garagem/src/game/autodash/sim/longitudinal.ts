@@ -1,0 +1,89 @@
+// AutoDash — sim/longitudinal.ts. O bloco longitudinal de um quadro de corrida:
+// giro, turbo, câmbio automático, força, nitro, freio, arrasto, ladeira e teto.
+// Extraído de sim/update.ts (refactor sem mudança de comportamento) para o teste
+// de medidas (__tests__/medidas.test.ts) rodar a MESMA física que o jogo.
+import type { AutoDashEngine } from "../engine"
+import type { CarSpec } from "../data"
+import { relacao, fatorMarcha } from "../physics/cambio"
+import { emitSmoke, emitFlame } from "../fx/particles"
+import { climaAtual } from "./clima"
+import { type MotorFisico, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
+import { clamp } from "../math"
+import { rpmFor, powerCurve } from "../physics/rpm"
+import { accelK, finalDriveOf } from "../physics/traction"
+import { autoShift } from "../physics/gearbox"
+
+export interface EntradaLongitudinal {
+  throttle: number  // 0 ou 1 (teclado, mouse, toque)
+  braking: boolean
+  centrif: number   // força centrífuga do quadro (mesma unidade de sim/update.ts)
+  grade: number     // inclinação do segmento: < 0 desce, > 0 sobe
+  dt: number
+}
+
+/** Avança motor e velocidade num quadro de corrida. Devolve se o nitro está ativo. */
+export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorFisico, e: EntradaLongitudinal): boolean {
+  const { throttle, braking, centrif, grade, dt } = e
+
+  // ---------- motor ----------
+  if (eng.shiftT > 0) eng.shiftT -= dt
+  if (eng.wheelspinT > 0) eng.wheelspinT -= dt
+  if (eng.bogT > 0) eng.bogT -= dt
+
+  if (eng.gear >= 1) eng.rpm = rpmFor(eng, eng.speed, eng.gear)
+  else {
+    const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
+    // giro solto: motor leve sobe e cai rápido, motor pesado é preguiçoso
+    eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * taxaSolto(mf, targetRpm > eng.rpm))
+  }
+  // turbo: enche com giro e pé, com atraso; esvazia na troca e ao aliviar.
+  // É aqui que nasce o "lag": sai de curva em giro baixo e a força demora a vir.
+  // Na troca de marcha o boost se segura (troca curta, eixo ainda girando);
+  // em ponto morto quase não enche (sem carga).
+  if (eng.gear >= 1 && eng.shiftT > 0) { /* segura o boost */ }
+  else {
+    const comCarga = eng.gear >= 1 ? throttle : throttle * 0.35
+    eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, giroDeForca(mf, eng.rpm, eng.gear), comCarga), dt)
+  }
+
+  // câmbio automático
+  if (eng.cfg.transmission === "auto" && eng.gear >= 1 && eng.shiftT <= 0) autoShift(eng, throttle > 0)
+
+  let accel = 0
+  if (eng.gear >= 1 && throttle && eng.shiftT <= 0) {
+    const gearF = fatorMarcha(eng, eng.gear)
+    const pc = powerCurve(eng, giroDeForca(mf, eng.rpm, eng.gear))
+    accel = spec.power * pc * gearF
+    // tração: o eixo motor limita a aceleração (ADR 0012). Padrão RWD = 1, sem efeito.
+    accel *= accelK(spec, pc * gearF, centrif)
+    if (eng.rpm >= mf.corte - 50) { accel = 0; if (Math.random() < 0.4) eng.audio.limiter() }
+    if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0") }
+    if (eng.bogT > 0) accel *= 0.5
+  }
+  if (eng.nitroOn && eng.nitroMeter > 1 && eng.gear >= 1) {
+    accel += 42
+    eng.nitroMeter = Math.max(0, eng.nitroMeter - 38 * dt)
+    emitFlame(eng)
+  }
+  const nitroActive = eng.nitroOn && eng.nitroMeter > 1
+
+  eng.speed += accel * dt
+  if (braking) eng.speed -= 105 * climaAtual(eng).freio * dt
+  eng.speed -= (5 + eng.speed * 0.028) * dt // arrasto
+
+  // FÍSICA DE LADEIRA: descida empurra o carro (dá pra passar do top speed —
+  // segura no freio), subida cobra potência. O limite por marcha logo abaixo
+  // age como freio motor: descer em marcha baixa segura o carro sozinho.
+  if (grade < 0) eng.speed += -grade * 210 * dt
+  else eng.speed -= grade * 120 * dt
+
+  const maxSpd = spec.topSpeed * (nitroActive ? 1.12 : 1) + (grade < 0 ? -grade * 420 : 0)
+  eng.speed = clamp(eng.speed, 0, maxSpd)
+  // limite por marcha (estourou o giro = não anda mais) — e freio motor na descida
+  if (eng.gear >= 1) {
+    // igual para todo motor: o giro por km/h escala com a faixa (physics/motores.ts)
+    const gearTop = faixa(mf) / (relacao(eng, eng.gear) * rpmPorKmh(mf) * finalDriveOf(spec))
+    eng.speed = Math.min(eng.speed, gearTop)
+  }
+  return nitroActive
+}

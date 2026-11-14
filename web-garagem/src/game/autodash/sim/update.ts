@@ -1,20 +1,20 @@
 // AutoDash — sim/update.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine, PLAYER_Z, H, W, PU_NITRO, PU_SHIELD, PU_X2 } from "../engine"
 import { CARS, KMH2UPS, SEG_LEN, DRAW_DIST } from "../data"
-import { relacao, fatorMarcha } from "../physics/cambio"
+import { fatorMarcha } from "../physics/cambio"
 import { duelNet } from "../modes/duel"
 import { startRace } from "../modes/race"
 import { segAt } from "../world/track"
 import { updateTraffic, wrapDz } from "../traffic/spawner"
-import { updateFx, emitSmoke, emitFlame, burst } from "../fx/particles"
+import { updateFx, emitSmoke, burst } from "../fx/particles"
 import { climaAtual, tickTempo } from "./clima"
 import { perfilDoCarro, REV_AMOSTRA_S } from "../sound/profiles"
-import { motorDe, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto, giroDoSom } from "../physics/motores"
+import { motorDe, giroNaFrac, faixa, boostAlvo, passoBoost, taxaSolto, giroDoSom } from "../physics/motores"
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
-import { rpmFor, powerCurve } from "../physics/rpm"
-import { accelK, finalDriveOf, steerK, tyreOf } from "../physics/traction"
-import { autoShift } from "../physics/gearbox"
+import { powerCurve } from "../physics/rpm"
+import { steerK, tyreOf } from "../physics/traction"
+import { passoLongitudinal } from "./longitudinal"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
@@ -161,67 +161,9 @@ export function update(eng: AutoDashEngine, dt: number) {
     eng.playerX = ramal.r.lado > 0 ? clamp(eng.playerX, -1.6, lim) : clamp(eng.playerX, -lim, 1.6)
   } else eng.playerX = clamp(eng.playerX, -1.6, 1.6)
 
-  // ---------- motor ----------
-  if (eng.shiftT > 0) eng.shiftT -= dt
-  if (eng.wheelspinT > 0) eng.wheelspinT -= dt
-  if (eng.bogT > 0) eng.bogT -= dt
-
-  if (eng.gear >= 1) eng.rpm = rpmFor(eng, eng.speed, eng.gear)
-  else {
-    const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
-    // giro solto: motor leve sobe e cai rápido, motor pesado é preguiçoso
-    eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * taxaSolto(mf, targetRpm > eng.rpm))
-  }
-  // turbo: enche com giro e pé, com atraso; esvazia na troca e ao aliviar.
-  // É aqui que nasce o "lag": sai de curva em giro baixo e a força demora a vir.
-  // Na troca de marcha o boost se segura (troca curta, eixo ainda girando);
-  // em ponto morto quase não enche (sem carga).
-  if (eng.gear >= 1 && eng.shiftT > 0) { /* segura o boost */ }
-  else {
-    const comCarga = eng.gear >= 1 ? throttle : throttle * 0.35
-    eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, giroDeForca(mf, eng.rpm, eng.gear), comCarga), dt)
-  }
-
-  // câmbio automático
-  if (eng.cfg.transmission === "auto" && eng.gear >= 1 && eng.shiftT <= 0) autoShift(eng, throttle > 0)
-
-  let accel = 0
-  if (eng.gear >= 1 && throttle && eng.shiftT <= 0) {
-    const gearF = fatorMarcha(eng, eng.gear)
-    const pc = powerCurve(eng, giroDeForca(mf, eng.rpm, eng.gear))
-    accel = spec.power * pc * gearF
-    // tração: o eixo motor limita a aceleração (ADR 0012). Padrão RWD = 1, sem efeito.
-    accel *= accelK(spec, pc * gearF, centrif)
-    if (eng.rpm >= mf.corte - 50) { accel = 0; if (Math.random() < 0.4) eng.audio.limiter() }
-    if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0") }
-    if (eng.bogT > 0) accel *= 0.5
-  }
-  if (eng.nitroOn && eng.nitroMeter > 1 && eng.gear >= 1) {
-    accel += 42
-    eng.nitroMeter = Math.max(0, eng.nitroMeter - 38 * dt)
-    emitFlame(eng)
-  }
-  const nitroActive = eng.nitroOn && eng.nitroMeter > 1
-
-  eng.speed += accel * dt
-  if (braking) eng.speed -= 105 * climaAtual(eng).freio * dt
-  eng.speed -= (5 + eng.speed * 0.028) * dt // arrasto
-
-  // FÍSICA DE LADEIRA: descida empurra o carro (dá pra passar do top speed —
-  // segura no freio), subida cobra potência. O limite por marcha logo abaixo
-  // age como freio motor: descer em marcha baixa segura o carro sozinho.
+  // ---------- motor, câmbio, força e velocidade (sim/longitudinal.ts) ----------
   const grade = (seg.y2 - seg.y1) / SEG_LEN // ~±0.13 nas ladeiras fortes
-  if (grade < 0) eng.speed += -grade * 210 * dt
-  else eng.speed -= grade * 120 * dt
-
-  const maxSpd = spec.topSpeed * (nitroActive ? 1.12 : 1) + (grade < 0 ? -grade * 420 : 0)
-  eng.speed = clamp(eng.speed, 0, maxSpd)
-  // limite por marcha (estourou o giro = não anda mais) — e freio motor na descida
-  if (eng.gear >= 1) {
-    // igual para todo motor: o giro por km/h escala com a faixa (physics/motores.ts)
-    const gearTop = faixa(mf) / (relacao(eng, eng.gear) * rpmPorKmh(mf) * finalDriveOf(spec))
-    eng.speed = Math.min(eng.speed, gearTop)
-  }
+  const nitroActive = passoLongitudinal(eng, spec, mf, { throttle, braking, centrif, grade, dt })
 
   // no miolo do ramal o avanço rende mais (linha de dentro). Fora dele, ganho = 1.
   const ganho = ganhoRamal(ramal, eng.playerX)
