@@ -37,8 +37,14 @@ export interface BancoGraos {
 export const ALIVIO = 0, CARGA = 1, ESTAVEL = 2
 const CAMPOS = 6
 
-// esq/dir: meia janela antes e depois do centro (amostras de saída)
-interface Grao { centro: number; esq: number; dir: number; rho: number; ganho: number; fonte: number }
+// Grãos tocando: anel fixo (nada é alocado na thread de áudio). Na prática há
+// no máximo 3 ao mesmo tempo; acima de LIMITE_GRAOS o mais antigo sai.
+const ANEL = 8, LIMITE_GRAOS = 6
+
+// suavização (constante de tempo, s): giro, carga e liga/desliga
+const SUAVE_GIRO_S = 0.012, SUAVE_CARGA_S = 0.04, SUAVE_AMP_S = 0.03
+// frequência de explosão mínima (giro quase parado): limita o tamanho do grão
+const HZ_MIN = 8
 
 // o alívio da gravação é giro caindo em ponto morto, ainda alto no cofre; no
 // carro andando, tirar o pé derruba bem mais o volume
@@ -54,7 +60,16 @@ export class MotorGravado {
   private n = 0                   // amostra de saída atual
   private proxCentro = 0
   private passo = 0               // distância do último centro ao próximo (0 = ainda sem grão)
-  private ativos: Grao[] = []
+  // anel de grãos ativos, do mais antigo (ini) ao mais novo; esq/dir = meia
+  // janela antes e depois do centro (amostras de saída)
+  private gCentro = new Float64Array(ANEL)
+  private gEsq = new Float64Array(ANEL)
+  private gDir = new Float64Array(ANEL)
+  private gRho = new Float64Array(ANEL)
+  private gGanho = new Float64Array(ANEL)
+  private gFonte = new Float64Array(ANEL)
+  private gIni = 0
+  private gN = 0
   private ultimo = -1             // índice do último grão usado
   private classeAtual = CARGA
   private porClasse: Int32Array[] = []
@@ -95,7 +110,7 @@ export class MotorGravado {
     }
     const [a, h] = ordenar(Array.from({ length: N }, (_, i) => i))
     this.todos = a; this.hzTodos = h
-    this.ativos = []; this.ultimo = -1; this.passo = 0
+    this.gN = 0; this.ultimo = -1; this.passo = 0
   }
 
   /** Pula a suavização (testes e medição). */
@@ -181,20 +196,27 @@ export class MotorGravado {
     const rho = Math.exp(lr - Math.max(-FOLGA, Math.min(FOLGA, lr)))
     // grão de alívio no limitador entra mais baixo (falha de ignição)
     const falha = this.st.corte && g[o + 4] === ALIVIO ? 0.55 : 1
-    this.ativos.push({ centro: this.proxCentro, esq, dir, rho, ganho: g[o + 5] * falha * NIVEL_CLASSE[g[o + 4]], fonte: g[o] * b.sr })
+    const k = (this.gIni + this.gN) % ANEL
+    this.gCentro[k] = this.proxCentro; this.gEsq[k] = esq; this.gDir[k] = dir; this.gRho[k] = rho
+    this.gGanho[k] = g[o + 5] * falha * NIVEL_CLASSE[g[o + 4]]; this.gFonte[k] = g[o] * b.sr
+    this.gN++
   }
+
+  /** Tira o grão mais antigo do anel. */
+  private soltarAntigo() { this.gIni = (this.gIni + 1) % ANEL; this.gN-- }
 
   render(out: Float32Array, len: number) {
     const b = this.b
     if (!b) { out.fill(0, 0, len); return }
     const dados = b.dados, nd = dados.length
-    const kr = 1 - Math.exp(-1 / (0.012 * this.sr)), kc = 1 - Math.exp(-1 / (0.04 * this.sr))
-    const ka = 1 - Math.exp(-1 / (0.03 * this.sr))
+    const kr = 1 - Math.exp(-1 / (SUAVE_GIRO_S * this.sr)), kc = 1 - Math.exp(-1 / (SUAVE_CARGA_S * this.sr))
+    const ka = 1 - Math.exp(-1 / (SUAVE_AMP_S * this.sr))
+    const gCentro = this.gCentro, gEsq = this.gEsq, gDir = this.gDir, gRho = this.gRho, gGanho = this.gGanho, gFonte = this.gFonte
     for (let s = 0; s < len; s++) {
       this.rpm += (this.st.rpm - this.rpm) * kr
       this.carga += (this.st.carga - this.carga) * kc
       this.amp += ((this.st.ligado ? 1 : 0) - this.amp) * ka
-      const hz = Math.max(8, this.rpm / 60 * this.cilindros / 2)
+      const hz = Math.max(HZ_MIN, this.rpm / 60 * this.cilindros / 2)
       const T = this.sr / hz
       // primeiro grão: entra suave, um período à frente
       if (this.passo <= 0) { this.passo = T; this.proxCentro = this.n + T }
@@ -205,25 +227,25 @@ export class MotorGravado {
         this.novoGrao(this.passo, T, hz)
         this.passo = T
         this.proxCentro += T
-        if (this.ativos.length > 6) this.ativos.shift()
+        if (this.gN > LIMITE_GRAOS) this.soltarAntigo()
       }
       let y = 0
-      for (let k = 0; k < this.ativos.length; k++) {
-        const a = this.ativos[k]
-        const u = this.n - a.centro
-        if (u >= a.dir) continue
-        const w = 0.5 * (1 + Math.cos(Math.PI * u / (u < 0 ? a.esq : a.dir)))
-        const x = a.fonte + u * a.rho
+      for (let j = 0; j < this.gN; j++) {
+        const k = (this.gIni + j) % ANEL
+        const u = this.n - gCentro[k]
+        if (u >= gDir[k]) continue
+        const w = 0.5 * (1 + Math.cos(Math.PI * u / (u < 0 ? gEsq[k] : gDir[k])))
+        const x = gFonte[k] + u * gRho[k]
         const xi = Math.floor(x)
         if (xi < 0 || xi + 1 >= nd) continue
         const fr = x - xi
-        y += (dados[xi] + (dados[xi + 1] - dados[xi]) * fr) * w * a.ganho
+        y += (dados[xi] + (dados[xi + 1] - dados[xi]) * fr) * w * gGanho[k]
       }
       out[s] = y * this.amp
       this.n++
       // descarta os grãos que já terminaram (terminam na ordem em que nasceram:
       // o fim de cada um é o centro do seguinte)
-      if (this.ativos.length && this.n - this.ativos[0].centro >= this.ativos[0].dir) this.ativos.shift()
+      if (this.gN && this.n - gCentro[this.gIni] >= gDir[this.gIni]) this.soltarAntigo()
     }
   }
 }
