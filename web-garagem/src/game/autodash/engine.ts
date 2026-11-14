@@ -210,6 +210,7 @@ export class AutoDashEngine {
   // garagem da Fase 7 (render/menus/estetica.ts)
   abaGaragem: AbaGaragem = "carro"
   previaPista = false // carro na pista do bioma escolhido, sem o painel
+  fovF = 0 // abertura do FOV dinâmico, 0..1 (render/fov.ts); só desenho
 
   // input
   keys = new Set<string>()

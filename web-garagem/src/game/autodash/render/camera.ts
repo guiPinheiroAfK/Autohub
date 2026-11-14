@@ -9,6 +9,7 @@ import type { AutoDashEngine } from "../engine"
 import { W, H } from "../engine"
 import { CARS } from "../data"
 import { clamp } from "../math"
+import { passoFov } from "./fov"
 
 // ---------- ruído ----------
 // Inteiro → [-1, 1], determinístico (hash de inteiro, sem estado).
@@ -57,6 +58,7 @@ export function passoCamera(eng: AutoDashEngine, dt: number) {
   eng.nitroZoom = nitro
     ? Math.min(1, eng.nitroZoom + dt / NITRO_SOBE_S)
     : Math.max(0, eng.nitroZoom - dt / NITRO_DESCE_S)
+  passoFov(eng, dt) // FOV dinâmico da Fase 7 (render/fov.ts)
 }
 
 /** Zoom da câmera neste quadro (1 = sem zoom). */

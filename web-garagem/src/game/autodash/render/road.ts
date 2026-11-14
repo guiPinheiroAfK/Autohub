@@ -9,13 +9,14 @@ import { drawDeco } from "./backdrop"
 import { drawBridge } from "./backdrop"
 import { drawTower } from "./backdrop"
 import { AutoDashEngine, PLAYER_Z, H, W, type Pickup, type Obstacle, type RoadSign, NEAR_SPRITE_MIN, RUMBLE, FADE_IN_START, FADE_IN_LEN } from "../engine"
-import { SEG_LEN, CAM_HEIGHT, ROAD_WIDTH, PAINTS, KMH2UPS, DRAW_DIST, CAM_DEPTH } from "../data"
+import { SEG_LEN, CAM_HEIGHT, ROAD_WIDTH, PAINTS, KMH2UPS, DRAW_DIST } from "../data"
 import { segAt } from "../world/track"
 import { shade, clamp, hexToRgb, mixHex } from "../math"
 import { CLIMAS } from "../world/weather"
 import { type Traffic, KINDS } from "../traffic/types"
 import { poly } from "./primitives"
 import { drawRamalSeg } from "./ramal"
+import { lenteAtual } from "./fov"
 
 const PLACA_ATALHO_DIR: RoadSign = { z: 0, type: "atalho", lado: 1 }
 const PLACA_ATALHO_ESQ: RoadSign = { z: 0, type: "atalho", lado: -1 }
@@ -31,6 +32,10 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   const playerY = pSeg.y1 + (pSeg.y2 - pSeg.y1) * pPct
   const camY = playerY + CAM_HEIGHT
   const camX = eng.playerX * ROAD_WIDTH
+  // FOV dinâmico (render/fov.ts): profundidade da lente e avanço da câmera que
+  // mantêm o chão do jogador no mesmo ponto. Parado ou com câmera fixa, é
+  // exatamente CAM_DEPTH e avanço 0 (o desenho de antes).
+  const lente = lenteAtual(eng)
 
   // chão base com profundidade (abaixo do horizonte)
   const gg = ctx.createLinearGradient(0, H * 0.5, 0, H)
@@ -152,16 +157,16 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     const idx = (baseIdx + n) % N
     const seg = eng.segments[idx]
     const looped = idx < baseIdx
-    const camZ = eng.position - (looped ? eng.trackLen : 0)
+    const camZ = eng.position + lente.avanco - (looped ? eng.trackLen : 0)
     const z1 = idx * SEG_LEN, z2 = z1 + SEG_LEN
 
     const dz1 = z1 - camZ, dz2 = z2 - camZ
     const x1 = x, x2 = x + dx
     x += dx; dx += seg.curve
-    if (dz1 <= CAM_DEPTH * 10) continue
+    if (dz1 <= lente.depth * 10) continue
 
-    const s1 = CAM_DEPTH / dz1 * (H / 2)
-    const s2 = CAM_DEPTH / dz2 * (H / 2)
+    const s1 = lente.depth / dz1 * (H / 2)
+    const s2 = lente.depth / dz2 * (H / 2)
     const sx1 = W / 2 + (x1 - camX) * s1 * (W / H)
     const sy1 = H / 2 - (seg.y1 - camY) * s1 / (H / 2) * (H / 2)
     const sw1 = ROAD_WIDTH * s1 * (W / H)
