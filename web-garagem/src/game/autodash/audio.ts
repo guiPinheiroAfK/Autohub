@@ -30,6 +30,10 @@ interface Motor {
   whine: OscillatorNode   // compressor mecânico
   whineGain: GainNode
   pops: AudioBuffer[]
+  // bancos de grãos deste worklet: já entregues e ainda baixando (um worklet
+  // novo começa sem nenhum)
+  bancos: Set<string>
+  carregando: Set<string>
 }
 
 export class AudioBus {
@@ -56,7 +60,6 @@ export class AudioBus {
   private estouroAte = 0
   private proxEstouro = 0
   private cortaCargaAte = 0
-  private bancos = new Set<string>()   // bancos de grãos já enviados ao worklet
   private partidaBuf: AudioBuffer | null = null
   private partidaAte = 0               // motor mudo enquanto o motor de arranque gira
 
@@ -178,6 +181,12 @@ export class AudioBus {
     this.stopMusic()
     void this.ctx?.close().catch(() => { /* já fechado */ })
     this.ctx = null
+    // o motor e os instantes marcados pertencem ao contexto fechado: um ensure()
+    // depois daqui começa do zero (senão o relógio novo, que volta a 0, ficaria
+    // mudo até alcançar o `partidaAte` antigo)
+    this.motor = null
+    this.partidaAte = 0; this.cortaCargaAte = 0; this.estouroAte = 0; this.proxEstouro = 0
+    this.lastT = 0; this.gasAltoT = -1
   }
 
   private noiseBuffer(seconds: number): AudioBuffer {
@@ -293,7 +302,7 @@ export class AudioBus {
       for (let i = 0; i < len; i++) d[i] = d[i] / pk * 0.6
       return b
     })
-    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, synthGain, gravHp, gravGain, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops }
+    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, synthGain, gravHp, gravGain, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops, bancos: new Set(), carregando: new Set() }
     this.aplicarPerfil()
     void this.carregarPartida()
     // o motor antigo sai de cena
@@ -351,17 +360,19 @@ export class AudioBus {
     return `${import.meta.env.BASE_URL ?? "/"}autodash/som/${arq}`
   }
 
-  /** Baixa e decodifica um banco de grãos (tools/som) e manda para o worklet. */
+  /** Baixa e decodifica um banco de grãos (tools/som) e manda para o worklet.
+   *  Só conta como pronto depois de entregue: até lá o modelo físico toca sozinho. */
   private async carregarBanco(nome: string) {
     const ctx = this.ctx, m = this.motor
-    if (!ctx || !m || this.bancos.has(nome)) return
-    this.bancos.add(nome)
+    if (!ctx || !m || m.bancos.has(nome) || m.carregando.has(nome)) return
+    m.carregando.add(nome)
     try {
       const [j, bin] = await Promise.all([
         fetch(this.base(`${nome}.json`)).then(r => r.json() as Promise<{ arquivo: string; clique: number; graos: number[][] }>),
         fetch(this.base(`${nome}.mp3`)).then(r => r.arrayBuffer()),
       ])
       const buf = await ctx.decodeAudioData(bin)
+      if (this.motor !== m) return // contexto fechado ou worklet refeito no meio do caminho
       const dados = buf.getChannelData(0).slice()
       // o MP3 pode chegar atrasado (atraso do codificador): acha o clique de
       // alinhamento e desloca os grãos para bater com o áudio decodificado
@@ -372,9 +383,12 @@ export class AudioBus {
       const graos = graosDoJson(j.graos)
       for (let i = 0; i < graos.length; i += 6) graos[i] += desvio
       m.node.port.postMessage({ banco: { nome, sr: buf.sampleRate, dados, graos, cilindros: 4 } }, [dados.buffer, graos.buffer])
+      m.bancos.add(nome)
       this.aplicarPerfil()
     } catch {
-      this.bancos.delete(nome) // fica só o modelo físico; tenta de novo na próxima troca
+      // fica só o modelo físico; tenta de novo na próxima troca de motor
+    } finally {
+      m.carregando.delete(nome)
     }
   }
 
@@ -408,7 +422,7 @@ export class AudioBus {
     m.node.port.postMessage({ perfil: p.id })
     // gravação real: motor gravado (mesma família) ou só a textura mecânica
     const grav = GRAVACAO_DO_PERFIL[p.id], g = grav ?? TEXTURA
-    const pronto = this.bancos.has(g.banco)
+    const pronto = m.bancos.has(g.banco)
     if (!pronto) void this.carregarBanco(g.banco)
     m.node.port.postMessage({ gravado: true })
     m.gravHp.frequency.setTargetAtTime(grav ? 30 : 1800, t, 0.05)
