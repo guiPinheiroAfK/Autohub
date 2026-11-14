@@ -39,7 +39,7 @@ export function renderHud(eng: AutoDashEngine) {
   ctx.font = "20px 'Space Grotesk', 'Segoe UI', sans-serif"
   const icone = eng.raining ? "🌧" : eng.clima === "neblina" ? "🌫" : eng.clima === "nublado" ? "☁️" : sky.amb < 0.6 ? "🌙" : "☀️"
   ctx.fillText(icone, W - 20, 34)
-  // relógio do jogo (ADR 0013): só no solo; a corrida tem o próprio HUD
+  // relógio do jogo (ADR 0013): aparece no solo e na corrida (este HUD é comum aos dois)
   ctx.font = "bold 14px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillStyle = "rgba(248,250,252,0.8)"
   ctx.fillText(formatHour(eng.clock.tick), W - 52, 31)

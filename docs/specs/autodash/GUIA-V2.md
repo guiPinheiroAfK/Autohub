@@ -189,8 +189,8 @@ Decisões no [ADR 0013](../../adr/0013-autodash-relogio-em-ticks.md). Começada 
 - [x] Clima vira só na janela de 1 minuto, pela seed da pista (largada sempre limpa). Antes era `Math.random` a cada 18 s.
 - [x] Neblina: névoa por cima dos sprites esconde o trânsito distante. Nublado e neblina puxam o céu pro cinza.
 - [x] Garagem (solo) e lobby (corrida com bots): horário [O] e clima [K]. Sala online e duelo usam o padrão (noite + sorteio / ciclo + sorteio).
-- [x] HUD do solo com relógio e ícone do clima. 11 testes (`__tests__/clock-weather.test.ts`).
-- Pendente / não verificado: neve (sem bioma neve); velocidade do relógio `custom` (×0,5, ×2) existe no dado mas não tem botão; HUD da corrida não mostra clima nem hora; o ciclo agora leva 20 min (antes 10 km, ~3 min a 200 km/h) — calibrar no playtest; render conferido só por sondas de pixel (aba do navegador oculta), não por screenshot.
+- [x] HUD (solo e corrida) com relógio e ícone do clima. 11 testes (`__tests__/clock-weather.test.ts`).
+- Pendente / não verificado: neve (sem bioma neve); velocidade do relógio `custom` (×0,5, ×2) existe no dado mas não tem botão; o ciclo agora leva 20 min (antes 10 km, ~3 min a 200 km/h) — calibrar no playtest; render conferido só por sondas de pixel (aba do navegador oculta), não por screenshot.
 ### Fase 5 — Eventos novos (racha, combustível) — `pendente`
 ### Fase 6 — Polícia por estrelas — `pendente`
 ### Fase 7 — Customização estética (bodykit, som, efeitos) — `pendente`
