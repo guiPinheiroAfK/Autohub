@@ -15,9 +15,10 @@ export function powerCurve(eng: AutoDashEngine, rpm: number) : number {
  * (eng.patina, 0..0,6), sem passar do corte. A física continua com eng.rpm.
  */
 export function giroVisto(eng: AutoDashEngine): number {
+  const r = eng.giroSom ?? eng.rpm
   const p = eng.patina ?? 0
-  if (p <= 0) return eng.rpm
-  return Math.min(motorDe(eng).corte, eng.rpm * (1 + 0.25 * p))
+  if (p <= 0) return r
+  return Math.min(motorDe(eng).corte, r * (1 + 0.25 * p))
 }
 
 export function rpmFor(eng: AutoDashEngine, speed: number, gear: number) : number {

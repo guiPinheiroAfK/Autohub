@@ -9,7 +9,7 @@ import { updateTraffic, wrapDz } from "../traffic/spawner"
 import { updateFx, emitSmoke, burst } from "../fx/particles"
 import { climaAtual, tickTempo } from "./clima"
 import { perfilDoCarro, REV_AMOSTRA_S } from "../sound/profiles"
-import { motorDe, giroNaFrac, faixa, boostAlvo, passoBoost, taxaSolto, giroDoSom, rampaGas } from "../physics/motores"
+import { motorDe, giroNaFrac, faixa, boostAlvo, passoBoost, giroSolto, suavizarGiro, giroDoSom, rampaGas, SOLTO_SOBE_S } from "../physics/motores"
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
 import { powerCurve, giroVisto } from "../physics/rpm"
@@ -86,7 +86,7 @@ export function update(eng: AutoDashEngine, dt: number) {
     // rev livre no grid
     const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
     // giro solto: motor leve sobe e cai rápido, motor pesado é preguiçoso
-    eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * taxaSolto(mf, targetRpm > eng.rpm))
+    eng.rpm = giroSolto(mf, eng.rpm, targetRpm, dt)
     if (eng.rpm > mf.corte) eng.rpm = mf.corte - Math.random() * 0.043 * faixa(mf)
     // em ponto morto o turbo quase não enche (sem carga)
     eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, eng.rpm, throttle) * 0.35, dt, eng.rpm)
@@ -107,7 +107,8 @@ export function update(eng: AutoDashEngine, dt: number) {
       }
     }
     const corteGrid = eng.rpm >= mf.corte - 60
-    eng.audio.engine(giroDoSom(mf, eng.rpm, throttle, corteGrid, eng.somT), throttle, false, true, corteGrid, eng.boost)
+    eng.giroSom = suavizarGiro(eng.giroSom, eng.rpm, dt)
+    eng.audio.engine(giroDoSom(mf, eng.giroSom, throttle, corteGrid, eng.somT), throttle, false, true, corteGrid, eng.boost)
     updateFx(eng, dt)
     return
   }
@@ -360,6 +361,7 @@ export function update(eng: AutoDashEngine, dt: number) {
 
   updateFx(eng, dt)
   const noCorte = throttle > 0 && eng.rpm >= mf.corte - 60
+  eng.giroSom = suavizarGiro(eng.giroSom, eng.rpm, dt)
   eng.audio.engine(giroDoSom(mf, giroVisto(eng), throttle, noCorte, eng.somT), throttle, nitroActive, true, noCorte, eng.boost)
 }
 
@@ -371,7 +373,7 @@ function acelerarAmostra(eng: AutoDashEngine, dt: number) {
   // lenta → pé no fundo até o corte (na rapidez de giro do motor) → segura no
   // limitador → solta e o giro cai na rapidez do motor
   const m = motorDe(eng), solto = m.solto ?? [5, 5]
-  const sobe = 0.15 + 3.2 / solto[0], segura = sobe + 0.45
+  const sobe = 0.15 + SOLTO_SOBE_S / solto[0], segura = sobe + 0.45 // mesma subida do giro solto (giroSolto)
   let rpm = m.idle, gas = 0, corte = false
   if (e > 0.15 && e < sobe) { gas = 1; rpm = m.idle + (m.corte - m.idle) * Math.pow((e - 0.15) / (sobe - 0.15), 0.85) }
   else if (e >= sobe && e < segura) { gas = 1; rpm = m.corte; corte = true }

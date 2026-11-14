@@ -7,7 +7,7 @@ import type { CarSpec } from "../data"
 import { relacao, fatorMarcha } from "../physics/cambio"
 import { emitSmoke, emitFlame } from "../fx/particles"
 import { climaAtual } from "./clima"
-import { type MotorFisico, forcaNoCorte, faseCorte, rampaGas, passoEixo, boostDoEixo, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
+import { type MotorFisico, forcaNoCorte, faseCorte, rampaGas, passoEixo, boostDoEixo, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, giroSolto } from "../physics/motores"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
 import { accelK, finalDriveOf, usoTracao } from "../physics/traction"
@@ -52,7 +52,7 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   } else {
     const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
     // giro solto: motor leve sobe e cai rápido, motor pesado é preguiçoso
-    eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * taxaSolto(mf, targetRpm > eng.rpm))
+    eng.rpm = giroSolto(mf, eng.rpm, targetRpm, dt)
   }
   // turbo: enche com giro e pé, com atraso; esvazia na troca e ao aliviar.
   // É aqui que nasce o "lag": sai de curva em giro baixo e a força demora a vir.

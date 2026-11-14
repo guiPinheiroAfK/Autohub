@@ -121,6 +121,7 @@ export class AutoDashEngine {
   boost = 0 // pressão do turbo, 0..1 (physics/motores.ts); motor aspirado fica em 0
   eixo = 0  // giro do eixo do turbo, 0..1: memória do boost num alívio curto (passoEixo)
   shiftT = 0
+  giroSom = 900 // giro do conta-giros e do som: segue eng.rpm sem saltar (physics/motores.ts suavizarGiro)
   gasF = 0 // pé efetivo 0..1: segue o acelerador com o atraso do motor (physics/motores.ts, rampaGas)
   marchaDoGiro = 1 // marcha do giro do último quadro (sim/longitudinal.ts: detecta a redução)
   reduzindo = false // a troca em andamento é uma redução (blip no giro)
@@ -157,6 +158,7 @@ export class AutoDashEngine {
   obstacles: Obstacle[] = []
   zones: Zone[] = []
   sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto
+  testeMotor = false   // pista vazia para ouvir os motores (garagem → Z)
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6

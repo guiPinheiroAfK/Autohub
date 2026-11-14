@@ -6,7 +6,7 @@ import { enterFromMenu } from "../flow"
 import { confirmName } from "../flow"
 import { toMenu } from "../flow"
 import { flashBeam } from "../flow"
-import { ensureAudio, trocarMotor } from "../flow"
+import { ensureAudio, trocarMotor, trocarMotorTeste } from "../flow"
 import { startRace } from "../modes/race"
 import { abrirRaceLobby, reconhecerPista, sairReconhecimento } from "../modes/race"
 import { mudarPista } from "../render/menus/race"
@@ -132,7 +132,9 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "k") { eng.cfg.clima = proximoClima(eng.cfg.clima); eng.audio.ui() }
       if (k === "n") { eng.nameBuf = eng.cfg.pilotName; eng.afterName = "garage"; eng.state = "nameentry"; eng.audio.ui() }
       if (["c", "v", "b", "r", "g", "t", "y", "x"].includes(k) || k.startsWith("arrow")) saveConfig(eng.cfg)
-      if (k === "enter") startAndSave(eng)
+      if (k === "enter") { eng.testeMotor = false; startAndSave(eng) }
+      // teste de motor: pista vazia, sem trânsito; [ e ] (ou , e .) trocam o motor andando
+      if (k === "z") { eng.testeMotor = true; startAndSave(eng) }
       if (k === "escape") eng.state = "menu"
       break
     }
@@ -150,6 +152,8 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "e") tryShift(eng, 1)
       if (k === "n") toNeutral(eng)
       if (k === "f") flashBeam(eng)
+      if (eng.testeMotor && (k === "]" || k === ".")) trocarMotorTeste(eng, 1)
+      if (eng.testeMotor && (k === "[" || k === ",")) trocarMotorTeste(eng, -1)
       // (as teclas de debug de playtest — O perseguição, L nível, B/V/J/K/I/U
       // eventos — foram removidas: tudo isso agora é sorteado pelo próprio
       // jogo em updateEventSpawner)
@@ -161,7 +165,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       break
     case "gameover":
       if (k === "enter") startRace(eng)
-      if (k === "g") eng.state = "garage"
+      if (k === "g") { eng.testeMotor = false; eng.state = "garage" }
       if (k === "m") eng.state = "menu"
       break
   }

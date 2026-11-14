@@ -536,7 +536,9 @@ export class AudioBus {
     const m = this.motor!, ctx = this.ctx!, p = this.perfil, t = ctx.currentTime
     const dt = Math.min(0.1, Math.max(0, t - this.lastT)); this.lastT = t
     const corte = noCorte && gas > 0.5
-    const carga = t < this.cortaCargaAte ? 0 : gas
+    // na troca a carga só afunda (não zera): zerar trocava o motor gravado para
+    // os grãos de alívio e o som "cortava" a cada marcha
+    const carga = t < this.cortaCargaAte ? Math.min(gas, 0.45) : gas
     m.node.port.postMessage({ st: { rpm, carga, ligado: running, corte } })
     // volume cresce com o giro (o pulso individual encolhe em giro alto; o motor
     // de verdade fica mais alto em cima). Calibrado para a mesma faixa do antigo.
@@ -566,8 +568,12 @@ export class AudioBus {
     // segue o eixo, não a pressão: é por isso que ele "canta" subindo em cada
     // marcha e desce assobiando depois do alívio, em vez de virar um zumbido fixo.
     const tb = this.turbo
+    // com a pressão da física (boostFisico ≥ 0) o eixo segue o turbo de verdade
+    // (atraso, memória, alívio); sem ela, estima pela energia do escape
     const energia = Math.min(1.2, rpm / this.corteMotor) * (0.15 + 0.85 * carga)
-    const alvoEixo = Math.min(1, energia * 1.3) // válvula de alívio do escape limita o eixo
+    const alvoEixo = boostFisico >= 0
+      ? Math.min(1, boostFisico * (0.75 + 0.25 * Math.min(1, rpm / this.corteMotor)))
+      : Math.min(1, energia * 1.3) // válvula de alívio do escape limita o eixo
     const antes = this.eixo
     const tau = alvoEixo > this.eixo ? (tb?.lag ?? 0.35) * 1.2 : (tb?.desce ?? 1.5)
     this.eixo += (alvoEixo - this.eixo) * Math.min(1, dt / tau)
@@ -583,10 +589,13 @@ export class AudioBus {
       m.apitoB.frequency.setTargetAtTime(hz * (1.013 + 0.004 * ((tb?.turbinas ?? 1) - 2)) * vib, t, 0.03)
       m.apitoBGain.gain.setTargetAtTime((tb?.turbinas ?? 1) > 1 ? 0.7 : 0, t, 0.1)
       const e2 = this.eixo * this.eixo
-      m.apitoGain.gain.setTargetAtTime(Math.min(0.09, e2 * (0.008 + 0.028 * carga) + subindo * 0.02), t, 0.04)
+      // o apito aparece quando o eixo ACELERA (cada marcha, cada retomada); em
+      // pressão cheia e constante ele fica baixinho — senão vira um zumbido
+      // agudo o tempo todo, já que no jogo o pé passa quase sempre no fundo
+      m.apitoGain.gain.setTargetAtTime(Math.min(0.06, e2 * (0.003 + 0.009 * carga) + subindo * 0.035), t, 0.04)
       // sopro: ar entrando no compressor, sobe de tom com o eixo
       m.sopro.frequency.setTargetAtTime(1800 + 3200 * this.eixo, t, 0.06)
-      m.soproGain.gain.setTargetAtTime(this.boost * carga * 0.03 + e2 * 0.012 + (nitro ? 0.03 : 0), t, 0.06)
+      m.soproGain.gain.setTargetAtTime(this.boost * carga * 0.014 + subindo * 0.012 + (nitro ? 0.03 : 0), t, 0.06)
       // tirou o pé com pressão no coletor: alivia (turbo simples = flutter, biturbo = blow-off)
       if (this.lastGas > 0.5 && gas < 0.3 && this.eixo > 0.35) this.alivio(Math.max(0.5, this.eixo), p.inducao === "turbo")
     } else {

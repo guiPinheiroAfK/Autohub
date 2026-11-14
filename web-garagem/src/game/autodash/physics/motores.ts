@@ -276,6 +276,32 @@ export function taxaSolto(m: MotorFisico, subindo: boolean): number {
 }
 
 /**
+ * Giro solto (ponto morto, grid): o motor acelera com o torque que tem, então o
+ * giro sobe numa VELOCIDADE máxima (rpm/s), não pulando para perto do alvo no
+ * primeiro quadro como na aproximação exponencial (que levava o VTEC ao corte em
+ * ~0,2 s). Tempo para cruzar a faixa inteira: subindo 5/solto[0] s (VTEC 0,5 s,
+ * 6 em linha 1 s, V8 de 71 e W16 ~1,7 s), descendo 8/solto[1] s. Perto do alvo a
+ * aproximação fica suave (constante de 0,12 s).
+ */
+export const SOLTO_SOBE_S = 5, SOLTO_DESCE_S = 8
+export function giroSolto(m: MotorFisico, rpm: number, alvo: number, dt: number): number {
+  const [s, d] = m.solto ?? [5, 5]
+  const f = faixa(m)
+  const v = Math.max(-f * d / SOLTO_DESCE_S, Math.min(f * s / SOLTO_SOBE_S, (alvo - rpm) / 0.12))
+  return rpm + v * dt
+}
+
+/**
+ * Giro MOSTRADO e OUVIDO (conta-giros e som): segue o giro da física com um
+ * amortecimento curto. A física pode saltar (fim da troca, embreagem fechando);
+ * o ponteiro e o motor não — eles deslizam até lá em ~0,1 s.
+ */
+export const GIRO_SOM_TAU = 0.045
+export function suavizarGiro(giroSom: number, rpm: number, dt: number): number {
+  return giroSom + (rpm - giroSom) * Math.min(1, dt / GIRO_SOM_TAU)
+}
+
+/**
  * Giro que vai para o SOM (a física não muda): no limitador o giro "bate" num
  * dente de serra — corte duro cai mais e mais rápido, o suave de fábrica é
  * macio — e na lenta o comando bravo / rotativo oscila. `t` é o tempo em s.

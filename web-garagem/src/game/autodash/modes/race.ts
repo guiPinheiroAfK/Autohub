@@ -17,19 +17,22 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   const circuito = corrida && seed !== undefined ? circuitoDaSeed(seed) : null
   if (circuito) buildCircuit(eng, circuito)
   else buildTrack(eng, seed, corrida)
-  seedTraffic(eng, corrida ? 5 : 14)
+  // teste de motor: pista vazia (sem trânsito, eventos, polícia nem powerups)
+  if (eng.testeMotor) { eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = 1e9 }
+  seedTraffic(eng, eng.testeMotor ? 0 : corrida ? 5 : 14)
   eng.position = 0
   eng.speed = 0
   eng.playerX = 0
   eng.steerVel = 0
   eng.gear = 0
   eng.rpm = motorDe(eng).idle
+  eng.giroSom = eng.rpm
   eng.boost = 0
   eng.score = 0; eng.km = 0; eng.combo = 0; eng.comboT = 0
   eng.nitroMeter = 0; eng.nitroOn = false
   eng.shield = false; eng.immuneT = 0; eng.policeHitT = 0; eng.policeEscapeT = 0; eng.policeChaseT = 0; eng.mult2T = 0
   eng.level = 0; eng.levelUpT = 0
-  eng.powerups = []; eng.puTimer = 6
+  eng.powerups = []; eng.puTimer = eng.testeMotor ? 1e9 : 6
   eng.curveWarn = 0; eng.collWarn = null
   eng.newRecord = false; eng.beamT = 0; eng.beamCdT = 0; eng.pitchY = 0
   eng.shiftT = 0; eng.wheelspinT = 0; eng.bogT = 0

@@ -43,7 +43,7 @@ export function wrapDz(eng: AutoDashEngine, a: number, b: number) : number {
 export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, demo: boolean) {
   // no circuito o desafio é o traçado, não a quantidade de carro: bem menos
   // trânsito, e sem escalar com nível (a corrida tem duração fixa em voltas)
-  const target = eng.mode === "race"
+  const target = eng.testeMotor ? 0 : eng.mode === "race"
       ? 5
       : 14 + Math.min(14, Math.floor(eng.km * 1.3)) + eng.level * 3
   if (eng.traffic.length < target) spawnTraffic(eng, DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))

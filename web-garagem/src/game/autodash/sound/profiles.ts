@@ -214,6 +214,13 @@ export function perfilDoCarro(body: string, escolha = ""): EngineSoundProfile {
   return ENGINE_PROFILES[MOTOR_DO_CARRO[body] ?? "i4"] ?? ENGINE_PROFILES.i4
 }
 
+/** Escolha anterior no seletor (o inverso de proximoMotor). */
+export function motorAnterior(escolha: string): string {
+  if (!escolha) return MOTOR_IDS[MOTOR_IDS.length - 1]
+  const i = MOTOR_IDS.indexOf(escolha)
+  return i <= 0 ? "" : MOTOR_IDS[i - 1]
+}
+
 /** Próxima escolha no seletor: original → cada perfil → original. */
 export function proximoMotor(escolha: string): string {
   if (!escolha) return MOTOR_IDS[0]

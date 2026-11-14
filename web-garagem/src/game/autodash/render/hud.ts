@@ -11,6 +11,9 @@ import { motorDe, faixa } from "../physics/motores"
 import { giroVisto } from "../physics/rpm"
 import { wrapDz } from "../traffic/spawner"
 import { ramalNoSeg } from "../world/ramais"
+import { CARS } from "../data"
+import { perfilDoCarro, GRAVACAO_DO_PERFIL, CREDITO_GRAVACAO } from "../sound/profiles"
+import { relacoes } from "../physics/cambio"
 
 export function renderHud(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -23,6 +26,8 @@ export function renderHud(eng: AutoDashEngine) {
   ctx.fillStyle = "rgba(248,250,252,0.65)"
   const best = eng.scores[0]
   ctx.fillText(`recorde ${best ? best.score.toLocaleString("pt-BR") : 0}  ·  ${eng.km.toFixed(1)} km`, 28, 62)
+
+  if (eng.testeMotor) painelTesteMotor(eng)
 
   // combo
   if (eng.combo > 0) {
@@ -375,8 +380,31 @@ export function renderSemaphore(eng: AutoDashEngine) {
     ctx.fillStyle = "rgba(74,222,128,0.55)"
     rr(ctx, zx + 180 * (3600 / 8000), top + 94, 180 * ((6300 - 3600) / 8000), 10, 5)
     ctx.fillStyle = "#f8fafc"
-    const rx = zx + 180 * clamp(eng.rpm / 8000, 0, 1)
+    const rx = zx + 180 * clamp(eng.giroSom / 8000, 0, 1)
     ctx.fillRect(rx - 2, top + 90, 4, 18)
     ctx.textAlign = "left"
   }
+}
+
+// Teste de motor (garagem → Z): qual motor está tocando, de onde vem o som e as teclas.
+function painelTesteMotor(eng: AutoDashEngine) {
+  const ctx = eng.ctx, spec = CARS[eng.cfg.carIdx]
+  const escolha = eng.cfg.customs[eng.cfg.carIdx]?.motor ?? ""
+  const perfil = perfilDoCarro(spec.body, escolha), m = motorDe(eng)
+  const grav = GRAVACAO_DO_PERFIL[perfil.id]
+  const x = W / 2 - 230, y = 84
+  glass(eng, x, y, 460, 74)
+  ctx.textAlign = "center"
+  ctx.fillStyle = "#fde047"
+  ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText(`TESTE DE MOTOR · ${perfil.nome}${escolha ? "" : " (original)"}`, W / 2, y + 22)
+  ctx.fillStyle = "rgba(248,250,252,0.8)"
+  ctx.font = "12px 'Space Grotesk', 'Segoe UI', sans-serif"
+  const som = grav ? `gravação real: ${CREDITO_GRAVACAO[grav.banco] ?? grav.banco}` : "síntese (modelo físico) + textura gravada"
+  ctx.fillText(`${spec.name} · ${relacoes(spec).length} marchas · lenta ${m.idle} · corte ${m.corte}${m.turbo ? " · turbo" : ""} · ${Math.round(giroVisto(eng))} rpm`, W / 2, y + 42)
+  ctx.fillText(som, W / 2, y + 58)
+  ctx.fillStyle = "rgba(248,250,252,0.5)"
+  ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText("[  ]  ou  ,  .  troca o motor  ·  Q/E marcha  ·  N ponto morto  ·  P pausa  ·  sem trânsito", W / 2, y + 90)
+  ctx.textAlign = "left"
 }
