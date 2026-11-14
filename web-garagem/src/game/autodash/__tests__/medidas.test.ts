@@ -27,7 +27,7 @@ function engDeTeste(carIdx: number): AutoDashEngine {
   return {
     cfg: { carIdx, transmission: "auto", customs: [] },
     state: "racing", clima: "limpo",
-    speed: 0, rpm: 0, gear: 1, boost: 0,
+    speed: 0, rpm: 0, gear: 1, boost: 0, eixo: 0,
     shiftT: 0, marchaDoGiro: 1, reduzindo: false, wheelspinT: 0, bogT: 0, patina: 0,
     nitroOn: false, nitroMeter: 0,
     particles: [], audio: mudo, somT: 0, pitchY: 0, trauma: 0,
@@ -46,6 +46,7 @@ export function medir(carIdx: number): Medida {
   eng.speed = 52
   eng.rpm = giroNaFrac(mf, 0.55)
   eng.boost = 0.35 * boostAlvo(mf, eng.rpm, 1)
+  eng.eixo = eng.boost
   const m: Medida = { t100: NaN, t160: NaN, t200: NaN, t95: NaN, v40: 0, v60: 0 }
   const n = Math.round(DURACAO / DT)
   for (let i = 1; i <= n; i++) {
@@ -137,6 +138,8 @@ describe("rampa do acelerador (R6) na retomada", () => {
       const solto = retomada(ci, 0), fundo = retomada(ci, 1)
       const tau = respostaDe(motorFisico(CARS[ci]))
       linhas.push(`  ${CARS[ci].id}: +${(solto - fundo).toFixed(3)} s (τ ${tau})`)
+      expect(fundo, CARS[ci].name).toBeGreaterThan(1) // retomada de verdade (não NaN)
+      expect(fundo, CARS[ci].name).toBeLessThan(15)
       expect(solto - fundo, CARS[ci].name).toBeGreaterThanOrEqual(0)
       expect(solto - fundo, CARS[ci].name).toBeLessThanOrEqual(1.5 * tau + 1e-9)
     }

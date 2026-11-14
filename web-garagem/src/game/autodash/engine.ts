@@ -119,6 +119,7 @@ export class AutoDashEngine {
   rpm = RPM_IDLE
   somT = 0 // tempo do som do motor (s): limitador e lenta irregular
   boost = 0 // pressão do turbo, 0..1 (physics/motores.ts); motor aspirado fica em 0
+  eixo = 0  // giro do eixo do turbo, 0..1: memória do boost num alívio curto (passoEixo)
   shiftT = 0
   gasF = 0 // pé efetivo 0..1: segue o acelerador com o atraso do motor (physics/motores.ts, rampaGas)
   marchaDoGiro = 1 // marcha do giro do último quadro (sim/longitudinal.ts: detecta a redução)

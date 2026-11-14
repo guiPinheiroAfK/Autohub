@@ -7,7 +7,7 @@ import type { CarSpec } from "../data"
 import { relacao, fatorMarcha } from "../physics/cambio"
 import { emitSmoke, emitFlame } from "../fx/particles"
 import { climaAtual } from "./clima"
-import { type MotorFisico, forcaNoCorte, faseCorte, rampaGas, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
+import { type MotorFisico, forcaNoCorte, faseCorte, rampaGas, passoEixo, boostDoEixo, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
 import { accelK, finalDriveOf, usoTracao } from "../physics/traction"
@@ -57,12 +57,18 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   // É aqui que nasce o "lag": sai de curva em giro baixo e a força demora a vir.
   // Na troca de marcha o boost se segura (troca curta, eixo ainda girando);
   // em ponto morto quase não enche (sem carga).
+  // Engatado, o eixo do turbo tem memória (passoEixo/boostDoEixo): um alívio
+  // curto não zera o boost.
   if (eng.gear >= 1 && eng.shiftT > 0) { /* segura o boost */ }
-  else {
-    const comCarga = eng.gear >= 1 ? eng.gasF : throttle * 0.35
+  else if (eng.gear >= 1) {
+    const giroF = giroDeForca(mf, eng.rpm, eng.gear)
+    eng.eixo = passoEixo(mf, eng.eixo, giroF, eng.gasF, dt)
+    eng.boost = boostDoEixo(mf, eng.boost, eng.eixo, giroF, eng.gasF, dt)
+  } else {
     const giroF = giroDeForca(mf, eng.rpm, eng.gear)
     // giro alto enche o turbo mais rápido (energia do escape)
-    eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, giroF, comCarga), dt, giroF)
+    eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, giroF, throttle * 0.35), dt, giroF)
+    eng.eixo = eng.boost
   }
 
   // câmbio automático

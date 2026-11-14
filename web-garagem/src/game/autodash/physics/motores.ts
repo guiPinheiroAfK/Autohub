@@ -235,6 +235,30 @@ export function rampaGas(m: MotorFisico, gas: number, pedido: number, dt: number
   return Math.abs(pedido - g) < 1e-6 ? pedido : g
 }
 
+// Eixo do turbo com memória (P4). A válvula de alívio derruba a PRESSÃO na
+// hora, mas o EIXO continua girando por 1–2 s (o `desce`, o mesmo que o som
+// usa). Voltar ao gás logo depois de um toque no freio recupera o boost rápido
+// em vez de recomeçar do zero. Em reta, sem tirar o pé, é igual ao modelo antigo.
+
+/** Avança o giro do eixo (0..1): sobe com o atraso do turbo, cai em `desce` s. */
+export function passoEixo(m: MotorFisico, eixo: number, rpm: number, gas: number, dt: number): number {
+  if (!m.turbo) return 0
+  const alvo = boostAlvo(m, rpm, gas)
+  const tau = alvo > eixo ? m.turbo.lag * fatorSpool(m, rpm) : (m.turbo.desce ?? 1.5)
+  return eixo + (alvo - eixo) * Math.min(1, dt / tau)
+}
+
+/**
+ * Pressão (boost) a partir do eixo: com o pé, vai na hora até o que o eixo
+ * entrega (sem passar do alvo do giro); ao aliviar, a válvula esvazia em ~0,2 s.
+ */
+export function boostDoEixo(m: MotorFisico, boost: number, eixo: number, rpm: number, gas: number, dt: number): number {
+  if (!m.turbo) return 0
+  const alvo = Math.min(eixo, boostAlvo(m, rpm, gas))
+  if (alvo >= boost) return alvo
+  return boost + (alvo - boost) * Math.min(1, dt / 0.2)
+}
+
 /** Fração do giro dentro da faixa do motor (0 = lenta, 1 = corte). */
 export function fracGiro(m: MotorFisico, rpm: number): number {
   return (rpm - m.idle) / faixa(m)

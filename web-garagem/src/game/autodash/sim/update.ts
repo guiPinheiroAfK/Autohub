@@ -90,6 +90,7 @@ export function update(eng: AutoDashEngine, dt: number) {
     if (eng.rpm > mf.corte) eng.rpm = mf.corte - Math.random() * 0.043 * faixa(mf)
     // em ponto morto o turbo quase não enche (sem carga)
     eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, eng.rpm, throttle) * 0.35, dt, eng.rpm)
+    eng.eixo = eng.boost // no verde o eixo parte da pressão do grid
     // burnout no grid: acelerando no ponto morto, pneu fuma (só na corrida)
     if (eng.mode === "race" && throttle > 0.5 && eng.rpm > giroNaFrac(mf, 0.514) && Math.random() < 0.6) {
       emitSmoke(eng, 2, "#d8dbe2")

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom, forcaNoCorte, faseCorte, CORTE_DURO_HZ, fatorSpool, rampaGas, respostaDe, RESPOSTA_PADRAO, MOTOR_PADRAO } from "../physics/motores"
+import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom, forcaNoCorte, faseCorte, CORTE_DURO_HZ, fatorSpool, rampaGas, respostaDe, RESPOSTA_PADRAO, MOTOR_PADRAO, passoEixo, boostDoEixo } from "../physics/motores"
 import { ENGINE_PROFILES } from "../sound/profiles"
 import { CARS, GEAR_RATIOS, RPM_PER_KMH, RPM_LIMITER, RPM_IDLE } from "../data"
 
@@ -155,6 +155,37 @@ describe("motores reais (faixa de giro e curva de força)", () => {
     expect(ate(MOTORES["i6-corrida"], 0.05)).toBeGreaterThan(ate(MOTORES["v8-cruzado-ford"], 0.05))
     // pé já no fundo fica no fundo (largada: o grid deixa o gás em 1)
     expect(rampaGas(MOTORES.w16, 1, 1, 1 / 60)).toBe(1)
+  })
+  it("eixo do turbo com memória: em reta é igual ao modelo antigo; alívio curto não zera (P4)", () => {
+    const m = MOTORES["i6-corrida"], dt = 1 / 60, rpm = 6500
+    // pé no fundo do zero: mesma curva de boost do passoBoost
+    let velho = 0, eixo = 0, boost = 0
+    for (let i = 0; i < 120; i++) {
+      velho = passoBoost(m, velho, boostAlvo(m, rpm, 1), dt, rpm)
+      eixo = passoEixo(m, eixo, rpm, 1, dt)
+      boost = boostDoEixo(m, boost, eixo, rpm, 1, dt)
+      expect(boost).toBe(velho)
+    }
+    // alívio de 0,5 s: a pressão cai como antes (~0,2 s), o eixo segue girando
+    for (let i = 0; i < 30; i++) {
+      velho = passoBoost(m, velho, 0, dt, rpm)
+      eixo = passoEixo(m, eixo, rpm, 0, dt)
+      boost = boostDoEixo(m, boost, eixo, rpm, 0, dt)
+    }
+    expect(boost).toBeCloseTo(velho, 10)
+    expect(boost).toBeLessThan(0.1)
+    expect(eixo).toBeGreaterThan(0.6)
+    // volta ao gás: em 0,1 s o eixo devolve o boost; o modelo antigo recomeçava do zero
+    for (let i = 0; i < 6; i++) {
+      velho = passoBoost(m, velho, boostAlvo(m, rpm, 1), dt, rpm)
+      eixo = passoEixo(m, eixo, rpm, 1, dt)
+      boost = boostDoEixo(m, boost, eixo, rpm, 1, dt)
+    }
+    expect(boost).toBeGreaterThan(0.6)
+    expect(velho).toBeLessThan(0.35)
+    // aspirado não tem eixo
+    expect(passoEixo(MOTORES.v10, 0.5, 8000, 1, dt)).toBe(0)
+    expect(boostDoEixo(MOTORES.v10, 0.5, 0.5, 8000, 1, dt)).toBe(0)
   })
 })
 
