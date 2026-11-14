@@ -1,5 +1,6 @@
 // AutoDash — fx/particles.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine, W, H } from "../engine"
+import { coresChama, corFumaca } from "../cosmetic/bodykit"
 
 export function burst(eng: AutoDashEngine, x: number, y: number, n: number, colors: string[]) {
   for (let i = 0; i < n; i++) {
@@ -24,15 +25,22 @@ export function emitSmoke(eng: AutoDashEngine, n: number, color: string) {
 }
 
 export function emitFlame(eng: AutoDashEngine) {
+  // cor da chama escolhida na garagem (Fase 7); a primeira é a laranja de antes
+  const [corpo, miolo] = coresChama(eng.cfg.customs[eng.cfg.carIdx])
   for (let i = 0; i < 2; i++) {
     eng.particles.push({
       x: W / 2 + (i === 0 ? -22 : 22) + (Math.random() - 0.5) * 8,
       y: H - 58,
       vx: (Math.random() - 0.5) * 30, vy: 90 + Math.random() * 80,
       size: 5 + Math.random() * 7, life: 0.35, maxLife: 0.35,
-      color: Math.random() < 0.5 ? "#fb923c" : "#fde047",
+      color: Math.random() < 0.5 ? corpo : miolo,
     })
   }
+}
+
+/** Fumaça do escape na cor escolhida na garagem; no padrão, a cor `base` de antes. */
+export function emitEscape(eng: AutoDashEngine, n: number, base: string) {
+  emitSmoke(eng, n, corFumaca(eng.cfg.customs[eng.cfg.carIdx], base))
 }
 
 export function initRain(eng: AutoDashEngine) {

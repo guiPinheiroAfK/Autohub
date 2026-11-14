@@ -1,6 +1,8 @@
 // AutoDash — render/primitives.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { type CarSpec, type CarCustom, PAINTS, WHEELS, NEONS } from "../data"
 import { shade } from "../math"
+import { coresChama } from "../cosmetic/bodykit"
+import { desenharRodas, labioRebaixado, abaixarCarroceria, alargadores, saiasEDifusor, asaAlta } from "./bodykit"
 
 // ---------- helpers de desenho ----------
 export function poly(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, x4: number, y4: number) {
@@ -47,13 +49,11 @@ export function drawPlayerCar(
   ctx.beginPath(); ctx.ellipse(0, 2, w * 0.62, w * 0.10, 0, 0, Math.PI * 2); ctx.fill()
 
   const bx = -w / 2, by = -h
-  // pneus + rodas coloridas
-  ctx.fillStyle = "#0a0a0c"
-  rr(ctx, bx - w * 0.05, -h * 0.36, w * 0.10, h * 0.36, w * 0.025)
-  rr(ctx, bx + w - w * 0.05, -h * 0.36, w * 0.10, h * 0.36, w * 0.025)
-  ctx.fillStyle = rim
-  rr(ctx, bx - w * 0.038, -h * 0.26, w * 0.024, h * 0.16, w * 0.012)
-  rr(ctx, bx + w + w * 0.014, -h * 0.26, w * 0.024, h * 0.16, w * 0.012)
+  // pneus + rodas coloridas (aro e cambagem da Fase 7 em render/bodykit.ts)
+  desenharRodas(ctx, w, h, bx, rim, custom)
+  // rebaixamento: lábio do para-lama sobre o pneu e carroceria mais baixa
+  labioRebaixado(ctx, w, h, bx, dark, custom)
+  const abaixou = abaixarCarroceria(ctx, custom)
 
   // ---- silhueta por carroceria (curvas, não caixas) ----
   ctx.fillStyle = body
@@ -216,6 +216,9 @@ export function drawPlayerCar(
     ctx.beginPath(); ctx.moveTo(0, roofY); ctx.lineTo(0, -h * 0.36); ctx.stroke()
   }
 
+  // widebody: alargadores por cima dos pneus
+  alargadores(ctx, w, h, bx, body, dark, custom)
+
   // faixas
   ctx.fillStyle = "rgba(255,255,255,0.35)"
   if (custom.stripe === 1) ctx.fillRect(-w * 0.05, by + h * 0.06, w * 0.10, h * 0.86)
@@ -273,7 +276,11 @@ export function drawPlayerCar(
     rr(ctx, bx - w * 0.03, by - h * 0.10, w * 1.06, h * 0.075, w * 0.03)
     ctx.fillRect(bx + w * 0.14, by - h * 0.04, w * 0.05, h * 0.14)
     ctx.fillRect(bx + w * 0.81, by - h * 0.04, w * 0.05, h * 0.14)
+  } else if (custom.wing === 3) {
+    asaAlta(ctx, w, h, bx, by)
   }
+  // saias e difusor na base da traseira
+  saiasEDifusor(ctx, w, h, bx, dark, custom)
 
   // lanternas
   const glow = braking ? 1 : amb < 0.62 ? 0.8 : 0.45
@@ -319,7 +326,7 @@ export function drawPlayerCar(
   ctx.beginPath(); ctx.arc(bx + w * 0.20, -h * 0.03, w * 0.035, 0, Math.PI * 2); ctx.fill()
   ctx.beginPath(); ctx.arc(bx + w * 0.80, -h * 0.03, w * 0.035, 0, Math.PI * 2); ctx.fill()
   if (nitro) {
-    ctx.fillStyle = "#fde047"
+    ctx.fillStyle = coresChama(custom)[1]
     ctx.beginPath(); ctx.arc(bx + w * 0.20, -h * 0.03, w * 0.05, 0, Math.PI * 2); ctx.fill()
     ctx.beginPath(); ctx.arc(bx + w * 0.80, -h * 0.03, w * 0.05, 0, Math.PI * 2); ctx.fill()
   }
@@ -333,5 +340,6 @@ export function drawPlayerCar(
   ctx.fillText("AUTOHUB", 0, -h * 0.093)
   ctx.textAlign = "left"
 
+  if (abaixou) ctx.restore()
   ctx.restore()
 }
