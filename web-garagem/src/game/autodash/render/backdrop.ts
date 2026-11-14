@@ -85,8 +85,6 @@ function camadaMontanhas(eng: AutoDashEngine, amb: number) {
 function camadaSkyline(eng: AutoDashEngine, amb: number) {
   const ctx = eng.ctx
   const hz = H * 0.5
-  // metrópole neon ATRÁS do skyline base (torres altas, letreiros) — só corrida
-  // if (eng.mode === "race") eng.renderNeonCity(hz) - isso aq eu removi por causa de otimização
   const wrap = W + 90
   for (let i = 0; i < 24; i++) {
     const bw = 20 + ((i * 37) % 28)

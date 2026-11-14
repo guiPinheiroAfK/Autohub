@@ -5,7 +5,6 @@
 // `update()` e lê `rivais`/`grid()` — assim o modo corrida não derrama mais
 // centenas de linhas dentro de engine.ts, que já é grande demais.
 
-import { KMH2UPS } from "../data"
 import { BotRacer, type PistaInfo } from "./bots"
 import { codificarSeed } from "../world/circuits"
 import { RaceNet, criarSala, entrarSala, darLargada, meuPlayerId, verLobby } from "./net"
@@ -203,6 +202,3 @@ export class RaceSession {
     return 0
   }
 }
-
-/** Converte km/h em unidades por segundo (o resto do jogo usa isso o tempo todo). */
-export const kmhToUps = (v: number) => v * KMH2UPS
