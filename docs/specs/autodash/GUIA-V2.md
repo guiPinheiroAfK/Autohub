@@ -300,4 +300,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-14 | dccd3c0 | Fase 5: convite de racha com reputação e rival que fecha (E7). | não alterado (o convite vem depois do fim dos replays). |
 | 2026-11-14 | b0f8e84, 9e5cc4c | Fase 5: obra com estreitamento (E4), comboio com fresta (E6), óleo após acidente (E15) no sorteio de eventos. | atualizado no replay solo: o evento sorteado do replay mudou. |
 | 2026-11-14 | c9d0bcd, 754833d, 661cf0a | Fase 5: vácuo com estilingue (E9) e caminhão trocando de faixa (E1). | atualizado: corrida com bots pelo vácuo, solo pelo caminhão (atribuição medida). Clique e duelo não mudam. |
+| 2026-11-14 | 87fbcba | Atalho de teste da Fase 5 na garagem [H] e roteiro "Como testar". | atualizado no replay solo: pílula nova na garagem (+98 chamadas). |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |
