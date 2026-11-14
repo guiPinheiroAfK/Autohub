@@ -1,8 +1,9 @@
 // AutoDash — sound/engine-worklet.ts. Processador de AudioWorklet que roda o
-// EngineSynth na thread de áudio (sem travar o jogo). Carregado por audio.ts via
+// sintetizador de motor (guias de onda) na thread de áudio (sem travar o jogo). Carregado por audio.ts via
 // `?worker&url`; recebe giro, carga e perfil por mensagem a cada quadro.
 
-import { EngineSynth, type EngineSynthState } from "./engine-synth"
+import { type EngineSynthState } from "./engine-synth"
+import { WaveguideSynth } from "./waveguide-synth"
 import { ENGINE_PROFILES } from "./profiles"
 
 // O escopo do AudioWorklet não está nas libs do TypeScript.
@@ -15,7 +16,8 @@ declare class AudioWorkletProcessor {
 interface Msg { perfil?: string; st?: Partial<EngineSynthState> }
 
 class MotorProcessor extends AudioWorkletProcessor {
-  private synth = new EngineSynth(sampleRate, ENGINE_PROFILES.i4, 1234)
+  // modelo físico por guias de onda (sound/waveguide-synth.ts)
+  private synth = new WaveguideSynth(sampleRate, ENGINE_PROFILES.i4, 1234)
   private sobra = new Float32Array(128)
 
   constructor() {

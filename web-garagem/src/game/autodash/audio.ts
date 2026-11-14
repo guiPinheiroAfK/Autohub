@@ -281,8 +281,9 @@ export class AudioBus {
     if (!m || !ctx) return
     const p = this.perfil, t = ctx.currentTime
     m.node.port.postMessage({ perfil: p.id })
-    m.boom.frequency.setTargetAtTime(p.boomHz, t, 0.05); m.boom.gain.setTargetAtTime(p.boomDb, t, 0.05)
-    m.coletor.frequency.setTargetAtTime(p.coletorHz, t, 0.05); m.coletor.gain.setTargetAtTime(p.coletorDb, t, 0.05)
+    // o timbre agora vem dos dutos do modelo físico: os filtros só dão um toque
+    m.boom.frequency.setTargetAtTime(p.boomHz, t, 0.05); m.boom.gain.setTargetAtTime(p.boomDb * 0.35, t, 0.05)
+    m.coletor.frequency.setTargetAtTime(p.coletorHz, t, 0.05); m.coletor.gain.setTargetAtTime(0, t, 0.05)
   }
 
   private estouro(vol: number) {
@@ -335,10 +336,12 @@ export class AudioBus {
     m.out.gain.setTargetAtTime(running ? 0.5 * (0.85 + 0.35 * Math.min(rpm, 8000) / 7000) : 0, t, running ? 0.05 : 0.15)
     if (!running) { this.lastGas = 0; return }
     // abafador abre com o giro e com o pé
-    m.lp.frequency.setTargetAtTime(Math.min(p.lpTeto + (nitro ? 800 : 0), p.lpBase + rpm * p.lpPorRpm + gas * p.lpGas), t, 0.03)
+    // abafador mais aberto: o modelo físico já tem o próprio abafador
+    m.lp.frequency.setTargetAtTime(Math.min(9000, 2500 + rpm * 0.5 + gas * 1500 + (nitro ? 800 : 0)), t, 0.03)
     const alto = Math.min(1, Math.max(0, (rpm - 4200) / 2600))
     m.admBp.frequency.setTargetAtTime(Math.min(1500, 600 + rpm * 0.12), t, 0.03)
-    m.admGain.gain.setTargetAtTime(gas * alto * alto * p.admissao * 0.6, t, 0.04)
+    // a admissão já vem misturada no modelo físico; a camada extra fica bem baixa
+    m.admGain.gain.setTargetAtTime(gas * alto * alto * p.admissao * 0.15, t, 0.04)
 
     // indução: boost sobe com giro e pé (atraso do turbo), cai rápido ao aliviar
     const turbo = p.inducao === "turbo" || p.inducao === "biturbo"
