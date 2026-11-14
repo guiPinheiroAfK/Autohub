@@ -15,6 +15,7 @@ import { clamp } from "../math"
 import { powerCurve, giroVisto } from "../physics/rpm"
 import { steerK, tyreOf } from "../physics/traction"
 import { passoLongitudinal } from "./longitudinal"
+import { passoCamera } from "../render/camera"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
@@ -29,6 +30,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   const mf = motorDe(eng)
   eng.audio.setTurbo(mf.turbo, mf.corte)
   eng.somT += dt // relógio do som (limitador batendo, lenta irregular)
+  passoCamera(eng, dt) // trauma, ruído e rampa do nitro da câmera
 
   duelNet(eng, dt)
 

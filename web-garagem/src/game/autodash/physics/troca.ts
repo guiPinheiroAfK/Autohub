@@ -17,6 +17,10 @@ export const K_TROCA: Record<CambioTipo, number> = { H: 1, seq: 2, dct: 4, conv:
 // dando o punta-tacco (ou o câmbio fazendo sozinho).
 export const BLIP_FRAC = 0.04
 
+// "Chute" de troca: quando a força volta, o carro cabeceia (eng.pitchY, só
+// desenho). Maior no H, pequeno no DCT, quase nada no conversor.
+export const KICK: Record<CambioTipo, number> = { H: -2.5, seq: -1.8, dct: -0.8, conv: -0.5 }
+
 /**
  * Giro num quadro de troca (embreagem aberta): anda até `alvo`, o giro da marcha
  * nova, na rapidez do giro solto do motor × o fator do câmbio. Com `blip`, mira

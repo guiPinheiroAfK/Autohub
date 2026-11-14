@@ -17,6 +17,7 @@ import { type TrechoInfo } from "./world/circuits"
 import { renderRoad } from "./render/road"
 import { renderPlayer, renderRearThreat } from "./render/player"
 import { renderParticles } from "./render/particles"
+import { aplicarCamera } from "./render/camera"
 import { vignetteTex } from "./render/textures"
 import { renderMenu, renderGarage, renderPause, renderGameOver, renderNameEntry } from "./render/menus/main"
 import { renderHud, renderSemaphore } from "./render/hud"
@@ -143,6 +144,9 @@ export class AutoDashEngine {
   greenFired = false
   goFlashT = 0
   shakeT = 0
+  trauma = 0    // tremor de câmera, 0..1 (render/camera.ts): decai sozinho
+  camT = 0      // relógio do ruído da câmera (s)
+  nitroZoom = 0 // rampa do zoom do nitro, 0..1
   crashed = false
   crashByPolice = false // a batida foi contra uma viatura? (muda o texto do game over)
 
@@ -355,19 +359,8 @@ export class AutoDashEngine {
     const amb = sky.amb
 
     ctx.save()
-    if (this.shakeT > 0) ctx.translate((Math.random() - 0.5) * 14, (Math.random() - 0.5) * 10)
-    // trepidação de motor no grid da corrida: quanto mais giro, mais treme —
-    // o carro "pedindo pra sair"
-    if (this.mode === "race" && this.state === "countdown") {
-      const rev = clamp((this.rpm - 3000) / 5000, 0, 1)
-      ctx.translate((Math.random() - 0.5) * 3 * rev, (Math.random() - 0.5) * 2.4 * rev)
-    }
-    // "FOV pump" no nitro — a câmera aperta levemente
-    if (this.nitroOn && this.nitroMeter > 1 && this.state === "racing") {
-      ctx.translate(W / 2, H / 2)
-      ctx.scale(1.025, 1.025)
-      ctx.translate(-W / 2, -H / 2)
-    }
+    // tremor por trauma, trepidação do grid e zoom por velocidade e nitro
+    aplicarCamera(this, ctx)
     // a câmera deita junto com o volante
     if (this.state === "racing" && Math.abs(this.steerVel) > 0.04) {
       ctx.translate(W / 2, H)

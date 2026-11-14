@@ -7,12 +7,12 @@ import type { CarSpec } from "../data"
 import { relacao, fatorMarcha } from "../physics/cambio"
 import { emitSmoke, emitFlame } from "../fx/particles"
 import { climaAtual } from "./clima"
-import { type MotorFisico, forcaNoCorte, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
+import { type MotorFisico, forcaNoCorte, faseCorte, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, taxaSolto } from "../physics/motores"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
 import { accelK, finalDriveOf, usoTracao } from "../physics/traction"
 import { autoShift } from "../physics/gearbox"
-import { giroNaTroca, cambioDe } from "../physics/troca"
+import { giroNaTroca, cambioDe, KICK } from "../physics/troca"
 
 export interface EntradaLongitudinal {
   throttle: number  // 0 ou 1 (teclado, mouse, toque)
@@ -27,7 +27,10 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   const { throttle, braking, centrif, grade, dt } = e
 
   // ---------- motor ----------
+  const emTroca = eng.shiftT > 0
   if (eng.shiftT > 0) eng.shiftT -= dt
+  // fim da troca com o pé no fundo: a força volta e o carro cabeceia (só desenho)
+  if (emTroca && eng.shiftT <= 0 && throttle && eng.gear >= 1) eng.pitchY += KICK[cambioDe(spec)]
   if (eng.wheelspinT > 0) eng.wheelspinT -= dt
   if (eng.bogT > 0) eng.bogT -= dt
 
@@ -75,6 +78,10 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
     if (patina > 0) emitSmoke(eng, Math.ceil(patina * 8), "#e2e8f0")
     // limitador: corte duro pulsa com o som, corte suave segura o giro em rampa
     accel *= forcaNoCorte(mf, eng.rpm, eng.somT)
+    // corte duro: cada pulso dá um tranco leve na câmera, na batida do som
+    if (mf.corteDuro && eng.rpm >= mf.corte - 50 && faseCorte(eng.somT) < faseCorte(eng.somT - dt)) {
+      eng.trauma = Math.min(1, Math.max(eng.trauma, 0.2) + 0.04)
+    }
     if (eng.rpm >= mf.corte - 50 && Math.random() < 0.4) eng.audio.limiter()
     if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0"); patina = Math.max(patina, 0.3) }
     if (eng.bogT > 0) accel *= 0.5
