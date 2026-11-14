@@ -21,6 +21,7 @@ import { aplicarCamera } from "./render/camera"
 import { vignetteTex } from "./render/textures"
 import { renderMenu, renderGarage, renderPause, renderGameOver, renderNameEntry } from "./render/menus/main"
 import { renderHud, renderSemaphore } from "./render/hud"
+import { renderTorqueHud } from "./render/hud-torque"
 import { renderTrackPreview, renderRaceLobby, renderRaceCode, renderRaceWait, renderRaceResult, renderRaceRecon } from "./render/menus/race"
 import { renderRaceHud } from "./render/race-hud"
 import { renderDuelLobby, renderDuelCode, renderDuelWaiting, renderDuelSpectate, renderDuelResult } from "./render/menus/duel"
@@ -438,6 +439,8 @@ export class AutoDashEngine {
       case "raceresult": renderRaceResult(this); break
       case "racerecon": renderRaceRecon(this); break
     }
+    // torque ao lado do conta-giros (Fase 7, render/hud-torque.ts)
+    renderTorqueHud(this)
 
     // floaters por cima de tudo
     const ctx2 = this.ctx
