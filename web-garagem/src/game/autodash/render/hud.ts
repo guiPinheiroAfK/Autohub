@@ -3,6 +3,7 @@ import { AutoDashEngine, W, H, PLAYER_Z } from "../engine"
 import { glass } from "../ui/widgets"
 import { clamp } from "../math"
 import { skyNow } from "./backdrop"
+import { formatHour } from "../world/clock"
 import { rr } from "./primitives"
 import { renderRearView } from "./player"
 import { SEG_LEN, RPM_REDLINE } from "../data"
@@ -36,7 +37,12 @@ export function renderHud(eng: AutoDashEngine) {
   const sky = skyNow(eng)
   ctx.textAlign = "right"
   ctx.font = "20px 'Space Grotesk', 'Segoe UI', sans-serif"
-  ctx.fillText(eng.raining ? "🌧" : sky.amb < 0.6 ? "🌙" : "☀️", W - 20, 34)
+  const icone = eng.raining ? "🌧" : eng.clima === "neblina" ? "🌫" : eng.clima === "nublado" ? "☁️" : sky.amb < 0.6 ? "🌙" : "☀️"
+  ctx.fillText(icone, W - 20, 34)
+  // relógio do jogo (ADR 0013): só no solo; a corrida tem o próprio HUD
+  ctx.font = "bold 14px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillStyle = "rgba(248,250,252,0.8)"
+  ctx.fillText(formatHour(eng.clock.tick), W - 52, 31)
   ctx.font = "bold 13px 'Space Grotesk', 'Segoe UI', sans-serif"
   let by = 58
   ctx.fillStyle = "rgba(248,250,252,0.6)"

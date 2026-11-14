@@ -5,7 +5,8 @@ import { duelNet } from "../modes/duel"
 import { startRace } from "../modes/race"
 import { segAt } from "../world/track"
 import { updateTraffic, wrapDz } from "../traffic/spawner"
-import { updateFx, emitSmoke, emitFlame, burst, initRain } from "../fx/particles"
+import { updateFx, emitSmoke, emitFlame, burst } from "../fx/particles"
+import { climaAtual, tickTempo } from "./clima"
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
@@ -95,7 +96,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   // ---------- racing ----------
-  const grip = spec.grip * tyreOf(spec).grip * (eng.raining ? 0.62 : 1)
+  const grip = spec.grip * tyreOf(spec).grip * climaAtual(eng).grip
   const playerZ = eng.position + PLAYER_Z
   const seg = segAt(eng, playerZ)
   // ramal (atalho) neste ponto da pista, se houver (ADR 0014). Sem ramais: null.
@@ -180,7 +181,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   const nitroActive = eng.nitroOn && eng.nitroMeter > 1
 
   eng.speed += accel * dt
-  if (braking) eng.speed -= (eng.raining ? 78 : 105) * dt
+  if (braking) eng.speed -= 105 * climaAtual(eng).freio * dt
   eng.speed -= (5 + eng.speed * 0.028) * dt // arrasto
 
   // FÍSICA DE LADEIRA: descida empurra o carro (dá pra passar do top speed —
@@ -350,16 +351,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   if (throttle && eng.speed < 40 && eng.gear >= 1) emitSmoke(eng, 2, "#cbd5e1")
   else if (throttle && Math.random() < 0.3) emitSmoke(eng, 1, "#64748b")
 
-  // clima
-  eng.rainRollT += dt
-  if (eng.rainRollT > 18) {
-    eng.rainRollT = 0
-    if (!eng.raining && Math.random() < 0.18) { eng.raining = true; eng.rainT = 22 + Math.random() * 20; initRain(eng); eng.audio.rain(true) }
-  }
-  if (eng.raining) {
-    eng.rainT -= dt
-    if (eng.rainT <= 0) { eng.raining = false; eng.audio.rain(false) }
-  }
+  // relógio e clima (ADR 0013): o clima só vira na janela de ticks
+  tickTempo(eng, dt)
 
   updateTraffic(eng, dt, playerZ, false)
   updateZones(eng, dt, playerZ)

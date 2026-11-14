@@ -5,6 +5,7 @@ import { buildCircuit, circuitoDaSeed, CIRCUITS } from "../world/circuits"
 import { seedTraffic } from "../traffic/spawner"
 import { RPM_IDLE } from "../data"
 import { RaceSession } from "../race/session"
+import { iniciarTempo, seedDoTracado } from "../sim/clima"
 
 export function startRace(eng: AutoDashEngine, seed?: number) {
   const corrida = eng.mode === "race"
@@ -32,8 +33,14 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.shiftT = 0; eng.wheelspinT = 0; eng.bogT = 0
   eng.crashed = false; eng.crashByPolice = false; eng.noRamal = false
   eng.raceFinished = false; eng.raceSpectT = 0
-  eng.raining = false; eng.rainRollT = 0
-  eng.audio.rain(false)
+  // relógio e clima (ADR 0013). Corrida com bots usa a escolha do lobby; sala
+  // online e duelo usam o padrão, para todo mundo ver o mesmo céu e o mesmo clima.
+  const online = !!eng.race && !eng.race.offline
+  const hora = eng.mode === "race" ? (online ? "noite" : eng.cfg.horaCorrida)
+    : eng.mode === "duel" ? "ciclo" : eng.cfg.hora
+  const clima = eng.mode === "race" ? (online ? "sorteio" : eng.cfg.climaCorrida)
+    : eng.mode === "duel" ? "sorteio" : eng.cfg.clima
+  iniciarTempo(eng, hora, clima, seed ?? seedDoTracado(eng))
   eng.particles = []; eng.floaters = []
   eng.countT = 0
   // no duelo o verde é fixo pra manter os dois relógios alinhados

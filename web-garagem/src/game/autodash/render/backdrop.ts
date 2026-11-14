@@ -3,7 +3,9 @@ import { neonGlow } from "./textures"
 import { drawTraffic } from "./objects"
 import { AutoDashEngine, H, W } from "../engine"
 import { type LayerKind } from "../world/biomes"
-import { shade, mix } from "../math"
+import { dayFrac } from "../world/clock"
+import { CLIMAS } from "../world/weather"
+import { shade, mix, mixHex } from "../math"
 import { rr } from "./primitives"
 import { type Traffic } from "../traffic/types"
 
@@ -467,23 +469,35 @@ export function drawTower(eng: AutoDashEngine, x: number, y: number, w: number, 
 }
 
 export function skyNow(eng: AutoDashEngine) : { top: string; bot: string; amb: number } {
-  // corrida é SEMPRE noite neon — o clima "Velozes e Furiosos" vive de racha
-  // noturno. Céu roxo-profundo com barra magenta no horizonte (poluição
-  // luminosa da cidade), sem o ciclo de dia do modo solo.
+  // corrida à noite (padrão) mantém o céu neon fixo do bioma — o clima
+  // "Velozes e Furiosos" vive de racha noturno. Os outros horários e o solo
+  // seguem o relógio em ticks (ADR 0013) pelas chaves de céu do bioma.
   const bio = eng.bioma
-  if (eng.mode === "race") {
+  const cl = CLIMAS[eng.clima]
+  let top: string, bot: string, amb: number
+  if (eng.mode === "race" && eng.horaModo === "noite") {
     const cr = bio.ceuCorrida
-    return { top: cr.top, bot: cr.bot, amb: eng.raining ? cr.ambChuva : cr.amb }
+    top = cr.top; bot = cr.bot; amb = cl.chuva ? cr.ambChuva : cr.amb * cl.amb
+  } else {
+    // as chaves do bioma foram feitas com 0 = começo da manhã; o relógio usa
+    // 0 = amanhecer (6h). O deslocamento de 0,125 deixa 12h no "dia", 18h no
+    // "pôr do sol", 0h na "noite" e 6h no "amanhecer".
+    const t = (dayFrac(eng.clock.tick) - 0.125 + 1) % 1
+    const keys = bio.ceu
+    let a = keys[keys.length - 1], b = keys[0], p = 0
+    for (let i = 0; i < keys.length; i++) {
+      const k1 = keys[i], k2 = keys[(i + 1) % keys.length]
+      const t2 = k2.t > k1.t ? k2.t : k2.t + 1
+      const tt = t >= k1.t ? t : t + 1
+      if (tt >= k1.t && tt <= t2) { a = k1; b = k2; p = (tt - k1.t) / (t2 - k1.t); break }
+    }
+    top = mix(a.top, b.top, p); bot = mix(a.bot, b.bot, p)
+    amb = (a.amb + (b.amb - a.amb) * p) * cl.amb
   }
-  const t = (eng.km % 10) / 10
-  const keys = bio.ceu
-  let a = keys[keys.length - 1], b = keys[0], p = 0
-  for (let i = 0; i < keys.length; i++) {
-    const k1 = keys[i], k2 = keys[(i + 1) % keys.length]
-    const t2 = k2.t > k1.t ? k2.t : k2.t + 1
-    const tt = t >= k1.t ? t : t + 1
-    if (tt >= k1.t && tt <= t2) { a = k1; b = k2; p = (tt - k1.t) / (t2 - k1.t); break }
+  // nublado e neblina puxam o céu pro cinza (claro de dia, chumbo à noite)
+  if (cl.cinza > 0) {
+    const cz = amb > 0.6 ? "#8b94a3" : "#262b36"
+    top = mixHex(top, cz, cl.cinza); bot = mixHex(bot, cz, cl.cinza * 0.8)
   }
-  const amb = a.amb + (b.amb - a.amb) * p
-  return { top: mix(a.top, b.top, p), bot: mix(a.bot, b.bot, p), amb: eng.raining ? amb * 0.8 : amb }
+  return { top, bot, amb }
 }

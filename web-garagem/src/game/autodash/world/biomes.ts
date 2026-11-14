@@ -40,7 +40,7 @@ export const BIOMES: Record<string, BiomeDef> = {
     ceuCorrida: { top: "#0a0618", bot: "#2a1140", amb: 0.44, ambChuva: 0.34 },
     camadas: { longe: ["ceu-sol", "montanhas"], meio: ["skyline"], perto: ["brilho-urbano"] },
     arvore: 0,
-    climas: ["limpo", "chuva"],
+    climas: ["limpo", "nublado", "chuva", "neblina"],
   },
   // costa: mesmo sistema de camadas. Horizonte com mar, palmeiras e um píer.
   costa: {
@@ -55,7 +55,7 @@ export const BIOMES: Record<string, BiomeDef> = {
     ceuCorrida: { top: "#04161c", bot: "#0e3b43", amb: 0.46, ambChuva: 0.36 },
     camadas: { longe: ["ceu-sol", "mar"], meio: ["palmeiras"], perto: ["pier"] },
     arvore: 7, // palmeira de beira (drawDeco, kind 7)
-    climas: ["limpo", "chuva"],
+    climas: ["limpo", "nublado", "chuva", "neblina"],
   },
 }
 

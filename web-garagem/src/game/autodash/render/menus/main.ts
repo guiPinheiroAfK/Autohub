@@ -8,6 +8,8 @@ import { CARS, saveConfig, NEONS, PAINTS, WHEELS, STRIPES, WINGS, NEON_NAMES } f
 import { drawPlayerCar, rr } from "../primitives"
 import { clamp } from "../../math"
 import { biomeById, proximoBioma } from "../../world/biomes"
+import { HORA_NOME, proximaHora } from "../../world/clock"
+import { proximoClima } from "../../world/weather"
 import { driveLabel } from "../../physics/traction"
 
 export function renderMenu(eng: AutoDashEngine) {
@@ -158,17 +160,19 @@ export function renderGarage(eng: AutoDashEngine) {
   pill(eng, `direção: ${eng.cfg.steering === "mouse" ? "mouse" : "teclado"} [Y]`, sx + 216, 258, 200, () => { eng.cfg.steering = eng.cfg.steering === "mouse" ? "keyboard" : "mouse"; save(); eng.audio.ui() })
   pill(eng, `câmbio: ${eng.cfg.transmission === "auto" ? "automático" : "sequencial (scroll)"} [T]`, sx, 294, 200, () => { eng.cfg.transmission = eng.cfg.transmission === "auto" ? "manual" : "auto"; save(); eng.audio.ui() })
   pill(eng, `bioma: ${biomeById(eng.cfg.biome).nome} [X]`, sx + 216, 294, 200, () => { eng.cfg.biome = proximoBioma(eng.cfg.biome); eng.bioma = biomeById(eng.cfg.biome); save(); eng.audio.ui() })
+  pill(eng, `horário: ${HORA_NOME[eng.cfg.hora]} [O]`, sx, 330, 200, () => { eng.cfg.hora = proximaHora(eng.cfg.hora); save(); eng.audio.ui() }, { h: 26 })
+  pill(eng, `clima: ${eng.cfg.clima} [K]`, sx + 216, 330, 200, () => { eng.cfg.clima = proximoClima(eng.cfg.clima); save(); eng.audio.ui() }, { h: 26 })
 
   // leaderboard global
   ctx.fillStyle = "rgba(253,224,71,0.9)"
   ctx.font = "bold 12px 'Space Grotesk', 'Segoe UI', sans-serif"
-  ctx.fillText("🌐 TOP 10 GLOBAL", sx, 348)
+  ctx.fillText("🌐 TOP 10 GLOBAL", sx, 374)
   ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillStyle = "rgba(248,250,252,0.7)"
-  if (eng.scores.length === 0) ctx.fillText("— ainda sem recordes, seja o primeiro —", sx, 368)
+  if (eng.scores.length === 0) ctx.fillText("— ainda sem recordes, seja o primeiro —", sx, 392)
   eng.scores.slice(0, 10).forEach((s, i) => {
     ctx.fillStyle = s.name === eng.cfg.pilotName ? "rgba(253,224,71,0.95)" : "rgba(248,250,252,0.7)"
-    ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, sx, 368 + i * 15)
+    ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, sx, 392 + i * 13.5)
   })
 }
 

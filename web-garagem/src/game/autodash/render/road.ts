@@ -11,7 +11,8 @@ import { drawTower } from "./backdrop"
 import { AutoDashEngine, PLAYER_Z, H, W, type Pickup, type Obstacle, type RoadSign, NEAR_SPRITE_MIN, RUMBLE, FADE_IN_START, FADE_IN_LEN } from "../engine"
 import { SEG_LEN, CAM_HEIGHT, ROAD_WIDTH, PAINTS, KMH2UPS, DRAW_DIST, CAM_DEPTH } from "../data"
 import { segAt } from "../world/track"
-import { shade, clamp, hexToRgb } from "../math"
+import { shade, clamp, hexToRgb, mixHex } from "../math"
+import { CLIMAS } from "../world/weather"
 import { type Traffic, KINDS } from "../traffic/types"
 import { poly } from "./primitives"
 import { drawRamalSeg } from "./ramal"
@@ -477,4 +478,20 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   fogG.addColorStop(1, `rgba(${fr[0]},${fr[1]},${fr[2]},0)`)
   ctx.fillStyle = fogG
   ctx.fillRect(0, maxY - 34, W, 154)
+
+  // visibilidade do clima (ADR 0013): neblina e chuva engolem o fundo da pista.
+  // Desenhado DEPOIS dos sprites de propósito: carro e obstáculo distantes só
+  // aparecem quando chegam mais perto — é o efeito de jogo, não só o visual.
+  const fogK = 1 - CLIMAS[eng.clima].visib
+  if (fogK > 0.01) {
+    const fc = hexToRgb(mixHex(fogColor, amb > 0.6 ? "#d5dae2" : "#545d70", 0.6))
+    const top = maxY - 60, alto = 90 + 560 * fogK
+    const peak = Math.min(0.92, 1.6 * fogK)
+    const g = ctx.createLinearGradient(0, top, 0, top + alto)
+    g.addColorStop(0, `rgba(${fc[0]},${fc[1]},${fc[2]},${peak * 0.7})`)
+    g.addColorStop(0.3, `rgba(${fc[0]},${fc[1]},${fc[2]},${peak})`)
+    g.addColorStop(1, `rgba(${fc[0]},${fc[1]},${fc[2]},0)`)
+    ctx.fillStyle = g
+    ctx.fillRect(0, top, W, alto)
+  }
 }

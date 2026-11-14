@@ -1,5 +1,7 @@
 // AutoDash — input/keyboard.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { biomeById, proximoBioma } from "../world/biomes"
+import { proximaHora } from "../world/clock"
+import { proximoClima } from "../world/weather"
 import { enterFromMenu } from "../flow"
 import { confirmName } from "../flow"
 import { toMenu } from "../flow"
@@ -81,6 +83,8 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "arrowdown") eng.raceVoltas = Math.max(1, eng.raceVoltas - 1)
       if (k === "arrowup") eng.raceVoltas = Math.min(9, eng.raceVoltas + 1)
       if (k === "p") mudarPista(eng, 1)
+      if (k === "o") { eng.cfg.horaCorrida = proximaHora(eng.cfg.horaCorrida); saveConfig(eng.cfg); eng.audio.ui() }
+      if (k === "k") { eng.cfg.climaCorrida = proximoClima(eng.cfg.climaCorrida); saveConfig(eng.cfg); eng.audio.ui() }
       if (k === "r") reconhecerPista(eng)
       if (k === "escape") toMenu(eng)
       break
@@ -123,6 +127,8 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "t") { eng.cfg.transmission = eng.cfg.transmission === "auto" ? "manual" : "auto"; eng.audio.ui() }
       if (k === "y") { eng.cfg.steering = eng.cfg.steering === "mouse" ? "keyboard" : "mouse"; eng.audio.ui() }
       if (k === "x") { eng.cfg.biome = proximoBioma(eng.cfg.biome); eng.bioma = biomeById(eng.cfg.biome); eng.audio.ui() }
+      if (k === "o") { eng.cfg.hora = proximaHora(eng.cfg.hora); eng.audio.ui() }
+      if (k === "k") { eng.cfg.clima = proximoClima(eng.cfg.clima); eng.audio.ui() }
       if (k === "n") { eng.nameBuf = eng.cfg.pilotName; eng.afterName = "garage"; eng.state = "nameentry"; eng.audio.ui() }
       if (["c", "v", "b", "r", "g", "t", "y", "x"].includes(k) || k.startsWith("arrow")) saveConfig(eng.cfg)
       if (k === "enter") startAndSave(eng)

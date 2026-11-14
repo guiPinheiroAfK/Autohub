@@ -1,4 +1,6 @@
 // AutoDash — constantes, specs dos carros e persistência local.
+import type { HoraModo } from "./world/clock"
+import type { ClimaModo } from "./world/weather"
 
 export const CANVAS_W = 960
 export const CANVAS_H = 540
@@ -185,6 +187,10 @@ export interface GameConfig {
   transmission: "auto" | "manual"
   steering: "keyboard" | "mouse"
   biome: string        // id do bioma do modo solo (world/biomes.ts)
+  hora: HoraModo       // horário do solo (ADR 0013): ciclo ou fixo
+  clima: ClimaModo     // clima do solo: sorteio ou fixo
+  horaCorrida: HoraModo   // horário da corrida com bots (padrão: noite neon)
+  climaCorrida: ClimaModo // clima da corrida com bots
   sound: boolean
   pilotName: string
 }
@@ -205,6 +211,10 @@ export function defaultConfig(): GameConfig {
     transmission: "auto",
     steering: "keyboard",
     biome: "cidade",
+    hora: "ciclo",
+    clima: "sorteio",
+    horaCorrida: "noite",
+    climaCorrida: "sorteio",
     sound: true,
     pilotName: "",
   }

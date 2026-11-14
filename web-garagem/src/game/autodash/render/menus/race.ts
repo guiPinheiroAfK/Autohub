@@ -10,6 +10,8 @@ import { correrComBots, abrirCodigoSala, reconhecerPista, sairReconhecimento } f
 import { ramalNoSeg, type Ramal } from "../../world/ramais"
 import { CIRCUITS, montarCircuito, type CircuitoMontado } from "../../world/circuits"
 import { biomeById } from "../../world/biomes"
+import { HORA_NOME, proximaHora } from "../../world/clock"
+import { proximoClima } from "../../world/weather"
 import { SEG_LEN, KMH2UPS } from "../../data"
 
 export function renderRaceLobby(eng: AutoDashEngine) {
@@ -75,6 +77,9 @@ export function renderRaceLobby(eng: AutoDashEngine) {
   pill(eng, "🏁 CORRER COM BOTS  [ENTER]", W / 2 - 160, 366, 320, () => correrComBots(eng), { primary: true, h: 44, font: 16 })
   pill(eng, "CRIAR SALA  [H]", W / 2 - 160, 416, 155, () => void eng.criarSalaOnline(), { h: 36, font: 13 })
   pill(eng, "ENTRAR  [J]", W / 2 + 5, 416, 155, () => abrirCodigoSala(eng), { h: 36, font: 13 })
+  // horário e clima da corrida com bots (ADR 0013). Sala online usa noite + sorteio.
+  pill(eng, `horário: ${HORA_NOME[eng.cfg.horaCorrida]} [O]`, W / 2 - 160, 486, 155, () => { eng.cfg.horaCorrida = proximaHora(eng.cfg.horaCorrida); saveConfig(eng.cfg); eng.audio.ui() }, { h: 26, font: 12 })
+  pill(eng, `clima: ${eng.cfg.climaCorrida} [K]`, W / 2 + 5, 486, 155, () => { eng.cfg.climaCorrida = proximoClima(eng.cfg.climaCorrida); saveConfig(eng.cfg); eng.audio.ui() }, { h: 26, font: 12 })
 
   ctx.textAlign = "center"
   ctx.fillStyle = "rgba(248,250,252,0.5)"

@@ -10,6 +10,8 @@ import { clamp, mix } from "./math"
 import { update } from "./sim/update"
 import { skyNow, renderBackdrop } from "./render/backdrop"
 import { type BiomeDef, biomeById } from "./world/biomes"
+import { type Clock, type HoraModo, newClock } from "./world/clock"
+import { type ClimaId, type ClimaModo, CLIMAS } from "./world/weather"
 import { type Ramal } from "./world/ramais"
 import { type TrechoInfo } from "./world/circuits"
 import { renderRoad } from "./render/road"
@@ -173,7 +175,14 @@ export class AutoDashEngine {
   // mais barato.
   glowCache = new Map<string, HTMLCanvasElement>()
   glowSprite: HTMLCanvasElement | null = null
-  raining = false
+  // relógio em ticks e clima (ADR 0013). `raining` deriva do clima.
+  clock: Clock = newClock("ciclo")
+  horaModo: HoraModo = "ciclo"
+  clima: ClimaId = "limpo"
+  climaModo: ClimaModo = "sorteio"
+  climaSeed = 0
+  climaS = 0 // segundos de simulação desde a largada: as janelas de clima contam daqui
+  get raining() { return CLIMAS[this.clima].chuva }
   // bioma da pista atual (ADR 0011). Definido em buildTrack, lido pelo render.
   bioma: BiomeDef = biomeById(undefined)
   // circuito fixo da corrida (ADR 0014). Vazios na pista procedural.
@@ -181,8 +190,6 @@ export class AutoDashEngine {
   noRamal = false // o jogador está no miolo de um ramal (para anunciar a entrada uma vez)
   ramais: Ramal[] = []
   trechos: TrechoInfo[] = []
-  rainT = 0
-  rainRollT = 0
   demoT = 0
 
   // input
