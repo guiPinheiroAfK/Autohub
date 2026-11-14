@@ -66,9 +66,14 @@ export class RaceNet {
   private t = 0
   private enviando = false
   private erro: string | null = null
+  private readonly code: string
+  private readonly meuId: string
 
-  // @ts-ignore
-  constructor(private code: string, private meuId: string) {}
+  // Campos explícitos: `erasableSyntaxOnly` proíbe parameter properties (`private x` no construtor).
+  constructor(code: string, meuId: string) {
+    this.code = code
+    this.meuId = meuId
+  }
 
   get ultimoErro() { return this.erro }
 
