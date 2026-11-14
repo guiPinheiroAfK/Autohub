@@ -25,9 +25,13 @@ export class EngineSynth {
   private rpm = 900
   private carga = 0
   private seed: number
+  private sr: number
+  private perfil: EngineSoundProfile
   st: EngineSynthState = { rpm: 900, carga: 0, ligado: true, corte: false }
 
-  constructor(private sr: number, private perfil: EngineSoundProfile, seed = 1) {
+  constructor(sr: number, perfil: EngineSoundProfile, seed = 1) {
+    this.sr = sr
+    this.perfil = perfil
     this.seed = seed >>> 0 || 1
   }
 

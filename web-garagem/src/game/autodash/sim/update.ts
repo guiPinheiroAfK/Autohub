@@ -7,6 +7,7 @@ import { segAt } from "../world/track"
 import { updateTraffic, wrapDz } from "../traffic/spawner"
 import { updateFx, emitSmoke, emitFlame, burst } from "../fx/particles"
 import { climaAtual, tickTempo } from "./clima"
+import { perfilDoCarro } from "../sound/profiles"
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
@@ -21,6 +22,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   const spec = CARS[eng.cfg.carIdx]
   const voice = AutoDashEngine.ENGINE_VOICE[spec.body] ?? [1, 1]
   eng.audio.setEngine(voice[0], voice[1])
+  eng.audio.setProfile(perfilDoCarro(spec.body))
 
   duelNet(eng, dt)
 
