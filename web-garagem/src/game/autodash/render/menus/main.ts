@@ -1,6 +1,7 @@
 // AutoDash — render/menus/main.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { enterFromMenu } from "../../flow"
-import { confirmName } from "../../flow"
+import { confirmName, trocarMotor } from "../../flow"
+import { perfilDoCarro } from "../../sound/profiles"
 import { AutoDashEngine, W, H } from "../../engine"
 import { pill, arrowBtn, glass } from "../../ui/widgets"
 import { abrirRaceLobby, startRace } from "../../modes/race"
@@ -77,6 +78,9 @@ export function renderGarage(eng: AutoDashEngine) {
   ctx.textAlign = "left"
 
   pill(eng, "← menu", 16, 16, 92, () => { eng.state = "menu" }, { h: 26, font: 12 })
+  // som do motor: o original do carro ou qualquer outro perfil (salvo por carro)
+  const motorNome = perfilDoCarro(spec.body, custom.motor).nome
+  pill(eng, `motor: ${motorNome}${custom.motor ? "" : " (original)"} [E]`, 70, 108, 340, () => trocarMotor(eng), { h: 24, font: 11 })
   arrowBtn(eng, 38, 206, -1, () => { eng.cfg.carIdx = (eng.cfg.carIdx + CARS.length - 1) % CARS.length; save(); eng.audio.ui() })
   arrowBtn(eng, 396, 206, 1, () => { eng.cfg.carIdx = (eng.cfg.carIdx + 1) % CARS.length; save(); eng.audio.ui() })
 

@@ -191,6 +191,7 @@ export class AutoDashEngine {
   ramais: Ramal[] = []
   trechos: TrechoInfo[] = []
   demoT = 0
+  revAmostraT = 0 // acelerada de amostra na garagem ao trocar o motor
 
   // input
   keys = new Set<string>()

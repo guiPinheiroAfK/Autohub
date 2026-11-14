@@ -56,7 +56,7 @@ export function drawGhost(eng: AutoDashEngine, x: number, y: number, w: number, 
   const spec = CARS[clamp(Math.floor(opp?.car ?? 0), 0, CARS.length - 1)]
   const custom: CarCustom = {
     paint: clamp(Math.floor(opp?.paint ?? 0), 0, PAINTS.length - 1),
-    stripe: 0, neon: 0, wheel: 0,
+    stripe: 0, neon: 0, wheel: 0, motor: "",
     wing: spec.body === "muscle" || spec.body === "ninja" ? 1 : 2,
   }
   ctx.save()

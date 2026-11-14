@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { EngineSynth, freqDisparo } from "../sound/engine-synth"
-import { ENGINE_PROFILES, MOTOR_DO_CARRO, perfilDoCarro } from "../sound/profiles"
+import { ENGINE_PROFILES, MOTOR_DO_CARRO, MOTOR_IDS, perfilDoCarro, proximoMotor } from "../sound/profiles"
 import { CARS } from "../data"
 
 const SR = 22050
@@ -88,6 +88,20 @@ describe("síntese de motor por pulsos", () => {
     const a = new Float32Array(SR / 4), b = new Float32Array(SR / 4)
     s.render(a, b)
     expect(rms(a)).toBe(0)
+  })
+
+  it("seletor da garagem: original → todos os perfis → original", () => {
+    let e = "", n = 0
+    const vistos = new Set<string>()
+    do { e = proximoMotor(e); if (e) vistos.add(e); n++ } while (e && n < 100)
+    expect(e).toBe("")
+    expect([...vistos]).toEqual(MOTOR_IDS)
+  })
+
+  it("a escolha do jogador vence o original; escolha inválida cai no original", () => {
+    expect(perfilDoCarro("muscle").id).toBe("v8-cruzado-ford")
+    expect(perfilDoCarro("muscle", "w16").id).toBe("w16")
+    expect(perfilDoCarro("muscle", "nao-existe").id).toBe("v8-cruzado-ford")
   })
 
   it("todo carro do jogo tem um motor com perfil", () => {

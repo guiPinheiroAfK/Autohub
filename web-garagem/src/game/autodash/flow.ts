@@ -2,6 +2,7 @@
 import { AutoDashEngine, PLAYER_Z } from "./engine"
 import { startDuelLobby } from "./modes/duel"
 import { saveConfig } from "./data"
+import { proximoMotor, REV_AMOSTRA_S } from "./sound/profiles"
 import { wrapDz } from "./traffic/spawner"
 
 export function enterFromMenu(eng: AutoDashEngine, dest: "garage" | "duellobby" = "garage") {
@@ -55,4 +56,13 @@ export function ensureAudio(eng: AutoDashEngine) {
     eng.audioInit = true
     eng.audio.setMuted(!eng.cfg.sound)
   }
+}
+
+/** Garagem: troca o som do motor do carro atual e dá uma acelerada de amostra. */
+export function trocarMotor(eng: AutoDashEngine) {
+  const c = eng.cfg.customs[eng.cfg.carIdx]
+  c.motor = proximoMotor(c.motor)
+  saveConfig(eng.cfg)
+  ensureAudio(eng)
+  eng.revAmostraT = REV_AMOSTRA_S
 }

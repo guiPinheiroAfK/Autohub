@@ -7,7 +7,7 @@ import { segAt } from "../world/track"
 import { updateTraffic, wrapDz } from "../traffic/spawner"
 import { updateFx, emitSmoke, emitFlame, burst } from "../fx/particles"
 import { climaAtual, tickTempo } from "./clima"
-import { perfilDoCarro } from "../sound/profiles"
+import { perfilDoCarro, REV_AMOSTRA_S } from "../sound/profiles"
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
@@ -22,7 +22,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   const spec = CARS[eng.cfg.carIdx]
   const voice = AutoDashEngine.ENGINE_VOICE[spec.body] ?? [1, 1]
   eng.audio.setEngine(voice[0], voice[1])
-  eng.audio.setProfile(perfilDoCarro(spec.body))
+  eng.audio.setProfile(perfilDoCarro(spec.body, eng.cfg.customs[eng.cfg.carIdx]?.motor))
 
   duelNet(eng, dt)
 
@@ -54,7 +54,8 @@ export function update(eng: AutoDashEngine, dt: number) {
     eng.bgShift += segAt(eng, eng.position + PLAYER_Z).curve * eng.speed * dt * 0.6
     updateTraffic(eng, dt, eng.position + PLAYER_Z, true)
     updateFx(eng, dt) // floaters/partículas sobrando da corrida ainda precisam morrer
-    eng.audio.engine(0, 0, false, false)
+    if (eng.state === "garage" && eng.revAmostraT > 0) acelerarAmostra(eng, dt)
+    else eng.audio.engine(0, 0, false, false)
     return
   }
   if (eng.state === "paused" || eng.state === "gameover" || eng.state === "nameentry" || eng.state === "duelspectate") {
@@ -391,4 +392,15 @@ export function update(eng: AutoDashEngine, dt: number) {
 
   updateFx(eng, dt)
   eng.audio.engine(eng.rpm, throttle, nitroActive, true)
+}
+
+// Acelerada de amostra na garagem: lenta, pé no fundo até ~6800 rpm e solta
+// (dá pra ouvir o ronco, o turbo aliviando e os estouros do motor escolhido).
+function acelerarAmostra(eng: AutoDashEngine, dt: number) {
+  eng.revAmostraT = Math.max(0, eng.revAmostraT - dt)
+  const e = REV_AMOSTRA_S - eng.revAmostraT
+  let rpm = RPM_IDLE, gas = 0
+  if (e > 0.15 && e < 0.8) { gas = 1; rpm = RPM_IDLE + (6800 - RPM_IDLE) * Math.pow((e - 0.15) / 0.65, 0.8) }
+  else if (e >= 0.8) rpm = RPM_IDLE + (6800 - RPM_IDLE) * Math.exp(-(e - 0.8) * 3.2)
+  eng.audio.engine(rpm, gas, false, true)
 }

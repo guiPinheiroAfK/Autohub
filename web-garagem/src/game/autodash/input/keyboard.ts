@@ -6,7 +6,7 @@ import { enterFromMenu } from "../flow"
 import { confirmName } from "../flow"
 import { toMenu } from "../flow"
 import { flashBeam } from "../flow"
-import { ensureAudio } from "../flow"
+import { ensureAudio, trocarMotor } from "../flow"
 import { startRace } from "../modes/race"
 import { abrirRaceLobby, reconhecerPista, sairReconhecimento } from "../modes/race"
 import { mudarPista } from "../render/menus/race"
@@ -128,6 +128,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "y") { eng.cfg.steering = eng.cfg.steering === "mouse" ? "keyboard" : "mouse"; eng.audio.ui() }
       if (k === "x") { eng.cfg.biome = proximoBioma(eng.cfg.biome); eng.bioma = biomeById(eng.cfg.biome); eng.audio.ui() }
       if (k === "o") { eng.cfg.hora = proximaHora(eng.cfg.hora); eng.audio.ui() }
+      if (k === "e") trocarMotor(eng)
       if (k === "k") { eng.cfg.clima = proximoClima(eng.cfg.clima); eng.audio.ui() }
       if (k === "n") { eng.nameBuf = eng.cfg.pilotName; eng.afterName = "garage"; eng.state = "nameentry"; eng.audio.ui() }
       if (["c", "v", "b", "r", "g", "t", "y", "x"].includes(k) || k.startsWith("arrow")) saveConfig(eng.cfg)

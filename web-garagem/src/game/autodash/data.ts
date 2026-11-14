@@ -168,6 +168,7 @@ export interface CarCustom {
   neon: number
   wheel: number
   wing: number
+  motor: string // som do motor (sound/profiles.ts); "" = o original do carro
 }
 
 function defaultCustom(i: number): CarCustom {
@@ -178,6 +179,7 @@ function defaultCustom(i: number): CarCustom {
     neon: 0,
     wheel: 0,
     wing: body === "muscle" || body === "ninja" ? 1 : 2,
+    motor: "",
   }
 }
 

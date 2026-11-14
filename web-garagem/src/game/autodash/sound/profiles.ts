@@ -74,6 +74,18 @@ export const ENGINE_PROFILES: Record<string, EngineSoundProfile> = {
     pulsoMs: 2.6, aspereza: 0.08, jitter: 0.05, boomHz: 90, boomDb: 6, coletorHz: 340, coletorDb: 4,
     lpBase: 900, lpPorRpm: 0.17, lpGas: 900, lpTeto: 2900, admissao: 0.35, inducao: "turbo", pops: 0.7,
   },
+  // 4 em linha 1.6 pequeno e aspirado: pulso mais fino, corpo mais agudo
+  "i4-pequeno": {
+    id: "i4-pequeno", nome: "4 em linha 1.6 aspirado", eventos: uniforme(4, () => 0, i => [1, 0.88, 1.06, 0.95][i]),
+    pulsoMs: 2.1, aspereza: 0.09, jitter: 0.07, boomHz: 110, boomDb: 4, coletorHz: 420, coletorDb: 3,
+    lpBase: 1000, lpPorRpm: 0.2, lpGas: 1000, lpTeto: 3100, admissao: 0.6, inducao: "aspirado", pops: 0.3,
+  },
+  // 6 em linha de corrida (borboletas individuais): admissão forte, mais aberto
+  "i6-corrida": {
+    id: "i6-corrida", nome: "6 em linha biturbo de corrida", eventos: uniforme(6, () => 0, i => [1, 0.96, 1.02, 0.97, 1.01, 0.95][i]),
+    pulsoMs: 2.2, aspereza: 0.07, jitter: 0.04, boomHz: 105, boomDb: 4, coletorHz: 480, coletorDb: 4,
+    lpBase: 1100, lpPorRpm: 0.22, lpGas: 1100, lpTeto: 3600, admissao: 1, inducao: "biturbo", pops: 0.55,
+  },
   i6: {
     id: "i6", nome: "6 em linha", eventos: uniforme(6, () => 0, i => [1, 0.95, 1.03, 0.97, 1.01, 0.96][i]),
     pulsoMs: 2.4, aspereza: 0.06, jitter: 0.04, boomHz: 100, boomDb: 5, coletorHz: 420, coletorDb: 3,
@@ -84,8 +96,19 @@ export const ENGINE_PROFILES: Record<string, EngineSoundProfile> = {
     pulsoMs: 2.3, aspereza: 0.07, jitter: 0.04, boomHz: 105, boomDb: 4, coletorHz: 520, coletorDb: 4,
     lpBase: 1100, lpPorRpm: 0.24, lpGas: 1200, lpTeto: 3800, admissao: 0.9, inducao: "aspirado", pops: 0.35,
   },
+  // V6 60°: cada bancada é um 3 em linha; ímpares de um lado, pares do outro
+  "boxer6-turbo": {
+    id: "boxer6-turbo", nome: "boxer 6 biturbo", eventos: uniforme(6, i => [0, 0.5, 0, 0.5, 0, 0.5][i], i => [1, 0.92, 1.02, 0.93, 1, 0.94][i]),
+    pulsoMs: 2.4, aspereza: 0.06, jitter: 0.04, boomHz: 95, boomDb: 6, coletorHz: 420, coletorDb: 3,
+    lpBase: 950, lpPorRpm: 0.17, lpGas: 900, lpTeto: 2900, admissao: 0.4, inducao: "biturbo", pops: 0.45,
+  },
   v6: {
-    id: "v6", nome: "V6 60° biturbo", eventos: uniforme(6, i => [0, 0.7, 0, 0.7, 0, 0.7][i], i => [1, 0.9, 1.04, 0.92, 1.01, 0.9][i]),
+    id: "v6", nome: "V6 60° aspirado", eventos: uniforme(6, i => [0, 0.7, 0, 0.7, 0, 0.7][i], i => [1, 0.9, 1.04, 0.92, 1.01, 0.9][i]),
+    pulsoMs: 2.5, aspereza: 0.08, jitter: 0.05, boomHz: 95, boomDb: 5, coletorHz: 420, coletorDb: 4,
+    lpBase: 1000, lpPorRpm: 0.21, lpGas: 1100, lpTeto: 3400, admissao: 0.8, inducao: "aspirado", pops: 0.4,
+  },
+  "v6-biturbo": {
+    id: "v6-biturbo", nome: "V6 60° biturbo", eventos: uniforme(6, i => [0, 0.7, 0, 0.7, 0, 0.7][i], i => [1, 0.9, 1.04, 0.92, 1.01, 0.9][i]),
     pulsoMs: 2.6, aspereza: 0.07, jitter: 0.05, boomHz: 90, boomDb: 6, coletorHz: 360, coletorDb: 3,
     lpBase: 900, lpPorRpm: 0.15, lpGas: 800, lpTeto: 2600, admissao: 0.3, inducao: "biturbo", pops: 0.6,
   },
@@ -94,6 +117,14 @@ export const ENGINE_PROFILES: Record<string, EngineSoundProfile> = {
     eventos: uniforme(8, i => V8_CRUZADO_BANCADA[i] ? 0.9 : 0, i => (V8_CRUZADO_BANCADA[i] ? 0.82 : 1.08) * [1, 0.95, 1.02, 0.97, 1, 0.94, 1.03, 0.96][i]),
     pulsoMs: 3.2, aspereza: 0.05, jitter: 0.07, boomHz: 70, boomDb: 9, coletorHz: 260, coletorDb: 4,
     lpBase: 700, lpPorRpm: 0.13, lpGas: 900, lpTeto: 2300, admissao: 0.3, inducao: "roots", pops: 0.5,
+  },
+  // V8 cruzado de ordem Ford (1-5-4-2-6-3-7-8; 1–4 na bancada direita):
+  // D E D D E D E E. Mesmo burble, outro "sotaque". Aspirado, cano mais aberto.
+  "v8-cruzado-ford": {
+    id: "v8-cruzado-ford", nome: "V8 cruzado aspirado, ordem Ford",
+    eventos: uniforme(8, i => [0, 1, 0, 0, 1, 0, 1, 1][i] ? 0.9 : 0, i => ([0, 1, 0, 0, 1, 0, 1, 1][i] ? 0.84 : 1.07) * [1, 0.96, 1.03, 0.95, 1.01, 0.97, 1.02, 0.94][i]),
+    pulsoMs: 3.3, aspereza: 0.06, jitter: 0.09, boomHz: 72, boomDb: 9, coletorHz: 250, coletorDb: 4,
+    lpBase: 700, lpPorRpm: 0.15, lpGas: 1000, lpTeto: 2600, admissao: 0.4, inducao: "aspirado", pops: 0.45,
   },
   "v8-plano": {
     id: "v8-plano", nome: "V8 virabrequim plano", eventos: uniforme(8, () => 0, i => [1, 0.97, 1.02, 0.98, 1, 0.97, 1.01, 0.98][i]),
@@ -124,23 +155,37 @@ export const ENGINE_PROFILES: Record<string, EngineSoundProfile> = {
   },
 }
 
-// Qual motor cada carro do jogo usa (por `body`). Carros fictícios: o motor é
-// escolha de som, não cópia de um carro real.
+// Motor original de cada carro (por `body`), seguindo a inspiração de cada um.
+// O jogador pode trocar na garagem (CarCustom.motor); "" = este original.
 export const MOTOR_DO_CARRO: Record<string, string> = {
-  gt: "v10",
-  muscle: "v8-cruzado",
-  ninja: "i4",
-  ghost: "w16",
-  zcoupe: "v6",
-  rotor: "rotativo",
-  apex: "i6",
-  kaiju: "i6",
-  sylva: "i4-turbo",
-  roadster: "i4",
-  alta: "i5",
-  flat6: "boxer6",
+  gt: "v10",                    // carro da casa, sem inspiração fixa
+  muscle: "v8-cruzado-ford",    // muscle 71: V8 cruzado aspirado
+  ninja: "i4",                  // 4 em linha de giro alto
+  ghost: "v8-plano",            // hiper de reta: V8 plano biturbo
+  zcoupe: "v6",                 // Z: V6 60° aspirado
+  rotor: "rotativo",            // FD: rotativo 2 rotores
+  apex: "i6",                   // A80: 6 em linha biturbo
+  kaiju: "i6-corrida",          // R32: 6 em linha biturbo com borboletas individuais
+  sylva: "i4-turbo",            // S15: 4 em linha turbo
+  roadster: "i4-pequeno",       // MK1: 4 em linha 1.6 aspirado
+  alta: "i4",                   // IS: 4 em linha aspirado
+  flat6: "boxer6-turbo",        // 992: boxer 6 biturbo
 }
 
-export function perfilDoCarro(body: string): EngineSoundProfile {
+// duração da acelerada de amostra na garagem (s)
+export const REV_AMOSTRA_S = 1.9
+
+// Ordem do seletor da garagem (todos os perfis)
+export const MOTOR_IDS = Object.keys(ENGINE_PROFILES)
+
+export function perfilDoCarro(body: string, escolha = ""): EngineSoundProfile {
+  if (escolha && ENGINE_PROFILES[escolha]) return ENGINE_PROFILES[escolha]
   return ENGINE_PROFILES[MOTOR_DO_CARRO[body] ?? "i4"] ?? ENGINE_PROFILES.i4
+}
+
+/** Próxima escolha no seletor: original → cada perfil → original. */
+export function proximoMotor(escolha: string): string {
+  if (!escolha) return MOTOR_IDS[0]
+  const i = MOTOR_IDS.indexOf(escolha)
+  return i < 0 || i === MOTOR_IDS.length - 1 ? "" : MOTOR_IDS[i + 1]
 }
