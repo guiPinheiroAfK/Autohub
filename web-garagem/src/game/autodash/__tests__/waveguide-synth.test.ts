@@ -27,8 +27,10 @@ describe("motor por guias de onda (modelo físico)", () => {
     for (const id of Object.keys(ENGINE_PROFILES)) {
       for (const rpm of [800, 4000, 9000]) {
         const x = render(id, rpm, 1, 0.5)
-        let pico = 0
-        for (const v of x) { expect(Number.isFinite(v)).toBe(true); pico = Math.max(pico, Math.abs(v)) }
+        // um expect por amostra deixava o teste lento (centenas de milhares de chamadas)
+        let pico = 0, ruins = 0
+        for (const v of x) { if (!Number.isFinite(v)) ruins++; pico = Math.max(pico, Math.abs(v)) }
+        expect(ruins, `${id} @${rpm}`).toBe(0)
         expect(rms(x), `${id} @${rpm}`).toBeGreaterThan(1e-4)
         expect(pico, `${id} @${rpm}`).toBeLessThan(5)
       }
