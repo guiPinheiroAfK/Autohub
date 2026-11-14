@@ -1,6 +1,6 @@
 # ADR 0013 — Relógio em ticks e clima do AutoDash
 
-**Status:** Proposto (Fase 0 do ciclo v2). Implementação na Fase 4.
+**Status:** Aceito. Implementado na Fase 4 (commits fb780c5, d8efd4a). Janela de clima ficou em 1 minuto.
 
 ## Contexto
 O ciclo de dia atual (`SKY_KEYS`, só no solo) anda com o tempo real. O usuário quer um relógio discreto, estilo Minecraft: o tempo do jogo avança em ticks, pausa com o jogo, e pode ter um modo personalizado. O clima precisa ser escolhido por bioma ou por corrida, e precisa alterar a física (ADR 0012).
