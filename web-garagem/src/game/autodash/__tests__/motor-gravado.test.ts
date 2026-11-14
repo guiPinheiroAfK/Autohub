@@ -136,6 +136,20 @@ describe("motor gravado (grãos síncronos ao giro)", () => {
     expect(f).toBeLessThan(0.65)
   })
 
+  it("giro nos extremos (parado, lenta de motor grande, 9500 e limitador): finito e sem estouro", () => {
+    const m = new MotorGravado(SR)
+    m.setBanco(bancoSintetico())
+    for (const [rpm, corte] of [[0, false], [300, false], [600, false], [9500, false], [9500, true]] as const) {
+      m.st.corte = corte
+      const x = tocar(m, rpm, 1, 0.5)
+      let pico = 0, ruins = 0
+      for (const v of x) { if (!Number.isFinite(v)) ruins++; pico = Math.max(pico, Math.abs(v)) }
+      expect(ruins, `${rpm}`).toBe(0)
+      expect(pico, `${rpm}`).toBeGreaterThan(0)
+      expect(pico, `${rpm}`).toBeLessThan(1.5) // pulsos de 0,5: duas janelas somam 1
+    }
+  })
+
   it("desligado, some", () => {
     const m = new MotorGravado(SR)
     m.setBanco(bancoSintetico())
