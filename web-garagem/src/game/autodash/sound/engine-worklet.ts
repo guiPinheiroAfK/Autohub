@@ -2,7 +2,7 @@
 // sintetizador de motor (guias de onda) na thread de áudio (sem travar o jogo). Carregado por audio.ts via
 // `?worker&url`; recebe giro, carga e perfil por mensagem a cada quadro.
 
-import { type EngineSynthState } from "./engine-synth"
+import { type EngineSynthState, estadoFinito } from "./engine-synth"
 import { WaveguideSynth } from "./waveguide-synth"
 import { ENGINE_PROFILES } from "./profiles"
 import { MotorGravado, type BancoGraos } from "./motor-gravado"
@@ -29,7 +29,7 @@ class MotorProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (e: MessageEvent<Msg>) => {
       const m = e.data
       if (m.perfil && ENGINE_PROFILES[m.perfil]) this.synth.setPerfil(ENGINE_PROFILES[m.perfil])
-      if (m.st) { Object.assign(this.synth.st, m.st); Object.assign(this.gravado.st, m.st) }
+      if (m.st) { const st = estadoFinito(m.st); Object.assign(this.synth.st, st); Object.assign(this.gravado.st, st) }
       if (m.banco) this.gravado.setBanco(m.banco)
       if (m.gravado !== undefined) this.usaGravado = m.gravado
     }

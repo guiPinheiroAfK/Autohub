@@ -18,6 +18,17 @@ export interface EngineSynthState {
   corte: boolean   // limitador: corta parte das ignições
 }
 
+/**
+ * Descarta giro/carga não finitos de uma mensagem de estado. Os sintetizadores
+ * suavizam giro e carga (x += (alvo − x)·k): um único NaN fica preso para
+ * sempre, e o NaN na saída trava também os filtros do WebAudio depois dele.
+ */
+export function estadoFinito(st: Partial<EngineSynthState>): Partial<EngineSynthState> {
+  if (st.rpm !== undefined && !Number.isFinite(st.rpm)) delete st.rpm
+  if (st.carga !== undefined && !Number.isFinite(st.carga)) delete st.carga
+  return st
+}
+
 export class EngineSynth {
   private ang = 0                  // grau no ciclo de 720°
   private prox = 0                 // índice do próximo evento

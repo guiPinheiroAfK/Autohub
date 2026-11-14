@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { EngineSynth, freqDisparo } from "../sound/engine-synth"
+import { EngineSynth, freqDisparo, estadoFinito } from "../sound/engine-synth"
 import { ENGINE_PROFILES, MOTOR_DO_CARRO, MOTOR_IDS, perfilDoCarro, proximoMotor } from "../sound/profiles"
 import { CARS } from "../data"
 
@@ -109,5 +109,20 @@ describe("síntese de motor por pulsos", () => {
       expect(perfilDoCarro(c.body).eventos.length).toBeGreaterThan(0)
       if (MOTOR_DO_CARRO[c.body]) expect(ENGINE_PROFILES[MOTOR_DO_CARRO[c.body]]).toBeDefined()
     }
+  })
+})
+
+describe("estado vindo do jogo", () => {
+  it("giro ou carga não finitos são ignorados (não envenenam a suavização)", () => {
+    expect(estadoFinito({ rpm: NaN, carga: Infinity, ligado: true, corte: false })).toEqual({ ligado: true, corte: false })
+    expect(estadoFinito({ rpm: 3000, carga: 0.5 })).toEqual({ rpm: 3000, carga: 0.5 })
+    // o mesmo caminho do worklet: estado limpo aplicado num sintetizador já tocando
+    const s = new EngineSynth(SR, ENGINE_PROFILES.i4, 1)
+    s.st.rpm = 3000; s.st.carga = 1
+    const a = new Float32Array(2048), b = new Float32Array(2048)
+    s.render(a, b)
+    Object.assign(s.st, estadoFinito({ rpm: NaN, carga: NaN }))
+    s.render(a, b)
+    expect(a.every(Number.isFinite)).toBe(true)
   })
 })
