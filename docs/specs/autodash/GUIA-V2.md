@@ -128,6 +128,9 @@ Origem: QA respondido pelo usuário em 2026-11-13.
 - D24 (13/11): Custo zero continua como meta. Se não der, planejar hospedagem paga no futuro.
 - D25 (13/11): Prazo informal: entregar o máximo até 17/11. Não é prazo fixo.
 
+**Partida do motor**
+- D27 (14/11): A partida do motor (chave virando, motor pegando) é só animação e **não conta tempo**. `PARTIDA_S = 1,3 s` em `sim/partida.ts`, na lógica, nunca no áudio (os testes rodam sem áudio). `eng.partidaT` conta para trás dentro do estado `countdown`: `countT` fica em 0, o semáforo não acende (o HUD diz "ligando…"), o pé não sobe giro (giro vai de ~22% da lenta até a lenta na pegada), a câmera dá um tranco, e o ronco só entra quando a etapa acaba. Pontuação, km, combustível e polícia já não rodam em `countdown`. Vale para solo, corrida com bots, corrida online e os modos de teste (`testeMotor`, `testeFase5`, `testePolicia`). **O duelo fica de fora** (`partidaT = 0`): `modes/duel.ts` calcula `countT` pelo relógio do servidor (`3,3 − restante`) e os dois lados precisam ver o verde no mesmo instante; encaixar a partida dentro desses 3,3 s tiraria o início do semáforo e o duelo já reserva esse tempo. No duelo o arranque gravado toca como antes. Na corrida online a sessão (`RaceSession`) só anda depois do verde, então a partida não mexe nela.
+
 **Formato de trabalho**
 - D26 (13/11): Este arquivo é o guia. O prompt apenas aponta para ele.
 
@@ -401,4 +404,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-14 | 32d23eb, 082980c | FOV dinâmico (dolly zoom, só desenho; `CAM_DEPTH`/`PLAYER_Z` iguais), desligável na garagem. | atualizado no replay solo e na corrida com bots (passam de 150 km/h). |
 | 2026-11-14 | f733ffd, fb74fe0 | Torque do motor no HUD (mini curva e ponto no giro). | atualizado nos 3 cenários que dirigem. |
 | 2026-11-14 | (merge da Fase 7) | Fases 5, 6 e 7 juntas. [H] e [P] da garagem ficam com a Fase 7 (aba estética e prévia); teste da Fase 5 vai para [J] e teste de polícia para [L]. O [F] não colide (farol na corrida, cor da fumaça na garagem). | atualizado (solo e cenários) pela soma das três fases. |
+| 2026-11-14 | (partida) | Partida do motor como animação de 1,3 s antes do semáforo (D27): `countT` parado, sem luzes, sem gás, sem contagem de nada; HUD "ligando…" e tranco da câmera; ronco entra no fim. Duelo fica de fora. Teste em `__tests__/partida.test.ts`. | atualizado nos 3 cenários que largam (solo, corrida com bots, clique): a largada atrasa ~1,3 s. Duelo não mudou. |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |
