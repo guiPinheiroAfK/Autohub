@@ -42,9 +42,11 @@ export const MOTORES: Record<string, MotorFisico> = {
     turbo: { spool: 1500, cheio: 2600, lag: 0.3, peso: 0.35, apito: [1800, 7500], desce: 1.1 } },
   // 4 em linha de giro alto com comando variável: fraco embaixo, acorda depois de 5800
   i4: { potencia: 240, resposta: 0.05, idle: 900, redline: 8600, corte: 8800, curva: [[900, 0.22], [3000, 0.48], [5000, 0.62], [5800, 0.82], [7500, 1], [8800, 0.9]], solto: [10, 7], corteDuro: true },
-  // 4 em linha 2.0 turbo de rua: atraso até ~3500
-  "i4-turbo": { potencia: 250, resposta: 0.07, idle: 850, redline: 7200, corte: 7500, curva: [[850, 0.25], [2500, 0.55], [4000, 0.95], [6400, 1], [7500, 0.82]], solto: [6, 5], corteDuro: true,
-    turbo: { spool: 2600, cheio: 4000, lag: 0.45, peso: 0.4, apito: [1400, 6000] } },
+  // 4 em linha 2.0 turbo de rua (SR20DET): enche em ~3500 e empurra forte no
+  // meio. Playtest 15/11: "muito fraco, parece um Onix turbo" — o atraso (0,45 s,
+  // cheio só em 4000) e o peso do boost (0,4) deixavam o S15 o mais lento dos esportivos
+  "i4-turbo": { potencia: 250, resposta: 0.07, idle: 850, redline: 7200, corte: 7500, curva: [[850, 0.25], [2500, 0.6], [3600, 0.97], [6400, 1], [7500, 0.85]], solto: [6, 5], corteDuro: true,
+    turbo: { spool: 2300, cheio: 3500, lag: 0.33, peso: 0.3, apito: [1400, 6000] } },
   // 1.6 aspirado pequeno: linear, gira solto, pouca força
   "i4-pequeno": { potencia: 115, resposta: 0.05, idle: 850, redline: 7000, corte: 7200, curva: [[850, 0.3], [3000, 0.6], [5000, 0.85], [6500, 1], [7200, 0.92]], solto: [8, 6] },
   // boxer 2.5 turbo: atraso e depois uma pancada no meio

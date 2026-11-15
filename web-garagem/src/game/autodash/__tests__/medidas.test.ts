@@ -92,7 +92,10 @@ const REFERENCIA: Record<string, [number, number, number, number, number, number
   rotor: [3.733, 12.250, 26.717, 43.200, 226.9, 243.9],
   apex: [3.133, 9.750, 18.000, 32.650, 259.8, 262.0],
   kaiju: [3.367, 10.417, 20.833, 29.417, 240.0, 240.0],
-  sylva: [3.933, 13.617, 30.667, 48.533, 214.6, 234.5],
+  // 15/11: o S15 era o esportivo mais lento (0–200 em 30,7 s; playtest: "parece
+  // um Onix turbo"). Turbo mais esperto (cheio em 3500, atraso 0,33, peso 0,3) e
+  // power 45 → 50: agora entre o GT e o Z.
+  sylva: [3.517, 11.900, 24.600, 36.683, 231.4, 238.0],
   roadster: [4.817, 18.100, NaN, NaN, 180.1, 190.4], // não chega a 200 nem a 95% de 220 em 60 s
   alta: [3.283, 10.433, 20.483, 29.633, 242.0, 242.0],
   flat6: [3.150, 9.983, 19.400, 36.833, 250.0, 258.0],

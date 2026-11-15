@@ -113,7 +113,7 @@ export const CARS: CarSpec[] = [
   },
   {
     id: "sylva", name: "SYLVA S15", body: "sylva",
-    power: 45, grip: 0.80, topSpeed: 238, width: 0.23, shiftMs: 185,
+    power: 50, grip: 0.80, topSpeed: 238, width: 0.23, shiftMs: 185,
     desc: "Estreito e ágil. Costura onde os outros não cabem.",
   },
   {

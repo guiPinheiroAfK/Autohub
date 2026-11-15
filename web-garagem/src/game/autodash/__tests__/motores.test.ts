@@ -121,7 +121,7 @@ describe("motores reais (faixa de giro e curva de força)", () => {
     const m = MOTORES["i4-turbo"]
     expect(fatorSpool(m)).toBe(1)                       // sem giro: como antes
     expect(fatorSpool(m, m.turbo!.cheio)).toBe(1)
-    expect(fatorSpool(m, 5000)).toBeCloseTo(0.8)        // 5000 rpm: 20% mais rápido
+    expect(fatorSpool(m, m.turbo!.cheio * 1.25)).toBeCloseTo(0.8) // 25% acima do cheio: 20% mais rápido
     expect(fatorSpool(m, 9000)).toBe(0.6)               // teto: 40% mais rápido
     expect(fatorSpool(m, 1000)).toBe(2)                 // embaixo: no máximo 2× mais lento
     expect(fatorSpool(MOTORES.v10, 8000)).toBe(1)       // aspirado: nada muda
