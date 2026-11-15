@@ -17,6 +17,7 @@ import { duelJoin } from "../modes/duel"
 import { AutoDashEngine, H } from "../engine"
 import { saveConfig, CARS, PAINTS, STRIPES, NEONS, WHEELS, WINGS } from "../data"
 import { shiftUp, shiftDown } from "../physics/gearbox"
+import { teclaDebugEvento, iniciarTesteFase5 } from "../world/debug-eventos"
 
 export function toggleMute(eng: AutoDashEngine) {
   eng.cfg.sound = !eng.cfg.sound
@@ -132,9 +133,11 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "k") { eng.cfg.clima = proximoClima(eng.cfg.clima); eng.audio.ui() }
       if (k === "n") { eng.nameBuf = eng.cfg.pilotName; eng.afterName = "garage"; eng.state = "nameentry"; eng.audio.ui() }
       if (["c", "v", "b", "r", "g", "t", "y", "x"].includes(k) || k.startsWith("arrow")) saveConfig(eng.cfg)
-      if (k === "enter") { eng.testeMotor = false; startAndSave(eng) }
+      if (k === "enter") { eng.testeMotor = false; eng.testeFase5 = false; startAndSave(eng) }
       // teste de motor: pista vazia, sem trânsito; [ e ] (ou , e .) trocam o motor andando
-      if (k === "z") { eng.testeMotor = true; startAndSave(eng) }
+      if (k === "z") { eng.testeMotor = true; eng.testeFase5 = false; startAndSave(eng) }
+      // teste da Fase 5: tanque baixo (posto à frente) e convite de racha em 4 s
+      if (k === "h") iniciarTesteFase5(eng)
       if (k === "escape") eng.state = "menu"
       break
     }
@@ -154,6 +157,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "f") flashBeam(eng)
       if (eng.testeMotor && (k === "]" || k === ".")) trocarMotorTeste(eng, 1)
       if (eng.testeMotor && (k === "[" || k === ",")) trocarMotorTeste(eng, -1)
+      teclaDebugEvento(eng, k) // 1–6: eventos da Fase 5 (world/debug-eventos.ts)
       // (as teclas de debug de playtest — O perseguição, L nível, B/V/J/K/I/U
       // eventos — foram removidas: tudo isso agora é sorteado pelo próprio
       // jogo em updateEventSpawner)

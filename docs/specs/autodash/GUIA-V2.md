@@ -31,7 +31,7 @@ Prioridade: fazer tudo em fases, uma por vez, com parada para o usuário testar.
 - Custo zero de infra (ADR 0004). Netlify + Neon free tier.
 - Gerenciador de pacotes: **npm** em `web-garagem/` (não criar `bun.lock`).
 - Migrations já aplicadas no Neon não são editadas; mudança de schema vira nova versão.
-- Teclas de debug (`O L B V J K I U`) ficam ativas: são ferramenta de teste do usuário.
+- Teclas de debug (`O L B V J K I U`) ficam ativas: são ferramenta de teste do usuário. Fase 5 somou `1`–`6` no solo (posto, racha, obra, comboio, óleo, reserva); no dev server elas também expõem o engine em `globalThis.__autodash`.
 
 ### Verificação obrigatória em cada commit
 ```bash
@@ -77,6 +77,7 @@ API: `api/src/routes/autodash.ts`. Tabelas: `autodash_scores`, `autodash_rooms`,
 - **Clima:** chuva (`eng.raining`) só no modo solo. Sem neve, neblina ou efeito na física.
 - **Ciclo de dia:** só no solo (`SKY_KEYS`).
 - **Eventos (solo):** ponte, viaduto, obstáculos, mão dupla, blitz, radar (`speedtrap`), perseguição policial.
+- **Fase 5 (solo):** combustível e posto (`world/combustivel.ts`, `world/posto.ts`), racha (`world/racha.ts`, `modes/racha.ts`), obra, comboio e óleo (`world/obra.ts`, `world/comboio.ts`, `world/oleo.ts`), caminhão que troca de faixa (`traffic/driver.ts`). Vácuo (`sim/vacuo.ts`) vale no solo e na corrida. Desenho em `render/eventos.ts`.
 - **Cenário:** um tema urbano (árvores, postes, outdoors, prédios em `render/backdrop.ts`). Sem biomas.
 - **Carros:** lista pequena em `CARS`. Customização estética: pintura, faixa, neon, rodas, asa.
 - **Tração:** FWD, RWD e AWD com divisão e pneu, em `physics/traction.ts` (Fase 2). Padrão continua RWD com pneu padrão.
@@ -137,6 +138,11 @@ Origem: QA respondido pelo usuário em 2026-11-13.
 - **Drift:** pontuação, critérios e como entra nas rodadas.
 - **Biomas:** lista final e ordem de implementação além de cidade e costa.
 - **Modelo de física:** quantos parâmetros por pneu e por carro (ver ADR 0012 quando existir).
+- **Combustível acabar (Fase 5):** fim de corrida ou só perda de potência? **Escolha provisória: só perda de potência** (pane seca: motor engasga, posto garantido logo à frente). Motivo: D19 pede que o combustível não quebre as rodadas infinitas, e D6 diz que punição reduz velocidade, nunca encerra.
+- **Combustível na corrida e no duelo (Fase 5):** **provisório: só no solo.** A corrida tem duração fixa em voltas e o duelo precisa dos dois carros iguais; posto na corrida exige decidir pit stop.
+- **Preço do combustível (Fase 5):** **provisório: grátis**, custa só o tempo de passar a 70 km/h pela faixa do posto. Dinheiro segue em aberto (acima).
+- **Recompensa do racha (Fase 5):** **provisório: reputação** (um contador salvo na config) mais pontos da rodada. Ideia 10 da seção 9: reputação, não moeda. O que a reputação libera fica para a decisão de progressão (D17).
+- **Aceitar o racha (Fase 5):** **provisório: piscar o farol [F]**, que já é o gesto de "bora" na rua. No toque ainda não há botão de farol (pendente).
 
 ## 8. Fases
 
@@ -191,7 +197,50 @@ Decisões no [ADR 0013](../../adr/0013-autodash-relogio-em-ticks.md). Começada 
 - [x] Garagem (solo) e lobby (corrida com bots): horário [O] e clima [K]. Sala online e duelo usam o padrão (noite + sorteio / ciclo + sorteio).
 - [x] HUD (solo e corrida) com relógio e ícone do clima. 11 testes (`__tests__/clock-weather.test.ts`).
 - Pendente / não verificado: neve (sem bioma neve); velocidade do relógio `custom` (×0,5, ×2) existe no dado mas não tem botão; o ciclo agora leva 20 min (antes 10 km, ~3 min a 200 km/h) — calibrar no playtest; render conferido só por sondas de pixel (aba do navegador oculta), não por screenshot.
-### Fase 5 — Eventos novos (racha, combustível) — `pendente`
+### Fase 5 — Eventos novos (racha, combustível) — `implementada` (hashes no log; aguardando playtest)
+Começada em paralelo à Fase 4 em playtest, por pedido do usuário (Fases 5, 6 e 7 em sessões separadas). Eventos de tráfego vêm da pesquisa [visual-e-desafio.md](../../pesquisa/visual-e-desafio.md), seção 4.5. Dados em `world/` como tabela; lógica fora de `engine.ts` (o engine só ganha campos e tipos).
+
+Checklist:
+- [x] **Sorteio próprio dos eventos novos** (`eng.rngEv`, mulberry32 da seed do clima). Os eventos antigos continuam no `Math.random` (trocar muda o golden do solo sem ganho; fica pendente).
+- [x] **Combustível (só solo):** tanque por carro em `world/combustivel.ts` (tabela). Consumo cresce com o pé, com o giro (fração da faixa do motor) e com o nitro: trocar cedo economiza, o que dá lógica ao câmbio (D19). HUD com barra "COMB" ao lado do NOS, aviso de reserva e distância até o posto.
+- [x] **Posto de combustível:** aparece quando o tanque passa de 45% para baixo (e de novo se você passou reto e caiu para 20%). É uma "reta com posto": o trecho perde a curva (como a ponte) e ganha uma faixa de acesso à direita, feita com o **ramal paralelo** do ADR 0014 (`ganho = 1`). Abastece andando a até 70 km/h no miolo da faixa (+20% do tanque por segundo). Placas "POSTO 2 km / 1 km / ENTRADA". O posto é zona: não empilha com outro evento (alívio, pesquisa 4.2).
+- [x] **Pane seca:** tanque vazio não encerra a rodada. O motor engasga (pé efetivo pulsando entre 0 e 35%) e um posto é garantido logo à frente.
+- [x] **Convite de racha (D18, ideia 10):** depois de ~45 s de solo, um desafiante (tabela `DESAFIANTES` em `world/racha.ts`) encosta na faixa ao lado com pisca-alerta e "chama na seta". Piscar o farol [F] aceita. A disputa é um sprint de 2,5 km; ganhar vale **reputação** (+1, salva na config, sem dinheiro) e pontos. Ignorar por 7 s recusa: ele buzina e vai embora. Encostar no desafiante é encostão (empurra, perde velocidade), não batida fatal.
+- [x] **E7 rival que fecha (no racha):** com você até ~8 carros atrás, numa faixa vizinha, ele "olha" (luz de freio e balanço de 0,03) e fecha a sua linha 0,5 s depois, no máximo 1 vez a cada 10 s. Reage com atraso: a finta funciona. Nunca entra na faixa se você está colado (a trava do `applyMovement` continua valendo).
+- [x] **E9 vácuo (solo e corrida):** colado atrás de um veículo rápido (mesma faixa, até ~5 carros) o carro ganha até +4% de velocidade máxima. Ao sair do vácuo, "estilingue" de 1 s. HUD com ícone "VÁCUO" e linhas de ar. Vale para trânsito, desafiante do racha e rivais da corrida.
+- [x] **E1 caminhão trocando de faixa:** caminhão passa a trocar de faixa às vezes, com seta acesa ≥ 1,2 s e "ensaio" de 0,05 de `offset` antes de ir. Nunca entra na sua faixa se você chegaria nele em menos de 1,2 s.
+- [x] **E4 obra com estreitamento:** evento novo no sorteio. Duas faixas de um lado fecham por ~3 s a 200 km/h, com seta luminosa piscando (paleta de perigo da pesquisa 1.8), cones na divisa e cavaletes no trecho fechado. O trânsito migra para o lado livre.
+- [x] **E6 comboio com fresta:** três veículos lado a lado no mesmo ritmo, uma faixa livre. A fresta anda: o vizinho dá seta 1,2 s e fecha, abrindo outra. Passar pela fresta vale bônus ×3 de quase-batida. Depois de ~16 s o comboio se desfaz.
+- [x] **E15 óleo após acidente:** carro batido no acostamento com pisca-alerta e mancha de óleo na faixa ao lado. Em cima da mancha a aderência cai para 35% por 0,7 s (escorrega, sem morte).
+- [x] Teclas de debug de playtest (só no solo, correndo): **1** posto, **2** convite de racha, **3** obra, **4** comboio, **5** óleo, **6** tanque na reserva.
+- [x] Testes unitários das funções puras (consumo, abastecimento, vácuo).
+
+Critério de aceite: build, lint e testes verdes. Golden muda só em commits próprios (HUD do combustível; caminhão e vácuo mudam o trânsito e a corrida). No navegador: o posto aparece e abastece; a pane seca não encerra a rodada; o convite de racha aparece, aceita com [F] e termina com resultado; obra, comboio e óleo aparecem e se leem a tempo; vácuo aparece no HUD atrás de um carro.
+
+**Como testar** (solo, `http://localhost:5173/autodash`):
+1. Menu → [ENTER] → garagem → **[H]** ("testar racha + posto"). Largada normal com o tanque em 40%.
+2. Logo depois do verde: medidor **COMB** ao lado do NOS e "⛽ … m" acima dele; placas azuis com bomba (POSTO, À DIREITA, ENTRADA).
+3. Pegue a faixa da direita que descola da pista e passe pela cobertura "POSTO 24h" a **até 70 km/h**: "ABASTECENDO", a barra sobe ~20% por segundo. Acima de 70 aparece "reduza pra 70".
+4. ~4 s depois do verde (acima de 70 km/h) um desafiante encosta ao lado com **pisca-alerta** e o painel "te chamou pro racha". Pisque o farol **[F]** em até 7 s para aceitar (ou ignore: ele buzina e vai embora).
+5. Na disputa: painel com "faltam … m" e a vantagem (▲ azul na frente, ▼ laranja atrás). Fique atrás dele numa faixa vizinha: ele acende o freio, balança e **fecha a sua faixa** 0,5 s depois. Finta (troca de lado) funciona. Encostar empurra, não mata.
+6. Fim: placa quadriculada CHEGADA; vencer mostra "+1 REP" (a reputação fica salva na config).
+7. Cole atrás de qualquer carro rápido na mesma faixa: "💨 VÁCUO +n%" acima do carro e linhas de ar; ao sair, "ESTILINGUE".
+8. Durante o solo, teclas **3** obra, **4** comboio, **5** óleo, **6** tanque na reserva, **1** posto, **2** racha. Observe: seta âmbar piscando e trânsito saindo do lado fechado (obra); fresta que anda com seta de 1,3 s e "FRESTA!" ao passar (comboio); carro batido com pisca-alerta e "ÓLEO!" com o carro dançando (óleo); caminhões dando seta longa e "ensaiando" antes de trocar de faixa.
+9. Pane seca: tecla 6, depois passe reto pelo posto. Com o tanque a zero o carro engasga, não acaba a rodada, e outro posto abre.
+
+Como ficou (diferenças do plano):
+- Vácuo passa da máxima porque `sim/update.ts` entrega ao passo longitudinal um `topSpeed` até 4% maior (`specComVacuo`); `sim/longitudinal.ts` não mudou. Medido em reta atrás de um caminhão (força 0,9): 246 → 253 km/h em 12 s. O teto desce em 1 s ao sair (estilingue), sem degrau.
+- Desafiante do racha acelera ~10–13 km/h/s (o carro padrão faz ~8–12 entre 120 e 200). O primeiro valor (30–40) deixava o jogador para trás sem chance.
+- Comboio fica 18 s (não 16) e a fresta só anda se a faixa destino estiver livre: com trânsito em volta ela anda pouco.
+- Posto: placas "POSTO / À DIREITA / ENTRADA" (sem km: as distâncias do jogo não são km reais); o HUD mostra os metros até a bomba pela escala do hodômetro.
+
+Pendente / não verificado:
+- Playtest de verdade: tudo foi conferido no navegador avançando quadros por script (o painel do navegador estava oculto e o `requestAnimationFrame` parava), com teclas de debug e posições forçadas. Não foi jogado com teclado em tempo real; som não foi ouvido.
+- Números de palpite a calibrar: consumo (tanque de ~4 min de pé no fundo), 20% por segundo na bomba, ritmo e `fecha` dos desafiantes, chance do caminhão (1 troca a cada ~11 s por caminhão), aderência no óleo (35%), força do vácuo.
+- Eventos antigos continuam no `Math.random` (passar para `eng.rngEv` muda o golden do solo sem ganho de jogo agora).
+- Achado fora do escopo: as viaturas estacionadas da blitz e do radar nascem a 102 mil unidades e o spawner mata estacionado acima de 88 mil, então provavelmente somem no primeiro quadro (leitura de código, não verificado; interessa à Fase 6).
+
+Fora desta fase (registrado para depois): diretor de intensidade (pesquisa 4.2), quase-batida graduada (4.4), E7 nos bots da corrida, som do abastecimento (função `somAbastecer` existe e não toca nada: implementação fica com a sessão de som), botão de toque para aceitar o racha.
 ### Fase 6 — Polícia por estrelas — `pendente`
 ### Fase 7 — Customização estética (bodykit, som, efeitos) — `pendente` (som do motor antecipado)
 - [x] Som de motor por pulsos de combustão (`sound/`), um perfil por motor (14 motores) e um motor por carro; turbo, flutter/blow-off, compressor Roots, estouros. Pesquisa em [docs/pesquisa/som-motor.md](../../pesquisa/som-motor.md).
@@ -246,4 +295,10 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-14 | 9f709ef … c5d95e7 | Feel da física (R1–R6, P4, P5 de `docs/pesquisa/fisica-carro.md`): giro na troca, limitador físico, patinada visível, câmera (zoom, trauma, chute), spool por giro, rampa do acelerador, eixo do turbo com memória, teto suave. Trava de equilíbrio em `__tests__/medidas.test.ts`. | atualizado em R1 e R3 (giro no hash), R2 (câmera nas 2 corridas), P5 (corrida com bots) e em 2904a91 (estado do áudio). Detalhe na seção "Aplicado" da pesquisa. |
 | 2026-11-14 | dc3a831 … e0b6a30 | Motor com gravação real CC0 (Renault 19, grãos síncronos ao giro, `sound/motor-gravado.ts`, `tools/som/`) nos 4 cilindros e como textura nos demais; partida com chave no grid; ambiente por convolução e eco sob o viaduto; revisão do som (janela com giro variando, falha do limitador, NaN, corrida no carregamento, folga antes da saturação). Pesquisa de gravações por família em `docs/pesquisa/gravacoes-motor.md` (baixar exige aprovação por arquivo). | atualizado em 2904a91 (estado do áudio). |
 | 2026-11-14 | (este) | Giro solto com velocidade máxima por motor (`giroSolto`); conta-giros e som seguem `giroSom`, que desliza até o giro da física (τ 45 ms) e não pula na troca; carga mínima de 0,45 na troca (som não corta); apito do turbo pela pressão da física. Modo de teste de motor: garagem [Z], pista vazia, `[ ]` troca o motor. | atualizado nos 3 cenários: conta-giros desenha `giroSom` e o giro do grid sobe mais devagar. |
+| 2026-11-14 | c5a233d | Fase 5 detalhada no guia (checklist, aceite, decisões provisórias). | não alterado |
+| 2026-11-14 | 6f350ff, 4f8689f | Fase 5: combustível e posto no solo (tanque, consumo por pé/giro/nitro, posto como ramal, pane seca). | atualizado no replay solo: medidor COMB no HUD. |
+| 2026-11-14 | dccd3c0 | Fase 5: convite de racha com reputação e rival que fecha (E7). | não alterado (o convite vem depois do fim dos replays). |
+| 2026-11-14 | b0f8e84, 9e5cc4c | Fase 5: obra com estreitamento (E4), comboio com fresta (E6), óleo após acidente (E15) no sorteio de eventos. | atualizado no replay solo: o evento sorteado do replay mudou. |
+| 2026-11-14 | c9d0bcd, 754833d, 661cf0a | Fase 5: vácuo com estilingue (E9) e caminhão trocando de faixa (E1). | atualizado: corrida com bots pelo vácuo, solo pelo caminhão (atribuição medida). Clique e duelo não mudam. |
+| 2026-11-14 | 87fbcba | Atalho de teste da Fase 5 na garagem [H] e roteiro "Como testar". | atualizado no replay solo: pílula nova na garagem (+98 chamadas). |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

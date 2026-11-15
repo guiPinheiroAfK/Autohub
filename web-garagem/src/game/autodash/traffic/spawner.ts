@@ -108,6 +108,21 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           eng.floaters.push({ text: "ENCOSTÃO! 🚔", color: "#60a5fa", y: H * 0.42, life: 1, big: false })
           if (Math.abs(eng.playerX) > 1.05) crash(eng, true) // te jogaram pra fora = preso
         }
+      } else if (hit && t.role === "racha") {
+        // desafiante do racha: encostar empurra e custa velocidade, não mata
+        // (é disputa lado a lado, e ele fecha a porta de propósito — E7)
+        if (eng.immuneT <= 0) {
+          const dir = Math.sign(eng.playerX - t.offset) || 1
+          eng.playerX += dir * 0.12
+          eng.steerVel += dir * 1.0
+          eng.speed *= 0.93
+          t.speed *= 0.97
+          eng.shakeT = Math.max(eng.shakeT, 0.3)
+          eng.immuneT = 0.5
+          eng.combo = 0
+          eng.audio.crash()
+          burst(eng, W / 2 + dir * 60, H - 110, 12, ["#fde047", "#e2e8f0"])
+        }
       } else if (hit && eng.immuneT <= 0) {
         if (eng.shield) {
           eng.shield = false
@@ -147,10 +162,10 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
     // ultrapassar. Quem perde a perseguição some pelo despiste, ali embaixo.
     // Estacionados (blitz) e contramão também não reciclam: cenografia que
     // ficou pra trás simplesmente some.
-    if (t.parked || t.role === "oncoming") {
+    if (t.parked || t.role === "oncoming" || t.role === "comboio") {
       const rel = wrapDz(eng, t.z, eng.position)
       if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 140) * SEG_LEN) t.dead = true
-    } else if (t.role !== "police") {
+    } else if (t.role !== "police" && t.role !== "racha") {
       const rel = wrapDz(eng, t.z, eng.position)
       if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 80) * SEG_LEN) {
         t.z = ((eng.position + (DRAW_DIST * 0.55 + Math.random() * DRAW_DIST * 0.4) * SEG_LEN) % eng.trackLen + eng.trackLen) % eng.trackLen

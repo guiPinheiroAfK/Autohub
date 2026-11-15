@@ -4,8 +4,18 @@ import { DRAW_DIST, SEG_LEN } from "../data"
 import { TRAFFIC_COLORS } from "../traffic/types"
 import { wrapDz } from "../traffic/spawner"
 import { clamp } from "../math"
+import { postoPedido } from "./posto"
+import { spawnObra } from "./obra"
+import { spawnComboio } from "./comboio"
+import { spawnOleo } from "./oleo"
 
-export function spawnEvent(eng: AutoDashEngine, kind: "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap") {
+export type EventoMapa = "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap" | "obra" | "comboio" | "oleo"
+
+export function spawnEvent(eng: AutoDashEngine, kind: EventoMapa) {
+  // eventos da Fase 5: módulos próprios e sorteio próprio (eng.rngEv)
+  if (kind === "obra") { spawnObra(eng, eng.rngEv() < 0.5 ? 1 : -1); return }
+  if (kind === "comboio") { spawnComboio(eng, eng.rngEv); return }
+  if (kind === "oleo") { spawnOleo(eng, eng.rngEv() < 0.5 ? 1 : -1, eng.rngEv()); return }
   const at = (d: number) => ((eng.position + d) % eng.trackLen + eng.trackLen) % eng.trackLen
   const note = (text: string) => eng.floaters.push({ text, color: "#fbbf24", y: H * 0.38, life: 1.6, big: false })
   // O perigo SEMPRE nasce além do horizonte de render (VIEW), e as placas
@@ -155,6 +165,9 @@ export function updateEventSpawner(eng: AutoDashEngine, dt: number, playerZ: num
   if (eng.zones.some(z => atras(z.end))) eng.zones = eng.zones.filter(z => !atras(z.end))
   if (eng.roadSigns.some(s => atras(s.z))) eng.roadSigns = eng.roadSigns.filter(s => !atras(s.z))
 
+  // tanque pedindo posto (Fase 5): segura os eventos sorteados até ele abrir
+  if (postoPedido(eng)) return
+
   eng.eventTimer -= dt
   if (eng.eventTimer > 0) return
 
@@ -164,8 +177,9 @@ export function updateEventSpawner(eng: AutoDashEngine, dt: number, playerZ: num
 
   // blitz e radar só a partir do nível 4 (regra combinada: perseguição não cai
   // em cima de quem ainda está começando)
+  // Fase 5: obra (E4), comboio (E6) e óleo (E15) entram no sorteio de todos os níveis
   const pool = eng.level >= 3
-      ? (["obstacles", "obstacles", "viaduct", "wrongway", "bridge", "blitz", "speedtrap"] as const)
-      : (["obstacles", "obstacles", "obstacles", "viaduct", "wrongway", "bridge"] as const)
+      ? (["obstacles", "obstacles", "viaduct", "wrongway", "bridge", "blitz", "speedtrap", "obra", "comboio", "oleo"] as const)
+      : (["obstacles", "obstacles", "obstacles", "viaduct", "wrongway", "bridge", "obra", "comboio", "oleo"] as const)
   spawnEvent(eng, pool[Math.floor(Math.random() * pool.length)])
 }

@@ -6,7 +6,9 @@ import { RaceSession } from "./race/session"
 import { noCallout, buildTouchControls, onTouchStart, onTouchMove } from "./input/touch"
 import { buildTrack } from "./world/track"
 import { seedTraffic } from "./traffic/spawner"
-import { clamp, mix } from "./math"
+import { clamp, mix, mulberry32 } from "./math"
+import { type Racha } from "./modes/racha"
+import { type Comboio } from "./world/comboio"
 import { update } from "./sim/update"
 import { skyNow, renderBackdrop } from "./render/backdrop"
 import { type BiomeDef, biomeById } from "./world/biomes"
@@ -74,7 +76,10 @@ export interface Seg { curve: number; y1: number; y2: number; sign?: number }
 // Obstáculo físico na pista (cones, barreiras). Cone é perdoável (tranco);
 // barreira é parede. Base do futuro modo corrida.
 // `fixo`: faz parte do circuito (não some quando fica para trás; vale a corrida toda).
-export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean }
+// Fase 5: `seta` = painel de seta luminosa da obra (sólido, como barreira);
+// `oleo` = mancha de óleo (não é sólida: escorrega, world/oleo.ts). `lado` = lado
+// fechado da obra ou lado do acidente. `pisado`: o jogador já passou na mancha.
+export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" | "seta" | "oleo"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean; lado?: number; pisado?: boolean }
 // Zona de evento no traçado:
 //  bridge    — ponte suspensa (estilo Golden Gate): você dirige EM CIMA, com
 //              guarda-corpo, torres e água dos dois lados
@@ -84,8 +89,10 @@ export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier";
 //  blitz     — bloqueio policial: TODO MUNDO desce pra ~60; furar = perseguição
 //  speedtrap — radar (placa 90): trânsito reduz, polícia observando; passar
 //              rápido demais = perseguição (o evento da conversa original)
-interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap"; z: number; end: number; spawnT: number; checked?: boolean }
-export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho"; label?: string; lado?: number }
+//  posto     — reta com posto de combustível (Fase 5, world/posto.ts)
+//  obra      — obra com estreitamento: `lado` fecha duas faixas (world/obra.ts)
+export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto" | "obra"; z: number; end: number; spawnT: number; checked?: boolean; lado?: number }
+export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto" | "chegada" | "acidente"; label?: string; lado?: number }
 
 export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 export interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
@@ -159,6 +166,7 @@ export class AutoDashEngine {
   zones: Zone[] = []
   sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto
   testeMotor = false   // pista vazia para ouvir os motores (garagem → Z)
+  testeFase5 = false   // atalho de teste da Fase 5: racha e posto logo de cara (garagem → H)
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6
@@ -205,7 +213,20 @@ export class AutoDashEngine {
   ramais: Ramal[] = []
   trechos: TrechoInfo[] = []
   demoT = 0
-  revAmostraT = 0 // acelerada de amostra na garagem ao trocar o motor
+  revAmostraT = 0
+
+  // Fase 5 (eventos novos). A lógica mora em world/ e sim/; aqui só o estado.
+  rngEv: () => number = mulberry32(1) // sorteio dos eventos novos (semeado na largada)
+  combustivel = 1   // tanque, 0..1 (world/combustivel.ts; só no solo)
+  postoLimite = 0.45 // abaixo disso abre o próximo posto (world/posto.ts)
+  abastecendo = false
+  racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
+  rachaT = 45 // s de solo até o próximo convite
+  comboio: Comboio | null = null // comboio com fresta em andamento (world/comboio.ts)
+  oleoT = 0 // s restantes escorregando no óleo (world/oleo.ts)
+  vacuo = 0       // força do vácuo, 0..1 (sim/vacuo.ts)
+  vacuoS = 0      // s seguidos no vácuo (o estilingue só vale depois de um tempo)
+  estilingueT = 0 // s restantes do estilingue ao sair do vácuo // acelerada de amostra na garagem ao trocar o motor
 
   // input
   keys = new Set<string>()

@@ -9,6 +9,15 @@
 
 import { KMH2UPS } from "../data"
 import { KINDS, type Traffic, type TrafficRole, type WorldView } from "./types"
+import { RACHA } from "../world/racha"
+
+// E1 — caminhão trocando de faixa (Fase 5)
+export const CAMINHAO = {
+  chance: 0.0015,  // por quadro, por caminhão (~1 troca a cada 11 s a 60 fps)
+  setaS: 1.6,      // seta antes de sair (sai com 0,3 restante: 1,3 s de leitura)
+  leituraS: 1.2,   // janela mínima até o jogador chegar na traseira
+  ensaio: 0.05,    // quanto puxa pro lado antes de ir
+}
 
 function clamp(v: number, lo: number, hi: number) { return v < lo ? lo : v > hi ? hi : v }
 
@@ -165,6 +174,20 @@ export class CivilianDriver extends Driver {
         this.tryLaneChange(self, world, sides, moto ? 700 : 1100, 0.8, true, moto ? 3000 : 2500)
       }
     }
+    // E1 (Fase 5): caminhão às vezes troca de faixa sozinho, com seta longa
+    // (≥ 1,2 s de leitura antes de sair) e sem entrar na faixa do jogador se ele
+    // chegaria na traseira em menos de 1,2 s. Só fora da tela de atração.
+    if (self.kind === "truck" && !world.demo && self.blinkT <= 0 && self.targetOffset === self.offset
+        && Math.random() < CAMINHAO.chance) {
+      const fecha = Math.max(0, world.playerSpeed - self.speed) * KMH2UPS
+      const janela = Math.max(1500, fecha * CAMINHAO.leituraS)
+      const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
+      this.tryLaneChange(self, world, sides, 1300, CAMINHAO.setaS, true, janela)
+    }
+    // "ensaio": nos 0,4 s antes de sair, o caminhão já puxa 0,05 pro lado
+    if (self.kind === "truck" && self.targetOffset !== self.offset && self.blinkT > 0.3 && self.blinkT <= 0.7) {
+      self.offset += Math.sign(self.targetOffset - self.offset) * (CAMINHAO.ensaio / 0.4) * dt
+    }
     // alguém colado atrás e mais rápido na mesma faixa: tenta liberar (sem cortar o jogador)
     if (beside && self.blinkT <= 0 && self.targetOffset === self.offset && Math.random() < 0.015) {
       const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
@@ -295,9 +318,104 @@ export class OncomingDriver extends Driver {
   }
 }
 
+/**
+ * Desafiante do racha (Fase 5). No convite encosta do seu lado e acompanha;
+ * valendo, corre no ritmo dele, ultrapassa o trânsito e FECHA A PORTA (E7):
+ * com você até ~8 carros atrás numa faixa vizinha, ele "olha" (luz de freio e
+ * balanço) e 0,5 s depois vai para a faixa onde você ESTAVA. A reação atrasada
+ * é de propósito: a finta funciona. Nunca entra em cima de você — a trava de
+ * `applyMovement` aborta a troca com você colado na faixa destino.
+ */
+export class RachaDriver extends Driver {
+  // números do E7 na tabela do racha (world/racha.ts)
+  private static readonly PERTO = RACHA.pertoZ
+  private static readonly OLHAR = RACHA.olharS
+  private static readonly FECHA_CADA = RACHA.fechaCadaS
+  private static readonly BALANCO = RACHA.balanco
+
+  static centro(x: number): number {
+    return clamp(Math.round((x - 0.25) / 0.5) * 0.5 + 0.25, -0.75, 0.75)
+  }
+
+  drive(self: Traffic, world: WorldView, dt: number): number {
+    const r = self.racha
+    if (!r) { this.applyMovement(self, world, self.speed, dt); return self.speed }
+    if (self.freioT && self.freioT > 0) self.freioT -= dt
+    if (r.fechaT > 0) r.fechaT -= dt
+    const gap = world.wrapDz(self.z, world.playerZ) // >0: rival à frente do jogador
+    const ahead = this.nearestAhead(self, world)
+
+    let alvo: number
+    if (r.fase === "convite") {
+      // encosta do lado, um tico à frente (o jogador vê o pisca-alerta)
+      alvo = world.playerSpeed + clamp((300 - gap) / 30, -45, 45)
+    } else {
+      alvo = r.vMax
+    }
+
+    if (r.fase === "corrida" && r.olharT > 0) {
+      // olhando: balança na direção do jogador e volta; depois fecha
+      r.olharT -= dt
+      const p = 1 - Math.max(0, r.olharT) / RachaDriver.OLHAR
+      const dir = Math.sign(world.playerX - r.base) || 1
+      self.offset = r.base + dir * RachaDriver.BALANCO * Math.sin(Math.PI * p)
+      self.targetOffset = self.offset
+      if (r.olharT <= 0) {
+        self.offset = r.base; self.targetOffset = r.base
+        if (r.alvoFaixa !== null && this.laneFree(self, world, r.alvoFaixa, 700)) {
+          self.targetOffset = r.alvoFaixa
+          self.blinkT = 0.32 // quase sem seta: é uma fechada
+        }
+        r.alvoFaixa = null
+      }
+    } else if (self.blinkT <= 0 && self.targetOffset === self.offset) {
+      const dx = Math.abs(world.playerX - self.offset)
+      if (r.fase === "corrida" && r.fechaT <= 0 && gap > 300 && gap < RachaDriver.PERTO && dx > 0.3 && dx < 0.8
+          && Math.random() < r.fecha * dt * 2) {
+        // E7: olha antes de fechar
+        r.olharT = RachaDriver.OLHAR
+        r.fechaT = RachaDriver.FECHA_CADA
+        r.base = self.offset
+        r.alvoFaixa = RachaDriver.centro(world.playerX)
+        self.freioT = 0.3
+      } else if (ahead && ahead.speed < alvo - 10) {
+        // trânsito lento na frente: contorna (sem cortar o jogador de perto)
+        const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
+        this.tryLaneChange(self, world, sides, 900, 0.5, true, 700)
+      } else {
+        // troca abortada no meio deixa o carro entre faixas: volta pro centro da mais perto
+        const c = RachaDriver.centro(self.offset)
+        if (Math.abs(c - self.offset) > 0.02 && this.laneFree(self, world, c, 500)) self.targetOffset = c
+      }
+      // a troca sempre mira o centro de uma faixa (nunca "offset + 0,5" a partir do meio)
+      if (self.targetOffset !== self.offset) self.targetOffset = RachaDriver.centro(self.targetOffset)
+    }
+
+    alvo = this.antiOverlap(self, world, ahead, alvo)
+    const dv = alvo - self.speed
+    self.speed += clamp(dv, -170 * dt, r.acel * dt)
+    this.applyMovement(self, world, self.speed, dt)
+    return self.speed
+  }
+}
+
+/**
+ * Comboio (E6): segue reto no ritmo do grupo. Quem decide a troca de faixa (a
+ * fresta andando) é world/comboio.ts; aqui só a trava de não entrar em ninguém.
+ */
+export class ComboioDriver extends Driver {
+  drive(self: Traffic, world: WorldView, dt: number): number {
+    const spd = this.antiOverlap(self, world, this.nearestAhead(self, world), self.speed)
+    this.applyMovement(self, world, spd, dt)
+    return spd
+  }
+}
+
 // Registro papel -> IA. Instâncias únicas compartilhadas (drivers são stateless).
 export const DRIVERS: Record<TrafficRole, Driver> = {
   civilian: new CivilianDriver(),
   police: new PoliceDriver(),
   oncoming: new OncomingDriver(),
+  racha: new RachaDriver(),
+  comboio: new ComboioDriver(),
 }

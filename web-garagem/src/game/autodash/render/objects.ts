@@ -4,6 +4,7 @@ import { shade, clamp } from "../math"
 import { CARS, type CarCustom, PAINTS } from "../data"
 import { drawPlayerCar, rr } from "./primitives"
 import { type Traffic, KINDS } from "../traffic/types"
+import { desenharPlacaEvento, desenharObstaculoEvento } from "./eventos"
 
 export function drawPickup(eng: AutoDashEngine, p: Pickup, x: number, y: number, w: number, amb: number) {
   if (w < 2.5) return
@@ -75,6 +76,7 @@ export function drawGhost(eng: AutoDashEngine, x: number, y: number, w: number, 
 
 export function drawObstacle(eng: AutoDashEngine, o: Obstacle, x: number, y: number, w: number, amb: number) {
   if (w < 2) return
+  if (desenharObstaculoEvento(eng, o, x, y, w, amb)) return // seta da obra e óleo (render/eventos.ts)
   const ctx = eng.ctx
   if (o.kind === "cone") {
     const h = w * 1.5
@@ -178,6 +180,8 @@ export function drawRoadSign(eng: AutoDashEngine, sign: RoadSign, x: number, y: 
       ctx.fillRect(x - r * 0.38, cy + r * 0.08, r * 0.1, r * 0.3)  // pilares
       ctx.fillRect(x + r * 0.28, cy + r * 0.08, r * 0.1, r * 0.3)
     }
+  } else if (desenharPlacaEvento(eng, sign, x, cy, r, amb)) {
+    // placas dos eventos da Fase 5 (render/eventos.ts)
   } else {
     // mão dupla/contramão: proibido (círculo vermelho, barra branca)
     ctx.fillStyle = shade("#dc2626", amb)
@@ -311,6 +315,20 @@ export function drawTraffic(eng: AutoDashEngine, t: Traffic, x: number, y: numbe
       ctx.fillText(t.label, x, by - fs * 0.72)
       ctx.textAlign = "left"
     }
+  }
+  // luz de freio (o rival "olhando" antes de fechar): lanternas fortes
+  if (t.freioT && t.freioT > 0) {
+    ctx.fillStyle = "#ff1a1a"
+    const fh = Math.max(2, h * 0.1)
+    rr(ctx, bx + w * 0.04, y - fh * 2, w * 0.26, fh, fh / 2)
+    rr(ctx, bx + w * 0.70, y - fh * 2, w * 0.26, fh, fh / 2)
+  }
+  // pisca-alerta: as duas setas juntas
+  if (t.alerta && Math.floor(performance.now() / 250) % 2 === 0) {
+    ctx.fillStyle = "#FFC23D"
+    const rs = Math.max(2, w * 0.07)
+    ctx.beginPath(); ctx.arc(x - w * 0.52, y - h * 0.28, rs, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x + w * 0.52, y - h * 0.28, rs, 0, Math.PI * 2); ctx.fill()
   }
   // seta
   if (t.blinkT > 0 && Math.floor(t.blinkT * 6) % 2 === 0) {

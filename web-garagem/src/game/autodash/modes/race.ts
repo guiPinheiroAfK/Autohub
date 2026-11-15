@@ -6,6 +6,10 @@ import { seedTraffic } from "../traffic/spawner"
 import { motorDe } from "../physics/motores"
 import { RaceSession } from "../race/session"
 import { iniciarTempo, seedDoTracado } from "../sim/clima"
+import { mulberry32 } from "../math"
+import { COMBUSTIVEL } from "../world/combustivel"
+import { RACHA } from "../world/racha"
+import { prepararTesteFase5 } from "../world/debug-eventos"
 
 export function startRace(eng: AutoDashEngine, seed?: number) {
   const corrida = eng.mode === "race"
@@ -46,6 +50,13 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   const clima = eng.mode === "race" ? (online ? "sorteio" : eng.cfg.climaCorrida)
     : eng.mode === "duel" ? "sorteio" : eng.cfg.clima
   iniciarTempo(eng, hora, clima, seed ?? seedDoTracado(eng))
+  // eventos da Fase 5: sorteio próprio (não mexe na sequência do Math.random) e tanque cheio
+  eng.rngEv = mulberry32((eng.climaSeed ^ 0x5f3759df) >>> 0)
+  eng.combustivel = 1; eng.postoLimite = COMBUSTIVEL.chamaPosto; eng.abastecendo = false
+  eng.racha = null; eng.rachaT = RACHA.primeiroConviteS
+  eng.comboio = null; eng.oleoT = 0
+  eng.vacuo = 0; eng.vacuoS = 0; eng.estilingueT = 0
+  if (eng.testeFase5 && eng.mode === "solo") prepararTesteFase5(eng)
   eng.particles = []; eng.floaters = []
   eng.countT = 0
   // no duelo o verde é fixo pra manter os dois relógios alinhados

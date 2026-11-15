@@ -8,7 +8,21 @@ export type TrafficKind = "car" | "moto" | "truck" | "bus" | "police"
 //  - civilian: trânsito comum, respeita os outros e o jogador
 //  - police:   perseguição — agressivo de propósito
 //  - oncoming: contramão — vem no sentido oposto, reto na faixa (speed negativa)
-export type TrafficRole = "civilian" | "police" | "oncoming"
+//  - racha:    desafiante do convite de racha (Fase 5, modes/racha.ts)
+//  - comboio:  membro de um comboio com fresta (Fase 5, world/comboio.ts)
+export type TrafficRole = "civilian" | "police" | "oncoming" | "racha" | "comboio"
+
+// Estado do desafiante do racha (a IA é stateless: o estado mora no veículo).
+export interface RivalRacha {
+  fase: "convite" | "corrida" | "saindo"
+  vMax: number             // km/h
+  acel: number             // km/h por segundo
+  fecha: number            // 0..1, vontade de fechar a porta (E7)
+  fechaT: number           // s até poder fechar de novo
+  olharT: number           // s restantes do "olhar" antes de fechar
+  alvoFaixa: number | null // faixa do jogador vista quando decidiu fechar
+  base: number             // faixa onde estava ao começar a olhar (balanço volta pra ela)
+}
 
 // w = meia-largura na fração da pista (-1..1) · len = comprimento em unidades Z
 // h = altura visual (sprite) · spd = faixa de velocidade de cruzeiro [min, max] km/h
@@ -41,6 +55,9 @@ export interface Traffic {
   parked?: boolean     // estacionado (blitz): sem IA, sem reciclagem, colisão normal
   label?: string       // nome exibido em cima do carro (rivais do modo corrida)
   accent?: string      // cor de destaque do rival (teto/faixa), pra distinguir na pista
+  alerta?: boolean     // pisca-alerta ligado (convite de racha, carro batido)
+  freioT?: number      // >0: luz de freio acesa (o rival "olhando" antes de fechar)
+  racha?: RivalRacha   // só no desafiante do racha
 }
 
 // Visão read-only do mundo que uma IA precisa pra decidir. O engine constrói

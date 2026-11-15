@@ -20,6 +20,12 @@ import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
 import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro } from "../world/ramais"
+import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
+import { atualizarRacha } from "../modes/racha"
+import { atualizarObras } from "../world/obra"
+import { atualizarComboio } from "../world/comboio"
+import { aderenciaOleo, passoOleo } from "../world/oleo"
+import { aplicarVacuo, specComVacuo, forcaTeto } from "./vacuo"
 
 export function update(eng: AutoDashEngine, dt: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -79,6 +85,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   // desaceleração e não pode mais acelerar (bug: a física acelerava antes de
   // o bloco de chegada zerar a marcha)
   if (eng.raceFinished) throttle = 0
+  // pane seca (Fase 5): sem combustível o motor engasga e o pé efetivo cai
+  throttle *= peDoCombustivel(eng)
 
   if (eng.state === "countdown") {
     eng.countT += dt
@@ -114,7 +122,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   // ---------- racing ----------
-  const grip = spec.grip * tyreOf(spec).grip * climaAtual(eng).grip
+  // óleo (E15): aderência cai por um instante em cima da mancha
+  const grip = spec.grip * tyreOf(spec).grip * climaAtual(eng).grip * aderenciaOleo(eng)
   const playerZ = eng.position + PLAYER_Z
   const seg = segAt(eng, playerZ)
   // ramal (atalho) neste ponto da pista, se houver (ADR 0014). Sem ramais: null.
@@ -144,7 +153,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.playerX -= centrif * dt
   const slip = Math.abs(centrif) * speedF
   // chiado de curva ou de patinada no gás (eng.patina, do quadro anterior)
-  eng.audio.skid(Math.max(slip > 0.3 ? slip : 0, eng.patina))
+  eng.audio.skid(Math.max(slip > 0.3 ? slip : 0, eng.patina, eng.oleoT > 0 ? 0.6 : 0))
+  passoOleo(eng, dt)
   if (slip > 0.45 && Math.abs(eng.steerVel) > 0.3 && Math.random() < 0.5) emitSmoke(eng, 1, "#6b7280")
   eng.bgShift += seg.curve * eng.speed * dt * 0.6
 
@@ -169,7 +179,12 @@ export function update(eng: AutoDashEngine, dt: number) {
 
   // ---------- motor, câmbio, força e velocidade (sim/longitudinal.ts) ----------
   const grade = (seg.y2 - seg.y1) / SEG_LEN // ~±0.13 nas ladeiras fortes
-  const nitroActive = passoLongitudinal(eng, spec, mf, { throttle, braking, centrif, grade, dt })
+  // vácuo (E9) do quadro anterior sobe o teto em até 4% (sim/vacuo.ts)
+  const nitroActive = passoLongitudinal(eng, specComVacuo(spec, forcaTeto(eng)), mf, { throttle, braking, centrif, grade, dt })
+  // combustível (só no solo): gasta pelo pé, giro e nitro; abastece no posto
+  atualizarCombustivel(eng, dt, eng.gasF, nitroActive)
+  // vácuo (E9): colado atrás de alguém rápido, empurrão até +4% da máxima
+  aplicarVacuo(eng, spec, throttle, dt)
 
   // no miolo do ramal o avanço rende mais (linha de dentro). Fora dele, ganho = 1.
   const ganho = ganhoRamal(ramal, eng.playerX)
@@ -294,6 +309,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   updateEventSpawner(eng, dt, playerZ)
+  atualizarRacha(eng, dt) // convite de racha (Fase 5, só no solo)
 
   // powerups na pista
   eng.puTimer -= dt
@@ -328,6 +344,8 @@ export function update(eng: AutoDashEngine, dt: number) {
 
   updateTraffic(eng, dt, playerZ, false)
   updateZones(eng, dt, playerZ)
+  atualizarObras(eng, dt, playerZ)              // E4: trânsito sai do lado fechado
+  atualizarComboio(eng, dt, playerZ, eng.rngEv) // E6: a fresta anda
   updateObstacles(eng, playerZ)
 
   // aviso de curva fechada à frente
