@@ -6,6 +6,7 @@ import { type EngineSynthState, estadoFinito } from "./engine-synth"
 import { WaveguideSynth } from "./waveguide-synth"
 import { ENGINE_PROFILES } from "./profiles"
 import { MotorGravado, type BancoGraos } from "./motor-gravado"
+import { TurboSynth, type TurboSom, type TurboState } from "./turbo-synth"
 
 // O escopo do AudioWorklet não está nas libs do TypeScript.
 declare const sampleRate: number
@@ -14,7 +15,10 @@ declare class AudioWorkletProcessor {
   readonly port: MessagePort
 }
 
-interface Msg { perfil?: string; st?: Partial<EngineSynthState>; banco?: BancoGraos; usar?: string; gravado?: boolean }
+interface Msg {
+  perfil?: string; st?: Partial<EngineSynthState>; banco?: BancoGraos; usar?: string; gravado?: boolean
+  turbo?: TurboSom | null; tb?: Partial<TurboState>; alivio?: number
+}
 
 class MotorProcessor extends AudioWorkletProcessor {
   // modelo físico por guias de onda (sound/waveguide-synth.ts)
@@ -25,6 +29,8 @@ class MotorProcessor extends AudioWorkletProcessor {
   private usaGravado = false
   // bancos já recebidos (cada um chega uma vez; trocar de carro só escolhe outro)
   private bancos = new Map<string, BancoGraos>()
+  // turbo (sound/turbo-synth.ts), na 3ª saída
+  private turbo = new TurboSynth(sampleRate, 7)
 
   constructor() {
     super()
@@ -38,6 +44,12 @@ class MotorProcessor extends AudioWorkletProcessor {
         if (b && this.gravado.banco !== m.usar) this.gravado.setBanco(b)
       }
       if (m.gravado !== undefined) this.usaGravado = m.gravado
+      if (m.turbo !== undefined) this.turbo.setConfig(m.turbo)
+      if (m.tb) {
+        for (const k of ["eixo", "boost", "carga", "rpm"] as const) if (m.tb[k] !== undefined && !Number.isFinite(m.tb[k])) delete m.tb[k]
+        Object.assign(this.turbo.st, m.tb)
+      }
+      if (m.alivio) this.turbo.alivio(m.alivio)
     }
   }
 
@@ -51,6 +63,8 @@ class MotorProcessor extends AudioWorkletProcessor {
       if (this.usaGravado && this.gravado.pronto) this.gravado.render(g, g.length)
       else g.fill(0)
     }
+    const tb = outputs[2]?.[0]
+    if (tb) this.turbo.render(tb, tb.length)
     return true
   }
 }

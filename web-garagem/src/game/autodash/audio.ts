@@ -3,6 +3,7 @@
 import { type EngineSoundProfile, ENGINE_PROFILES, GRAVACAO_DO_PERFIL, TEXTURA } from "./sound/profiles"
 import { graosDoJson } from "./sound/motor-gravado"
 import type { Turbo } from "./physics/motores"
+import { eixoDoSom, GatilhoAlivio } from "./sound/turbo-synth"
 
 // Motor por pulsos (sound/engine-synth.ts) rodando num AudioWorklet, com a
 // cadeia de mixagem do escape: corpo → coletor → abafador → saturação →
@@ -21,14 +22,8 @@ interface Motor {
   gravEq: BiquadFilterNode // corpo do escape (pico em 80–250 Hz), por gravação
   gravLp: BiquadFilterNode // corta o chiado de cofre acima de `topoHz`, por gravação
   gravGain: GainNode
-  fx: GainNode            // estouros, flutter e blow-off
-  apito: OscillatorNode   // eixo do turbo
-  apito2: OscillatorNode
-  apitoB: OscillatorNode  // segunda turbina (biturbo/quadri), levemente desafinada
-  apitoBGain: GainNode
-  apitoGain: GainNode
-  sopro: BiquadFilterNode // "whoosh" do turbo
-  soproGain: GainNode
+  fx: GainNode            // estouros
+  soproGain: GainNode     // sopro do nitro (o turbo inteiro vem do worklet, sound/turbo-synth.ts)
   whine: OscillatorNode   // compressor mecânico
   whineGain: GainNode
   pops: AudioBuffer[]
@@ -58,7 +53,7 @@ export class AudioBus {
   private boost = 0
   private eixo = 0          // rotação do eixo da turbina, 0..1 (tem inércia própria)
   private turbo: Turbo | null = null
-  private vib = 0
+  private gatilho = new GatilhoAlivio()
   private corteMotor = 7900
   private lastT = 0
   private lastGas = 0
@@ -259,8 +254,8 @@ export class AudioBus {
       if (gain !== undefined) b.gain.value = gain
       return b
     }
-    // saída 0: modelo físico (escape, admissão); saída 1: gravação real
-    const node = new AudioWorkletNode(ctx, "autodash-motor", { numberOfInputs: 0, numberOfOutputs: 2, outputChannelCount: [2, 1] })
+    // saída 0: modelo físico (escape, admissão); saída 1: gravação real; saída 2: turbo
+    const node = new AudioWorkletNode(ctx, "autodash-motor", { numberOfInputs: 0, numberOfOutputs: 3, outputChannelCount: [2, 1, 1] })
     const split = ctx.createChannelSplitter(2)
     node.connect(split)
     // escape: tira DC, corpo, coletor, abafador e brilho
@@ -303,14 +298,9 @@ export class AudioBus {
     // efeitos de alívio passam pela mesma saturação (soam "do escape")
     const fx = ctx.createGain()
     fx.connect(pre)
-    // turbo: apito do eixo (seno + harmônico inarmônico) e sopro filtrado
-    const apito = ctx.createOscillator(), apito2 = ctx.createOscillator(), apito2g = ctx.createGain(), apitoGain = ctx.createGain()
-    apito.type = "sine"; apito2.type = "sine"; apito2g.gain.value = 0.18; apitoGain.gain.value = 0
-    apito.connect(apitoGain); apito2.connect(apito2g); apito2g.connect(apitoGain); apitoGain.connect(out)
-    const apitoB = ctx.createOscillator(), apitoBGain = ctx.createGain()
-    apitoB.type = "sine"; apitoBGain.gain.value = 0
-    apitoB.connect(apitoBGain); apitoBGain.connect(apitoGain)
-    apito.start(); apito2.start(); apitoB.start()
+    // turbo (apito, sopro, blow-off e flutter) sai pronto do worklet, na mesma escala dos ganhos antigos
+    node.connect(out, 2)
+    // sopro do nitro
     const ruido = ctx.createBufferSource(); ruido.buffer = this.noiseBuffer(2); ruido.loop = true
     const sopro = f("bandpass", 2600, 1.2), soproGain = ctx.createGain(); soproGain.gain.value = 0
     ruido.connect(sopro); sopro.connect(soproGain); soproGain.connect(out); ruido.start()
@@ -333,7 +323,7 @@ export class AudioBus {
       for (let i = 0; i < len; i++) d[i] = d[i] / pk * 0.6
       return b
     })
-    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, synthGain, gravHp, gravEq, gravLp, gravGain, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops, bancos: new Set(), carregando: new Set(), faixas: new Map() }
+    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, synthGain, gravHp, gravEq, gravLp, gravGain, fx, soproGain, whine, whineGain, pops, bancos: new Set(), carregando: new Set(), faixas: new Map() }
     this.aplicarPerfil()
     void this.carregarPartida()
     // o motor antigo sai de cena
@@ -378,6 +368,22 @@ export class AudioBus {
   setTurbo(t: Turbo | null | undefined, corte: number) {
     this.turbo = t ?? null
     this.corteMotor = corte
+    this.enviarTurbo()
+  }
+
+  // config do turbo no worklet: turbina da física + perfil de som (indução e cilindros).
+  // Chamado a cada quadro (setTurbo): só manda quando muda.
+  private turboEnviado = ""
+  private enviarTurbo() {
+    const m = this.motor
+    if (!m) return
+    const p = this.perfil, tb = this.turbo
+    const usa = !!tb && (p.inducao === "turbo" || p.inducao === "biturbo")
+    const cfg = usa ? { apito: tb.apito, turbinas: tb.turbinas ?? 1, cilindros: p.eventos.length, flutter: p.inducao === "turbo" } : null
+    const chave = JSON.stringify(cfg)
+    if (chave === this.turboEnviado) return
+    this.turboEnviado = chave
+    m.node.port.postMessage({ turbo: cfg })
   }
 
   /** Troca o motor (perfil de som) do carro atual. Barato se não mudou. */
@@ -490,6 +496,7 @@ export class AudioBus {
     if (!m || !ctx) return
     const p = this.perfil, t = ctx.currentTime
     m.node.port.postMessage({ perfil: p.id })
+    this.enviarTurbo()
     // gravação real: motor gravado (mesma família) ou só a textura mecânica
     const grav = GRAVACAO_DO_PERFIL[p.id], g = grav ?? TEXTURA
     const pronto = m.bancos.has(g.banco)
@@ -518,34 +525,6 @@ export class AudioBus {
     src.connect(g); g.connect(m.fx); src.start()
   }
 
-  // alívio do turbo: flutter ("tututu", surto do compressor) ou blow-off ("pssh")
-  private alivio(nivel: number, flutter: boolean) {
-    const m = this.motor, ctx = this.ctx
-    if (!m || !ctx) return
-    const t0 = ctx.currentTime
-    const ruido = this.ruido()
-    if (!flutter) {
-      const src = ctx.createBufferSource(); src.buffer = ruido
-      const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 3000
-      const pk = ctx.createBiquadFilter(); pk.type = "peaking"; pk.frequency.value = 6500; pk.gain.value = 4; pk.Q.value = 0.8
-      const g = ctx.createGain(), d = 0.15 + 0.15 * nivel
-      g.gain.setValueAtTime(0.3 * nivel, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d)
-      src.connect(hp); hp.connect(pk); pk.connect(g); g.connect(m.fx); src.start(t0, this.trechoRuido(d + 0.05)); src.stop(t0 + d + 0.05)
-      return
-    }
-    let at = t0 + 0.015, hz = 13
-    const fim = t0 + 0.45 + nivel * 0.45
-    while (at < fim) {
-      const iv = 1 / hz, fase = (at - t0) / (fim - t0)
-      const src = ctx.createBufferSource(); src.buffer = ruido
-      const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2800 * (1 - 0.55 * fase); bp.Q.value = 1.8
-      const g = ctx.createGain(), a = 0.34 * nivel * (1 - 0.75 * fase) * (0.85 + Math.random() * 0.3)
-      g.gain.setValueAtTime(a, at); g.gain.linearRampToValueAtTime(0.0001, at + iv * 0.9)
-      src.connect(bp); bp.connect(g); g.connect(m.fx); src.start(at, Math.random() * 0.4); src.stop(at + iv)
-      at += iv; hz = Math.max(7.5, hz * 0.95)
-    }
-  }
-
   /** Motor por pulsos: chamado a cada quadro por engine(). */
   private motorFrame(rpm: number, gas: number, nitro: boolean, running: boolean, noCorte: boolean, boostFisico: number) {
     const m = this.motor!, ctx = this.ctx!, p = this.perfil, t = ctx.currentTime
@@ -562,7 +541,11 @@ export class AudioBus {
     if (this.grav && running) this.misturarGravacao(rpm, 0.05)
     const ligado = running && t >= this.partidaAte
     m.out.gain.setTargetAtTime(ligado ? 0.5 * (0.85 + 0.35 * Math.min(rpm, 8000) / 7000) : 0, t, ligado ? (this.partidaAte > t - 0.5 ? 0.12 : 0.05) : 0.15)
-    if (!running) { this.lastGas = 0; return }
+    if (!running) {
+      this.lastGas = 0
+      if (this.turbo) m.node.port.postMessage({ tb: { eixo: 0, boost: 0, carga: 0, ligado: false } })
+      return
+    }
     // abafador abre com o giro e com o pé
     // abafador mais aberto: o modelo físico já tem o próprio abafador
     m.lp.frequency.setTargetAtTime(Math.min(9000, 2500 + rpm * 0.5 + gas * 1500 + (nitro ? 800 : 0)), t, 0.03)
@@ -578,45 +561,17 @@ export class AudioBus {
       const alvo = gas * Math.min(1, Math.max(0, (rpm - 2200) / 2600))
       this.boost += (alvo - this.boost) * Math.min(1, dt / (alvo > this.boost ? 0.35 : 0.07))
     }
-    // EIXO DA TURBINA: gira com a energia do escape (giro × pé) e tem inércia
-    // própria — sobe com o atraso do motor e desce devagar ao aliviar. O apito
-    // segue o eixo, não a pressão: é por isso que ele "canta" subindo em cada
-    // marcha e desce assobiando depois do alívio, em vez de virar um zumbido fixo.
-    const tb = this.turbo
-    // com a pressão da física (boostFisico ≥ 0) o eixo segue o turbo de verdade
-    // (atraso, memória, alívio); sem ela, estima pela energia do escape
-    const energia = Math.min(1.2, rpm / this.corteMotor) * (0.15 + 0.85 * carga)
-    const alvoEixo = boostFisico >= 0
-      ? Math.min(1, boostFisico * (0.75 + 0.25 * Math.min(1, rpm / this.corteMotor)))
-      : Math.min(1, energia * 1.3) // válvula de alívio do escape limita o eixo
-    const antes = this.eixo
-    const tau = alvoEixo > this.eixo ? (tb?.lag ?? 0.35) * 1.2 : (tb?.desce ?? 1.5)
-    this.eixo += (alvoEixo - this.eixo) * Math.min(1, dt / tau)
-    const subindo = Math.max(0, (this.eixo - antes) / Math.max(dt, 1e-3)) // eixo acelerando = apito mais forte
+    // EIXO DA TURBINA: gira com a energia do escape e tem inércia própria
+    // (eixoDoSom). O som do turbo (apito, sopro, blow-off, flutter) é feito no
+    // worklet (sound/turbo-synth.ts) a partir do eixo, da pressão e do pé.
+    this.eixo = eixoDoSom(this.eixo, boostFisico, rpm, this.corteMotor, carga, dt, this.turbo)
     if (turbo) {
-      const [f0, f1] = tb?.apito ?? [1300, 5500]
-      // vibrato do eixo (folga do mancal) + leve variação aleatória
-      this.vib += (Math.random() - 0.5) * 0.002; this.vib *= 0.97
-      const vib = 1 + 0.003 * Math.sin(t * 31) + this.vib
-      const hz = f0 + (f1 - f0) * Math.pow(this.eixo, 1.25)
-      m.apito.frequency.setTargetAtTime(hz * vib, t, 0.03)
-      m.apito2.frequency.setTargetAtTime(hz * 2.27 * vib, t, 0.03)
-      m.apitoB.frequency.setTargetAtTime(hz * (1.013 + 0.004 * ((tb?.turbinas ?? 1) - 2)) * vib, t, 0.03)
-      m.apitoBGain.gain.setTargetAtTime((tb?.turbinas ?? 1) > 1 ? 0.7 : 0, t, 0.1)
-      const e2 = this.eixo * this.eixo
-      // o apito aparece quando o eixo ACELERA (cada marcha, cada retomada); em
-      // pressão cheia e constante ele fica baixinho — senão vira um zumbido
-      // agudo o tempo todo, já que no jogo o pé passa quase sempre no fundo
-      m.apitoGain.gain.setTargetAtTime(Math.min(0.06, e2 * (0.003 + 0.009 * carga) + subindo * 0.035), t, 0.04)
-      // sopro: ar entrando no compressor, sobe de tom com o eixo
-      m.sopro.frequency.setTargetAtTime(1800 + 3200 * this.eixo, t, 0.06)
-      m.soproGain.gain.setTargetAtTime(this.boost * carga * 0.014 + subindo * 0.012 + (nitro ? 0.03 : 0), t, 0.06)
       // tirou o pé com pressão no coletor: alivia (turbo simples = flutter, biturbo = blow-off)
-      if (this.lastGas > 0.5 && gas < 0.3 && this.eixo > 0.35) this.alivio(Math.max(0.5, this.eixo), p.inducao === "turbo")
-    } else {
-      m.apitoGain.gain.setTargetAtTime(0, t, 0.05)
-      m.soproGain.gain.setTargetAtTime(nitro ? 0.03 : 0, t, 0.06)
+      const alivio = this.gatilho.passo(gas, this.eixo)
+      const tb = { eixo: this.eixo, boost: this.boost, carga, rpm, ligado: true }
+      m.node.port.postMessage(alivio ? { tb, alivio } : { tb })
     }
+    m.soproGain.gain.setTargetAtTime(nitro ? 0.03 : 0, t, 0.06)
     if (p.inducao === "roots" || p.inducao === "centrifugo") {
       // zumbido preso ao giro: polia ~2,4× × lóbulos/palhetas (estimativa); centrífugo só cresce em cima
       const hz = rpm / 60 * (p.inducao === "roots" ? 2.4 * 6 : 2.4 * 12)

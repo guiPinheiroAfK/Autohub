@@ -12,7 +12,8 @@ import { fileURLToPath } from "node:url"
 import { ENGINE_PROFILES, GRAVACAO_DO_PERFIL, TEXTURA } from "../sound/profiles"
 import { WaveguideSynth } from "../sound/waveguide-synth"
 import { MotorGravado, graosDoJson, type BancoGraos } from "../sound/motor-gravado"
-import { MOTORES, giroDoSom } from "../physics/motores"
+import { MOTORES, giroDoSom, passoEixo, boostDoEixo } from "../physics/motores"
+import { TurboSynth, GatilhoAlivio, eixoDoSom } from "../sound/turbo-synth"
 
 const SR = 48000
 const NIVEL_REF = 0.135
@@ -34,7 +35,7 @@ function carregarBanco(nome: string): { banco: BancoGraos; faixa: [number, numbe
   return {
     banco: { nome, sr: SR, dados, graos, voltasPorGrao: voltas },
     faixa: [hz[Math.floor(hz.length * 0.02)] * 60 * voltas, hz[Math.floor(hz.length * 0.98)] * 60 * voltas],
-    nivel: Math.min(3.5, Math.max(0.4, NIVEL_REF / (j.nivel ?? NIVEL_REF))),
+    nivel: Math.min(3.5, Math.max(0.25, NIVEL_REF / (j.nivel ?? NIVEL_REF))),
   }
 }
 
@@ -57,13 +58,20 @@ const rampa = (x: number) => Math.min(1, Math.max(0, x))
 export type Ponto = [number, number, number, number?] // t (s), rpm, carga, limitador (1 = no corte)
 
 /** Renderiza a trajetória `pontos` (interpolada) com a cadeia do jogo. `soGrav`/`soSint` isolam uma camada. */
-function renderizar(perfilId: string, pontos: Ponto[], opc: { soGrav?: boolean; soSint?: boolean } = {}): Float32Array {
+function renderizar(perfilId: string, pontos: Ponto[], opc: { soGrav?: boolean; soSint?: boolean; soTurbo?: boolean; semTurbo?: boolean } = {}): Float32Array {
   const perfil = ENGINE_PROFILES[perfilId]
   const grav = GRAVACAO_DO_PERFIL[perfilId], g = grav ?? TEXTURA
   const cb = carregarBanco(g.banco)
   const synth = new WaveguideSynth(SR, perfil, 1234)
   const mot = new MotorGravado(SR, 99); mot.setBanco(cb.banco)
   const motorF = MOTORES[perfilId]
+  // turbo (sound/turbo-synth.ts): eixo pela física do jogo e alívio ao tirar o pé, como em audio.ts
+  const tbF = perfil.inducao === "turbo" || perfil.inducao === "biturbo" ? motorF?.turbo ?? null : null
+  const turbo = new TurboSynth(SR, 7)
+  if (tbF && !opc.semTurbo) turbo.setConfig({ apito: tbF.apito, turbinas: tbF.turbinas ?? 1, cilindros: perfil.eventos.length, flutter: perfil.inducao === "turbo" })
+  const T = new Float32Array(128)
+  let eixoF = 0, boostF = 0, eixoS = 0
+  const gatilho = new GatilhoAlivio()
   const dur = pontos[pontos.length - 1][0], N = Math.floor(dur * SR)
   const out = new Float32Array(N)
   const hpS = biquad("hp", 35, 0.7), boom = biquad("peak", perfil.boomHz, 1, perfil.boomDb * 0.35)
@@ -88,6 +96,15 @@ function renderizar(perfilId: string, pontos: Ponto[], opc: { soGrav?: boolean; 
     const n = Math.min(128, N - i)
     synth.render(L, R, n)
     mot.render(G, n)
+    if (tbF && motorF) {
+      const dt = n / SR
+      eixoF = passoEixo(motorF, eixoF, rpm, carga, dt); boostF = boostDoEixo(motorF, boostF, eixoF, rpm, carga, dt)
+      eixoS = eixoDoSom(eixoS, boostF, rpm, motorF.corte, carga, dt, tbF)
+      const alivio = gatilho.passo(carga, eixoS)
+      if (alivio) turbo.alivio(alivio)
+      turbo.st.eixo = eixoS; turbo.st.boost = boostF; turbo.st.carga = carga; turbo.st.rpm = rpm; turbo.st.ligado = true
+    }
+    turbo.render(T, n)
     // ganhos de misturarGravacao()
     const [lo, hi] = cb.faixa
     const sobe = rampa((hi * 1.35 - rpm) / (hi * 0.27)), desce = rampa((rpm - lo * 0.7) / (lo * 0.2))
@@ -101,9 +118,9 @@ function renderizar(perfilId: string, pontos: Ponto[], opc: { soGrav?: boolean; 
       gg += (gAlvo - gg) * 0.003; sg += (sAlvo - sg) * 0.003; og += (oAlvo - og) * 0.003
       const s = brilho(lp(boom(hpS(L[j]))))
       const gv = lpG(eqG(hpG(G[j])))
-      let m = (opc.soGrav ? 0 : s * sg) + (opc.soSint ? 0 : gv * gg)
+      let m = opc.soTurbo ? 0 : (opc.soGrav ? 0 : s * sg) + (opc.soSint ? 0 : gv * gg)
       m = Math.tanh(0.8 * (m * 0.5)) / tanh08
-      out[i + j] = m * og
+      out[i + j] = (m + T[j]) * og
     }
   }
   return out
@@ -138,6 +155,18 @@ describe.skipIf(!SAIDA)("render offline do motor", () => {
       const pts: Ponto[] = [[0, 900, 0], [1.5, 900, 0], [1.6, 3500, 1], [2.6, 900, 0], [3.5, 900, 0],
         [3.6, 1800, 1], [9.0, topo, 1, 1], [10.5, topo, 1], [10.6, topo, 0], [14, 1200, 0], [15, 900, 0]]
       wav(`${SAIDA}/${tag}_${p}_varredura.wav`, renderizar(p, pts))
+      if (MOTORES[p]?.turbo) {
+        // turbo: puxada em 2ª até perto do corte, alívio (blow-off/flutter), retomada,
+        // troca de marcha (pé alivia 0,25 s, giro cai 35%), nova puxada e alívio longo
+        const c = MOTORES[p]!.corte, r = (f: number) => Math.round(c * f)
+        const tp: Ponto[] = [[0, 900, 0], [1, 900, 0], [1.1, r(0.3), 1], [4.2, r(0.93), 1], [4.25, r(0.9), 0], [5.6, r(0.5), 0],
+          [5.65, r(0.5), 1], [7.8, r(0.92), 1], [7.85, r(0.92), 0.2], [8.1, r(0.6), 0.2], [8.15, r(0.6), 1], [10.3, r(0.93), 1],
+          [10.35, r(0.9), 0], [13.5, 1100, 0], [14.5, 900, 0]]
+        const nome = `${SAIDA}/${tag}_${p}_turbo`
+        wav(nome + ".wav", renderizar(p, tp))
+        wav(nome + "_so.wav", renderizar(p, tp, { soTurbo: true }))
+        wav(nome + "_sem.wav", renderizar(p, tp, { semTurbo: true }))
+      }
     }
   }, 900_000)
 })
