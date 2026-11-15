@@ -114,6 +114,11 @@ function camadaBrilhoUrbano(eng: AutoDashEngine, amb: number) {
   ctx.fillRect(0, hz - 46, W, 48)
 }
 
+// Costa: o mar, as palmeiras e o píer são a mesma margem distante e andam
+// juntos na curva. Antes as palmeiras corriam a 0,6 por cima de um mar a 0,25
+// e o píer ficava parado na tela: a paisagem "escorregava" e dava enjoo.
+const COSTA_PARALLAX = 0.25
+
 // mar no horizonte: faixa de água com cintilação que anda com a pista
 function camadaMar(eng: AutoDashEngine, amb: number) {
   const ctx = eng.ctx
@@ -126,12 +131,12 @@ function camadaMar(eng: AutoDashEngine, amb: number) {
   ctx.fillStyle = `rgba(224,242,254,${Math.max(0.08, amb * 0.22)})`
   const wrapM = W + 60
   for (let i = 0; i < 26; i++) {
-    const x = (((i * 97 - eng.bgShift * 0.25) % wrapM) + wrapM) % wrapM - 30
+    const x = (((i * 97 - eng.bgShift * COSTA_PARALLAX) % wrapM) + wrapM) % wrapM - 30
     ctx.fillRect(x, hz - 46 + ((i * 29) % 40), 14 + ((i * 7) % 16), 1.5)
   }
 }
 
-// fileira de palmeiras contra o mar (rola devagar com a pista)
+// fileira de palmeiras contra o mar (rola devagar com a pista, junto com o mar)
 function camadaPalmeiras(eng: AutoDashEngine, amb: number) {
   const ctx = eng.ctx
   const hz = H * 0.5
@@ -139,7 +144,7 @@ function camadaPalmeiras(eng: AutoDashEngine, amb: number) {
   const cor = shade("#0d3b2e", Math.max(0.35, amb))
   ctx.strokeStyle = cor
   for (let i = 0; i < 12; i++) {
-    const x = (((i * 131 - eng.bgShift * 0.6) % wrap) + wrap) % wrap - 60
+    const x = (((i * 131 - eng.bgShift * COSTA_PARALLAX) % wrap) + wrap) % wrap - 60
     const h = 40 + ((i * 53) % 26)
     const lean = ((i % 3) - 1) * 10
     const tx = x + lean, ty = hz - h
@@ -156,11 +161,12 @@ function camadaPalmeiras(eng: AutoDashEngine, amb: number) {
   }
 }
 
-// píer de madeira entrando no mar, à esquerda do horizonte
+// píer de madeira entrando no mar (anda com o mar; começa à esquerda do horizonte)
 function camadaPier(eng: AutoDashEngine, amb: number) {
   const ctx = eng.ctx
   const hz = H * 0.5
-  const x0 = W * 0.12, x1 = W * 0.3
+  const larg = W * 0.18, wrap = W * 2.2
+  const x0 = (((W * 0.12 + larg - eng.bgShift * COSTA_PARALLAX) % wrap) + wrap) % wrap - larg, x1 = x0 + larg
   ctx.fillStyle = shade("#6b4f35", Math.max(0.4, amb))
   ctx.fillRect(x0, hz - 6, x1 - x0, 4)
   ctx.fillStyle = shade("#3f2d1d", Math.max(0.4, amb))
