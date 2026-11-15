@@ -15,6 +15,7 @@ import { CARS } from "../data"
 import { perfilDoCarro, GRAVACAO_DO_PERFIL, CREDITO_GRAVACAO } from "../sound/profiles"
 import { relacoes } from "../physics/cambio"
 import { renderCombustivel, renderRacha, renderVacuo } from "./eventos"
+import { renderEstrelas } from "./policia"
 
 export function renderHud(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -94,6 +95,7 @@ export function renderHud(eng: AutoDashEngine) {
   if (eng.mode === "duel" && eng.duel) renderDuelBar(eng)
   renderMinimap(eng)
   renderRearView(eng) // só aparece durante perseguição
+  renderEstrelas(eng) // nível de procurado (só com calor; Fase 6)
 }
 
 export function renderMinimap(eng: AutoDashEngine) {

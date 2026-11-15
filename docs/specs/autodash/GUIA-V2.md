@@ -57,12 +57,12 @@ Pasta: `web-garagem/src/game/autodash/`
 | Orquestração | `engine.ts` (~660 linhas) | Campos, render, bind/unbind. Módulos recebem `eng` como primeiro argumento |
 | Simulação | `sim/update.ts` | Um quadro da simulação |
 | Física | `physics/rpm.ts`, `physics/gearbox.ts` | Curva de torque, RPM, câmbio |
-| Mundo | `world/track.ts`, `world/zones.ts`, `world/obstacles.ts`, `world/events.ts` | Geração de pista, zonas, obstáculos, eventos e perseguição |
+| Mundo | `world/track.ts`, `world/zones.ts`, `world/obstacles.ts`, `world/events.ts`, `world/policia.ts` | Geração de pista, zonas, obstáculos, eventos; polícia por estrelas (calor, despiste, pregos, bloqueio, helicóptero) |
 | Tráfego | `traffic/types.ts`, `traffic/driver.ts`, `traffic/spawner.ts` | IA por papel (civil, polícia) com registro `DRIVERS` |
 | Modos | `modes/solo.ts`, `modes/race.ts`, `modes/duel.ts` | Largada, colisão, lobbies |
 | Corrida | `race/session.ts`, `race/bots.ts`, `race/net.ts`, `race/types.ts` | Sessão, bots, rede com dead reckoning |
 | Rede | `net.ts` (duelo), `net-http.ts` (helper comum) | Polling |
-| Render | `render/road.ts`, `render/backdrop.ts`, `render/objects.ts`, `render/player.ts`, `render/hud.ts`, `render/race-hud.ts`, `render/particles.ts`, `render/textures.ts`, `render/primitives.ts`, `render/menus/*.ts` | Desenho por área |
+| Render | `render/road.ts`, `render/backdrop.ts`, `render/objects.ts`, `render/player.ts`, `render/hud.ts`, `render/race-hud.ts`, `render/particles.ts`, `render/textures.ts`, `render/primitives.ts`, `render/policia.ts`, `render/menus/*.ts` | Desenho por área |
 | Entrada | `input/keyboard.ts`, `input/pointer.ts`, `input/touch.ts` | Teclado, mouse, toque |
 | UI e fluxo | `ui/widgets.ts`, `flow.ts` | Botões de canvas, navegação entre telas |
 | Dados | `data.ts` | Carros (`CARS`), pinturas, faixas, neon, rodas, asas, constantes de câmbio, leaderboard, config |
@@ -134,7 +134,8 @@ Origem: QA respondido pelo usuário em 2026-11-13.
 ## 7. Decisões em aberto
 
 - **Dinheiro / moeda do jogo:** tem que existir? Como combustível e progresso se encaixam sem quebrar as rodadas infinitas? Propor 2 ou 3 opções em documento.
-- **Polícia:** escalas de estrelas, o que cada nível faz, como encerra a perseguição.
+- **Polícia:** escalas de estrelas, o que cada nível faz, como encerra a perseguição. **Escolha provisória (14/11, sessão da Fase 6, sem o dono):** escala de `docs/pesquisa/visual-e-desafio.md` 4.6 (★ radar, ★★ cola, ★★★ pregos, ★★★★ bloqueio, ★★★★★ helicóptero); perseguição encerra por despiste (ninguém te vê por N s) ou prisão (encostão te joga fora da pista, ou batida no bloqueio). Números na tabela `ESTRELAS` (`world/policia.ts`) e na Fase 6 abaixo. Confirmar no playtest.
+- **Polícia — recompensa:** despistar dá pontos (1.500 × estrelas) e passar na fresta do bloqueio dá 2.500. Provisório até decidir moeda (ver Dinheiro).
 - **Drift:** pontuação, critérios e como entra nas rodadas.
 - **Biomas:** lista final e ordem de implementação além de cidade e costa.
 - **Modelo de física:** quantos parâmetros por pneu e por carro (ver ADR 0012 quando existir).
@@ -241,7 +242,55 @@ Pendente / não verificado:
 - Achado fora do escopo: as viaturas estacionadas da blitz e do radar nascem a 102 mil unidades e o spawner mata estacionado acima de 88 mil, então provavelmente somem no primeiro quadro (leitura de código, não verificado; interessa à Fase 6).
 
 Fora desta fase (registrado para depois): diretor de intensidade (pesquisa 4.2), quase-batida graduada (4.4), E7 nos bots da corrida, som do abastecimento (função `somAbastecer` existe e não toca nada: implementação fica com a sessão de som), botão de toque para aceitar o racha.
-### Fase 6 — Polícia por estrelas — `pendente`
+### Fase 6 — Polícia por estrelas — `implementada` (hashes no log; juntada à Fase 5 em 14/11; aguardando playtest)
+Feita em paralelo com a Fase 5 por pedido do usuário. Insumo: `docs/pesquisa/visual-e-desafio.md` 4.5–4.6 (E8, E10, E13). Lógica em `world/policia.ts` (estado, tabela, regras), desenho em `render/policia.ts`; `engine.ts` ganha só o campo `policia`.
+
+**Regras (provisórias, ver Decisões em aberto)**
+- **Calor** de 0 a 5,99; estrelas = parte inteira. Sobe com infração e com tempo de perseguição; nunca passa de 5★.
+  - Infrações: radar (+1), furar blitz (+2), encostão em viatura (+0,25), bater no bloqueio = preso.
+  - Tempo: +1★ a cada 30 s em que a polícia te **vê** (viatura a menos de 10.000 u, ou você dentro do holofote).
+- **Despiste:** depois de 6 s de perseguição, ficar sem ser visto pelo tempo da tabela faz as viaturas desistirem e o helicóptero ir embora (+1.500 pontos × estrelas). Aí o calor **esfria**: perde 1★ a cada 8 s, com as estrelas piscando. Infração nova durante o esfriamento reabre a perseguição no nível atual.
+- **Prisão** (fim da partida solo, texto de polícia no game over): encostão que te joga fora da pista (já existia) ou batida em viatura do bloqueio.
+- **Fuga honesta (ADR 0008):** o teto da viatura sobe com as estrelas, mas é sempre `topSpeed do carro − 8 km/h`, no máximo. O helicóptero segue a mesma regra (−10). Em reta limpa todo carro escapa.
+
+| ★ | Viaturas | Teto (km/h) | Arrancada (km/h/s) | Despiste (s) | Evento |
+|---|---|---|---|---|---|
+| 1 | 1 | 205 | 50 | 3 | radar e blitz (o gatilho) |
+| 2 | 2 | 215 | 55 | 4 | viaturas na cola (a perseguição de antes) |
+| 3 | 3 | 222 | 60 | 5 | E8 tapete de pregos a cada ~22 s |
+| 4 | 4 | 228 | 65 | 6 | + E10 bloqueio com fresta (alterna com os pregos) |
+| 5 | 4 | 234 | 70 | 7 | + E13 helicóptero com holofote |
+
+**Checklist**
+- [x] Nível de procurado: tabela `ESTRELAS`, calor, infrações, tempo, despiste, esfriamento (`world/policia.ts`). Radar e blitz viram infração (`world/zones.ts`). 7 testes das regras puras (`__tests__/policia.test.ts`) e 3 cenários no engine real (`__tests__/policia.cenario.test.ts`, 3★, 4★ e 5★, sem render, menos de 1 s).
+- [x] Viaturas como estratégia de tráfego: `PoliceDriver` lê teto e arrancada da viatura (`Traffic.top`, `Traffic.accel`), definidos pela estrela. Reforço chega por trás quando a estrela sobe (nunca nasce na frente).
+- [x] HUD de estrelas no topo, à direita do retrovisor (abaixo da barra no duelo): estrelas cheias e vazias, progresso da próxima, "TE VIRAM" em vermelho e azul, barra de despiste, estrela piscando no esfriamento, aviso de pneu furado e de holofote.
+- [x] E8 tapete de pregos (≥3★): placas, viatura no acostamento, tapete com reflexo âmbar em 2–3 faixas, sempre uma faixa livre. Pneu furado por 8 s: teto ×0,75, aderência ×0,8, faísca no aro. Não para nem teleporta.
+- [x] E10 bloqueio com fresta (≥4★): três viaturas atravessadas (tipo `roadblock`), a fresta numa faixa do meio e o acostamento livre. Civis que chegam encostam na fresta. Fresta dá bônus; acostamento perde velocidade no chão; bater = preso.
+- [x] E13 helicóptero (5★): holofote no asfalto logo à frente do carro, segue com atraso; dentro dele você é visto. Teto 230 (sempre 10 abaixo do carro). Embaixo do viaduto ele te perde por 4 s. Sprite no céu com facho e farol.
+- [x] Tecla de debug **O** (só solo, correndo): sobe uma estrela. Volta para a lista O L B V J K I U.
+- [x] Atalho de teste **[P] na garagem** (como o [Z] do motor): larga já perseguido em 1★, sem evento de mapa sorteado; correndo, **0–5** põem a caçada direto na estrela (0 encerra) e o calor não sobe sozinho. A garagem mostra "testes: [Z] motor · [P] polícia".
+- [x] Gancho da sirene: `eng.policia.sirene` (0..1, pela viatura mais perto). **TODO (sessão do som):** tocar a sirene com pan pela viatura; aqui só o valor é calculado.
+
+Critério de aceite: sem perseguição o jogo é idêntico (golden inalterado, ou muda só em commit próprio e justificado). No navegador: furar o radar dá 1★ e uma viatura; a estrela sobe com o tempo; 3★ traz pregos, 4★ bloqueio, 5★ helicóptero; despistar zera as viaturas e as estrelas esfriam. Build, lint e test verdes.
+
+**Como testar** (garagem → **[P]**; segure W):
+1. **1★** (largada): uma viatura chega por trás; o painel à direita do retrovisor diz "TE VIRAM" e o aviso "TESTE · estrelas nas teclas 0–5". Abra distância em reta: a barra "DESPISTANDO" enche, as viaturas desistem (+pontos) e a estrela esfria piscando.
+2. **2★** (tecla 2): duas viaturas, o ritmo de perseguição de antes.
+3. **3★** (tecla 3): três viaturas; em ~2 s, três placas PARE ("PREGOS 2 km/1 km") e um tapete prateado com reflexo âmbar em 2 faixas, viatura parada no acostamento. Ache a faixa livre; se passar por cima: "PNEU FURADO", faísca no aro, carro preso em 75% da velocidade final por 8 s.
+4. **4★** (tecla 4): quatro viaturas; giroflex no horizonte e placas "BLOQUEIO"; três viaturas atravessadas com a fresta numa faixa do meio. Fresta = "PASSOU NA FRESTA! +2500"; acostamento passa mas freia na grama; bater = "POLÍCIA TE PEGOU". Os eventos alternam bloqueio e pregos.
+5. **5★** (tecla 5): "HELICÓPTERO!", facho e círculo de luz no capô ("NO HOLOFOTE"). Pé no fundo em reta (acima de 230 km/h) deixa a luz para trás ("FORA DO HOLOFOTE"); embaixo de viaduto: "TE PERDEU DE VISTA".
+6. **0** encerra a caçada. Fora do teste, o caminho natural é radar (1★) ou blitz (2★) a partir do nível 4, e a tecla **O** sobe uma estrela.
+
+**Resultado (14/11):** golden inalterado em todos os commits. Conferido no navegador (porta 5182, quadro a quadro, porque o painel do navegador estava oculto e o `requestAnimationFrame` parava): HUD ao lado do retrovisor; 3★ com três viaturas no retrovisor; placa PARE de longe; tapete com faixa livre; bloqueio com giroflex visível de longe e "PASSOU NA FRESTA! +2500"; helicóptero com holofote no capô, que perde o carro acima de 230 km/h e deixa despistar.
+- **Bug antigo corrigido no caminho** (380d989): as viaturas paradas da blitz e do radar morriam no quadro em que nasciam (o tráfego matava parado a mais de `DRAW_DIST + 140` segmentos, e os eventos nascem a 1,7 × `DRAW_DIST`). Agora aparecem.
+- Pendente / não verificado:
+  - Sirene: só o valor `eng.policia.sirene` existe. **TODO da sessão do som** (`audio.ts` e `sound/` não foram tocados).
+  - Os eventos da polícia sorteiam com `Math.random` (como `world/events.ts`). Trocar pelo RNG da seed junto com o diretor de intensidade (pesquisa 4.2).
+  - Eventos da polícia não criam zona: o sorteio comum (blitz, obra) pode cair perto de um tapete ou bloqueio.
+  - `spawnPoliceChase` (`world/events.ts`) ficou sem uso. Não removido para não conflitar com a Fase 5; apagar depois do merge.
+  - Balanço (tabela, 30 s por estrela, 8 s de esfriamento, despiste por estrela, alvo e teto do helicóptero) é palpite: calibrar no playtest. Reforço nasce a 150 km/h quando o carro está devagar e pode ultrapassar e "desistir" (lógica antiga do `PoliceDriver`); só aparece com a tecla O em baixa velocidade.
+  - Não testado: duelo (HUD abaixo da barra), celular, helicóptero perdendo o carro sob o viaduto (só no teste de regra, não na tela), fila de civis na fresta.
 ### Fase 7 — Customização estética (bodykit, som, efeitos) — `pendente` (som do motor antecipado)
 - [x] Som de motor por pulsos de combustão (`sound/`), um perfil por motor (14 motores) e um motor por carro; turbo, flutter/blow-off, compressor Roots, estouros. Pesquisa em [docs/pesquisa/som-motor.md](../../pesquisa/som-motor.md).
 - [x] Motor original de cada carro segue a inspiração dele (Mustang 71 → V8 cruzado Ford, Miata → I4 1.6, Silvia S15 → I4 turbo, RX-7 FD → rotativo, Supra A80 → I6 biturbo, R32 → I6 de corrida, 911 992 → boxer 6 biturbo, Z → V6 aspirado). Decisão do usuário (13/11): "depende do carro"; por enquanto o jogador escolhe.
@@ -301,4 +350,9 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-14 | b0f8e84, 9e5cc4c | Fase 5: obra com estreitamento (E4), comboio com fresta (E6), óleo após acidente (E15) no sorteio de eventos. | atualizado no replay solo: o evento sorteado do replay mudou. |
 | 2026-11-14 | c9d0bcd, 754833d, 661cf0a | Fase 5: vácuo com estilingue (E9) e caminhão trocando de faixa (E1). | atualizado: corrida com bots pelo vácuo, solo pelo caminhão (atribuição medida). Clique e duelo não mudam. |
 | 2026-11-14 | 87fbcba | Atalho de teste da Fase 5 na garagem [H] e roteiro "Como testar". | atualizado no replay solo: pílula nova na garagem (+98 chamadas). |
+| 2026-11-14 | 606bfc6, aeac94c, ad362c4, e29459e, e334e16 | Fase 6: GUIA detalhado; nível de procurado (calor, infrações, despiste, esfriamento, viaturas por estrela, tecla O); HUD de estrelas; tapete de pregos (E8); teste de cenário com sonda no harness. | não alterado |
+| 2026-11-14 | 380d989 | Viaturas paradas da blitz e do radar morriam ao nascer (limite à frente menor que o ponto de nascimento dos eventos). | não alterado (os replays não chegam à blitz) |
+| 2026-11-14 | cdabbe9, 221bdd3, f124c6f | Fase 6: bloqueio com fresta (E10), helicóptero com holofote (E13), anúncio de estrela sem empilhar. | não alterado |
+| 2026-11-14 | 6d3adc8, (este) | Atalho de teste de polícia: garagem [P], estrelas 0–5. Texto "testes: [Z] motor · [P] polícia" na garagem. | atualizado no replay solo (+35 chamadas: o texto na garagem). Cenas de corrida e duelo não mudaram. |
+| 2026-11-14 | (merge da Fase 6) | Fases 5 e 6 juntas no branch do v2. Atalhos de teste da garagem viram três pílulas: motor [Z], racha [H], polícia [P]; no teste de polícia os dígitos são só estrelas (eventos 1–6 da Fase 5 desligados). `limparTestes` em flow.ts. | atualizado no replay solo (+196 chamadas: as três pílulas no lugar de pílula + texto). Fim de partida igual. |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

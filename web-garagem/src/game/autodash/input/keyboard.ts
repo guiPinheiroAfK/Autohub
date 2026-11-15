@@ -2,11 +2,12 @@
 import { biomeById, proximoBioma } from "../world/biomes"
 import { proximaHora } from "../world/clock"
 import { proximoClima } from "../world/weather"
+import { infracao, definirEstrelas } from "../world/policia"
 import { enterFromMenu } from "../flow"
 import { confirmName } from "../flow"
 import { toMenu } from "../flow"
 import { flashBeam } from "../flow"
-import { ensureAudio, trocarMotor, trocarMotorTeste } from "../flow"
+import { ensureAudio, trocarMotor, trocarMotorTeste, limparTestes } from "../flow"
 import { startRace } from "../modes/race"
 import { abrirRaceLobby, reconhecerPista, sairReconhecimento } from "../modes/race"
 import { mudarPista } from "../render/menus/race"
@@ -133,11 +134,13 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "k") { eng.cfg.clima = proximoClima(eng.cfg.clima); eng.audio.ui() }
       if (k === "n") { eng.nameBuf = eng.cfg.pilotName; eng.afterName = "garage"; eng.state = "nameentry"; eng.audio.ui() }
       if (["c", "v", "b", "r", "g", "t", "y", "x"].includes(k) || k.startsWith("arrow")) saveConfig(eng.cfg)
-      if (k === "enter") { eng.testeMotor = false; eng.testeFase5 = false; startAndSave(eng) }
+      if (k === "enter") { limparTestes(eng); startAndSave(eng) }
       // teste de motor: pista vazia, sem trânsito; [ e ] (ou , e .) trocam o motor andando
-      if (k === "z") { eng.testeMotor = true; eng.testeFase5 = false; startAndSave(eng) }
+      if (k === "z") { limparTestes(eng); eng.testeMotor = true; startAndSave(eng) }
       // teste da Fase 5: tanque baixo (posto à frente) e convite de racha em 4 s
-      if (k === "h") iniciarTesteFase5(eng)
+      if (k === "h") { limparTestes(eng); iniciarTesteFase5(eng) }
+      // teste de polícia: larga já perseguido, sem eventos de mapa; 0–5 definem as estrelas
+      if (k === "p") { limparTestes(eng); eng.testePolicia = true; startAndSave(eng) }
       if (k === "escape") eng.state = "menu"
       break
     }
@@ -157,10 +160,14 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "f") flashBeam(eng)
       if (eng.testeMotor && (k === "]" || k === ".")) trocarMotorTeste(eng, 1)
       if (eng.testeMotor && (k === "[" || k === ",")) trocarMotorTeste(eng, -1)
-      teclaDebugEvento(eng, k) // 1–6: eventos da Fase 5 (world/debug-eventos.ts)
-      // (as teclas de debug de playtest — O perseguição, L nível, B/V/J/K/I/U
-      // eventos — foram removidas: tudo isso agora é sorteado pelo próprio
-      // jogo em updateEventSpawner)
+      // 1–6: eventos da Fase 5 (world/debug-eventos.ts); no teste de polícia os
+      // dígitos 0–5 são as estrelas, então os eventos ficam desligados ali
+      if (!eng.testePolicia) teclaDebugEvento(eng, k)
+      // (as teclas de debug de playtest — L nível, B/V/J/K/I/U eventos — foram
+      // removidas: tudo isso agora é sorteado pelo próprio jogo em
+      // updateEventSpawner). O voltou na Fase 6: sobe uma estrela de procurado.
+      if (k === "o" && eng.mode === "solo" && eng.state === "racing" && !eng.testeMotor) infracao(eng, "debug")
+      if (eng.testePolicia && eng.state === "racing" && /^[0-5]$/.test(k)) definirEstrelas(eng, Number(k))
       break
     case "paused":
       if (k === "escape" || k === "p" || k === "enter") eng.state = "racing"
@@ -169,7 +176,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       break
     case "gameover":
       if (k === "enter") startRace(eng)
-      if (k === "g") { eng.testeMotor = false; eng.state = "garage" }
+      if (k === "g") { limparTestes(eng); eng.state = "garage" }
       if (k === "m") eng.state = "menu"
       break
   }

@@ -18,7 +18,7 @@ export function enterFromMenu(eng: AutoDashEngine, dest: "garage" | "duellobby" 
     // deixava mode="race" e o "bora correr" virava circuito
     eng.mode = "solo"
     eng.race = null
-    eng.testeMotor = false
+    limparTestes(eng)
     eng.state = "garage"
   }
 }
@@ -32,9 +32,15 @@ export function confirmName(eng: AutoDashEngine) {
   eng.afterName = "garage"
 }
 
-export function toMenu(eng: AutoDashEngine) {
+/** Desliga todos os atalhos de teste da garagem (motor, Fase 5, polícia). */
+export function limparTestes(eng: AutoDashEngine) {
   eng.testeMotor = false
   eng.testeFase5 = false
+  eng.testePolicia = false
+}
+
+export function toMenu(eng: AutoDashEngine) {
+  limparTestes(eng)
   eng.mode = "solo"
   eng.duel = null
   eng.floaters = []

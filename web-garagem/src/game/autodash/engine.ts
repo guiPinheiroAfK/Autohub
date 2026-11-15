@@ -2,6 +2,7 @@ import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig,
 import { type DuelTelemetry } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic } from "./traffic/types"
+import { type Procurado, novoProcurado } from "./world/policia"
 import { RaceSession } from "./race/session"
 import { noCallout, buildTouchControls, onTouchStart, onTouchMove } from "./input/touch"
 import { buildTrack } from "./world/track"
@@ -79,7 +80,8 @@ export interface Seg { curve: number; y1: number; y2: number; sign?: number }
 // Fase 5: `seta` = painel de seta luminosa da obra (sólido, como barreira);
 // `oleo` = mancha de óleo (não é sólida: escorrega, world/oleo.ts). `lado` = lado
 // fechado da obra ou lado do acidente. `pisado`: o jogador já passou na mancha.
-export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" | "seta" | "oleo"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean; lado?: number; pisado?: boolean }
+// Fase 6: `pregos` = tapete de pregos da polícia (world/policia.ts).
+export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" | "seta" | "oleo" | "pregos"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean; lado?: number; pisado?: boolean }
 // Zona de evento no traçado:
 //  bridge    — ponte suspensa (estilo Golden Gate): você dirige EM CIMA, com
 //              guarda-corpo, torres e água dos dois lados
@@ -92,7 +94,7 @@ export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" 
 //  posto     — reta com posto de combustível (Fase 5, world/posto.ts)
 //  obra      — obra com estreitamento: `lado` fecha duas faixas (world/obra.ts)
 export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto" | "obra"; z: number; end: number; spawnT: number; checked?: boolean; lado?: number }
-export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto" | "chegada" | "acidente"; label?: string; lado?: number }
+export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto" | "chegada" | "acidente" | "policia"; label?: string; lado?: number }
 
 export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 export interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
@@ -167,6 +169,7 @@ export class AutoDashEngine {
   sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto
   testeMotor = false   // pista vazia para ouvir os motores (garagem → Z)
   testeFase5 = false   // atalho de teste da Fase 5: racha e posto logo de cara (garagem → H)
+  testePolicia = false // perseguição direta, estrelas nas teclas 0–5 (garagem → P)
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6
@@ -181,6 +184,7 @@ export class AutoDashEngine {
   policeHitT = 0 // cooldown pós-encostão — vale SÓ contra viatura
   policeEscapeT = 0 // tempo mantendo distância da polícia (protótipo do "despiste")
   policeChaseT = 0 // duração da perseguição atual — despiste só vale após o aquecimento
+  policia: Procurado = novoProcurado() // nível de procurado (world/policia.ts, Fase 6)
   particles: Particle[] = []
   floaters: Floater[] = []
   drops: Drop[] = []

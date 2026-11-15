@@ -19,6 +19,7 @@ import { passoCamera } from "../render/camera"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
+import { atualizarPolicia, aderenciaPolicia } from "../world/policia"
 import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro } from "../world/ramais"
 import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
 import { atualizarRacha } from "../modes/racha"
@@ -122,8 +123,9 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   // ---------- racing ----------
-  // óleo (E15): aderência cai por um instante em cima da mancha
-  const grip = spec.grip * tyreOf(spec).grip * climaAtual(eng).grip * aderenciaOleo(eng)
+  // óleo (E15): aderência cai por um instante em cima da mancha; pneu furado
+  // pelos pregos (Fase 6) também
+  const grip = spec.grip * tyreOf(spec).grip * climaAtual(eng).grip * aderenciaOleo(eng) * aderenciaPolicia(eng)
   const playerZ = eng.position + PLAYER_Z
   const seg = segAt(eng, playerZ)
   // ramal (atalho) neste ponto da pista, se houver (ADR 0014). Sem ramais: null.
@@ -347,6 +349,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   atualizarObras(eng, dt, playerZ)              // E4: trânsito sai do lado fechado
   atualizarComboio(eng, dt, playerZ, eng.rngEv) // E6: a fresta anda
   updateObstacles(eng, playerZ)
+  atualizarPolicia(eng, dt, playerZ)
 
   // aviso de curva fechada à frente
   eng.curveWarn = 0

@@ -10,6 +10,7 @@ import { mulberry32 } from "../math"
 import { COMBUSTIVEL } from "../world/combustivel"
 import { RACHA } from "../world/racha"
 import { prepararTesteFase5 } from "../world/debug-eventos"
+import { novoProcurado } from "../world/policia"
 
 export function startRace(eng: AutoDashEngine, seed?: number) {
   const corrida = eng.mode === "race"
@@ -23,6 +24,8 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   else buildTrack(eng, seed, corrida)
   // teste de motor: pista vazia (sem trânsito, eventos, polícia nem powerups)
   if (eng.testeMotor) { eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = 1e9 }
+  // teste de polícia: sem evento de mapa sorteado (só os da polícia), estrelas pelas teclas 0–5
+  if (eng.testePolicia) eng.eventTimer = 1e9
   seedTraffic(eng, eng.testeMotor ? 0 : corrida ? 5 : 14)
   eng.position = 0
   eng.speed = 0
@@ -35,6 +38,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.score = 0; eng.km = 0; eng.combo = 0; eng.comboT = 0
   eng.nitroMeter = 0; eng.nitroOn = false
   eng.shield = false; eng.immuneT = 0; eng.policeHitT = 0; eng.policeEscapeT = 0; eng.policeChaseT = 0; eng.mult2T = 0
+  eng.policia = novoProcurado()
   eng.level = 0; eng.levelUpT = 0
   eng.powerups = []; eng.puTimer = eng.testeMotor ? 1e9 : 6
   eng.curveWarn = 0; eng.collWarn = null

@@ -1,7 +1,7 @@
 // AutoDash — render/menus/main.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { enterFromMenu } from "../../flow"
 import { iniciarTesteFase5 } from "../../world/debug-eventos"
-import { confirmName, trocarMotor } from "../../flow"
+import { confirmName, trocarMotor, limparTestes } from "../../flow"
 import { perfilDoCarro, GRAVACAO_DO_PERFIL, CREDITO_GRAVACAO } from "../../sound/profiles"
 import { relacoes } from "../../physics/cambio"
 import { AutoDashEngine, W, H } from "../../engine"
@@ -120,9 +120,12 @@ export function renderGarage(eng: AutoDashEngine) {
     eng.state = "nameentry"
     eng.audio.ui()
   })
-  pill(eng, "ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); eng.testeMotor = false; eng.testeFase5 = false; startRace(eng) }, { primary: true, h: 42, font: 17 })
-  // atalho de teste da Fase 5 (world/debug-eventos.ts)
-  pill(eng, "testar racha + posto  [H]", 120, 516, 240, () => iniciarTesteFase5(eng), { h: 20, font: 10 })
+  pill(eng, "ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); limparTestes(eng); startRace(eng) }, { primary: true, h: 42, font: 17 })
+  // atalhos de teste (playtest): pista vazia para o motor, racha + posto (Fase 5)
+  // e perseguição direta com estrelas nas teclas 0–5 (Fase 6)
+  pill(eng, "motor [Z]", 120, 516, 76, () => { save(); limparTestes(eng); eng.testeMotor = true; startRace(eng) }, { h: 20, font: 10 })
+  pill(eng, "racha [H]", 202, 516, 76, () => { limparTestes(eng); iniciarTesteFase5(eng) }, { h: 20, font: 10 })
+  pill(eng, "polícia [P]", 284, 516, 76, () => { save(); limparTestes(eng); eng.testePolicia = true; startRace(eng) }, { h: 20, font: 10 })
 
   // painel de specs e customização
   glass(eng, 486, 66, 456, 460, 18)

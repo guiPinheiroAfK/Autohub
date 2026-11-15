@@ -1,6 +1,6 @@
 # AutoDash v2 — "mini Most Wanted"
 
-**Status:** Fases 0 a 5 implementadas, aguardando playtest. Status e commits no GUIA.
+**Status:** Fases 0 a 6 implementadas, aguardando playtest. Status e commits no GUIA.
 **Guia vivo (fonte da verdade do ciclo):** [GUIA-V2.md](GUIA-V2.md). Esta spec detalha escopo, fases e critérios; decisões e log ficam no guia.
 
 ## 1. Escopo
