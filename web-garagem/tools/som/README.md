@@ -144,6 +144,34 @@ pedir e numa varredura. Serve para medir espectro e volume e para comparar antes
 RENDER_MOTOR=/pasta/saida RENDER_TAG=depois RENDER_PERFIS=v8-cruzado,v8-plano RENDER_GIROS=1500,3000,5000,6500   npx vitest run src/game/autodash/__tests__/render-motor.test.ts
 ```
 
+## Bancos do Engine Simulator (`sim-*`)
+
+Gravação: Engine Simulator v0.1.11a (MIT). O simulador lê o teclado por Raw Input e
+ignora tecla simulada, então a pessoa pilota (A ignição, S partida, D dinamômetro,
+R pé no fundo) e um gravador de loopback (WASAPI, `pyaudiowpatch`) grava a saída.
+Roteiro por motor: 3 s de lenta, D + R até o dinamômetro desligar no redline, 3 s
+no corte, solta. Volume do simulador perto de 50 (Z + roda) para não clipar.
+
+Sem rastreador: a puxada do dinamômetro sobe a 500 rpm/s em linha reta, então
+`trilha_dino.py` ajusta uma reta pelo pente das harmônicas (ou fixa a reta medida na
+linha dominante com `RETA="t:rpm"`, como no V8 e no V12, em que o pente erra) e uma
+constante na lenta. `nivelar_lenta.py` sobe a lenta até 18 dB abaixo da puxada
+(no simulador ela sai até 45 dB abaixo).
+
+```bash
+python -P trilha_dino.py v10.wav v10 10 "lenta:2-11" "puxada:11.9-27.7"
+RETA="39.3:1245" python -P trilha_dino.py v8.wav v8 8 "lenta:29.5-38.5" "puxada:39.3-49.3"
+RETA="21.5:3440" python -P trilha_dino.py v12.wav v12 12 "lenta:4-20" "puxada:21.5-37"
+python -P nivelar_lenta.py jz.wav "lenta:1-4.5" "puxada:9.3-19.1"   # gera jz_niv.wav
+python -P marcas.py v10.wav v10 "2-11,11.9-27.7" 10      # k = cilindros (grão de 720°)
+python -P banco.py v10.wav v10 "2-11,11.9-27.7" ../../public/autodash/som sim-v10-lfa 32000 2
+python -P nivel.py ../../public/autodash/som sim-v10-lfa
+```
+
+Janelas usadas: V8 lenta 29,5–38,5 / puxada 39,3–49,3; VTEC 1–5 / 8–22,7; VQ35 1–5,5 /
+6,4–17,5; 2JZ 1–4,5 / 9,3–19,1; RB26 1–5 / 11,1–24,9; V10 2–11 / 11,9–27,7; V12 4–20 /
+21,5–37 (só até ~11200 rpm; o 412 T2 vai a 18000).
+
 ## Partida
 
 Freesound #50898, "Car Ignition Key - Engine Starting Running Idle 2.wav", de
