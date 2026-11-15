@@ -14,6 +14,7 @@ import { biomeById, proximoBioma } from "../../world/biomes"
 import { HORA_NOME, proximaHora } from "../../world/clock"
 import { proximoClima } from "../../world/weather"
 import { driveLabel } from "../../physics/traction"
+import { abasGaragem, renderAbaEstetica, renderPreviaPista } from "./estetica"
 
 export function renderMenu(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -63,6 +64,8 @@ export function renderMenu(eng: AutoDashEngine) {
 
 export function renderGarage(eng: AutoDashEngine) {
   const ctx = eng.ctx
+  // prévia na pista (Fase 7): só o carro na cena, sem painel
+  if (eng.previaPista) { renderPreviaPista(eng); return }
   dim(eng, 0.72)
   const spec = CARS[eng.cfg.carIdx]
   const custom = eng.cfg.customs[eng.cfg.carIdx]
@@ -124,12 +127,14 @@ export function renderGarage(eng: AutoDashEngine) {
   // atalhos de teste (playtest): pista vazia para o motor, racha + posto (Fase 5)
   // e perseguição direta com estrelas nas teclas 0–5 (Fase 6)
   pill(eng, "motor [Z]", 120, 516, 76, () => { save(); limparTestes(eng); eng.testeMotor = true; startRace(eng) }, { h: 20, font: 10 })
-  pill(eng, "racha [H]", 202, 516, 76, () => { limparTestes(eng); iniciarTesteFase5(eng) }, { h: 20, font: 10 })
-  pill(eng, "polícia [P]", 284, 516, 76, () => { save(); limparTestes(eng); eng.testePolicia = true; startRace(eng) }, { h: 20, font: 10 })
+  pill(eng, "racha [J]", 202, 516, 76, () => { limparTestes(eng); iniciarTesteFase5(eng) }, { h: 20, font: 10 })
+  pill(eng, "polícia [L]", 284, 516, 76, () => { save(); limparTestes(eng); eng.testePolicia = true; startRace(eng) }, { h: 20, font: 10 })
 
   // painel de specs e customização
   glass(eng, 486, 66, 456, 460, 18)
   const sx = 510
+  abasGaragem(eng)
+  if (eng.abaGaragem === "estetica") { renderAbaEstetica(eng, sx); return }
   const stat = (label: string, frac: number, x: number, y: number, invert = false) => {
     ctx.fillStyle = "rgba(248,250,252,0.75)"
     ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"

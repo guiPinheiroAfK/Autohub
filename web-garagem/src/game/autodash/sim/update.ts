@@ -6,7 +6,7 @@ import { duelNet } from "../modes/duel"
 import { startRace } from "../modes/race"
 import { segAt } from "../world/track"
 import { updateTraffic, wrapDz } from "../traffic/spawner"
-import { updateFx, emitSmoke, burst } from "../fx/particles"
+import { updateFx, emitSmoke, emitEscape, burst } from "../fx/particles"
 import { climaAtual, tickTempo } from "./clima"
 import { perfilDoCarro, REV_AMOSTRA_S } from "../sound/profiles"
 import { motorDe, giroNaFrac, faixa, boostAlvo, passoBoost, giroSolto, suavizarGiro, giroDoSom, rampaGas, SOLTO_SOBE_S } from "../physics/motores"
@@ -338,8 +338,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.powerups = eng.powerups.filter(p => !p.taken && wrapDz(eng, p.z, eng.position) > -20 * SEG_LEN)
 
   // fumaça de escape / arrancada
-  if (throttle && eng.speed < 40 && eng.gear >= 1) emitSmoke(eng, 2, "#cbd5e1")
-  else if (throttle && Math.random() < 0.3) emitSmoke(eng, 1, "#64748b")
+  if (throttle && eng.speed < 40 && eng.gear >= 1) emitEscape(eng, 2, "#cbd5e1")
+  else if (throttle && Math.random() < 0.3) emitEscape(eng, 1, "#64748b")
 
   // relógio e clima (ADR 0013): o clima só vira na janela de ticks
   tickTempo(eng, dt)

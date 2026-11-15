@@ -144,6 +144,7 @@ Origem: QA respondido pelo usuário em 2026-11-13.
 - **Preço do combustível (Fase 5):** **provisório: grátis**, custa só o tempo de passar a 70 km/h pela faixa do posto. Dinheiro segue em aberto (acima).
 - **Recompensa do racha (Fase 5):** **provisório: reputação** (um contador salvo na config) mais pontos da rodada. Ideia 10 da seção 9: reputação, não moeda. O que a reputação libera fica para a decisão de progressão (D17).
 - **Aceitar o racha (Fase 5):** **provisório: piscar o farol [F]**, que já é o gesto de "bora" na rua. No toque ainda não há botão de farol (pendente).
+- **Estética (Fase 7, provisório desde 14/11):** bodykit só visual e liberado; rivais online sem bodykit; FOV dinâmico ligado por padrão (+4° no topo) com opção de desligar. Confirmar no playtest.
 
 ## 8. Fases
 
@@ -219,7 +220,7 @@ Checklist:
 Critério de aceite: build, lint e testes verdes. Golden muda só em commits próprios (HUD do combustível; caminhão e vácuo mudam o trânsito e a corrida). No navegador: o posto aparece e abastece; a pane seca não encerra a rodada; o convite de racha aparece, aceita com [F] e termina com resultado; obra, comboio e óleo aparecem e se leem a tempo; vácuo aparece no HUD atrás de um carro.
 
 **Como testar** (solo, `http://localhost:5173/autodash`):
-1. Menu → [ENTER] → garagem → **[H]** ("testar racha + posto"). Largada normal com o tanque em 40%.
+1. Menu → [ENTER] → garagem → **[J]** (pílula "racha [J]"). Largada normal com o tanque em 40%.
 2. Logo depois do verde: medidor **COMB** ao lado do NOS e "⛽ … m" acima dele; placas azuis com bomba (POSTO, À DIREITA, ENTRADA).
 3. Pegue a faixa da direita que descola da pista e passe pela cobertura "POSTO 24h" a **até 70 km/h**: "ABASTECENDO", a barra sobe ~20% por segundo. Acima de 70 aparece "reduza pra 70".
 4. ~4 s depois do verde (acima de 70 km/h) um desafiante encosta ao lado com **pisca-alerta** e o painel "te chamou pro racha". Pisque o farol **[F]** em até 7 s para aceitar (ou ignore: ele buzina e vai embora).
@@ -269,12 +270,12 @@ Feita em paralelo com a Fase 5 por pedido do usuário. Insumo: `docs/pesquisa/vi
 - [x] E10 bloqueio com fresta (≥4★): três viaturas atravessadas (tipo `roadblock`), a fresta numa faixa do meio e o acostamento livre. Civis que chegam encostam na fresta. Fresta dá bônus; acostamento perde velocidade no chão; bater = preso.
 - [x] E13 helicóptero (5★): holofote no asfalto logo à frente do carro, segue com atraso; dentro dele você é visto. Teto 230 (sempre 10 abaixo do carro). Embaixo do viaduto ele te perde por 4 s. Sprite no céu com facho e farol.
 - [x] Tecla de debug **O** (só solo, correndo): sobe uma estrela. Volta para a lista O L B V J K I U.
-- [x] Atalho de teste **[P] na garagem** (como o [Z] do motor): larga já perseguido em 1★, sem evento de mapa sorteado; correndo, **0–5** põem a caçada direto na estrela (0 encerra) e o calor não sobe sozinho. A garagem mostra "testes: [Z] motor · [P] polícia".
+- [x] Atalho de teste **[L] na garagem** (era [P]; mudou no merge com a Fase 7) (como o [Z] do motor): larga já perseguido em 1★, sem evento de mapa sorteado; correndo, **0–5** põem a caçada direto na estrela (0 encerra) e o calor não sobe sozinho. A garagem mostra "testes: [Z] motor · [P] polícia".
 - [x] Gancho da sirene: `eng.policia.sirene` (0..1, pela viatura mais perto). **TODO (sessão do som):** tocar a sirene com pan pela viatura; aqui só o valor é calculado.
 
 Critério de aceite: sem perseguição o jogo é idêntico (golden inalterado, ou muda só em commit próprio e justificado). No navegador: furar o radar dá 1★ e uma viatura; a estrela sobe com o tempo; 3★ traz pregos, 4★ bloqueio, 5★ helicóptero; despistar zera as viaturas e as estrelas esfriam. Build, lint e test verdes.
 
-**Como testar** (garagem → **[P]**; segure W):
+**Como testar** (garagem → **[L]**, pílula "polícia [L]"; segure W):
 1. **1★** (largada): uma viatura chega por trás; o painel à direita do retrovisor diz "TE VIRAM" e o aviso "TESTE · estrelas nas teclas 0–5". Abra distância em reta: a barra "DESPISTANDO" enche, as viaturas desistem (+pontos) e a estrela esfria piscando.
 2. **2★** (tecla 2): duas viaturas, o ritmo de perseguição de antes.
 3. **3★** (tecla 3): três viaturas; em ~2 s, três placas PARE ("PREGOS 2 km/1 km") e um tapete prateado com reflexo âmbar em 2 faixas, viatura parada no acostamento. Ache a faixa livre; se passar por cima: "PNEU FURADO", faísca no aro, carro preso em 75% da velocidade final por 8 s.
@@ -302,6 +303,46 @@ Critério de aceite: sem perseguição o jogo é idêntico (golden inalterado, o
 - [x] **Giro com caráter**: giro solto por motor, limitador duro/suave, lenta irregular (V8 bravo e rotativo).
 - Próximo passo de fidelidade (precisa de aprovação para baixar arquivos): híbrido com gravações CC0 (pesquisa, seção 4) como textura e eventos (partida, pops reais).
 - Em aberto: inspiração do GT (V10), do NINJA (I4) e do ALTA (I4) foi palpite pelo nome; FANTASMA confirmado como Koenigsegg (V8 plano biturbo). Calibrar de ouvido: não foi ouvido, só medido offline.
+
+#### Fase 7 — parte visual (bodykit, efeitos, prévia, câmera, torque) — `implementada` (hashes no log; aguardando playtest)
+Fontes: D12, D16 e D17; `docs/pesquisa/visual-e-desafio.md` §1.4 (prévia da pintura contra a cena) e §2.2 (FOV dinâmico); `docs/pesquisa/fisica-carro.md` R2 (zoom ≤ 1,05, `PLAYER_Z` não pode mudar); ADR 0012 (torque no HUD). **Estética não muda a física**: nenhum campo novo é lido por `sim/`, `physics/` ou pela colisão.
+
+Checklist:
+- [x] **Bodykit como dados** (`cosmetic/bodykit.ts`), salvo em `CarCustom` por carro: kit de carroceria (sem kit, saias laterais, saias + difusor, widebody), aerofólio (os 3 de antes + asa alta), aro (padrão, aro fundo, corrida, turbofan), altura (original, rebaixado, stance com cambagem). Desenhado no sprite do carro (`drawPlayerCar`) e na garagem. Configuração salva por versão antiga carrega com o padrão (sem kit, aro padrão, altura original), que desenha **igual** a antes.
+- [x] **Efeitos**: cor da fumaça do escape (padrão, branca, preta, azul, rosa, verde) e cor da chama do nitro (laranja, azul, roxa, verde). Neon por baixo continua o de antes (`NEONS`). Padrão desenha igual.
+- [x] **Atalho de vitrine** [1] (garagem e prévia): presets prontos de bodykit, neon e escape para comparar; volta ao seu no fim do ciclo.
+- [x] **Garagem, aba estética** [H]: as opções novas ficam numa aba própria do painel, para não espremer a aba do carro. Teclas novas: [S] kit, [W] aro, [A] altura, [F] fumaça, [Q] chama, [D] câmera; as antigas ([C] [V] [B] [R] [G]) seguem valendo nas duas abas.
+- [x] **Prévia na pista** [P]: esconde o painel e mostra o carro no tamanho do jogo, na pista do bioma escolhido, no horário e clima escolhidos (O, K e X trocam ao vivo). Mostra o contraste da pintura contra o asfalto da cena (razão WCAG, §1.4) e avisa quando a pintura "some" (< 2:1).
+- [x] **FOV dinâmico** (só desenho): o campo de visão abre de 100° para até 104° entre 150 km/h e a máxima, com a câmera andando junto para o carro do jogador ficar no mesmo lugar e no mesmo tamanho ("dolly zoom"). `CAM_DEPTH` e `PLAYER_Z` não mudam; a colisão não muda. Opção na garagem para desligar ("câmera: fixa"), contra enjoo.
+- [x] **Torque no HUD**: mini curva de força do motor ao lado do conta-giros, com um ponto no giro atual e a faixa de força máxima marcada (pendência do ADR 0012).
+
+Critério de aceite:
+- Carro com customização padrão desenha igual a antes: o golden só muda pelos itens novos de tela (aba da garagem, câmera, torque), cada um em commit `test:` próprio com linha no Log.
+- Nenhum valor de física muda: `medidas.test.ts` e os testes de tração passam sem mexer.
+- Navegador: cada peça do bodykit aparece na garagem e na pista; fumaça e chama trocam de cor; a prévia muda com bioma, horário e clima; a 200 km/h o fundo "abre" sem o carro mexer na tela; nada de tremor novo.
+- Desempenho: o bodykit são até ~8 formas a mais por quadro, sem gradiente novo por quadro.
+
+Decisões provisórias (a confirmar pelo dono, ver seção 7):
+- Bodykit é **só visual** e liberado desde o começo (D17 trava só tuning e aerodinâmica com efeito). Aerofólio e difusor não dão pressão aerodinâmica.
+- Na corrida online e nos bots, os outros veem só a pintura (a rede leva só `paint`); bodykit dos rivais fica para depois.
+- FOV dinâmico ligado por padrão, com teto de +4° (abaixo dos +6° da pesquisa) por ainda existir o zoom de velocidade do R2; os dois juntos ficam ≤ 1,05 de escala no carro.
+- Luz de recorte, grading (G2), bloom falso (G6) e a opção "Visual leve/completo" da pesquisa ficam fora desta leva.
+
+Como testar (garagem do solo, `/autodash` → ENTER):
+1. **[H]** abre a aba estética. **[1]** é o atalho de vitrine: cada toque troca o carro inteiro por um visual pronto (rua limpa, drift JDM, time attack, neon noturno; a pintura fica a sua) e, depois do último, volta exatamente ao seu. Observe: saias, difusor, alargadores com rebites, aro, carro mais baixo com roda inclinada (stance), asa alta.
+2. **[S] [W] [A] [G]** trocam kit, aro, altura e aerofólio uma peça por vez; **[F] [Q]** a cor da fumaça e da chama; **[C]** a pintura. A linha "pintura no asfalto desta cena" fica vermelha quando a pintura some (< 2:1).
+3. **[P]** prévia na pista: o carro no tamanho do jogo. **[X] [O] [K]** trocam bioma, horário e clima ao vivo; **[1]** continua trocando o visual. Segure **[espaço]** (chama do nitro) e **[W]** (fumaça). Observe se a pintura e o neon aparecem à noite e na chuva. **[P]** ou **[ESC]** volta.
+4. **FOV e câmera:** **ENTER** (ou **[Z]**, pista vazia), acelere até passar de 150 km/h e segure; depois o nitro. Observe: o fundo e a pista "abrem" devagar (uns 7% no longe) sem o carro mudar de lugar nem de tamanho, e sem tremor novo; numa batida a lente fecha em ~0,6 s, sem tranco. Compare com **[D]** na aba estética (câmera: fixa). Se der enjoo, anote a velocidade.
+5. **Torque:** ao lado do conta-giros (só no PC). O ponto deve andar pela curva com o giro; nos turbo, a curva azul sobe até a cinza quando o turbo enche. A faixa verde é o pico de força: trocar perto dela.
+
+Pendente / não verificado:
+- Playtest: nada foi jogado por gente; os números (altura, abertura da lente, tamanho dos alargadores) são palpite a calibrar.
+- O FOV foi conferido por teste numérico da lente (`__tests__/fov.test.ts`) e por screenshot a ~210 km/h sem defeito, mas não lado a lado com a câmera fixa; enjoo só se mede jogando. No navegador, o painel ficou oculto e os quadros foram tocados por um laço de `MessageChannel` no lugar do `requestAnimationFrame` (ADR 0007).
+- Vitrine [1]: o "seu" visual guardado vive só na sessão; recarregar a página no meio do ciclo faz o preset atual virar o seu. Trocar de carro no meio deixa o carro anterior com o preset aplicado.
+- Asa alta encosta de leve no texto de crédito da gravação na garagem (motor com gravação real).
+- Bodykit não vai para a rede: rivais online e o fantasma do duelo aparecem sem kit.
+- Torque no HUD fica fora no celular; sem lugar definido para ele com os botões de toque.
+- Estouro do escape (pop) com chama visual: depende do evento de estouro do som (`sound/`, outra sessão); não ligado.
 
 Fases 4 em diante só são detalhadas quando a anterior for aprovada.
 
@@ -354,5 +395,10 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-14 | 380d989 | Viaturas paradas da blitz e do radar morriam ao nascer (limite à frente menor que o ponto de nascimento dos eventos). | não alterado (os replays não chegam à blitz) |
 | 2026-11-14 | cdabbe9, 221bdd3, f124c6f | Fase 6: bloqueio com fresta (E10), helicóptero com holofote (E13), anúncio de estrela sem empilhar. | não alterado |
 | 2026-11-14 | 6d3adc8, (este) | Atalho de teste de polícia: garagem [P], estrelas 0–5. Texto "testes: [Z] motor · [P] polícia" na garagem. | atualizado no replay solo (+35 chamadas: o texto na garagem). Cenas de corrida e duelo não mudaram. |
-| 2026-11-14 | (merge da Fase 6) | Fases 5 e 6 juntas no branch do v2. Atalhos de teste da garagem viram três pílulas: motor [Z], racha [H], polícia [P]; no teste de polícia os dígitos são só estrelas (eventos 1–6 da Fase 5 desligados). `limparTestes` em flow.ts. | atualizado no replay solo (+196 chamadas: as três pílulas no lugar de pílula + texto). Fim de partida igual. |
+| 2026-11-14 | (merge da Fase 6) | Fases 5 e 6 juntas no branch do v2. Atalhos de teste da garagem viram três pílulas: motor [Z], racha [H], polícia [P] (depois [J] e [L], no merge da Fase 7); no teste de polícia os dígitos são só estrelas (eventos 1–6 da Fase 5 desligados). `limparTestes` em flow.ts. | atualizado no replay solo (+196 chamadas: as três pílulas no lugar de pílula + texto). Fim de partida igual. |
+| 2026-11-14 | 64129fa, 4ad9eb5 | Fase 7 visual: guia detalhado; bodykit (kit, aro, altura, asa alta) e cor de fumaça e chama como dados em `CarCustom`, desenhados no sprite. Padrão desenha igual. | não alterado |
+| 2026-11-14 | 582df8a, a8f9843 | Garagem: aba estética [H] e prévia na pista [P] com contraste da pintura no asfalto. | atualizado no replay solo (pills das abas, +196 chamadas). |
+| 2026-11-14 | 32d23eb, 082980c | FOV dinâmico (dolly zoom, só desenho; `CAM_DEPTH`/`PLAYER_Z` iguais), desligável na garagem. | atualizado no replay solo e na corrida com bots (passam de 150 km/h). |
+| 2026-11-14 | f733ffd, fb74fe0 | Torque do motor no HUD (mini curva e ponto no giro). | atualizado nos 3 cenários que dirigem. |
+| 2026-11-14 | (merge da Fase 7) | Fases 5, 6 e 7 juntas. [H] e [P] da garagem ficam com a Fase 7 (aba estética e prévia); teste da Fase 5 vai para [J] e teste de polícia para [L]. O [F] não colide (farol na corrida, cor da fumaça na garagem). | atualizado (solo e cenários) pela soma das três fases. |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

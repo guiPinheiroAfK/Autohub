@@ -9,7 +9,7 @@ import { convidarRacha } from "../modes/racha"
 import { spawnEvent } from "./events"
 
 /**
- * Atalho de teste da Fase 5 (garagem → H), como o [Z] do teste de motor: largada
+ * Atalho de teste da Fase 5 (garagem → J), como o [Z] do teste de motor: largada
  * normal no solo com o tanque em 40% (o posto abre já no primeiro quadro), o
  * convite de racha 4 s depois do verde e o primeiro evento sorteado aos 25 s.
  */

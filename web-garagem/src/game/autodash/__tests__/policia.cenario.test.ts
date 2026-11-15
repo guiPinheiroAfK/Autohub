@@ -185,13 +185,13 @@ describe("polícia por estrelas — cenário no engine", () => {
     expect(fatos.heliDepois).toBeNull()
   }, 60_000)
 
-  it("atalho de teste: garagem [P] larga em 1★ e as teclas 0–5 definem as estrelas", async () => {
+  it("atalho de teste: garagem [L] larga em 1★ e as teclas 0–5 definem as estrelas", async () => {
     const f: Record<string, any> = {}
     await runScenario(1500, 717171, (i, api) => {
       if (i === 10) api.tap("Enter")
       if (i >= 12 && i <= 16) api.tap("TESTE"[i - 12])
       if (i === 18) api.tap("Enter")
-      if (i === 25) api.tap("p")      // garagem -> teste de polícia
+      if (i === 25) api.tap("l")      // garagem -> teste de polícia
       if (i === 27) api.down("w")
       if (i === 400) api.tap("3")
       if (i === 1000) api.tap("5")

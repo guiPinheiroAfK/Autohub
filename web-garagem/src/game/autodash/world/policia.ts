@@ -169,7 +169,7 @@ export function infracao(eng: AutoDashEngine, inf: Infracao) {
 /** Um quadro da polícia: calor por tempo, despiste, esfriamento e sirene. */
 export function atualizarPolicia(eng: AutoDashEngine, dt: number, playerZ: number) {
   const p = eng.policia
-  // teste de polícia (garagem → P): já larga perseguido em 1★
+  // teste de polícia (garagem → L): já larga perseguido em 1★
   if (eng.testePolicia && !p.testeLargou) { p.testeLargou = true; definirEstrelas(eng, 1) }
   if (p.furadoT > 0) passoPneuFurado(eng, dt)
   if (p.bloqueios.length) passoBloqueios(eng, playerZ)
@@ -404,7 +404,7 @@ function passoHeli(eng: AutoDashEngine, dt: number, playerZ: number): boolean {
 }
 
 /**
- * Teste de polícia (garagem → P): põe a caçada direto em `n` estrelas (0 encerra).
+ * Teste de polícia (garagem → L): põe a caçada direto em `n` estrelas (0 encerra).
  * Viaturas a mais saem, as que faltam chegam por trás, o helicóptero só fica
  * em 5★, e o próximo evento da estrela vem logo.
  */

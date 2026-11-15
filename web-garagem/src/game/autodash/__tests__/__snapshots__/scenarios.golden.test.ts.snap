@@ -2,21 +2,21 @@
 
 exports[`AutoDash — cenários golden (corrida e duelo) > corrida com bots: lobby -> largada -> pilotagem -> pausa 1`] = `
 {
-  "calls": 22809273,
+  "calls": 22880065,
   "finalMode": "race",
   "finalState": "racing",
   "frames": 1500,
-  "hash": "2f2dfead704c8d8970b5d39147b0991943c35418f263436bf881edccaf557326",
+  "hash": "692aebe7c78e27134c928b88f19a23096547800c2fa78d5e7d79cc885c1fcad3",
 }
 `;
 
 exports[`AutoDash — cenários golden (corrida e duelo) > corrida por CLIQUE real: botão CORRIDA -> CORRER COM BOTS -> pilotagem 1`] = `
 {
-  "calls": 18357732,
+  "calls": 18412623,
   "finalMode": "race",
   "finalState": "racing",
   "frames": 1200,
-  "hash": "a688d48548fcc650d95da81ef644e7c0309b4d6d3c13b20a76e9b3a8719b5d45",
+  "hash": "13ca8b70da233e4a7eee0561c2c491e9a67e77d55663b25c474c4716cd0a776f",
 }
 `;
 

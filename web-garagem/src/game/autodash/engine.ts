@@ -24,10 +24,12 @@ import { aplicarCamera } from "./render/camera"
 import { vignetteTex } from "./render/textures"
 import { renderMenu, renderGarage, renderPause, renderGameOver, renderNameEntry } from "./render/menus/main"
 import { renderHud, renderSemaphore } from "./render/hud"
+import { renderTorqueHud } from "./render/hud-torque"
 import { renderTrackPreview, renderRaceLobby, renderRaceCode, renderRaceWait, renderRaceResult, renderRaceRecon } from "./render/menus/race"
 import { renderRaceHud } from "./render/race-hud"
 import { renderDuelLobby, renderDuelCode, renderDuelWaiting, renderDuelSpectate, renderDuelResult } from "./render/menus/duel"
 import { onKeyDown, onKeyUp } from "./input/keyboard"
+import { type AbaGaragem } from "./render/menus/estetica"
 import { onMouseDown, onMouseUp, onMouseMove, onWheel, onCtx } from "./input/pointer"
 
 // AutoDash — engine pseudo-3D (estilo NFS de PSP) em Canvas 2D puro.
@@ -168,8 +170,8 @@ export class AutoDashEngine {
   zones: Zone[] = []
   sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto
   testeMotor = false   // pista vazia para ouvir os motores (garagem → Z)
-  testeFase5 = false   // atalho de teste da Fase 5: racha e posto logo de cara (garagem → H)
-  testePolicia = false // perseguição direta, estrelas nas teclas 0–5 (garagem → P)
+  testeFase5 = false   // atalho de teste da Fase 5: racha e posto logo de cara (garagem → J)
+  testePolicia = false // perseguição direta, estrelas nas teclas 0–5 (garagem → L)
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6
@@ -217,7 +219,7 @@ export class AutoDashEngine {
   ramais: Ramal[] = []
   trechos: TrechoInfo[] = []
   demoT = 0
-  revAmostraT = 0
+  revAmostraT = 0 // acelerada de amostra na garagem ao trocar o motor
 
   // Fase 5 (eventos novos). A lógica mora em world/ e sim/; aqui só o estado.
   rngEv: () => number = mulberry32(1) // sorteio dos eventos novos (semeado na largada)
@@ -230,7 +232,12 @@ export class AutoDashEngine {
   oleoT = 0 // s restantes escorregando no óleo (world/oleo.ts)
   vacuo = 0       // força do vácuo, 0..1 (sim/vacuo.ts)
   vacuoS = 0      // s seguidos no vácuo (o estilingue só vale depois de um tempo)
-  estilingueT = 0 // s restantes do estilingue ao sair do vácuo // acelerada de amostra na garagem ao trocar o motor
+  estilingueT = 0 // s restantes do estilingue ao sair do vácuo
+
+  // garagem da Fase 7 (render/menus/estetica.ts)
+  abaGaragem: AbaGaragem = "carro"
+  previaPista = false // carro na pista do bioma escolhido, sem o painel
+  fovF = 0 // abertura do FOV dinâmico, 0..1 (render/fov.ts); só desenho
 
   // input
   keys = new Set<string>()
@@ -458,6 +465,8 @@ export class AutoDashEngine {
       case "raceresult": renderRaceResult(this); break
       case "racerecon": renderRaceRecon(this); break
     }
+    // torque ao lado do conta-giros (Fase 7, render/hud-torque.ts)
+    renderTorqueHud(this)
 
     // floaters por cima de tudo
     const ctx2 = this.ctx

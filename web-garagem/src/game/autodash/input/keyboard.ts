@@ -19,6 +19,7 @@ import { AutoDashEngine, H } from "../engine"
 import { saveConfig, CARS, PAINTS, STRIPES, NEONS, WHEELS, WINGS } from "../data"
 import { shiftUp, shiftDown } from "../physics/gearbox"
 import { teclaDebugEvento, iniciarTesteFase5 } from "../world/debug-eventos"
+import { teclaEstetica } from "../render/menus/estetica"
 
 export function toggleMute(eng: AutoDashEngine) {
   eng.cfg.sound = !eng.cfg.sound
@@ -118,6 +119,8 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "m" || k === "escape") toMenu(eng)
       break
     case "garage": {
+      // Fase 7: aba estética, prévia na pista e as teclas novas (S W A F Q D H P)
+      if (teclaEstetica(eng, k)) break
       const custom = eng.cfg.customs[eng.cfg.carIdx]
       if (k === "arrowleft") { eng.cfg.carIdx = (eng.cfg.carIdx + CARS.length - 1) % CARS.length; eng.audio.ui() }
       if (k === "arrowright") { eng.cfg.carIdx = (eng.cfg.carIdx + 1) % CARS.length; eng.audio.ui() }
@@ -138,9 +141,10 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       // teste de motor: pista vazia, sem trânsito; [ e ] (ou , e .) trocam o motor andando
       if (k === "z") { limparTestes(eng); eng.testeMotor = true; startAndSave(eng) }
       // teste da Fase 5: tanque baixo (posto à frente) e convite de racha em 4 s
-      if (k === "h") { limparTestes(eng); iniciarTesteFase5(eng) }
+      // ([H] e [P] são da aba estética e da prévia da Fase 7)
+      if (k === "j") { limparTestes(eng); iniciarTesteFase5(eng) }
       // teste de polícia: larga já perseguido, sem eventos de mapa; 0–5 definem as estrelas
-      if (k === "p") { limparTestes(eng); eng.testePolicia = true; startAndSave(eng) }
+      if (k === "l") { limparTestes(eng); eng.testePolicia = true; startAndSave(eng) }
       if (k === "escape") eng.state = "menu"
       break
     }

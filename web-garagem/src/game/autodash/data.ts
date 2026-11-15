@@ -162,8 +162,9 @@ export const NEONS = ["#00000000", "#38bdf8", "#a78bfa", "#4ade80", "#fb7185", "
 export const NEON_NAMES = ["desligado", "azul", "roxo", "verde", "rosa", "amarelo"]
 
 export const WHEELS = ["#1f2937", "#cbd5e1", "#eab308", "#f8fafc"]
+export const WHEEL_NAMES = ["preta", "prata", "dourada", "branca"] // nomes das cores de roda (aba estética da Fase 7)
 
-export const WINGS = ["sem aerofólio", "ducktail", "asa GT"]
+export const WINGS = ["sem aerofólio", "ducktail", "asa GT", "asa alta"]
 
 export interface CarCustom {
   paint: number
@@ -172,6 +173,13 @@ export interface CarCustom {
   wheel: number
   wing: number
   motor: string // som do motor (sound/profiles.ts); "" = o original do carro
+  // Fase 7 — estética (cosmetic/bodykit.ts). Opcionais: ausente = 0 = desenho de antes.
+  // Só visual: nenhum desses campos é lido pela física nem pela colisão.
+  kit?: number    // kit de carroceria (KITS)
+  aro?: number    // estilo do aro (AROS)
+  altura?: number // rebaixamento (ALTURAS)
+  fumaca?: number // cor da fumaça do escape (FUMACAS)
+  chama?: number  // cor da chama do nitro (CHAMAS)
 }
 
 function defaultCustom(i: number): CarCustom {
@@ -183,6 +191,7 @@ function defaultCustom(i: number): CarCustom {
     wheel: 0,
     wing: body === "muscle" || body === "ninja" ? 1 : 2,
     motor: "",
+    kit: 0, aro: 0, altura: 0, fumaca: 0, chama: 0,
   }
 }
 
@@ -199,6 +208,7 @@ export interface GameConfig {
   sound: boolean
   pilotName: string
   reputacao: number    // vitórias de racha (Fase 5): reputação, não moeda
+  camera: "dinamica" | "fixa" // FOV dinâmico com a velocidade (Fase 7, render/fov.ts); só desenho
 }
 
 export interface ScoreEntry {
@@ -224,6 +234,7 @@ export function defaultConfig(): GameConfig {
     sound: true,
     pilotName: "",
     reputacao: 0,
+    camera: "dinamica",
   }
 }
 
