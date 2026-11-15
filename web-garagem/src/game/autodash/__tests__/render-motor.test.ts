@@ -12,10 +12,12 @@ import { fileURLToPath } from "node:url"
 import { ENGINE_PROFILES, GRAVACAO_DO_PERFIL, TEXTURA } from "../sound/profiles"
 import { WaveguideSynth } from "../sound/waveguide-synth"
 import { MotorGravado, graosDoJson, type BancoGraos } from "../sound/motor-gravado"
+import { MOTORES, giroDoSom } from "../physics/motores"
 
 const SR = 48000
 const NIVEL_REF = 0.135
-const SOM = fileURLToPath(new URL("../../../../public/autodash/som/", import.meta.url))
+// RENDER_SOM=<pasta> troca a pasta dos bancos (comparar um banco de outro branch)
+const SOM = process.env.RENDER_SOM ? process.env.RENDER_SOM.replace(/[\\/]?$/, "/") : fileURLToPath(new URL("../../../../public/autodash/som/", import.meta.url))
 
 function carregarBanco(nome: string): { banco: BancoGraos; faixa: [number, number]; nivel: number } {
   const j = JSON.parse(readFileSync(SOM + nome + ".json", "utf8"))
@@ -52,7 +54,7 @@ function biquad(tipo: "hp" | "lp" | "peak" | "hshelf", f: number, q: number, gDb
 }
 
 const rampa = (x: number) => Math.min(1, Math.max(0, x))
-export type Ponto = [number, number, number] // t (s), rpm, carga
+export type Ponto = [number, number, number, number?] // t (s), rpm, carga, limitador (1 = no corte)
 
 /** Renderiza a trajetória `pontos` (interpolada) com a cadeia do jogo. `soGrav`/`soSint` isolam uma camada. */
 function renderizar(perfilId: string, pontos: Ponto[], opc: { soGrav?: boolean; soSint?: boolean } = {}): Float32Array {
@@ -61,6 +63,7 @@ function renderizar(perfilId: string, pontos: Ponto[], opc: { soGrav?: boolean; 
   const cb = carregarBanco(g.banco)
   const synth = new WaveguideSynth(SR, perfil, 1234)
   const mot = new MotorGravado(SR, 99); mot.setBanco(cb.banco)
+  const motorF = MOTORES[perfilId]
   const dur = pontos[pontos.length - 1][0], N = Math.floor(dur * SR)
   const out = new Float32Array(N)
   const hpS = biquad("hp", 35, 0.7), boom = biquad("peak", perfil.boomHz, 1, perfil.boomDb * 0.35)
@@ -76,9 +79,12 @@ function renderizar(perfilId: string, pontos: Ponto[], opc: { soGrav?: boolean; 
     while (k < pontos.length - 2 && pontos[k + 1][0] < t) k++
     const [t0, r0, c0] = pontos[k], [t1, r1, c1] = pontos[k + 1]
     const u = rampa((t - t0) / (t1 - t0 || 1))
-    const rpm = r0 + (r1 - r0) * u, carga = c0 + (c1 - c0) * u
-    synth.st.rpm = rpm; synth.st.carga = carga; synth.st.ligado = true
-    mot.st.rpm = rpm; mot.st.carga = carga; mot.st.ligado = true
+    const carga = c0 + (c1 - c0) * u
+    // no corte o giro do som pulsa como no jogo (giroDoSom, sim/update.ts)
+    const corte = !!pontos[k][3] && carga > 0.5
+    const rpm = motorF ? giroDoSom(motorF, r0 + (r1 - r0) * u, carga, corte, t) : r0 + (r1 - r0) * u
+    synth.st.rpm = rpm; synth.st.carga = carga; synth.st.ligado = true; synth.st.corte = corte
+    mot.st.rpm = rpm; mot.st.carga = carga; mot.st.ligado = true; mot.st.corte = corte
     const n = Math.min(128, N - i)
     synth.render(L, R, n)
     mot.render(G, n)
@@ -126,9 +132,11 @@ describe.skipIf(!SAIDA)("render offline do motor", () => {
         wav(base + "_grav.wav", renderizar(p, pts, { soGrav: true }).subarray(Math.floor(0.8 * SR)))
         wav(base + "_sint.wav", renderizar(p, pts, { soSint: true }).subarray(Math.floor(0.8 * SR)))
       }
-      // varredura: lenta, acelerada no grid, puxada de 1800 a 6500 em ~5 s, corte, desacelerando
+      // varredura: lenta, acelerada no grid, puxada de 1800 até o corte do motor
+      // em ~5 s, 1,5 s batendo no limitador (como no jogo), desacelerando
+      const topo = MOTORES[p]?.corte ?? 6500
       const pts: Ponto[] = [[0, 900, 0], [1.5, 900, 0], [1.6, 3500, 1], [2.6, 900, 0], [3.5, 900, 0],
-        [3.6, 1800, 1], [9.0, 6500, 1], [10.5, 6500, 1], [10.6, 6500, 0], [14, 1200, 0], [15, 900, 0]]
+        [3.6, 1800, 1], [9.0, topo, 1, 1], [10.5, topo, 1], [10.6, topo, 0], [14, 1200, 0], [15, 900, 0]]
       wav(`${SAIDA}/${tag}_${p}_varredura.wav`, renderizar(p, pts))
     }
   }, 900_000)

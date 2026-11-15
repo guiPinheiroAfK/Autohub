@@ -117,6 +117,18 @@ CURVA="800:-44,2000:-43,3400:-41,5000:-38,6000:-38" python -P juntar.py $MID v8-
 cp $MID/v8-escape.* ../../public/autodash/som/ && python -P nivel.py ../../public/autodash/som v8-escape
 ```
 
+**Timbre do alto casado com o meio (15/11).** O trecho do Studebaker (alto) soava
+"outro motor": centroide 650–930 Hz contra 300–540 do NASCAR. `casar_timbre.py`
+mede o espectro médio dos dois trechos do banco (1/3 de oitava), aplica 80% da
+diferença como EQ de fase linear (±15 dB, nada acima de 3 kHz, que o passa-baixa
+já tirou) só no trecho B, preserva o nível dele e regrava o MP3. Os grãos não
+mudam (o clique de alinhamento corrige o atraso do codificador).
+
+```bash
+python -P casar_timbre.py ../../public/autodash/som v8-escape $SAIDA 21.8-29.7 32.9-44.7 0.8
+cp $SAIDA/v8-escape.* ../../public/autodash/som/ && python -P nivel.py ../../public/autodash/som v8-escape
+```
+
 `CURVA` (ambiente) leva o volume gravado por grão para uma curva em função do giro, por
 classe (carga, alívio, estável): as gravações de cofre sobem mais de 20 dB da lenta ao alto
 giro e o motor de verdade sobe uns 12. O nível absoluto não importa (o jogo iguala por
