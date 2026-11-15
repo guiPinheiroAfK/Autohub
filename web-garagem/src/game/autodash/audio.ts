@@ -419,7 +419,8 @@ export class AudioBus {
       m.faixas.set(nome, {
         rpm: [hz[Math.floor(hz.length * 0.02)] * 60 * voltasPorGrao, hz[Math.floor(hz.length * 0.98)] * 60 * voltasPorGrao],
         // gravações de níveis diferentes: iguala ao Renault (0,135 nos grãos de carga), a referência da mixagem
-        nivel: Math.min(3.5, Math.max(0.4, NIVEL_REF / (j.nivel ?? NIVEL_REF))),
+        // os bancos do simulador saem mais altos (nível ~0,43): piso 0,25 para igualá-los
+        nivel: Math.min(3.5, Math.max(0.25, NIVEL_REF / (j.nivel ?? NIVEL_REF))),
       })
       m.node.port.postMessage({ banco: { nome, sr: buf.sampleRate, dados, graos, voltasPorGrao } }, [dados.buffer, graos.buffer])
       m.bancos.add(nome)

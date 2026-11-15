@@ -197,18 +197,26 @@ export interface Gravacao {
   burble?: number
 }
 // Fora do giro que a gravação cobre, a síntese assume sozinha (audio.ts).
+// Bancos "sim-*": gravados no Engine Simulator (AngeTheGreat, MIT) em 15/11, um
+// motor só da lenta ao corte (puxada no dinamômetro), sem emenda de gravações.
+// Quase só gravação: a síntese fica como fundo (sint 0,05).
+const SIM = (banco: string): Gravacao => ({ banco, mix: 1, sint: 0.05 })
 export const GRAVACAO_DO_PERFIL: Record<string, Gravacao> = {
-  i4: { banco: "r19-i4", mix: 0.7 },                 // Renault 19, 750–7300 rpm
-  "i4-pequeno": { banco: "r19-i4", mix: 0.75 },
-  "i4-turbo": { banco: "r19-i4", mix: 0.6 },
-  "v8-cruzado": { banco: "v8-escape", mix: 1, sint: 0.06, corpo: [140, 2], topoHz: 9000, burble: 0.7 },    // Chrysler 1964 (lenta) + NASCAR (meio) + Studebaker 1953 (alto), 700–6000 rpm
-  "v8-cruzado-ford": { banco: "v8-escape", mix: 1, sint: 0.06, corpo: [140, 2], topoHz: 9000, burble: 0.5 },
+  i4: SIM("sim-i4-vtec"),                            // Honda B18C5 (VTEC), 1000–8400 rpm
+  "i4-pequeno": { banco: "r19-i4", mix: 0.75 },      // Renault 19, 750–7300 rpm
+  "i4-turbo": SIM("sim-i4-vtec"),
+  "v8-cruzado": SIM("sim-v8-ls"),                    // GM LS 5.3, 720–6250 rpm
+  "v8-cruzado-ford": SIM("sim-v8-ls"),
   "v8-plano": { banco: "v8-plano", mix: 0.85, sint: 0.1, corpo: [160, 1.5], topoHz: 9000 },      // Ferrari 360, 830–4400 rpm
-  i6: { banco: "i6", mix: 0.75 },                    // Supra no dinamômetro, 1500–8400 rpm
-  "i6-aspirado": { banco: "i6", mix: 0.75 },
-  "i6-corrida": { banco: "i6", mix: 0.7 },
+  i6: SIM("sim-i6-2jz"),                             // Toyota 2JZ, 1000–5900 rpm
+  "i6-aspirado": SIM("sim-i6-2jz"),
+  "i6-corrida": SIM("sim-i6-rb26"),                  // Nissan RB26 (aproximado), 1000–7900 rpm
   boxer6: { banco: "boxer6", mix: 0.55 },            // Porsche 911, 670–3200 rpm
   "boxer6-turbo": { banco: "boxer6", mix: 0.5 },
+  v6: SIM("sim-v6-vq35"),                            // Nissan VQ35 (aproximado), 1000–6550 rpm
+  "v6-biturbo": SIM("sim-v6-vq35"),
+  v10: SIM("sim-v10-lfa"),                           // Lexus LFA 1LR-GUE, 900–8950 rpm
+  v12: SIM("sim-v12-f1"),                            // Ferrari 412 T2, lenta e 3400–11200 rpm
 }
 // Crédito de cada gravação (as CC BY exigem atribuição): a garagem mostra o do
 // motor escolhido. Lista completa em public/autodash/som/CREDITOS.md.
@@ -218,6 +226,13 @@ export const CREDITO_GRAVACAO: Record<string, string> = {
   "v8-plano": "Ferrari 360 · PritzProductions · CC0",
   i6: "Supra no dinamômetro · editboy23 · CC0",
   boxer6: "Porsche 911 · jerry.berumen · CC BY 4.0",
+  "sim-v8-ls": "GM LS · Engine Simulator (AngeTheGreat, MIT)",
+  "sim-v10-lfa": "Lexus LFA · Engine Simulator (AngeTheGreat, MIT)",
+  "sim-v12-f1": "Ferrari 412 T2 · Engine Simulator (AngeTheGreat, MIT)",
+  "sim-i4-vtec": "Honda B18C5 · Engine Simulator (AngeTheGreat, MIT)",
+  "sim-v6-vq35": "V6 60° (VQ35 aprox.) · Engine Simulator (AngeTheGreat, MIT)",
+  "sim-i6-2jz": "Toyota 2JZ · Engine Simulator (AngeTheGreat, MIT)",
+  "sim-i6-rb26": "6 em linha (RB26 aprox.) · Engine Simulator (AngeTheGreat, MIT)",
 }
 
 export const TEXTURA: Gravacao = { banco: "r19-i4", mix: 0.22 }
