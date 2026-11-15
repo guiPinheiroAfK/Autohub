@@ -19,6 +19,18 @@ export interface EngineSynthState {
   corte: boolean   // limitador: corta parte das ignições
 }
 
+// Batida do corte duro no som: a mesma da física (physics/motores.ts,
+// CORTE_DURO_HZ e CORTE_DURO_FASE; o teste confere que batem). Antes cada
+// ignição falhava por sorteio (50% na gravação, 70% na síntese, sem ritmo) e o
+// limitador soava como chiado digital; agora corta em bloco, "brap-brap".
+export const CORTE_SOM_HZ = 13, CORTE_SOM_FASE = 0.55
+
+/** No limitador, a ignição está cortada nesta amostra? Relógio do próprio sintetizador. */
+export function ignicaoCortada(amostra: number, sr: number): boolean {
+  const f = amostra * CORTE_SOM_HZ / sr
+  return f - Math.floor(f) < CORTE_SOM_FASE
+}
+
 /**
  * Descarta giro/carga não finitos de uma mensagem de estado. Os sintetizadores
  * suavizam giro e carga (x += (alvo − x)·k): um único NaN fica preso para

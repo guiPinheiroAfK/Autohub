@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { MotorGravado, graosDoJson, ALIVIO, CARGA, ESTAVEL, type BancoGraos } from "../sound/motor-gravado"
+import { CORTE_SOM_HZ, CORTE_SOM_FASE, ignicaoCortada } from "../sound/engine-synth"
+import { CORTE_DURO_HZ, CORTE_DURO_FASE } from "../physics/motores"
 
 const SR = 16000
 
@@ -134,6 +136,42 @@ describe("motor gravado (grãos síncronos ao giro)", () => {
     const f = falhas(true)
     expect(f).toBeGreaterThan(0.35)
     expect(f).toBeLessThan(0.65)
+  })
+
+  it("no limitador as falhas vêm em bloco, na batida da física (13 Hz), não sorteadas", () => {
+    expect(CORTE_SOM_HZ).toBe(CORTE_DURO_HZ)
+    expect(CORTE_SOM_FASE).toBe(CORTE_DURO_FASE)
+    const m = new MotorGravado(SR, 3)
+    m.setBanco(bancoSintetico())
+    m.fixar(6000, 1); m.st.corte = true
+    const x = tocar(m, 6000, 1, 2)
+    // energia na parte cortada de cada pulso × na parte que queima
+    let eC = 0, nC = 0, eQ = 0, nQ = 0
+    for (let i = Math.floor(SR * 0.3); i < x.length; i++) {
+      if (ignicaoCortada(i, SR)) { eC += x[i] * x[i]; nC++ } else { eQ += x[i] * x[i]; nQ++ }
+    }
+    expect(Math.sqrt(eC / nC)).toBeLessThan(0.6 * Math.sqrt(eQ / nQ))
+  })
+
+  it("banco ralo: acima da faixa gravada sorteia entre vários grãos e não repete os últimos", () => {
+    // só 30 grãos, todos entre 100 e 130 Hz; toca bem acima (≈ 200 Hz)
+    const b = bancoSintetico()
+    const todos = Array.from({ length: b.graos.length / 6 }, (_, i) => i).filter(i => b.graos[i * 6 + 3] > 100 && b.graos[i * 6 + 3] < 130)
+    const g: number[][] = todos.slice(0, 30).map(i => Array.from(b.graos.slice(i * 6, i * 6 + 6)))
+    const ralo: BancoGraos = { ...b, graos: graosDoJson(g) }
+    const m = new MotorGravado(SR, 5)
+    m.setBanco(ralo)
+    m.fixar(6000, 1) // 6000 rpm com 0,5 volta por grão = 200 Hz
+    const um = new Float32Array(1), usados: number[] = []
+    let ant = -1
+    for (let i = 0; i < SR; i++) {
+      m.render(um, 1)
+      const u = m["ultimo"]
+      if (u !== ant && u >= 0) { usados.push(u); ant = u }
+    }
+    expect(new Set(usados).size).toBeGreaterThanOrEqual(10)
+    // nenhum grão volta antes de outros 3 tocarem (o laço curto vira pente)
+    for (let i = 1; i < usados.length; i++) for (let k = 1; k <= 3 && i - k >= 0; k++) expect(usados[i]).not.toBe(usados[i - k])
   })
 
   it("giro nos extremos (parado, lenta de motor grande, 9500 e limitador): finito e sem estouro", () => {

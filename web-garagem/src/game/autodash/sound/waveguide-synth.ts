@@ -13,7 +13,7 @@
 // O timbre sai dessas ressonâncias, não de filtros.
 
 import type { EngineSoundProfile } from "./profiles"
-import type { EngineSynthState } from "./engine-synth"
+import { type EngineSynthState, ignicaoCortada } from "./engine-synth"
 import { GANHOS_MOTOR } from "./ganhos-motor"
 import { Sorteio } from "./sorteio"
 
@@ -110,10 +110,10 @@ class Cilindro {
     this.col = new Duto(c.coletor, sr, 0, m.coletorBeta)
   }
   /** Avança o cilindro: preenche `saiAdm`, `saiEsc` e `som`. */
-  pop(manivela: number, escPrev: number, carga: number, sorteio: () => number, corte: boolean) {
+  pop(manivela: number, escPrev: number, carga: number, corte: boolean) {
     const m = this.m
     const cr = fract(manivela + this.c.offset)
-    if (cr < this.ultimo) this.corta = corte && sorteio() < 0.7 // nova volta: sorteia se queima
+    if (cr < this.ultimo) this.corta = corte // nova volta: queima ou não pela batida do limitador
     this.ultimo = cr
     const ign = this.corta ? 0 : ignicao(cr, m.tempoIgnicao) * m.ignicao * (0.18 + 0.82 * carga)
     // borboleta fechada = pouco ar: o pistão bombeia menos pressão sem gás
@@ -149,7 +149,7 @@ export class WaveguideSynth {
   private rpm = 900
   private carga = 0
   private aleatorio: Sorteio
-  private sorteio = () => this.rnd() // criado uma vez (não a cada amostra)
+  private amostra = 0 // relógio da batida do limitador
   private normalizar: boolean
   ganho = 1 // normaliza o volume entre motores e ao longo do giro (cada duto ressoa com força própria)
   perfilId = ""
@@ -220,8 +220,9 @@ export class WaveguideSynth {
       let coletorAdm = 0, vib = 0
       const flut = this.flutLp.passo(this.rnd() * 2 - 1)
       const pos = this.manivela + m.flutuacao * flut
+      const cortado = this.st.corte && ignicaoCortada(this.amostra++, this.sr)
       for (const c of this.cil) {
-        c.pop(pos, escPrev, this.st.ligado ? this.carga : 0, this.sorteio, this.st.corte)
+        c.pop(pos, escPrev, this.st.ligado ? this.carga : 0, cortado)
         coletorAdm += c.saiAdm; this.coletorEsc += c.saiEsc; vib += c.som
       }
       this.cano.pop()

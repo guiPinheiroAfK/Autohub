@@ -19,7 +19,7 @@
 //
 // DSP puro (sem WebAudio): roda no AudioWorklet e nos testes.
 
-import type { EngineSynthState } from "./engine-synth"
+import { type EngineSynthState, ignicaoCortada } from "./engine-synth"
 import { Sorteio } from "./sorteio"
 
 /** Banco de grãos já decodificado na taxa de saída. */
@@ -54,6 +54,8 @@ const NIVEL_CLASSE = [0.55, 1, 0.8]
 
 // fração de giro que o PSOLA cobre sem reamostrar (≈ ±6%)
 const FOLGA = 0.06
+// sorteio de grão: no mínimo tantos candidatos, e os últimos tocados ficam de fora
+const CANDIDATOS = 12, RECENTES = 4
 
 export class MotorGravado {
   st: EngineSynthState = { rpm: 900, carga: 0, ligado: true, corte: false }
@@ -73,6 +75,9 @@ export class MotorGravado {
   private gIni = 0
   private gN = 0
   private ultimo = -1             // índice do último grão usado
+  private falhou = false          // o grão escolhido agora é uma falha de ignição (limitador)
+  private recentes = new Int32Array(RECENTES).fill(-1)
+  private nRecente = 0
   private classeAtual = CARGA
   private porClasse: Int32Array[] = []
   private hzClasse: Float32Array[] = []
@@ -151,31 +156,42 @@ export class MotorGravado {
     if (lista.length === 0) return -1
     let lo = 0, hi = lista.length - 1
     while (lo < hi) { const m = (lo + hi) >> 1; if (hz[m] < alvo) lo = m + 1; else hi = m }
-    // sorteio uniforme entre TODOS os grãos a ±2% do giro: escolher sempre o
-    // mais próximo faz o motor voltar ao mesmo trecho da gravação a cada salto,
-    // e o laço curto vira um pente (zumbido periódico)
+    // Sorteio uniforme entre os grãos a ±2% do giro. Escolher sempre o mais
+    // próximo faz o motor voltar ao mesmo trecho a cada salto, e o laço curto
+    // vira um pente (zumbido periódico, o "glitch robótico"). Onde o banco é
+    // ralo (buraco entre gravações, acima ou abaixo da faixa gravada) a janela
+    // cresce até juntar CANDIDATOS grãos, pegando sempre o vizinho mais perto
+    // (em log) de cada lado: o grão sai reamostrado um pouco mais, mas não
+    // repete. Os últimos grãos tocados ficam de fora do sorteio.
     const TOL = 0.02
     let a = lo, b = lo
     while (a > 0 && Math.log(alvo / hz[a - 1]) < TOL) a--
     while (b < lista.length - 1 && Math.log(hz[b + 1] / alvo) < TOL) b++
-    if (b - a >= 3) return lista[a + Math.floor(this.rnd() * (b - a + 1))]
-    // poucos grãos nessa faixa: o mais próximo entre os vizinhos, com sorteio
-    const K = 4
-    a = Math.max(0, lo - K); b = Math.min(lista.length - 1, lo + K)
-    let melhor = lo, nota = Infinity
-    for (let i = a; i <= b; i++) {
-      const d = Math.abs(Math.log(hz[i] / alvo)) + this.rnd() * 0.02
-      if (d < nota) { nota = d; melhor = i }
+    const quer = Math.min(CANDIDATOS, lista.length)
+    while (b - a + 1 < quer) {
+      const dA = a > 0 ? Math.abs(Math.log(alvo / hz[a - 1])) : Infinity
+      const dB = b < lista.length - 1 ? Math.abs(Math.log(hz[b + 1] / alvo)) : Infinity
+      if (dA <= dB) a--; else b++
     }
-    return lista[melhor]
+    let i = lista[a + Math.floor(this.rnd() * (b - a + 1))]
+    for (let t = 0; t < 3 && this.recente(i); t++) i = lista[a + Math.floor(this.rnd() * (b - a + 1))]
+    return i
+  }
+
+  /** O grão `i` tocou há pouco? (anel dos últimos RECENTES) */
+  private recente(i: number): boolean {
+    for (let k = 0; k < RECENTES; k++) if (this.recentes[k] === i) return true
+    return false
   }
 
   private escolher(hz: number): number {
     const g = this.b!.graos
     let classe = this.sortearClasse()
-    // no limitador, metade das explosões falha: grão de alívio no lugar (a
-    // falha vale mesmo quando daria para seguir a gravação)
-    const falha = this.st.corte && this.rnd() < 0.5
+    // no limitador, as explosões falham na batida do corte (a mesma da física e
+    // da síntese): grão de alívio, baixo, no lugar. A falha vale mesmo quando
+    // daria para seguir a gravação
+    const falha = this.st.corte && ignicaoCortada(Math.round(this.proxCentro), this.sr)
+    this.falhou = falha
     if (falha) classe = ALIVIO
     const j = this.ultimo + 1
     if (!falha && this.ultimo >= 0 && j < g.length / CAMPOS) {
@@ -202,11 +218,15 @@ export class MotorGravado {
     const i = this.escolher(hz)
     if (i < 0) return
     this.ultimo = i
+    this.recentes[this.nRecente++ % RECENTES] = i
     const o = i * CAMPOS
     const lr = Math.log(hz / g[o + 3])
     const rho = Math.exp(lr - Math.max(-FOLGA, Math.min(FOLGA, lr)))
-    // grão de alívio no limitador entra mais baixo (falha de ignição)
-    const falha = this.st.corte && g[o + 4] === ALIVIO ? 0.55 : 1
+    // ignição cortada no limitador: o grão entra bem mais baixo (sobra o ruído
+    // mecânico e o ar passando, sem a explosão). Vale qualquer que seja a classe
+    // do grão: muitos bancos não têm grão de alívio no giro do corte (o V8 só
+    // tem entre 2000 e 2800 rpm) e antes a falha simplesmente não acontecia
+    const falha = this.falhou ? 0.22 : 1
     const k = (this.gIni + this.gN) % ANEL
     this.gCentro[k] = this.proxCentro; this.gEsq[k] = esq; this.gDir[k] = dir; this.gRho[k] = rho
     this.gGanho[k] = g[o + 5] * falha * NIVEL_CLASSE[g[o + 4]]; this.gFonte[k] = g[o] * b.sr

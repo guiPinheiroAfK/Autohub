@@ -748,7 +748,9 @@ export class AudioBus {
     this.burst(90, 0.25, 2200, "bandpass"); this.blip(190, 60, 0.2, "square")
   }
   bog() { this.blip(120, 300, 0.25, "sawtooth") }
-  limiter() { this.burst(35, 0.08, 2600, "highpass") } // estalo do corte (uma vez por pulso)
+  // estampido do corte (uma vez por pulso, quando a ignição religa): baque grave
+  // no escape. Era chiado agudo (passa-alta em 2600 Hz) e somava ao "glitch".
+  limiter() { this.burst(30, 0.05, 420, "lowpass") }
   horn() { this.blip(420, 350, 0.12, "square"); this.blip(530, 350, 0.12, "square") }
   nearMiss() { this.burst(200, 0.3, 1600, "bandpass") }
   nitro() { this.burst(500, 0.35, 800, "lowpass"); this.blip(300, 400, 0.2, "sawtooth") }
