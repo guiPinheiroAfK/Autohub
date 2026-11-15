@@ -16,6 +16,7 @@ import { perfilDoCarro, GRAVACAO_DO_PERFIL, CREDITO_GRAVACAO } from "../sound/pr
 import { relacoes } from "../physics/cambio"
 import { renderCombustivel, renderRacha, renderVacuo } from "./eventos"
 import { renderEstrelas } from "./policia"
+import { renderAvisos } from "./avisos"
 
 export function renderHud(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -90,6 +91,7 @@ export function renderHud(eng: AutoDashEngine) {
   ctx.fillText("NOS", nx + 1, ny + nh + 18)
   renderCombustivel(eng) // só no solo (Fase 5)
   renderRacha(eng)
+  renderAvisos(eng) // cartões dos eventos à frente (só no solo)
   renderVacuo(eng) // solo e corrida
 
   if (eng.mode === "duel" && eng.duel) renderDuelBar(eng)

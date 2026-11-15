@@ -8,6 +8,7 @@ import { type AutoDashEngine, type Obstacle, H, PLAYER_Z } from "../engine"
 import { DRAW_DIST, SEG_LEN } from "../data"
 import { TRAFFIC_COLORS } from "../traffic/types"
 import { wrapDz } from "../traffic/spawner"
+import { avisar } from "./avisos"
 
 export const OLEO = {
   aderencia: 0.35, // multiplicador de aderência em cima do óleo
@@ -31,7 +32,7 @@ export function spawnOleo(eng: AutoDashEngine, lado: 1 | -1, cor: number) {
   eng.obstacles.push({ z: at(base - 300), offset: lado * 0.72, kind: "oleo", w: 0.34, len: 700, lado })
   eng.obstacles.push({ z: at(base - 1300), offset: lado * 0.38, kind: "oleo", w: 0.24, len: 500, lado })
   eng.roadSigns.push({ z: at(base - VIEW * 0.6), type: "acidente", label: "ACIDENTE" })
-  eng.floaters.push({ text: "⚠️ acidente à frente — óleo na pista", color: "#FF9F1C", y: H * 0.38, life: 1.8, big: false })
+  avisar(eng, { icone: "⚠️", titulo: "ACIDENTE", dica: `óleo à ${lado > 0 ? "direita" : "esquerda"}: desvie`, nivel: "perigo", z: at(base - 1300) })
 }
 
 /** Pisou na mancha: escorrega por um instante. Chamado pela colisão de obstáculos. */

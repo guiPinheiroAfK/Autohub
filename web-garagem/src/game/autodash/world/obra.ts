@@ -5,9 +5,10 @@
 // divisa e cavaletes no lado fechado. Contra-jogada: entrar cedo na faixa livre;
 // quem fura no último segundo arrisca o cone (tranco, sem morte). O trânsito
 // civil migra para o lado livre antes do funil, como na mão dupla.
-import { type AutoDashEngine, H } from "../engine"
+import { type AutoDashEngine } from "../engine"
 import { DRAW_DIST, SEG_LEN } from "../data"
 import { wrapDz } from "../traffic/spawner"
+import { avisar } from "./avisos"
 
 export const OBRA = {
   comprimento: 80000, // unidades de mundo (~3 s a 200 km/h)
@@ -44,7 +45,7 @@ export function spawnObra(eng: AutoDashEngine, lado: 1 | -1) {
   for (let d = OBRA.cavaleteCada / 2; d < OBRA.comprimento; d += OBRA.cavaleteCada) {
     eng.obstacles.push({ z: at(ini + d), offset: lado * 0.5, kind: "barrier", w: 0.55, len: 140 })
   }
-  eng.floaters.push({ text: `🚧 obra à frente — faixas da ${lado > 0 ? "direita" : "esquerda"} fechadas`, color: "#FF9F1C", y: H * 0.38, life: 1.8, big: false })
+  avisar(eng, { icone: "🚧", titulo: "PISTA ESTREITA", dica: `fechada à ${lado > 0 ? "direita" : "esquerda"}: entre cedo`, nivel: "perigo", z: at(START), fim: at(ini + OBRA.comprimento) })
 }
 
 /** O trânsito civil sai do lado fechado antes do funil (ou freia esperando vaga). */

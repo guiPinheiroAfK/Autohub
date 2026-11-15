@@ -10,6 +10,8 @@ import { seedTraffic } from "./traffic/spawner"
 import { clamp, mix, mulberry32 } from "./math"
 import { type Racha } from "./modes/racha"
 import { type Comboio } from "./world/comboio"
+import { type Aviso } from "./world/avisos"
+import { type EventoMapa } from "./world/events"
 import { update } from "./sim/update"
 import { skyNow, renderBackdrop } from "./render/backdrop"
 import { type BiomeDef, biomeById } from "./world/biomes"
@@ -102,7 +104,7 @@ export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 export interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
 
 interface Particle { x: number; y: number; vx: number; vy: number; size: number; life: number; maxLife: number; color: string }
-interface Floater { text: string; color: string; y: number; life: number; big: boolean }
+interface Floater { text: string; color: string; y: number; life: number; big: boolean; posto?: boolean }
 interface Drop { x: number; y: number; len: number; spd: number }
 
 
@@ -176,7 +178,8 @@ export class AutoDashEngine {
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6
-  eventTimer = 12 // s até o próximo evento de mapa sorteado
+  eventTimer = 12 // s até o próximo evento de mapa sorteado (conta só sem evento rolando)
+  ultimosEventos: EventoMapa[] = [] // os últimos sorteados (não repete; world/events.ts)
   bgShift = 0
   curveWarn = 0
   curveWarnDist = 0
@@ -190,6 +193,7 @@ export class AutoDashEngine {
   policia: Procurado = novoProcurado() // nível de procurado (world/policia.ts, Fase 6)
   particles: Particle[] = []
   floaters: Floater[] = []
+  avisos: Aviso[] = [] // cartões de aviso dos eventos (world/avisos.ts)
   drops: Drop[] = []
   clouds = Array.from({ length: 6 }, (_, i) => ({
     x: (i * 173) % W, y: 26 + (i * 61) % 130, s: 34 + (i * 37) % 44,

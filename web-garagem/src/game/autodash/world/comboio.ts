@@ -10,6 +10,7 @@ import { DRAW_DIST, SEG_LEN } from "../data"
 import { type Traffic, type TrafficKind, TRAFFIC_COLORS } from "../traffic/types"
 import { wrapDz } from "../traffic/spawner"
 import { burst } from "../fx/particles"
+import { avisar } from "./avisos"
 
 export const COMBOIO = {
   velocidade: 92,                 // km/h, todos iguais
@@ -48,7 +49,8 @@ export function spawnComboio(eng: AutoDashEngine, u: () => number) {
     eng.traffic.push(t)
   }
   eng.comboio = { membros, t: 0, proxT: 2, passou: false }
-  eng.floaters.push({ text: "🚛 comboio à frente — ache a fresta", color: "#FF9F1C", y: H * 0.38, life: 1.8, big: false })
+  const c = eng.comboio
+  avisar(eng, { icone: "🚛", titulo: "COMBOIO", dica: "a fresta muda de faixa", nivel: "perigo", z, ref: membros[0], vivo: () => eng.comboio === c && !c.passou })
 }
 
 function desfazer(eng: AutoDashEngine) {

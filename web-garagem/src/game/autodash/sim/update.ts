@@ -25,6 +25,7 @@ import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
 import { atualizarRacha } from "../modes/racha"
 import { atualizarObras } from "../world/obra"
 import { atualizarComboio } from "../world/comboio"
+import { atualizarAvisos } from "../world/avisos"
 import { aderenciaOleo, passoOleo } from "../world/oleo"
 import { giroDaPartida } from "./partida"
 import { aplicarVacuo, specComVacuo, forcaTeto } from "./vacuo"
@@ -324,6 +325,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   updateEventSpawner(eng, dt, playerZ)
+  atualizarAvisos(eng, dt, playerZ)
   atualizarRacha(eng, dt) // convite de racha (Fase 5, só no solo)
 
   // powerups na pista

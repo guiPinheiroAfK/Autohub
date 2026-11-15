@@ -12,6 +12,7 @@ import { wrapDz } from "../traffic/spawner"
 import { motorDe, fracGiro } from "../physics/motores"
 import { type Ramal, RAMAL_MIN, ramalNoSeg, sobreRamal } from "./ramais"
 import { COMBUSTIVEL, consumoDoCarro, consumoLs, gastar, abastecer, tetoDoPe } from "./combustivel"
+import { avisar } from "./avisos"
 
 // tamanho do posto em segmentos: um ramal mínimo mais um miolo de bomba
 export const POSTO_SEGS = RAMAL_MIN + 120
@@ -75,7 +76,7 @@ export function spawnPosto(eng: AutoDashEngine): boolean {
       { z: at(-VIEW * 0.6), type: "posto", label: "À DIREITA" },
       { z: at(-VIEW * 0.28), type: "posto", label: "ENTRADA" },
   )
-  eng.floaters.push({ text: "⛽ posto à frente — faixa da direita", color: "#4ade80", y: H * 0.38, life: 1.8, big: false })
+  avisar(eng, { icone: "⛽", titulo: "POSTO", dica: `pela direita, até ${COMBUSTIVEL.abasteceVmax} km/h`, nivel: "info", z: az, fim: b * SEG_LEN })
   return true
 }
 

@@ -13,6 +13,7 @@ import { burst } from "../fx/particles"
 import { wrapDz } from "../traffic/spawner"
 import { type Traffic } from "../traffic/types"
 import { clamp } from "../math"
+import { avisar } from "./avisos"
 
 export interface NivelEstrela {
   viaturas: number   // viaturas em perseguição neste nível
@@ -300,7 +301,7 @@ export function lancarPregos(eng: AutoDashEngine, faixas: 2 | 3) {
   const lado = livre < 2 ? 1 : -1
   viaturaParada(eng, noTracado(eng, START - 400), lado * 1.18)
   placas(eng, ["PREGOS 2 km", "PREGOS 1 km", "PARE"])
-  eng.floaters.push({ text: "⚠️ PREGOS À FRENTE — ache a faixa livre!", color: "#fbbf24", y: H * 0.38, life: 1.8, big: false })
+  avisar(eng, { icone: "📍", titulo: "PREGOS", dica: `faixa livre: a ${["1ª", "2ª", "3ª", "4ª"][livre]} da esquerda`, nivel: "policia", z })
 }
 
 /** Passou por cima dos pregos: pneu furado. Não para nem teleporta (D6). */
@@ -351,7 +352,7 @@ export function lancarBloqueio(eng: AutoDashEngine) {
     if (d > -8000 && d < 1500) t.dead = true
   }
   eng.policia.bloqueios.push({ z, fresta: eng.laneCenters[fresta], checado: false })
-  eng.floaters.push({ text: "🚧 BLOQUEIO À FRENTE — ache a fresta!", color: "#fbbf24", y: H * 0.38, life: 1.8, big: false })
+  avisar(eng, { icone: "🚔", titulo: "BLOQUEIO", dica: `vão na ${["1ª", "2ª", "3ª", "4ª"][fresta]} faixa da esquerda`, nivel: "policia", z })
 }
 
 /** Civis que chegam ao bloqueio encostam na fresta; cruzar o bloqueio dá bônus ou esquenta. */

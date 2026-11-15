@@ -716,6 +716,12 @@ export class AudioBus {
   }
   pickup() { this.blip(660, 70, 0.22); this.blip(880, 70, 0.22, "sine", 70); this.blip(1180, 140, 0.28, "sine", 140) }
   flash() { this.blip(1250, 55, 0.18); this.blip(1250, 55, 0.18, "sine", 110) }
+  /** Sinal do cartão de aviso: duas notas que sobem (polícia mais grave e áspera). */
+  aviso(nivel: "perigo" | "policia" | "info") {
+    if (nivel === "policia") { this.blip(587, 110, 0.12, "square"); this.blip(784, 160, 0.12, "square", 120); return }
+    const base = nivel === "info" ? 784 : 659
+    this.blip(base, 90, 0.13, "triangle"); this.blip(base * 1.335, 150, 0.13, "triangle", 110)
+  }
   warn() { this.blip(980, 80, 0.16, "square"); this.blip(980, 80, 0.12, "square", 150) }
   levelUp() { this.blip(440, 110, 0.26, "square"); this.blip(554, 110, 0.26, "square", 110); this.blip(659, 110, 0.26, "square", 220); this.blip(880, 300, 0.3, "square", 330) }
   shieldBreak() { this.blip(700, 80, 0.3); this.blip(500, 80, 0.3, "sine", 80); this.blip(350, 160, 0.3, "sine", 160) }

@@ -50,6 +50,28 @@ export function initRain(eng: AutoDashEngine) {
   }
 }
 
+/** Altura de um texto flutuante na tela (fonte 34 ou 20 + respiro). */
+const alturaFloater = (big: boolean) => big ? 40 : 26
+
+/**
+ * Texto novo que cairia em cima de outro ainda na tela desce para baixo dele
+ * (uma vez, quando nasce). Antes dois avisos no mesmo quadro se sobrepunham e
+ * nenhum dava para ler.
+ */
+export function arrumarFloaters(eng: AutoDashEngine) {
+  const postos = eng.floaters.filter(f => f.posto)
+  for (const f of eng.floaters) {
+    if (f.posto) continue
+    f.posto = true
+    for (let tentativa = 0; tentativa < 6; tentativa++) {
+      const bate = postos.find(g => Math.abs(g.y - f.y) < (alturaFloater(g.big) + alturaFloater(f.big)) / 2)
+      if (!bate) break
+      f.y = bate.y + (alturaFloater(bate.big) + alturaFloater(f.big)) / 2
+    }
+    postos.push(f)
+  }
+}
+
 export function updateFx(eng: AutoDashEngine, dt: number) {
   for (let i = eng.particles.length - 1; i >= 0; i--) {
     const p = eng.particles[i]
@@ -57,6 +79,7 @@ export function updateFx(eng: AutoDashEngine, dt: number) {
     p.life -= dt
     if (p.life <= 0) eng.particles.splice(i, 1)
   }
+  arrumarFloaters(eng)
   for (let i = eng.floaters.length - 1; i >= 0; i--) {
     const f = eng.floaters[i]
     f.y -= 24 * dt; f.life -= dt

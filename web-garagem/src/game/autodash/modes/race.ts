@@ -12,12 +12,14 @@ import { RACHA } from "../world/racha"
 import { prepararTesteFase5 } from "../world/debug-eventos"
 import { novoProcurado } from "../world/policia"
 import { PARTIDA_S } from "../sim/partida"
+import { RITMO } from "../world/events"
 
 export function startRace(eng: AutoDashEngine, seed?: number) {
   const corrida = eng.mode === "race"
   // limpa ANTES de construir: no circuito o buildTrack semeia os cones das
   // curvas, e zerar depois apagaria justamente eles
-  eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = corrida ? 1e9 : 12
+  eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = corrida ? 1e9 : RITMO.primeiroS
+  eng.ultimosEventos = []
   if (eng.sobViaduto) { eng.sobViaduto = false; eng.audio.ambiente("aberto") }
   // a pista da corrida vem da seed: circuito fixo ou procedural (ADR 0014)
   const circuito = corrida && seed !== undefined ? circuitoDaSeed(seed) : null
@@ -62,7 +64,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.comboio = null; eng.oleoT = 0
   eng.vacuo = 0; eng.vacuoS = 0; eng.estilingueT = 0
   if (eng.testeFase5 && eng.mode === "solo") prepararTesteFase5(eng)
-  eng.particles = []; eng.floaters = []
+  eng.particles = []; eng.floaters = []; eng.avisos = []
   eng.countT = 0
   // no duelo o verde é fixo pra manter os dois relógios alinhados
   eng.greenAt = eng.mode === "duel" ? 3.3 : 2.4 + 0.7 + Math.random() * 0.9
