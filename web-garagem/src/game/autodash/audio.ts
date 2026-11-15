@@ -431,7 +431,7 @@ export class AudioBus {
   }
 
   /** Motor de arranque + pegada (gravação real). O ronco entra quando o motor pega. */
-  partida() {
+  partida(ligaEm?: number) {
     const ctx = this.ctx, m = this.motor
     if (!ctx || !m || !this.partidaBuf || !this.enabled) return
     const src = ctx.createBufferSource(), g = ctx.createGain()
@@ -446,7 +446,7 @@ export class AudioBus {
     g.gain.linearRampToValueAtTime(0, t0 + 1.75 / r)
     src.connect(g); g.connect(this.master!)
     src.start(); src.stop(t0 + 1.8 / r)
-    this.partidaAte = t0 + 1.15 / r
+    this.partidaAte = t0 + (ligaEm ?? 1.15 / r) // com `ligaEm`, o ronco entra junto com a etapa de partida do jogo
   }
 
   // gravação em uso: própria do motor ou só textura; mix e faixa de giro coberta

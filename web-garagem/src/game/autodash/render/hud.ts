@@ -376,6 +376,12 @@ export function renderSemaphore(eng: AutoDashEngine) {
     ctx.textAlign = "center"
     ctx.fillText("GO!", cx, top + 100)
     ctx.textAlign = "left"
+  } else if (eng.partidaT > 0) {
+    ctx.fillStyle = "rgba(248,250,252,0.7)"
+    ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.textAlign = "center"
+    ctx.fillText("ligando…", cx, top + 82)
+    ctx.textAlign = "left"
   } else if (eng.countT > 0.5) {
     ctx.fillStyle = "rgba(248,250,252,0.85)"
     ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"

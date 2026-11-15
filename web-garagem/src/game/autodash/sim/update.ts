@@ -26,6 +26,7 @@ import { atualizarRacha } from "../modes/racha"
 import { atualizarObras } from "../world/obra"
 import { atualizarComboio } from "../world/comboio"
 import { aderenciaOleo, passoOleo } from "../world/oleo"
+import { giroDaPartida } from "./partida"
 import { aplicarVacuo, specComVacuo, forcaTeto } from "./vacuo"
 
 export function update(eng: AutoDashEngine, dt: number) {
@@ -88,6 +89,18 @@ export function update(eng: AutoDashEngine, dt: number) {
   if (eng.raceFinished) throttle = 0
   // pane seca (Fase 5): sem combustível o motor engasga e o pé efetivo cai
   throttle *= peDoCombustivel(eng)
+
+  if (eng.state === "countdown" && eng.partidaT > 0) {
+    // partida: só animação. Sem semáforo, sem pé no gás, motor mudo até pegar
+    eng.partidaT = Math.max(0, eng.partidaT - dt)
+    eng.gasF = rampaGas(mf, eng.gasF, 0, dt)
+    eng.rpm = giroDaPartida(mf.idle, eng.partidaT)
+    eng.boost = 0; eng.eixo = 0
+    eng.giroSom = eng.rpm
+    eng.audio.engine(eng.rpm, 0, false, eng.partidaT <= 0, false, 0)
+    updateFx(eng, dt)
+    return
+  }
 
   if (eng.state === "countdown") {
     eng.countT += dt
