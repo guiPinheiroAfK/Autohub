@@ -90,6 +90,48 @@ Descartados depois de baixar: "WRX - Exhaust sounds" (#273334; trechos
 repetidos idênticos, parece laço editado) e "Lambo idle and rev" (#112075; áudio
 de vídeo com ruído, sem periodicidade estável). Boxer 4 e V12 seguem na síntese.
 
+## V8 cruzado novo (`v8-escape`): três gravações num banco só
+
+Nenhuma gravação livre de V8 cobre a lenta ao alto giro com o microfone no escape.
+O banco `v8-escape` junta três, cada uma valendo numa faixa de giro, com
+`juntar.py` (decodifica os bancos, concatena, iguala o nível e recodifica):
+
+- lenta (~800 rpm): Chrysler 1964, microfone no escape (#240671, lonemonk, CC BY 4.0), 48 s de lenta estável;
+- meio (2000–3650 rpm): "nascar24chevyrev2" (#43485, enginemusic, CC BY 3.0). Só os 2,3–9,05 s (subida) e 9,45–10,1 s (queda); o resto tem outros motores de fundo e a lenta com uma linha de 150 Hz (zumbido de rede) que o rastreador seguia por engano;
+- alto (3500–6000 rpm): o próprio banco `v8-cruzado` (Studebaker 1953), com passa-baixa de 3 kHz porque é mais brilhante (cofre) que as outras duas (sem filtro o timbre pula de 460 para 800 Hz de centroide na emenda).
+
+Faixas e giros foram lidos no espectrograma. Em todas a linha rastreada é a 4ª ordem (explosão), `k = 8`, 2 voltas por grão. **Cuidado com o rastreador no NASCAR:** com várias linhas ele cai na lenta ou na oitava errada; o `PRIOR` abaixo é a trilha lida a olho.
+
+```bash
+# originais: prévias HQ do Freesound convertidas com ffmpeg -ac 1 -ar 48000 (cada uma numa pasta nova, fora do repo)
+python -P rastrear.py chrysler.wav chr 40 75 53 "0-3:40-75"            # SALTO=0.03
+python -P marcas.py chrysler.wav chr "4-46" 8
+python -P banco.py chrysler.wav chr "4-26" $MID chrysler 32000 2
+
+PRIOR="0:150,2.0:150,3:175,4:200,5:228,6:245,9.1:250,9.3:230,9.6:150,10:105,12:100" BANDA=0.07 SALTO=0.05 python -P rastrear.py nascar.wav nas 70 330 150
+python -P marcas.py nascar.wav nas "2.3-9.05,9.45-10.1" 8
+python -P banco.py nascar.wav nas "2.3-9.05,9.45-10.1" $MID nascar 32000 2
+
+# junta: "banco@rpm_min-rpm_max[@ganho[@passa_baixa_hz]]". O ganho 1,43 do NASCAR deixa a lenta ~3 dB abaixo do giro mais baixo dele
+CURVA="800:-44,2000:-43,3400:-41,5000:-38,6000:-38" python -P juntar.py $MID v8-escape   "$MID/chrysler@700-900;$MID/nascar@2000-3650@1.43;../../public/autodash/som/v8-cruzado@3500-6000@@3000" 112
+cp $MID/v8-escape.* ../../public/autodash/som/ && python -P nivel.py ../../public/autodash/som v8-escape
+```
+
+`CURVA` (ambiente) leva o volume gravado por grão para uma curva em função do giro, por
+classe (carga, alívio, estável): as gravações de cofre sobem mais de 20 dB da lenta ao alto
+giro e o motor de verdade sobe uns 12. O nível absoluto não importa (o jogo iguala por
+`nivel`).
+
+### Ouvir sem abrir o jogo: `render-motor.test.ts`
+
+Renderiza o som como `audio.ts` o monta (síntese por guias de onda + banco, com os ganhos de
+`misturarGravacao`, EQ e saturação; sem compressor, eco e efeitos) em WAV, nos giros que se
+pedir e numa varredura. Serve para medir espectro e volume e para comparar antes e depois:
+
+```bash
+RENDER_MOTOR=/pasta/saida RENDER_TAG=depois RENDER_PERFIS=v8-cruzado,v8-plano RENDER_GIROS=1500,3000,5000,6500   npx vitest run src/game/autodash/__tests__/render-motor.test.ts
+```
+
 ## Partida
 
 Freesound #50898, "Car Ignition Key - Engine Starting Running Idle 2.wav", de

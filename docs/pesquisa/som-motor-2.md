@@ -230,3 +230,57 @@ Os números de ordem e de intervalo são aritmética a partir de fatos (marcados
 - muted.io, "Performance Cars" (CC0, 68 arquivos, 96 kHz/24 bits): https://muted.io/performance-cars
 - Commons, trilhas de vídeos YouTube (CC BY 3.0, risco de proveniência, ver `gravacoes-motor.md` A.3): https://commons.wikimedia.org/wiki/File:Bugatti_Chiron_-_engine_and_exhaust_sound_(YouTube_BtBU0O3j_ZE).opus · https://commons.wikimedia.org/wiki/File:Mazda_RX-7_-_engine_and_exhaust_sound_(YouTube_4z0y1H2REvE).opus
 - Documentos locais de referência: `docs/pesquisa/som-motor.md` (§1.3, §2.5, §2.8 a §2.14, §3.1 e §10 Fontes [F1]–[F31]) e `docs/pesquisa/gravacoes-motor.md` (A.2, A.3, B.6 a B.9 e Fontes [G1]–[G21]).
+
+---
+
+# Parte V8 — por que os V8 soavam mal e o que mudou (14/11/2026)
+
+> Medido offline com `web-garagem/src/game/autodash/__tests__/render-motor.test.ts` (reproduz a cadeia de `audio.ts` sem WebAudio: guias de onda + banco + ganhos de `misturarGravacao`, EQ e saturação; sem compressor, eco e efeitos) e com os bancos como estão em `public/autodash/som/`. **Ninguém ouviu nada ainda**: o que está aqui é espectro e volume. Os números "antes" vêm do commit anterior a esta parte; o áudio de antes e depois está em `docs/pesquisa/audio-v8/`.
+
+## V.1 O que estava errado (medido)
+
+Perfil `v8-cruzado`, banco Studebaker 1953 (1957–5664 rpm), `mix` 0,7. Centroide espectral e volume (dBFS da saída renderizada), pé no fundo:
+
+| rpm | gravação sozinha | síntese sozinha | mistura (como no jogo) |
+|---|---|---|---|
+| 1500 | −62,6 dB (quase desligada) · 1229 Hz | −29,5 dB · 98 Hz | −29,5 dB · 98 Hz |
+| 3000 | −44,9 dB · 1392 Hz | −33,9 dB · 155 Hz | −33,7 dB · 248 Hz |
+| 5000 | −28,3 dB · 1222 Hz | −33,2 dB · 224 Hz | −27,4 dB · 1056 Hz |
+| 6500 | −32,9 dB · 2754 Hz | −28,5 dB · 260 Hz | −26,7 dB · 853 Hz |
+
+1. **A síntese domina a mistura abaixo de ~4500 rpm e é quase um seno.** Em 1500–3000 rpm o centroide da síntese é 100–260 Hz e ela tem 38 dB menos energia entre 1 e 4 kHz; a linha da explosão (4ª ordem) concentra de −0,8 a −3 dB de toda a energia. É o "zumbido". Com o pé no fundo ela ainda sobe 15 dB (de −44 para −29), enquanto a gravação sobe só 6: a síntese manda mais. A mistura a 3000 rpm tem centroide de 248 Hz, quatro vezes mais escura que a gravação (1064 Hz, medida nos grãos originais).
+2. **A lenta e o arranque não têm gravação.** O banco só cobre de 1957 rpm; o misturador desliga a gravação abaixo de ~1760 rpm (`lo × 0,9`) e a zera em ~1370. Lenta (700) e 1500 rpm são 100% síntese (a linha acima de 1500: gravação em −62 dB, síntese em −29).
+3. **Esticado demais no alto.** A 6500 rpm o grão sai a 1,15× do giro gravado mais alto; o centroide da gravação dobra (1222 → 2754 Hz): "esganiçado". A mistura só tira a gravação aos poucos (75% ainda a 6500).
+4. **Som de cofre em vez de escape.** O Studebaker foi gravado debaixo do capô: centroide de 940 a 1390 Hz, muito 250 Hz–4 kHz (clique de válvulas, chiado). Um V8 ouvido do escape tem o centroide entre 300 e 500 Hz (os bancos novos dão 400–500 Hz a 3000 rpm). A síntese escura mais a gravação clara não se juntam: o jogo toca dois sons diferentes ao mesmo tempo.
+5. **Período do grão: correto.** `voltasPorGrao = 2` (ciclo de 720°) e a frequência do grão bate com o giro (14,2 Hz a 1704 rpm). **Oitava: sem erro** no Studebaker (faixa 1957–5664 confere com o `PRIOR` do README). O erro de oitava apareceu na primeira tentativa de rastrear o candidato novo (V.2) e foi corrigido lá.
+6. **Cobertura curta.** 1957–5664 rpm num motor que vai de 700 a 6400. Fora disso, estica o grão (item 3) ou volta para a síntese (itens 1 e 2).
+
+## V.2 Gravações avaliadas (baixadas, licenças conferidas na página)
+
+| Gravação | Licença | Resultado |
+|---|---|---|
+| Chrysler 1964, microfone no escape (#240671, lonemonk) | CC BY 4.0 | **Usada (lenta).** 48 s de lenta estável a ~790 rpm (4ª ordem em 53 Hz; 1ª em 13,2 Hz), perspectiva do escape, grave forte em 80–130 Hz. Não tem varredura. |
+| "nascar24chevyrev2" (#43485, enginemusic) | CC BY 3.0 | **Usada (meio).** Acelerada de pit de 12 s, mas só de 2250 a 3750 rpm no motor-alvo: o resto tem outros motores de fundo e a "lenta" que parecia 670 rpm era um zumbido de rede de 150 Hz que o rastreador seguia. 4ª ordem em 245 Hz no platô (3670 rpm; linhas em 61,2·k, de 4 a 10). |
+| Studebaker 1953 (#238847, lonemonk) | CC BY 4.0 | **Usada (alto, 3500–6000 rpm), com passa-baixa de 3 kHz** para chegar perto do timbre das outras. |
+| "Big Block V8 Rev" (#127980, Henaway) | CC0 | Descartada: 3,7 s sem linhas harmônicas limpas (ruído de fundo largo). |
+| "DynoRunUp 1250HP Chev V8" (#177185, Ears68) | CC0 | Descartada: 103 s de dinamômetro de evento, mas com plateia e vários carros misturados. |
+| "Hot-Rod V8 Supercharged Dynamometer Test 600HP" (#144455, Ears68) | CC BY 3.0 | **Não usada, é a melhor pista para o futuro:** 32 s limpos de dinamômetro, subida em carga de 3500 a 4750 rpm e descida até ~1500, linhas harmônicas nítidas. Tem apito de compressor Roots (ordem 6) gravado junto; só serve de verdade para o `v8-cruzado` (que é "roots"), não para o Ford aspirado. |
+
+Não achei V8 de virabrequim plano melhor que a Ferrari 360 (CC0): `v8-plano` ficou com o banco antigo.
+
+## V.3 O que foi feito
+
+- **Banco `v8-escape`** (cruzado, 45 s, 703 grãos, 612 KB): Chrysler (700–900 rpm) + NASCAR (2000–3650) + Studebaker filtrado (3500–6000), com `tools/som/juntar.py`, curva de volume por giro e nível pelo `nivel.py` (receita completa em `tools/som/README.md`). Emendas: lenta → NASCAR, **buraco de 900 a ~2000 rpm** onde o motor estica o grão mais próximo (até ~1,4–1,5×, acima dos ~1,3× que eu queria): é o ponto fraco, junto da emenda das gravações em ~3500 rpm.
+- **Mixagem** (`Gravacao` em `sound/profiles.ts`, usada em `audio.ts`):
+  - `sint`: sobra do modelo físico dentro da faixa gravada, 0,06 (antes 0,51): a gravação manda e a síntese fica só como corpo; fora da faixa a síntese assume como antes.
+  - `corpo` [140 Hz, +2 dB]: pico do corpo do escape sobre a gravação; `topoHz` 9000 (só corta o chiado acima disso; as gravações novas já são escuras).
+  - `burble` 0,7 (Ford 0,5): ao tirar o pé a partir de 2300 rpm (antes 3300) os estouros ficam mais frequentes, mais longos e ~20% mais graves.
+- `v8-plano`: banco antigo, mesma mixagem nova (`mix` 0,85, `sint` 0,1, corpo 160 Hz +1,5 dB): a gravação passou a mandar de 1500 a 4500 rpm (centroide 1333 Hz a 3000, antes 1195).
+
+Resultado medido (mistura, pé no fundo, `v8-cruzado`): centroide a 3000 rpm 248 → 463 Hz (a gravação sozinha: ~430–500 Hz); a 5000 rpm 1056 → 407 Hz e a 6500 rpm 853 → 605 Hz (o Studebaker filtrado é bem mais escuro que antes; o timbre sobe com o giro, de 253 Hz a 1500 rpm até ~600 Hz a 6500, em vez de cair); a lenta a 800 rpm sai da gravação (Chrysler) em vez da síntese. Volume com o pé no fundo: 1500 rpm de −29,5 para −42,0 dB, 3000 rpm de −33,7 para −34,7, 5000 rpm de −27,4 para −29,1, 6500 rpm de −26,7 para −31,0. **A faixa baixa (1500–2500 rpm) ficou bem mais baixa que antes** (a síntese estourava lá, 12 dB acima da gravação); se soar fraco na largada, o ajuste é subir `sint` ou o ganho do trecho de 900 a 2200 rpm.
+
+## V.4 Não verificado
+
+- Som no navegador (ouvido). Só espectro e volume offline.
+- O burble (os estouros usam buffers WebAudio, fora do render offline).
+- O compressor e a saturação do jogo no mix final (o render só tem a tanh).

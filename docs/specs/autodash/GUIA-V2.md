@@ -304,8 +304,21 @@ Critério de aceite: sem perseguição o jogo é idêntico (golden inalterado, o
 - [x] **Turbo** com eixo de inércia própria: apito sobe em cada marcha e desce assobiando depois do alívio; turbina por motor (faixa do apito, tempo de desaceleração, biturbo/quadri desafinados).
 - [x] **Câmbio por carro** (`physics/cambio.ts`): MUSCLE 4, ROADSTER/ROTOR/KAIJU 5, TARGA 8, FANTASMA 9; 1ª e última iguais para todos.
 - [x] **Giro com caráter**: giro solto por motor, limitador duro/suave, lenta irregular (V8 bravo e rotativo).
+- [x] **V8 novo (14/11):** banco `v8-escape` (Chrysler 1964 na lenta + NASCAR no meio + Studebaker filtrado no alto) nos dois V8 cruzados; mixagem com a gravação mandando (`sint`, `corpo`, `topoHz`, `burble` em `Gravacao`); `v8-plano` com a mesma mixagem e o banco antigo. Diagnóstico, números e candidatos em [docs/pesquisa/som-motor-2.md](../../pesquisa/som-motor-2.md) (Parte V8); receita em `web-garagem/tools/som/README.md`; áudio de antes e depois em `docs/pesquisa/audio-v8/`. **Falta ouvir.** Roteiro abaixo.
 - Próximo passo de fidelidade (precisa de aprovação para baixar arquivos): híbrido com gravações CC0 (pesquisa, seção 4) como textura e eventos (partida, pops reais).
 - Em aberto: inspiração do GT (V10), do NINJA (I4) e do ALTA (I4) foi palpite pelo nome; FANTASMA confirmado como Koenigsegg (V8 plano biturbo). Calibrar de ouvido: não foi ouvido, só medido offline.
+
+#### Roteiro de escuta dos V8 (teste de motor: garagem → [Z]; `[` e `]` trocam o motor)
+
+Para cada um dos três (`V8 virabrequim cruzado`, `V8 cruzado aspirado, ordem Ford`, `V8 virabrequim plano`), com o carro que quiser. Antes, ouça `docs/pesquisa/audio-v8/antes_*.mp3` e `depois_*.mp3` (varredura de 15 s feita offline, sem estouros nem compressor do jogo).
+
+1. **Lenta** (solto, motor ligado): tem de soar como escape grave e irregular (cruzado), sem zumbido liso de um tom só. Era síntese pura; agora é a gravação do Chrysler.
+2. **Acelerada no grid** (segure o gás na contagem, ou em ponto morto com [N]): o giro sobe de ~800 a ~4000; ouça se há um "degrau" de timbre em torno de 1000–2000 rpm (o buraco entre as gravações, onde o grão é esticado) e se a subida fica fraca demais perto de 1500 rpm (a lenta ficou mais baixa que antes).
+3. **Puxada em 3ª** de 2000 até o corte: o timbre deve engrossar e subir de forma contínua. Pontos a conferir: a emenda em ~3500 rpm (NASCAR → Studebaker) e o alto (5000–6000), que antes era fino e agora é filtrado em 3 kHz: abafado demais ou bom?
+4. **Corte de giro** (6200–6400 nos cruzados): o limitador bate com falha de ignição; a síntese assume acima de ~7600 rpm.
+5. **Desaceleração**: tire o pé a partir de ~3000 rpm. O cruzado deve "borbulhar" (estouros graves e mais seguidos que antes); o plano não borbulha.
+
+Se algo estiver errado, os botões são `sint` (mais síntese = mais corpo e mais zumbido), `corpo` e `topoHz` (timbre) e `burble` em `GRAVACAO_DO_PERFIL`, em `sound/profiles.ts`; o filtro do Studebaker e a curva de volume por giro estão no comando de `juntar.py` do README das ferramentas.
 
 #### Fase 7 — parte visual (bodykit, efeitos, prévia, câmera, torque) — `implementada` (hashes no log; aguardando playtest)
 Fontes: D12, D16 e D17; `docs/pesquisa/visual-e-desafio.md` §1.4 (prévia da pintura contra a cena) e §2.2 (FOV dinâmico); `docs/pesquisa/fisica-carro.md` R2 (zoom ≤ 1,05, `PLAYER_Z` não pode mudar); ADR 0012 (torque no HUD). **Estética não muda a física**: nenhum campo novo é lido por `sim/`, `physics/` ou pela colisão.
@@ -405,4 +418,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-14 | f733ffd, fb74fe0 | Torque do motor no HUD (mini curva e ponto no giro). | atualizado nos 3 cenários que dirigem. |
 | 2026-11-14 | (merge da Fase 7) | Fases 5, 6 e 7 juntas. [H] e [P] da garagem ficam com a Fase 7 (aba estética e prévia); teste da Fase 5 vai para [J] e teste de polícia para [L]. O [F] não colide (farol na corrida, cor da fumaça na garagem). | atualizado (solo e cenários) pela soma das três fases. |
 | 2026-11-14 | (partida) | Partida do motor como animação de 1,3 s antes do semáforo (D27): `countT` parado, sem luzes, sem gás, sem contagem de nada; HUD "ligando…" e tranco da câmera; ronco entra no fim. Duelo fica de fora. Teste em `__tests__/partida.test.ts`. | atualizado nos 3 cenários que largam (solo, corrida com bots, clique): a largada atrasa ~1,3 s. Duelo não mudou. |
+| 2026-11-14 | (som V8) | V8 novo: banco `v8-escape` (CC BY: lonemonk e enginemusic, créditos atualizados), `juntar.py`, render offline do motor (`render-motor.test.ts`, só com `RENDER_MOTOR`), mixagem `sint`/`corpo`/`topoHz`/`burble` por gravação, `bancos-som.test.ts`. | não alterado (os replays usam o V10 e não carregam áudio) |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

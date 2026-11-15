@@ -18,6 +18,8 @@ interface Motor {
   ambGain: GainNode       // eco do ambiente (aberto x viaduto/túnel)
   synthGain: GainNode     // modelo físico (guias de onda)
   gravHp: BiquadFilterNode // gravação real: banda cheia (motor gravado) ou só agudos (textura)
+  gravEq: BiquadFilterNode // corpo do escape (pico em 80–250 Hz), por gravação
+  gravLp: BiquadFilterNode // corta o chiado de cofre acima de `topoHz`, por gravação
   gravGain: GainNode
   fx: GainNode            // estouros, flutter e blow-off
   apito: OscillatorNode   // eixo do turbo
@@ -261,7 +263,8 @@ export class AudioBus {
     // gravação: não passa pelo "escape" do sintetizador (o timbre já é real)
     const gravHp = f("highpass", 30, 0.7), gravGain = ctx.createGain(), synthGain = ctx.createGain()
     gravGain.gain.value = 0
-    node.connect(gravHp, 1); gravHp.connect(gravGain)
+    const gravEq = f("peaking", 120, 0.9, 0), gravLp = f("lowpass", 20000, 0.7)
+    node.connect(gravHp, 1); gravHp.connect(gravEq); gravEq.connect(gravLp); gravLp.connect(gravGain)
     // admissão: só aparece no alto giro com pé no fundo
     const admHp = f("highpass", 300, 0.7), admBp = f("bandpass", 1000, 1.4), admGain = ctx.createGain()
     admGain.gain.value = 0
@@ -323,7 +326,7 @@ export class AudioBus {
       for (let i = 0; i < len; i++) d[i] = d[i] / pk * 0.6
       return b
     })
-    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, synthGain, gravHp, gravGain, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops, bancos: new Set(), carregando: new Set(), faixas: new Map() }
+    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, synthGain, gravHp, gravEq, gravLp, gravGain, fx, apito, apito2, apitoB, apitoBGain, apitoGain, sopro, soproGain, whine, whineGain, pops, bancos: new Set(), carregando: new Set(), faixas: new Map() }
     this.aplicarPerfil()
     void this.carregarPartida()
     // o motor antigo sai de cena
@@ -450,7 +453,7 @@ export class AudioBus {
   }
 
   // gravação em uso: própria do motor ou só textura; mix e faixa de giro coberta
-  private grav: { proprio: boolean; mix: number; faixa: [number, number]; nivel: number } | null = null
+  private grav: { proprio: boolean; mix: number; sint?: number; burble: number; faixa: [number, number]; nivel: number } | null = null
   private ultimoRpm = 2000
 
   /** Mistura gravação × modelo físico. Dentro da faixa gravada vale o `mix` do
@@ -470,7 +473,8 @@ export class AudioBus {
     const cob = Math.min(sobe, desce)
     // a gravação sai ~2× mais forte que o modelo físico no pé no fundo (medido offline)
     m.gravGain.gain.setTargetAtTime(gv.mix * (gv.proprio ? 0.6 : 0.9) * gv.nivel * cob, t, tau)
-    m.synthGain.gain.setTargetAtTime(gv.proprio ? 1 - gv.mix * 0.7 * cob : 1, t, tau)
+    // `sint`: o que sobra do modelo físico dentro da faixa gravada (padrão: 1 − 0,7·mix)
+    m.synthGain.gain.setTargetAtTime(gv.proprio ? 1 - (1 - (gv.sint ?? 1 - gv.mix * 0.7)) * cob : 1, t, tau)
   }
 
   private aplicarPerfil() {
@@ -485,20 +489,23 @@ export class AudioBus {
     else m.node.port.postMessage({ usar: g.banco })
     m.node.port.postMessage({ gravado: pronto })
     m.gravHp.frequency.setTargetAtTime(grav ? 30 : 1800, t, 0.05)
+    // EQ de escape da gravação (por banco): corpo em 80–250 Hz e teto contra o chiado de cofre
+    m.gravEq.frequency.setTargetAtTime(g.corpo?.[0] ?? 120, t, 0.05); m.gravEq.gain.setTargetAtTime(g.corpo?.[1] ?? 0, t, 0.05)
+    m.gravLp.frequency.setTargetAtTime(g.topoHz ?? 20000, t, 0.05)
     const fx = m.faixas.get(g.banco)
-    this.grav = pronto ? { proprio: !!grav, mix: g.mix, faixa: fx?.rpm ?? [0, 1e9], nivel: fx?.nivel ?? 1 } : null
+    this.grav = pronto ? { proprio: !!grav, mix: g.mix, sint: g.sint, burble: g.burble ?? 0, faixa: fx?.rpm ?? [0, 1e9], nivel: fx?.nivel ?? 1 } : null
     this.misturarGravacao(this.ultimoRpm, 0.1)
     // o timbre agora vem dos dutos do modelo físico: os filtros só dão um toque
     m.boom.frequency.setTargetAtTime(p.boomHz, t, 0.05); m.boom.gain.setTargetAtTime(p.boomDb * 0.35, t, 0.05)
     m.coletor.frequency.setTargetAtTime(p.coletorHz, t, 0.05); m.coletor.gain.setTargetAtTime(0, t, 0.05)
   }
 
-  private estouro(vol: number) {
+  private estouro(vol: number, burble = 0) {
     const m = this.motor, ctx = this.ctx
     if (!m || !ctx) return
     const src = ctx.createBufferSource()
     src.buffer = m.pops[Math.floor(Math.random() * m.pops.length)]
-    src.playbackRate.value = 0.85 + Math.random() * 0.35
+    src.playbackRate.value = (0.85 + Math.random() * 0.35) * (1 - 0.3 * burble) // burble: estouro mais grave, "blub"
     const g = ctx.createGain(); g.gain.value = vol
     src.connect(g); g.connect(m.fx); src.start()
   }
@@ -611,15 +618,16 @@ export class AudioBus {
     } else m.whineGain.gain.setTargetAtTime(0, t, 0.05)
 
     // estouros ao tirar o pé em giro alto (combustível queimando no escape)
-    if (gas > 0.6 && rpm > 3300) this.gasAltoT = t
-    if (this.lastGas > 0.5 && gas < 0.15 && t - this.gasAltoT < 0.5 && Math.random() < p.pops + 0.2) {
-      this.estouroAte = t + 0.4 + Math.random() * 0.8 * p.pops
+    const burble = this.grav?.burble ?? 0 // V8 cruzado: borbulha ao tirar o pé, já em giro médio
+    if (gas > 0.6 && rpm > (burble > 0 ? 2300 : 3300)) this.gasAltoT = t
+    if (this.lastGas > 0.5 && gas < 0.15 && t - this.gasAltoT < 0.5 && Math.random() < p.pops + 0.2 + burble * 0.3) {
+      this.estouroAte = t + 0.4 + Math.random() * 0.8 * p.pops * (1 + burble)
       this.proxEstouro = t
     }
     if (gas > 0.3) this.estouroAte = 0
     if (t < this.estouroAte && rpm > 1800 && t >= this.proxEstouro) {
-      this.estouro((0.3 + Math.random() * 0.45) * Math.min(1, p.pops + 0.3))
-      this.proxEstouro = t + 0.04 + Math.random() * (Math.random() < 0.25 ? 0.25 : 0.11)
+      this.estouro((0.3 + Math.random() * 0.45) * Math.min(1, p.pops + 0.3), burble)
+      this.proxEstouro = t + 0.04 + Math.random() * (Math.random() < 0.25 ? 0.25 : 0.11) * (1 - 0.35 * burble)
     }
     this.lastGas = gas
   }
