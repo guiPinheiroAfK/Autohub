@@ -5,19 +5,26 @@ import { CARS } from "../data"
 import { motorDe, giroNaFrac, faixa, type MotorFisico } from "./motores"
 import { nMarchas } from "./cambio"
 
+// Marcha que o câmbio engata saindo do neutro em movimento: a mais alta que cai
+// no meio da faixa do motor. Se nenhuma cai (velocidade entre duas marchas ou
+// acima da faixa de todas), a mais baixa que não passa do topo dessa faixa —
+// nunca uma que jogue o giro acima do corte. Antes, a 250 km/h nenhuma marcha
+// ficava "no meio" e sobrava a 1ª: o giro estourava e o carro caía para a
+// velocidade de corte da 1ª (~60 km/h).
+export function marchaDoNeutro(eng: AutoDashEngine): number {
+  const m = motorDe(eng), lo = giroNaFrac(m, 0.129), hi = giroNaFrac(m, 0.8)
+  const n = nMarchas(eng)
+  for (let g = n; g >= 1; g--) {
+    const r = rpmFor(eng, eng.speed, g)
+    if (r >= lo && r <= hi) return g
+  }
+  for (let g = 1; g <= n; g++) if (rpmFor(eng, eng.speed, g) <= hi) return g
+  return n
+}
+
 export function shiftUp(eng: AutoDashEngine) {
   if (eng.gear === 0) {
-    // engata a marcha mais alta que cai no meio da faixa do motor
-    // (antes 1800–6500 fixos; agora as mesmas frações da faixa de cada motor)
-    const m = motorDe(eng), lo = giroNaFrac(m, 0.129), hi = giroNaFrac(m, 0.8)
-    let best = 1
-    const n = nMarchas(eng)
-    for (let g = n; g >= 1; g--) {
-      const r = rpmFor(eng, eng.speed, g)
-      if (r >= lo && r <= hi) { best = g; break }
-      if (r < lo) best = Math.max(1, g - 0)
-    }
-    eng.gear = Math.max(1, Math.min(n, best))
+    eng.gear = marchaDoNeutro(eng)
     eng.shiftT = CARS[eng.cfg.carIdx].shiftMs / 1000
     eng.audio.shift()
     popExhaust(eng)

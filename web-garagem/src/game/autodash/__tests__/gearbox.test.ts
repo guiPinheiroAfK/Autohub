@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
-import { autoGearTarget, limitesAuto } from "../physics/gearbox"
+import { autoGearTarget, limitesAuto, marchaDoNeutro } from "../physics/gearbox"
 import { rpmFor } from "../physics/rpm"
-import { motorDe } from "../physics/motores"
+import { motorDe, giroNaFrac } from "../physics/motores"
 import { relacoes, relacoesDeN } from "../physics/cambio"
 import { CARS } from "../data"
 import type { AutoDashEngine } from "../engine"
@@ -88,4 +88,23 @@ describe("câmbio por carro", () => {
     expect(relacoes(CARS.find(c => c.body === "ghost")!).length).toBe(9)
     expect(queda(4)).toBeGreaterThan(queda(9) * 2)
   })
+})
+
+describe("engatar saindo do neutro", () => {
+  for (const ci of carros) {
+    const nome = CARS[ci].name
+    it(`${nome}: em qualquer velocidade não engata marcha que passe do corte`, () => {
+      const m = motorDe(eng(1, 0, ci))
+      const N = relacoes(CARS[ci]).length
+      const v1 = (() => { let v = 1; while (rpmFor(eng(1, v, ci), v, 1) < m.corte) v++; return v })()
+      for (let v = 0; v <= 300; v += 5) {
+        const g = marchaDoNeutro(eng(0, v, ci))
+        expect(g).toBeGreaterThanOrEqual(1)
+        expect(g).toBeLessThanOrEqual(N)
+        // acima da velocidade de corte da 1ª, nunca volta para a 1ª
+        if (v > v1) expect(g).toBeGreaterThan(1)
+        if (rpmFor(eng(N, v, ci), v, N) <= giroNaFrac(m, 0.8)) expect(rpmFor(eng(g, v, ci), v, g)).toBeLessThanOrEqual(giroNaFrac(m, 0.8))
+      }
+    })
+  }
 })
