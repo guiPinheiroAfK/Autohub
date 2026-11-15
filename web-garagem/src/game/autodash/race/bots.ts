@@ -5,7 +5,7 @@
 // segue um ritmo alvo com variação, o que é barato e já convence, porque o que
 // o jogador vê do rival é posição, velocidade e faixa.
 
-import { KMH2UPS } from "../data"
+import { KMH2UPS, ESCALA_ACEL } from "../data"
 import { corPorIndice, type Rival } from "./types"
 
 const NOMES = ["KAMI", "L4BT", "TURBO", "DIESEL", "NITRO", "GHOST", "V8", "ZERO"]
@@ -109,7 +109,7 @@ export class BotRacer {
           }
         }
       }
-      r.v += Math.max(-150 * dt, Math.min(48 * dt, alvo - r.v))
+      r.v += Math.max(-150 * dt, Math.min(48 * ESCALA_ACEL * dt, alvo - r.v)) // mesma escala do jogador
     }
 
     // troca de faixa de vez em quando (só pra faixa livre)

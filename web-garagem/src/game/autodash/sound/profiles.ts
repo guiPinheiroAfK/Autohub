@@ -87,9 +87,16 @@ export const ENGINE_PROFILES: Record<string, EngineSoundProfile> = {
     lpBase: 1100, lpPorRpm: 0.22, lpGas: 1100, lpTeto: 3600, admissao: 1, inducao: "biturbo", pops: 0.55,
   },
   i6: {
-    id: "i6", nome: "6 em linha", eventos: uniforme(6, () => 0, i => [1, 0.95, 1.03, 0.97, 1.01, 0.96][i]),
+    id: "i6", nome: "6 em linha biturbo", eventos: uniforme(6, () => 0, i => [1, 0.95, 1.03, 0.97, 1.01, 0.96][i]),
     pulsoMs: 2.4, aspereza: 0.06, jitter: 0.04, boomHz: 100, boomDb: 5, coletorHz: 420, coletorDb: 3,
     lpBase: 1000, lpPorRpm: 0.19, lpGas: 1000, lpTeto: 3300, admissao: 0.45, inducao: "biturbo", pops: 0.5,
+  },
+  // 6 em linha 3.0 aspirado (tipo 2JZ-GE): o mesmo ronco liso do biturbo, sem
+  // turbina; mais admissão (aspira pela borboleta) e menos "sopro" no alívio
+  "i6-aspirado": {
+    id: "i6-aspirado", nome: "6 em linha aspirado", eventos: uniforme(6, () => 0, i => [1, 0.95, 1.03, 0.97, 1.01, 0.96][i]),
+    pulsoMs: 2.4, aspereza: 0.06, jitter: 0.04, boomHz: 100, boomDb: 5, coletorHz: 420, coletorDb: 3,
+    lpBase: 1000, lpPorRpm: 0.2, lpGas: 1100, lpTeto: 3400, admissao: 0.75, inducao: "aspirado", pops: 0.35,
   },
   boxer6: {
     id: "boxer6", nome: "boxer 6 aspirado", eventos: uniforme(6, i => [0, 0.5, 0, 0.5, 0, 0.5][i], i => [1, 0.92, 1.02, 0.93, 1, 0.94][i]),
@@ -187,6 +194,7 @@ export const GRAVACAO_DO_PERFIL: Record<string, Gravacao> = {
   "v8-cruzado-ford": { banco: "v8-cruzado", mix: 0.7 },
   "v8-plano": { banco: "v8-plano", mix: 0.65 },      // Ferrari 360, 830–4400 rpm
   i6: { banco: "i6", mix: 0.75 },                    // Supra no dinamômetro, 1500–8400 rpm
+  "i6-aspirado": { banco: "i6", mix: 0.75 },
   "i6-corrida": { banco: "i6", mix: 0.7 },
   boxer6: { banco: "boxer6", mix: 0.55 },            // Porsche 911, 670–3200 rpm
   "boxer6-turbo": { banco: "boxer6", mix: 0.5 },

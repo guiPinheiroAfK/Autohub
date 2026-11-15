@@ -3,11 +3,12 @@ import { AutoDashEngine } from "../engine"
 import { CARS } from "../data"
 import { relacao } from "./cambio"
 import { finalDriveOf } from "./traction"
-import { motorDe, forcaEm, rpmPorKmh } from "./motores"
+import { motorDe, forcaEm, rpmPorKmh, fatorTroca } from "./motores"
 
-/** Fração da potência máxima neste giro, já com o boost atual do turbo. */
+/** Fração da potência máxima neste giro, já com o boost atual do turbo e a troca de motor. */
 export function powerCurve(eng: AutoDashEngine, rpm: number) : number {
-  return forcaEm(motorDe(eng), rpm, eng.boost ?? 0)
+  const escolha = eng.cfg.customs?.[eng.cfg.carIdx]?.motor
+  return forcaEm(motorDe(eng), rpm, eng.boost ?? 0) * fatorTroca(CARS[eng.cfg.carIdx], escolha)
 }
 
 /**

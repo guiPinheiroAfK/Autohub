@@ -90,7 +90,14 @@ export class AudioBus {
     this.ctx = new AC()
     this.master = this.ctx.createGain()
     this.master.gain.value = 0.5
-    this.master.connect(this.ctx.destination)
+    // limitador na saída: motor, ambiente, música e efeitos (pickup, nitro) somam
+    // direto no master; sem ele, um efeito em cima do motor alto passava de 0 dBFS
+    // e o navegador ceifava seco (o "bug" no áudio ao pegar powerup)
+    const lim = this.ctx.createDynamicsCompressor()
+    lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20
+    lim.attack.value = 0.002; lim.release.value = 0.12
+    this.master.connect(lim)
+    lim.connect(this.ctx.destination)
     this.buildEngine()
     void this.buildMotor()
     this.buildLoops()
@@ -691,7 +698,10 @@ export class AudioBus {
     osc.type = type
     osc.frequency.value = freq
     const g = ctx.createGain()
-    g.gain.setValueAtTime(vol, t0)
+    // ataque de 4 ms: começar direto no volume cheio dá um estalo (degrau)
+    g.gain.setValueAtTime(0, ctx.currentTime)
+    g.gain.setValueAtTime(0.0001, t0)
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.004)
     g.gain.exponentialRampToValueAtTime(0.001, t0 + ms / 1000)
     osc.connect(g)
     g.connect(this.master)
@@ -730,7 +740,7 @@ export class AudioBus {
     this.burst(90, 0.25, 2200, "bandpass"); this.blip(190, 60, 0.2, "square")
   }
   bog() { this.blip(120, 300, 0.25, "sawtooth") }
-  limiter() { this.burst(45, 0.2, 3000, "highpass") }
+  limiter() { this.burst(35, 0.08, 2600, "highpass") } // estalo do corte (uma vez por pulso)
   horn() { this.blip(420, 350, 0.12, "square"); this.blip(530, 350, 0.12, "square") }
   nearMiss() { this.burst(200, 0.3, 1600, "bandpass") }
   nitro() { this.burst(500, 0.35, 800, "lowpass"); this.blip(300, 400, 0.2, "sawtooth") }

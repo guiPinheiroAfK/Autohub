@@ -5,10 +5,12 @@
 // 55% da faixa, boost a 35% do alvo, como sai do grid). Mede 0–100, 0–160,
 // 0–200, o tempo até 95% da máxima e a velocidade aos 40 s de cada carro.
 //
-// Os números de referência abaixo são os de ANTES das melhorias de "feel"
-// (R1–R6, P4, P5). Melhoria de sensação não pode mexer no equilíbrio: cada
-// tempo tem de ficar a ±3% da referência. Se um dia o equilíbrio mudar de
-// propósito, atualize a tabela no mesmo commit e diga por quê.
+// Melhoria de sensação não pode mexer no equilíbrio: cada tempo tem de ficar a
+// ±3% da referência. Se o equilíbrio mudar de propósito, atualize a tabela no
+// mesmo commit e diga por quê.
+// 14/11: tabela refeita com ESCALA_ACEL = 0,65 (data.ts, aceleração "mais real"
+// a pedido do usuário). Os tempos esticaram ~1/0,65; a ordem entre os carros e
+// a máxima de cada um não mudaram.
 //
 // Para ver a tabela medida: MEDIDAS=1 npx vitest run medidas
 
@@ -82,22 +84,22 @@ export function retomada(carIdx: number, gasInicial: number): number {
 // Referência medida antes das melhorias de feel (commit do teste), dt = 1/60.
 // [0–100, 0–160, 0–200, até 95% do topo] em s; v40 e v60 em km/h.
 const REFERENCIA: Record<string, [number, number, number, number, number, number]> = {
-  gt: [2.650, 8.617, 18.117, 28.083, 244.0, 244.0],
-  muscle: [2.033, 7.633, 13.700, 25.600, 260.0, 260.0],
-  ninja: [2.750, 9.300, 22.217, 29.300, 228.0, 228.0],
-  ghost: [2.800, 8.733, 16.550, 31.667, 255.4, 256.0],
-  zcoupe: [2.500, 8.067, 16.067, 24.450, 248.0, 248.0],
-  rotor: [2.683, 8.333, 17.967, 28.683, 244.0, 244.0],
-  apex: [2.333, 6.933, 12.500, 22.033, 262.0, 262.0],
-  kaiju: [2.467, 7.183, 14.167, 19.750, 240.0, 240.0],
-  sylva: [2.817, 9.400, 20.783, 32.417, 235.8, 238.0],
-  roadster: [3.317, 12.100, 52.067, NaN, 190.3, 206.5], // não chega a 95% de 220 em 60 s
-  alta: [2.333, 7.250, 14.017, 19.967, 242.0, 242.0],
-  flat6: [2.317, 6.933, 13.367, 24.700, 258.0, 258.0],
-  "test-fwd": [2.850, 9.017, 19.250, 30.200, 244.0, 244.0],
-  "test-rwd": [2.650, 8.617, 18.117, 28.083, 244.0, 244.0],
-  "test-awd5050": [2.800, 9.333, 20.933, 33.767, 244.0, 244.0],
-  "test-awd3070": [2.800, 9.333, 20.933, 33.767, 244.0, 244.0],
+  gt: [3.733, 12.417, 26.467, 41.800, 228.0, 244.0],
+  muscle: [2.933, 10.900, 20.233, 38.533, 249.1, 260.0],
+  ninja: [3.967, 13.633, 32.867, 43.767, 210.7, 228.0],
+  ghost: [3.700, 12.117, 23.267, 46.533, 233.7, 253.6],
+  zcoupe: [3.517, 11.633, 23.550, 36.433, 242.8, 248.0],
+  rotor: [3.733, 12.250, 26.717, 43.200, 226.9, 243.9],
+  apex: [3.133, 9.750, 18.000, 32.650, 259.8, 262.0],
+  kaiju: [3.367, 10.417, 20.833, 29.417, 240.0, 240.0],
+  sylva: [3.933, 13.617, 30.667, 48.533, 214.6, 234.5],
+  roadster: [4.817, 18.100, NaN, NaN, 180.1, 190.4], // não chega a 200 nem a 95% de 220 em 60 s
+  alta: [3.283, 10.433, 20.483, 29.633, 242.0, 242.0],
+  flat6: [3.150, 9.983, 19.400, 36.833, 250.0, 258.0],
+  "test-fwd": [4.017, 13.000, 28.167, 45.000, 222.3, 244.0],
+  "test-rwd": [3.733, 12.417, 26.467, 41.800, 228.0, 244.0],
+  "test-awd5050": [3.967, 13.483, 30.683, 50.400, 215.0, 243.0],
+  "test-awd3070": [3.967, 13.483, 30.683, 50.400, 215.0, 243.0],
 }
 
 const TOL = 0.03

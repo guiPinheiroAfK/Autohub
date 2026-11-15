@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom, forcaNoCorte, faseCorte, CORTE_DURO_HZ, fatorSpool, rampaGas, respostaDe, RESPOSTA_PADRAO, MOTOR_PADRAO, passoEixo, boostDoEixo } from "../physics/motores"
+import { MOTORES, curvaEm, forcaEm, boostAlvo, passoBoost, rpmPorKmh, faixa, motorFisico, taxaSolto, giroDoSom, forcaNoCorte, faseCorte, CORTE_DURO_HZ, fatorSpool, rampaGas, respostaDe, RESPOSTA_PADRAO, MOTOR_PADRAO, passoEixo, boostDoEixo, fatorTroca } from "../physics/motores"
 import { ENGINE_PROFILES } from "../sound/profiles"
 import { CARS, GEAR_RATIOS, RPM_PER_KMH, RPM_LIMITER, RPM_IDLE } from "../data"
 
@@ -189,3 +189,19 @@ describe("motores reais (faixa de giro e curva de força)", () => {
   })
 })
 
+
+describe("troca de motor (fatorTroca)", () => {
+  const apex = CARS.find(c => c.body === "apex")!
+  const roadster = CARS.find(c => c.body === "roadster")!
+  it("motor original não muda o carro", () => {
+    expect(fatorTroca(apex)).toBe(1)
+    expect(fatorTroca(apex, "i6")).toBe(1)
+  })
+  it("Supra aspirado anda menos que o biturbo de fábrica", () => {
+    expect(fatorTroca(apex, "i6-aspirado")).toBeCloseTo(Math.sqrt(220 / 320), 5)
+  })
+  it("swap absurdo fica limitado", () => {
+    expect(fatorTroca(roadster, "w16")).toBe(1.6)
+    expect(fatorTroca(CARS.find(c => c.body === "ghost")!, "i4-pequeno")).toBe(0.7)
+  })
+})

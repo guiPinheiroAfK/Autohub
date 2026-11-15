@@ -13,6 +13,12 @@ export const FOV = 100
 export const CAM_DEPTH = 1 / Math.tan(((FOV / 2) * Math.PI) / 180)
 export const DRAW_DIST = 300          // segmentos desenhados à frente
 export const KMH2UPS = 132            // 1 km/h → unidades de mundo por segundo
+// Escala de tempo da aceleração (decisão do usuário, 14/11: "mais real"). Força,
+// nitro e arrasto do jogador são multiplicados juntos, então a máxima de cada
+// carro não muda e só o tempo estica (÷0,65 ≈ +54%): o ÁPEX vai de 0 a 100 em
+// ~5 s, perto do Supra real (4,9 s). Antes era ~3,3 s. Os bots usam a mesma
+// escala no teto de aceleração deles (race/bots.ts).
+export const ESCALA_ACEL = 0.65
 
 // Motor / câmbio
 export const RPM_IDLE = 900

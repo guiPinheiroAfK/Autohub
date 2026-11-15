@@ -3,7 +3,7 @@
 // Extraído de sim/update.ts (refactor sem mudança de comportamento) para o teste
 // de medidas (__tests__/medidas.test.ts) rodar a MESMA física que o jogo.
 import type { AutoDashEngine } from "../engine"
-import type { CarSpec } from "../data"
+import { ESCALA_ACEL, type CarSpec } from "../data"
 import { relacao, fatorMarcha } from "../physics/cambio"
 import { emitSmoke, emitFlame } from "../fx/particles"
 import { climaAtual } from "./clima"
@@ -90,10 +90,13 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
     // limitador: corte duro pulsa com o som, corte suave segura o giro em rampa
     accel *= forcaNoCorte(mf, eng.rpm, eng.somT)
     // corte duro: cada pulso dá um tranco leve na câmera, na batida do som
+    // e um estalo curto no escape na mesma batida. Antes o estalo saía com 40% de
+    // chance A CADA QUADRO (~24/s, aleatório): virava um chiado digital constante
+    // perto do corte. O corte suave não estala: o som já segura o giro sozinho.
     if (mf.corteDuro && eng.rpm >= mf.corte - 50 && faseCorte(eng.somT) < faseCorte(eng.somT - dt)) {
       eng.trauma = Math.min(1, Math.max(eng.trauma, 0.2) + 0.04)
+      eng.audio.limiter()
     }
-    if (eng.rpm >= mf.corte - 50 && Math.random() < 0.4) eng.audio.limiter()
     if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0"); patina = Math.max(patina, 0.3) }
     if (eng.bogT > 0) accel *= 0.5
   }
@@ -108,11 +111,13 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   }
   const nitroActive = eng.nitroOn && eng.nitroMeter > 1
 
-  eng.speed += accel * dt
+  // força, nitro e arrasto na mesma escala de tempo (ESCALA_ACEL): a máxima não
+  // muda, só a rapidez. Freio e ladeira ficam fora (são do pneu e da gravidade)
+  eng.speed += accel * ESCALA_ACEL * dt
   if (braking) eng.speed -= 105 * climaAtual(eng).freio * dt
-  eng.speed -= arrasto(eng.speed) * dt
+  eng.speed -= arrasto(eng.speed) * ESCALA_ACEL * dt
   // acima do topo (nitro, descida) o ar cobra caro: equilibra em vez de bater no teto
-  eng.speed -= arrastoExcedente(eng.speed, spec.topSpeed) * dt
+  eng.speed -= arrastoExcedente(eng.speed, spec.topSpeed) * ESCALA_ACEL * dt
 
   // FÍSICA DE LADEIRA: descida empurra o carro (dá pra passar do top speed —
   // segura no freio), subida cobra potência. O limite por marcha logo abaixo
