@@ -8,7 +8,6 @@ export const CANVAS_H = 540
 // Pseudo-3D
 export const SEG_LEN = 200            // comprimento de um segmento de pista (unidades de mundo)
 export const ROAD_WIDTH = 2200        // meia-largura da pista
-export const LANES = 4
 export const CAM_HEIGHT = 1000
 export const FOV = 100
 export const CAM_DEPTH = 1 / Math.tan(((FOV / 2) * Math.PI) / 180)
@@ -17,7 +16,6 @@ export const KMH2UPS = 132            // 1 km/h → unidades de mundo por segund
 
 // Motor / câmbio
 export const RPM_IDLE = 900
-export const RPM_REDLINE = 7600
 export const RPM_LIMITER = 7900
 export const GEAR_RATIOS = [3.4, 2.35, 1.75, 1.38, 1.12, 0.88] // 6ª mais longa: cap ~265 km/h
 export const RPM_PER_KMH = 30         // rpm = idle + kmh * ratio * RPM_PER_KMH
@@ -164,7 +162,6 @@ export const NEONS = ["#00000000", "#38bdf8", "#a78bfa", "#4ade80", "#fb7185", "
 export const NEON_NAMES = ["desligado", "azul", "roxo", "verde", "rosa", "amarelo"]
 
 export const WHEELS = ["#1f2937", "#cbd5e1", "#eab308", "#f8fafc"]
-export const WHEEL_NAMES = ["preta", "prata", "dourada", "branca"]
 
 export const WINGS = ["sem aerofólio", "ducktail", "asa GT"]
 

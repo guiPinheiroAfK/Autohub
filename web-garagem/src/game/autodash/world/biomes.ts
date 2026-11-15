@@ -71,8 +71,9 @@ export function biomeById(id: string | undefined): BiomeDef {
   return (id && BIOMES[id]) || BIOMES.cidade
 }
 
-// Bioma da corrida. Fixo na cidade por enquanto: a escolha de bioma no lobby
-// entra na Fase 3. Não mudar sem atualizar o golden master (corrida usa esta seed).
+// Bioma da corrida sem circuito fixo (buildTrack com corrida=true). Com circuito,
+// buildCircuit troca pelo bioma dele (world/circuits.ts). Não mudar sem atualizar o
+// golden master (corrida usa esta seed).
 export function biomeDaCorrida(): BiomeDef {
   return BIOMES.cidade
 }

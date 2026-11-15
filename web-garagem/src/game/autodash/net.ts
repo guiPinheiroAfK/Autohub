@@ -1,4 +1,4 @@
-import { req } from "./net-http"
+import { postJson, req } from "./net-http"
 // AutoDash — cliente de rede do duelo online (salas por código + polling).
 
 export interface DuelTelemetry {
@@ -21,19 +21,11 @@ export interface StateResponse { opp: DuelTelemetry | null; oppName: string | nu
 
 
 export function createRoom(nome: string): Promise<RoomCreated> {
-  return req("/api/autodash/room", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nome }),
-  })
+  return postJson("/api/autodash/room", { nome })
 }
 
 export function joinRoom(code: string, nome: string): Promise<RoomJoined> {
-  return req(`/api/autodash/room/${encodeURIComponent(code)}/join`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nome }),
-  })
+  return postJson(`/api/autodash/room/${encodeURIComponent(code)}/join`, { nome })
 }
 
 export function pollRoom(code: string): Promise<RoomStatus> {
@@ -41,17 +33,9 @@ export function pollRoom(code: string): Promise<RoomStatus> {
 }
 
 export function postState(code: string, role: "host" | "guest", st: DuelTelemetry): Promise<StateResponse> {
-  return req(`/api/autodash/room/${encodeURIComponent(code)}/state`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role, st }),
-  })
+  return postJson(`/api/autodash/room/${encodeURIComponent(code)}/state`, { role, st })
 }
 
 export function rematchRoom(code: string, role: "host" | "guest"): Promise<RematchStatus> {
-  return req(`/api/autodash/room/${encodeURIComponent(code)}/rematch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role }),
-  })
+  return postJson(`/api/autodash/room/${encodeURIComponent(code)}/rematch`, { role })
 }
