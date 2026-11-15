@@ -5,11 +5,28 @@ import { AutoDashEngine, PLAYER_Z, W, H } from "../engine"
 import { DRAW_DIST, SEG_LEN, CARS } from "../data"
 import { type TrafficKind, KINDS, TRAFFIC_COLORS, type WorldView } from "./types"
 import { DRIVERS } from "./driver"
+import { segAt } from "../world/track"
+import { RACHA } from "../world/racha"
 import { infracao } from "../world/policia"
 
 export function seedTraffic(eng: AutoDashEngine, count: number) {
   eng.traffic = []
   for (let i = 0; i < count; i++) spawnTraffic(eng, (i + 1) * (DRAW_DIST * SEG_LEN / count) + 6000)
+}
+
+/**
+ * O desafiante do racha anda na beirada da janela onde o trânsito nasce. Um
+ * carro que nasce (ou é reciclado) logo à frente dele na mesma faixa não dá
+ * tempo de frear e ele entra no carro. Fica livre a distância de freio dele.
+ */
+export function naFrenteDoRacha(eng: AutoDashEngine, z: number, lane: number): boolean {
+  for (const t of eng.traffic) {
+    if (t.role !== "racha") continue
+    if (Math.abs(t.offset - lane) > 0.55 && Math.abs(t.targetOffset - lane) > 0.55) continue
+    const d = wrapDz(eng, z, t.z)
+    if (d > -600 && d < RACHA.livreNaFrente) return true
+  }
+  return false
 }
 
 export function spawnTraffic(eng: AutoDashEngine, relAhead: number) {
@@ -18,7 +35,8 @@ export function spawnTraffic(eng: AutoDashEngine, relAhead: number) {
   const k = KINDS[kind]
   const lane = eng.laneCenters[Math.floor(Math.random() * 4)]
   const z = ((eng.position + relAhead) % eng.trackLen + eng.trackLen) % eng.trackLen
-  // não nasce em cima de outro
+  // não nasce em cima de outro nem na cara do desafiante do racha
+  if (naFrenteDoRacha(eng, z, lane)) return
   for (const t of eng.traffic) {
     if (Math.abs(t.offset - lane) < 0.3 && Math.abs(wrapDz(eng, t.z, z)) < k.len + KINDS[t.kind].len) return
   }
@@ -61,12 +79,14 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
     trackLen: eng.trackLen,
     demo,
     wrapDz: (a, b) => wrapDz(eng, a, b),
+    curvaEm: z => segAt(eng, z).curve,
   }
   for (const t of eng.traffic) {
     const k = KINDS[t.kind]
     // a IA do papel do veículo decide faixa/velocidade e o move
     // (estacionado não tem IA — cenografia de blitz)
     const spd = t.parked ? 0 : DRIVERS[t.role].drive(t, world, dt)
+    t.vReal = spd
 
     const d = wrapDz(eng, t.z, playerZ)
     if (!demo) {
@@ -174,7 +194,10 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
       const rel = wrapDz(eng, t.z, eng.position)
       if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 80) * SEG_LEN) {
         t.z = ((eng.position + (DRAW_DIST * 0.55 + Math.random() * DRAW_DIST * 0.4) * SEG_LEN) % eng.trackLen + eng.trackLen) % eng.trackLen
-        const lane = eng.laneCenters[Math.floor(Math.random() * 4)]
+        let lane = eng.laneCenters[Math.floor(Math.random() * 4)]
+        // na cara do desafiante: outra faixa (só sorteia de novo se houver racha)
+        for (let k = 0; k < 4 && naFrenteDoRacha(eng, t.z, lane); k++) lane = eng.laneCenters[(eng.laneCenters.indexOf(lane) + 1) % 4]
+        if (naFrenteDoRacha(eng, t.z, lane)) t.z = ((t.z - RACHA.livreNaFrente * 2) % eng.trackLen + eng.trackLen) % eng.trackLen
         t.offset = lane; t.targetOffset = lane
         const kk = KINDS[t.kind]
         t.speed = kk.spd[0] + Math.random() * (kk.spd[1] - kk.spd[0])

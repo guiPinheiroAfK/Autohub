@@ -36,6 +36,24 @@ export const RACHA = {
   olharS: 0.5,                    // "olha" (freio e balanço) e só então fecha
   balanco: 0.03,                  // amplitude do balanço do olhar (offset)
   some: 9000,                     // rival que foi embora some a esta distância
+  // pilotagem do desafiante (traffic/driver.ts, RachaDriver)
+  freio: 170,                     // km/h/s de freio máximo
+  freioPanico: 400,               // km/h/s quando alguém entra colado na frente dele
+  freioLuz: 40,                   // km/h/s: freando mais que isso, acende a luz de freio
+  freioPlano: 110,                // km/h/s com que ele PLANEJA frear (sobra margem até o máximo)
+  olhaFrente: 9000,               // até onde enxerga o trânsito na faixa (unidades Z)
+  livreNaFrente: 6000,            // trânsito não nasce nem é reciclado tão perto à frente dele (traffic/spawner.ts)
+  ultrapassaS: 2.5,               // tenta trocar de faixa quando chegaria no carro da frente em menos disso
+  folegoFrac: 0.15,               // nos últimos 15% até a máxima a aceleração vai caindo (como o seu carro)
+  folegoMin: 0.3,                 // ...até 30% da arrancada
+  curvaLivre: 2,                  // curva até aqui não alivia
+  curvaPorUnid: 0.035,            // cada unidade de curva acima disso tira 3,5% da máxima
+  curvaPiso: 0.78,                // nunca abaixo de 78% da máxima por curva
+  // fora de vista (longe da janela onde o jogo tem carros) a pista dele fica
+  // vazia: ali ele anda no ritmo de quem costura no trânsito, não na máxima
+  foraFrente: 0.85,               // a partir desta fração da distância de desenho à frente
+  foraAtras: 30,                  // ou mais que isto de segmentos atrás de você
+  ritmoForaDeVista: 0.88,         // fração da máxima dele
 } as const
 
 /** Desafiante sorteado por um número em [0, 1). */
