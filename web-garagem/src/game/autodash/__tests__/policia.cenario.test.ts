@@ -19,7 +19,7 @@ const viaturas = (eng: any) => eng.traffic.filter((t: any) => t.role === "police
 
 describe("polícia por estrelas — cenário no engine", () => {
   it("3★: reforço, pregos com faixa livre, pneu furado, despiste e esfriamento", async () => {
-    const O = 300 // quadro em que sobe para 3★ (tecla O três vezes)
+    const O = 400 // quadro em que sobe para 3★ (tecla O três vezes; depois da partida e do semáforo)
     const fatos: Record<string, any> = {}
     let pregosZ: number | null = null
     let furouEm = -1
@@ -106,7 +106,7 @@ describe("polícia por estrelas — cenário no engine", () => {
   }, 180_000)
 
   it("4★: bloqueio com fresta no meio, passar nela dá bônus e esquenta", async () => {
-    const O = 300
+    const O = 400 // depois da partida do motor e do semáforo
     const fatos: Record<string, any> = {}
     let bloqueio: { z: number; fresta: number } | null = null
     let cruzou = -1
@@ -155,7 +155,7 @@ describe("polícia por estrelas — cenário no engine", () => {
   }, 60_000)
 
   it("5★: o helicóptero vê pelo holofote, e pé no fundo em reta tira o carro da luz", async () => {
-    const O = 300
+    const O = 400 // depois da partida do motor e do semáforo
     const fatos: Record<string, any> = { heliVeio: -1, vistoSoPeloHeli: false, saiuDaLuz: false, despiste: -1 }
     await runScenario(O + 60 * 70, 616161, (i, api) => {
       LARGADA(i, api)

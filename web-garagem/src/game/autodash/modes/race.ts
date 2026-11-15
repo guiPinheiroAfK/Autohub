@@ -11,6 +11,7 @@ import { COMBUSTIVEL } from "../world/combustivel"
 import { RACHA } from "../world/racha"
 import { prepararTesteFase5 } from "../world/debug-eventos"
 import { novoProcurado } from "../world/policia"
+import { PARTIDA_S } from "../sim/partida"
 
 export function startRace(eng: AutoDashEngine, seed?: number) {
   const corrida = eng.mode === "race"
@@ -66,7 +67,11 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   // no duelo o verde é fixo pra manter os dois relógios alinhados
   eng.greenAt = eng.mode === "duel" ? 3.3 : 2.4 + 0.7 + Math.random() * 0.9
   eng.greenFired = false
-  eng.audio.partida() // motor de arranque (gravação real); o ronco entra quando pega
+  // partida do motor: animação sem tempo contado, antes do semáforo. O duelo fica
+  // de fora: o relógio do servidor já reserva os 3,3 s até o verde (GUIA-V2)
+  eng.partidaT = eng.mode === "duel" ? 0 : PARTIDA_S
+  // motor de arranque (gravação real); o ronco entra quando o motor pega
+  eng.audio.partida(eng.partidaT > 0 ? eng.partidaT : undefined)
   eng.state = "countdown"
 }
 

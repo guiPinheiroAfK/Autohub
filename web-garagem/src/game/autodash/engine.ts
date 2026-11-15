@@ -153,6 +153,7 @@ export class AutoDashEngine {
   km = 0
   combo = 0
   comboT = 0
+  partidaT = 0  // s que faltam da partida do motor (antes do semáforo); countT só anda em 0
   countT = 0
   greenAt = 0
   greenFired = false

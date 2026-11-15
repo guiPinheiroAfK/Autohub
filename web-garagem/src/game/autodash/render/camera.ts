@@ -10,6 +10,7 @@ import { W, H } from "../engine"
 import { CARS } from "../data"
 import { clamp } from "../math"
 import { passoFov } from "./fov"
+import { tremidaDaPartida } from "../sim/partida"
 
 // ---------- ruído ----------
 // Inteiro → [-1, 1], determinístico (hash de inteiro, sem estado).
@@ -82,6 +83,12 @@ export function aplicarCamera(eng: AutoDashEngine, ctx: CanvasRenderingContext2D
   }
   // trepidação de motor no grid da corrida: quanto mais giro, mais treme —
   // o carro "pedindo pra sair"
+  // partida: tranco do motor pegando (sim/partida.ts)
+  if (eng.state === "countdown" && eng.partidaT > 0) {
+    const tr = tremidaDaPartida(eng.partidaT)
+    dx += 3 * tr * ruido(t * 40 + 600)
+    dy += 2.4 * tr * ruido(t * 40 + 700)
+  }
   if (eng.mode === "race" && eng.state === "countdown") {
     const rev = clamp((eng.rpm - 3000) / 5000, 0, 1)
     dx += 1.5 * rev * ruido(t * 30 + 400)

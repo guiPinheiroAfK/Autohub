@@ -184,15 +184,26 @@ export const MOTOR_DO_CARRO: Record<string, string> = {
 // misturado ao modelo físico: `mix` é a parte da gravação (0..1).
 // Perfil sem gravação própria usa a do 4 cilindros só como TEXTURA mecânica
 // (agudos de válvulas e admissão, sob o ronco sintetizado).
-export interface Gravacao { banco: string; mix: number }
+export interface Gravacao {
+  banco: string
+  mix: number
+  /** Parte do modelo físico que sobra dentro da faixa gravada (0..1). Padrão: 1 − 0,7·mix. */
+  sint?: number
+  /** EQ de escape da gravação: pico [Hz, dB] no corpo do motor. */
+  corpo?: [number, number]
+  /** Teto da gravação (Hz): corta o chiado de cofre. */
+  topoHz?: number
+  /** 0..1: estouros mais graves e frequentes ao tirar o pé (V8 cruzado). */
+  burble?: number
+}
 // Fora do giro que a gravação cobre, a síntese assume sozinha (audio.ts).
 export const GRAVACAO_DO_PERFIL: Record<string, Gravacao> = {
   i4: { banco: "r19-i4", mix: 0.7 },                 // Renault 19, 750–7300 rpm
   "i4-pequeno": { banco: "r19-i4", mix: 0.75 },
   "i4-turbo": { banco: "r19-i4", mix: 0.6 },
-  "v8-cruzado": { banco: "v8-cruzado", mix: 0.7 },   // Studebaker 1953, 1700–5700 rpm
-  "v8-cruzado-ford": { banco: "v8-cruzado", mix: 0.7 },
-  "v8-plano": { banco: "v8-plano", mix: 0.65 },      // Ferrari 360, 830–4400 rpm
+  "v8-cruzado": { banco: "v8-escape", mix: 1, sint: 0.06, corpo: [140, 2], topoHz: 9000, burble: 0.7 },    // Chrysler 1964 (lenta) + NASCAR (meio) + Studebaker 1953 (alto), 700–6000 rpm
+  "v8-cruzado-ford": { banco: "v8-escape", mix: 1, sint: 0.06, corpo: [140, 2], topoHz: 9000, burble: 0.5 },
+  "v8-plano": { banco: "v8-plano", mix: 0.85, sint: 0.1, corpo: [160, 1.5], topoHz: 9000 },      // Ferrari 360, 830–4400 rpm
   i6: { banco: "i6", mix: 0.75 },                    // Supra no dinamômetro, 1500–8400 rpm
   "i6-aspirado": { banco: "i6", mix: 0.75 },
   "i6-corrida": { banco: "i6", mix: 0.7 },
@@ -203,7 +214,7 @@ export const GRAVACAO_DO_PERFIL: Record<string, Gravacao> = {
 // motor escolhido. Lista completa em public/autodash/som/CREDITOS.md.
 export const CREDITO_GRAVACAO: Record<string, string> = {
   "r19-i4": "Renault 19 · lovretta · CC0",
-  "v8-cruzado": "Studebaker 1953 · lonemonk · CC BY 4.0",
+  "v8-escape": "Chrysler/Studebaker · lonemonk, NASCAR · enginemusic · CC BY",
   "v8-plano": "Ferrari 360 · PritzProductions · CC0",
   i6: "Supra no dinamômetro · editboy23 · CC0",
   boxer6: "Porsche 911 · jerry.berumen · CC BY 4.0",
