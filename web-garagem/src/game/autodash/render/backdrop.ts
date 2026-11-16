@@ -7,6 +7,7 @@ import { type LayerKind } from "../world/biomes"
 import { dayFrac } from "../world/clock"
 import { climaAtual } from "../sim/clima"
 import { faseNoSeg } from "../world/montanha"
+import { subidaNaSerra, ALTITUDE } from "../world/altitude"
 import { shade, mix, mixHex } from "../math"
 import { rr } from "./primitives"
 import { type Traffic } from "../traffic/types"
@@ -27,13 +28,21 @@ const CAMADAS: Record<LayerKind, (eng: AutoDashEngine, amb: number) => void> = {
 
 export function renderBackdrop(eng: AutoDashEngine, amb: number) {
   const c = eng.bioma.camadas
-  for (const k of c.longe) CAMADAS[k](eng, amb)
+  // subindo a serra, os morros de longe afundam (você está acima deles); o céu fica
+  const subida = subidaNaSerra(eng) ?? 0
+  const afunda = subida * ALTITUDE.afunda * H
+  if (afunda > 0.5) { eng.ctx.save(); eng.ctx.translate(0, afunda) }
+  for (const k of c.longe) {
+    if (k === "ceu-sol" && afunda > 0.5) { eng.ctx.restore(); CAMADAS[k](eng, amb); eng.ctx.save(); eng.ctx.translate(0, afunda); continue }
+    CAMADAS[k](eng, amb)
+  }
   // montanha: do mirante para baixo o mar aparece no fundo (o "reveal" do doc)
   if (eng.montanha) {
     const f = faseNoSeg(eng, Math.floor((eng.position + PLAYER_Z) / SEG_LEN) % eng.segments.length)
     if (f === "mirante" || f === "serraDescida" || f === "serraBase" || f === "costeira") camadaMar(eng, amb)
   }
   for (const k of c.meio) CAMADAS[k](eng, amb)
+  if (afunda > 0.5) eng.ctx.restore()
   for (const k of c.perto) CAMADAS[k](eng, amb)
   // troca de região: o fundo de antes some aos poucos por cima do novo
   // (antes era um corte seco escondido por uma escurecida)

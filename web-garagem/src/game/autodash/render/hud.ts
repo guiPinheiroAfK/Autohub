@@ -18,6 +18,7 @@ import { renderCombustivel, renderRacha, renderVacuo } from "./eventos"
 import { renderEstrelas } from "./policia"
 import { renderAvisos } from "./avisos"
 import { renderTouge } from "./touge"
+import { altitudeM } from "../world/altitude"
 
 export function renderHud(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -69,6 +70,13 @@ export function renderHud(eng: AutoDashEngine) {
   let by = 58
   ctx.fillStyle = "rgba(248,250,252,0.6)"
   ctx.fillText(`NÍVEL ${eng.level + 1}`, W - 20, by); by += 20
+  // altímetro na viagem da serra (world/altitude.ts)
+  const alt = altitudeM(eng)
+  if (alt !== null) {
+    ctx.fillStyle = "#a7f3d0"; ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`⛰ ${alt.toLocaleString("pt-BR")} m`, W - 20, by); by += 22
+    ctx.font = "bold 13px 'Space Grotesk', 'Segoe UI', sans-serif"
+  }
   if (eng.shield) { ctx.fillStyle = "#60a5fa"; ctx.fillText("● ESCUDO", W - 20, by); by += 20 }
   if (eng.mult2T > 0) { ctx.fillStyle = "#fde047"; ctx.fillText(`● 2X ${Math.ceil(eng.mult2T)}s`, W - 20, by); by += 20 }
   ctx.textAlign = "left"
