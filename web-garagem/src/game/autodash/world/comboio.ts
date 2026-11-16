@@ -51,6 +51,8 @@ export function spawnComboio(eng: AutoDashEngine, u: () => number) {
   }
   // Fase 8.3: faixa "CARGA LONGA" nos caminhões e o batedor de giroflex âmbar
   // na frente, no acostamento (não é membro: não entra na fresta)
+  // é um comboio de carga: pelo menos um caminhão (o primeiro vira um, se o sorteio não trouxe)
+  if (!membros.some(m => m.kind === "truck")) membros[0].kind = "truck"
   for (const m of membros) if (m.kind === "truck") m.placa = "CARGA LONGA"
   const zb = ((z + 2600) % eng.trackLen + eng.trackLen) % eng.trackLen
   eng.traffic.push({
