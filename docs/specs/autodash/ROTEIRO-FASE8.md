@@ -164,6 +164,29 @@ Na placa "SAÍDA", entre na faixa da direita e siga o elevado.
 
 **Feedback cidade:**
 
+## 10. Rodada 6 de 16/11 (mundo, trânsito e serra)
+- **Regiões:** cada uma dura ~9 km (uns 3 minutos), na ordem cidade (noite) →
+  rodovia → serra (a viagem da montanha) → praia → cidade. A tecla 9 pula.
+- **Trânsito:** conforme os pontos sobem, aparece "TRÂNSITO MOVIMENTADO /
+  PESADO / CAÓTICO": mais caminhão e moto, ondas de 2–3 carros lado a lado (com
+  uma faixa livre), mais troca de faixa e freada brusca com luz de freio. A pista
+  nunca fecha as 4 faixas.
+- **Céu:** a rodovia, a serra e a costa são de dia a qualquer hora (só a cidade é
+  noite). Não deve mais escurecer passando a placa da serra.
+- **Serra:** altímetro no HUD (sobe até ~1.100 m) e os morros do fundo afundando;
+  capelinha, barraquinha, marco de km, balizador no guard-rail; queda de barreiras
+  (pedras numa faixa) e caminhão quebrado (pisca-alerta), com placa antes;
+  respingo da cachoeira na tela; TÚNEL no meio da subida e, na saída, um VIADUTO
+  alto na neblina com o vale dos dois lados; mirante com estacionamento e gente.
+- **Duelo:** efeitos de chefe (fumaça e marcas de pneu, impacto nos acertos,
+  vinheta nos erros, câmera lenta fria, barras animadas, apresentação nova).
+
+**Feedback regiões/trânsito:**
+
+**Feedback serra (túnel, viaduto, momentos):**
+
+**Feedback efeitos do duelo:**
+
 ## Geral
 Desempenho (travou? caiu o fps em algum trecho?), o que mais incomodou, o que
 mais gostou:
