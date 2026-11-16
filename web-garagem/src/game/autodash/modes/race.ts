@@ -61,6 +61,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.rngEv = mulberry32((eng.climaSeed ^ 0x5f3759df) >>> 0)
   eng.combustivel = 1; eng.postoLimite = COMBUSTIVEL.chamaPosto; eng.abastecendo = false; eng.juntoDaBomba = false; eng.elevJogador = 0; eng.dentroTunel = false; eng.claraoT = 0; eng.audio.ventilacao(false); eng.audio.bomba(false)
   eng.racha = null; eng.rachaT = RACHA.primeiroConviteS
+  eng.touge = null
   eng.comboio = null; eng.oleoT = 0
   eng.vacuo = 0; eng.vacuoS = 0; eng.estilingueT = 0
   if (eng.testeFase5 && eng.mode === "solo") prepararTesteFase5(eng)

@@ -18,6 +18,7 @@ import { type BiomeDef, biomeById } from "./world/biomes"
 import { type Clock, type HoraModo, newClock } from "./world/clock"
 import { type ClimaId, type ClimaModo, CLIMAS } from "./world/weather"
 import { climaAtual } from "./sim/clima"
+import type { Touge } from "./world/touge"
 import { type Ramal } from "./world/ramais"
 import { type TrechoInfo } from "./world/circuits"
 import { renderRoad } from "./render/road"
@@ -102,7 +103,7 @@ export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" 
 //              rápido demais = perseguição (o evento da conversa original)
 //  posto     — reta com posto de combustível (Fase 5, world/posto.ts)
 //  obra      — obra com estreitamento: `lado` fecha duas faixas (world/obra.ts)
-export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto" | "obra" | "tunnel" | "drift"; z: number; end: number; spawnT: number; checked?: boolean; lado?: number; somFeito?: boolean }
+export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto" | "obra" | "tunnel" | "touge"; z: number; end: number; spawnT: number; checked?: boolean; lado?: number; somFeito?: boolean }
 export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto" | "chegada" | "acidente" | "policia" | "tunel" | "drift"; label?: string; lado?: number }
 
 export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
@@ -250,8 +251,7 @@ export class AutoDashEngine {
   driftAng = 0         // ângulo da traseira (rad, com sinal): só desenho
   driftPts = 0         // pontos do drift em andamento
   driftRetoT = 0       // s reto depois de soltar o Shift
-  driftZonaPts = 0     // pontos somados na zona de drift atual
-  naZonaDrift = false
+  touge: Touge | null = null // duelo de touge em andamento (world/touge.ts)
   racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
   rachaT = 45 // s de solo até o próximo convite
   comboio: Comboio | null = null // comboio com fresta em andamento (world/comboio.ts)

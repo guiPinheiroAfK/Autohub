@@ -2,10 +2,10 @@
 
 exports[`AutoDash engine — golden master > partida solo determinística (menu -> nome -> garagem -> largada -> pista) 1`] = `
 {
-  "calls": 21884887,
+  "calls": 21856173,
   "finalMode": "solo",
   "finalState": "racing",
   "frames": 1200,
-  "hash": "8bdbb089539a247e84fc3a59e014cb48780385f165aa2a3efe1aa6850dea7f29",
+  "hash": "53673fd49bd95196bec9278aa16e1dde05efce2366fb1b61338b1bb6050213d0",
 }
 `;

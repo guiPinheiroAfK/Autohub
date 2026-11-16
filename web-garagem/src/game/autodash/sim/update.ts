@@ -175,7 +175,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   const centrif = seg.curve * Math.pow(eng.speed / 240, 2.2) * (0.42 - grip * 0.22)
   eng.playerX -= centrif * dt
   // drift com freio de mão (world/drift.ts): segura parte da curva, fuma e pontua
-  const drift = passoDrift(eng, dt, steerInput, seg.curve, centrif, playerZ)
+  const drift = passoDrift(eng, dt, steerInput, seg.curve, centrif)
   const slip = Math.abs(centrif) * speedF
   // chiado de curva ou de patinada no gás (eng.patina, do quadro anterior)
   eng.audio.skid(Math.max(slip > 0.3 ? slip : 0, eng.patina, eng.oleoT > 0 ? 0.6 : 0, drift))

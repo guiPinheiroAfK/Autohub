@@ -16,7 +16,7 @@ Preencha a linha **Feedback** de cada item (ok / estranho / quebrado + o que viu
 | **7** | viaduto com elevado |
 | **8** | túnel |
 | **9** | próxima região (bioma) |
-| **0** | zona de drift |
+| **0** | duelo de touge |
 
 ---
 
@@ -125,11 +125,12 @@ Na placa "SAÍDA", entre na faixa da direita e siga o elevado.
   corte, o ponteiro do conta-giros bate e volta junto com o som.
 - **Posto:** pátio de concreto com setas, carros na loja, frentista, calibrador,
   lava-rápido e placa SAÍDA. **Viaduto:** ruas da cidade cruzando embaixo do elevado.
-- **Drift (tecla 0 para a zona):** segure **Shift** (freio de mão) com o volante
-  virado acima de 70 km/h: a traseira abre, fumaça e chiado, "DRIFT +N" ao
-  soltar. Volante para dentro da curva segura o carro na curva fechada. Bater no
-  meio perde os pontos. Na zona ("ZONA DE DRIFT", curvas em S) os pontos valem
-  em dobro e o total aparece na saída.
+- **Duelo de touge (tecla 0):** um rival te desafia; vêm 6 curvas fechadas. Em
+  cada uma, um anel fecha no meio da tela: aperte **Shift** quando ele encostar no
+  círculo (verde = PERFEITO, amarelo = BOM). Acertou: o carro escorrega redondo e
+  o rival perde vida. Errou (cedo, tarde ou sem apertar): sai de frente e você
+  perde vida. Barras dos dois no alto; zerou, acabou. Fora do duelo, Shift segue
+  sendo freio de mão livre.
 
 **Feedback ladeira/viaduto:**
 

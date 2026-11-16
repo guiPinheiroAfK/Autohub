@@ -86,6 +86,7 @@ export function atualizarRacha(eng: AutoDashEngine, dt: number) {
   }
   const r = eng.racha
   if (!r) {
+    if (eng.touge) return // no meio do duelo de touge, ninguém chama para racha
     eng.rachaT -= dt
     if (eng.rachaT <= 0 && !convidarRacha(eng)) eng.rachaT = 5
     return

@@ -17,6 +17,7 @@ import { relacoes } from "../physics/cambio"
 import { renderCombustivel, renderRacha, renderVacuo } from "./eventos"
 import { renderEstrelas } from "./policia"
 import { renderAvisos } from "./avisos"
+import { renderTouge } from "./touge"
 
 export function renderHud(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -48,9 +49,11 @@ export function renderHud(eng: AutoDashEngine) {
     ctx.textAlign = "center"
     ctx.fillStyle = "#ff2e88"
     ctx.font = "bold 30px 'Space Grotesk', 'Segoe UI', sans-serif"
-    ctx.fillText(`DRIFT ${Math.floor(eng.driftPts)}${eng.naZonaDrift ? "  x2" : ""}`, W / 2, H * 0.22)
+    ctx.fillText(`DRIFT ${Math.floor(eng.driftPts)}`, W / 2, H * 0.22)
     ctx.textAlign = "left"
   }
+
+  renderTouge(eng)
 
   // clima/hora + badges
   const sky = skyNow(eng)
