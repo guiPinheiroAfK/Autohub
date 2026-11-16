@@ -40,6 +40,9 @@ interface Motor {
 
 // nível de referência das gravações (RMS dos grãos de carga do Renault, tools/som/nivel.py)
 const NIVEL_REF = 0.135
+// Piso do ajuste de nível. 0,25 → 0,2 em 15/11: o VQ35HR (coletor único, som
+// denso, pouco pico) tem RMS alto depois da normalização por pico e pedia 0,24.
+export const NIVEL_PISO = 0.2
 
 export class AudioBus {
   private ctx: AudioContext | null = null
@@ -429,8 +432,8 @@ export class AudioBus {
       m.faixas.set(nome, {
         rpm: [hz[Math.floor(hz.length * 0.02)] * 60 * voltasPorGrao, hz[Math.floor(hz.length * 0.98)] * 60 * voltasPorGrao],
         // gravações de níveis diferentes: iguala ao Renault (0,135 nos grãos de carga), a referência da mixagem
-        // os bancos do simulador saem mais altos (nível ~0,43): piso 0,25 para igualá-los
-        nivel: Math.min(3.5, Math.max(0.25, NIVEL_REF / (j.nivel ?? NIVEL_REF))),
+        // os bancos do simulador saem mais altos (nível ~0,43–0,57): piso NIVEL_PISO para igualá-los
+        nivel: Math.min(3.5, Math.max(NIVEL_PISO, NIVEL_REF / (j.nivel ?? NIVEL_REF))),
       })
       m.node.port.postMessage({ banco: { nome, sr: buf.sampleRate, dados, graos, voltasPorGrao } }, [dados.buffer, graos.buffer])
       m.bancos.add(nome)

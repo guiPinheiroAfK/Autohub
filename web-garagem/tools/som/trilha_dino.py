@@ -9,6 +9,8 @@
 # descontar meias ordens), para motores em que a linha da volta domina.
 # RETA="t:rpm" (ambiente): fixa a puxada pela reta medida na linha dominante
 # (inclinação 500 rpm/s), sem busca. Use quando o pente erra (V8 e V12 do simulador).
+# LENTA="rpm" (ambiente): fixa o giro da lenta (o pente pega o dobro no boxer 4,
+# em que a meia ordem domina). A puxada parte da lenta, então ela confere o número.
 import sys, numpy as np
 from scipy.io import wavfile
 from scipy.signal import stft
@@ -41,7 +43,7 @@ def idx(r): return np.clip(np.round((r - R[0]) / 10).astype(int), 0, len(R) - 1)
 f0 = np.full(len(t), np.nan)
 for a, b in lentas:
     m = (t >= a) & (t <= b)
-    rl = R[np.argmax(S[m].mean(0) * (R < 2000))]
+    rl = float(os.environ["LENTA"]) if os.environ.get("LENTA") else R[np.argmax(S[m].mean(0) * (R < 2000))]
     f0[m] = rl / 60 * ordem; print(f"lenta {a}-{b}s: {rl:.0f} rpm")
 m = (t >= pa) & (t <= pb); tt = t[m] - pa; Sm = S[m]
 if os.environ.get("RETA"):

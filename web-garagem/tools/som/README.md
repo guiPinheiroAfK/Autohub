@@ -172,6 +172,29 @@ Janelas usadas: V8 lenta 29,5–38,5 / puxada 39,3–49,3; VTEC 1–5 / 8–22,7
 6,4–17,5; 2JZ 1–4,5 / 9,3–19,1; RB26 1–5 / 11,1–24,9; V10 2–11 / 11,9–27,7; V12 4–20 /
 21,5–37 (só até ~11200 rpm; o 412 T2 vai a 18000).
 
+Segunda sessão (15/11, à noite). Gravação contínua (`gravar_continuo.py` no scratchpad,
+loopback por N s, corte depois) em vez de esperar o som começar: o PC tocava outras coisas
+antes da puxada e o gravador disparava cedo. O simulador é reaberto com cada motor em vez
+do Enter (o Enter derrubou o EJ25 da pasta `atg-video-2`). Janelas nos cortes mono:
+
+| Banco | Arquivo do simulador | Cil. | Lenta | Puxada | Observação |
+|---|---|---|---|---|---|
+| `sim-v8-f136` | `atg-video-2/08_ferrari_f136_v8.mr` | 8 | 4,2–10,8 | 11,4–26,9 | 990 / 1110→8860 |
+| `sim-i5-audi` | `atg-video-1/07_audi_i5.mr` | 5 | 7–10,8 | 16,1–25,7 | 950 / 1078→5888 |
+| `sim-v8-454` | `chevrolet/chev_454_main.mr` (nosso: 454 + carro e câmbio do F136) | 8 | 5,6–13,9 | 14,4–23,6 | `RETA="23.7:5500"` |
+| `sim-boxer4-ej25` | `atg-video-1/06_subaru_ej25.mr` | 4 | 23–51 | 9,6–20,8 | `LENTA=880` (o pente pega 1760) |
+| `sim-v6-vq35hr` | `16_vq35hr_isr_tomei.mr` (nosso) | 6 | 40–50 | 12,7–25 | `LENTA=715` |
+| `sim-v10-lfa` | `atg-video-2/10_lfa_v10.mr` | 10 | 9–15,6 | 16,3–31,7 | 900 / 1190→8890 |
+| `sim-v12-f1` | `atg-video-2/12_ferrari_412_t2.mr` | 12 | 8–12 | 20–40,5 | `RETA="40:11440"`, só até 11690 (corte do jogo 9250) |
+
+O VQ35HR é derivado do VQ35 aproximado: câmara de 61 cc (compressão 10,6), corte 7500,
+comandos de ~238°/236° e ~10 mm (Tomei 264), volante de 13 lb, admissão maior e as duas
+bancadas em coletores longos de mesmo comprimento num escape só (pulsos a cada 120°: menos
+"abelha", mais agudo). A primeira versão (`15_vq35hr_longtube.mr`, escape inteiro com
+`audio_volume` 1 e `minimal_muffling_01`) estourava e chiava; a 16 usa metade do volume,
+`mild_exhaust_0` e avanço máximo de 32°. Os `.mr` novos e os cortes ficam em
+`.claude/som-simulador/`.
+
 ## Partida
 
 Freesound #50898, "Car Ignition Key - Engine Starting Running Idle 2.wav", de

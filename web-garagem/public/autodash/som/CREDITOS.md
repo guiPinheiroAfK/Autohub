@@ -12,13 +12,13 @@ Os arquivos daqui são versões editadas (trechos recortados, mono, normalizados
 | `v8-escape.mp3` / `.json` (V8 cruzado: lenta, meio e alto) | [Chrysler Start and Idle (Exhaust perspective)](https://freesound.org/s/240671/), lenta a ~800 rpm | lonemonk | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `v8-escape.mp3` (meio, 2000–3650 rpm) | [nascar24chevyrev2](https://freesound.org/s/43485/) | enginemusic | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) |
 | `v8-escape.mp3` (alto, 3500–6000 rpm, filtrado) | [1953 Studebaker Idle up to 6000rpm](https://freesound.org/s/238847/), a mesma gravação de `v8-cruzado` | lonemonk | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| `v8-plano.mp3` / `.json` | [Ferrari 360 Spider - engine sound](https://freesound.org/s/241083/) | PritzProductions | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `i6.mp3` / `.json` | [Import car revs on Chassis Dyno with Turbo.wav](https://freesound.org/s/496171/) | editboy23 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `boxer6.mp3` / `.json` | [vehicle car porsche 911 revving engine motor boxer](https://freesound.org/s/772802/) | jerry.berumen | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `partida.mp3` | [Car Ignition Key - Engine Starting Running Idle 2.wav](https://freesound.org/s/50898/) | RutgerMuller | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 
 Os bancos `sim-*` foram **gravados por nós** no [Engine Simulator](https://github.com/ange-yaghi/engine-sim)
-(AngeTheGreat, licença MIT), v0.1.11a, em 15/11/2026: puxada no dinamômetro com o
+(AngeTheGreat, licença MIT), v0.1.11a, em 15/11/2026 (F136, 454, Audi, EJ25 e VQ35HR
+gravados e V10 e V12 regravados na segunda sessão do mesmo dia): puxada no dinamômetro com o
 pé no fundo, da lenta ao corte. Motores do próprio simulador (GM LS, Lexus LFA
 1LR-GUE, Ferrari 412 T2, Honda B18C5, Toyota 2JZ) e dois derivados nossos (V6 60°
 com as medidas do VQ35DE e 6 em linha com as do RB26DETT; arquivos `.mr` em
@@ -33,5 +33,10 @@ com as medidas do VQ35DE e 6 em linha com as do RB26DETT; arquivos `.mr` em
 | `sim-v6-vq35` | V6 60° com medidas do VQ35DE (aproximado) |
 | `sim-i6-2jz` | Toyota 2JZ (6 em linha) |
 | `sim-i6-rb26` | 6 em linha com medidas do RB26DETT (aproximado) |
+| `sim-v8-f136` | Ferrari F136 (V8 plano) |
+| `sim-v8-454` | Chevrolet 454 big block (V8 cruzado), com o carro e o câmbio do arquivo do F136 |
+| `sim-i5-audi` | Audi 2.3 5 em linha |
+| `sim-boxer4-ej25` | Subaru EJ25 (boxer 4) |
+| `sim-v6-vq35hr` | VQ35HR do 350Z, derivado nosso do V6 60° (coletores longos de mesmo comprimento num coletor só, comandos tipo Tomei 264, volante leve, admissão maior) |
 
 Como os arquivos foram processados: `web-garagem/tools/som/README.md`.
