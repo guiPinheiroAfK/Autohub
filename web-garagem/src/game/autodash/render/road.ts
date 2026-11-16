@@ -516,6 +516,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         // nada em cima do pátio do posto nem do ramal/elevado (os dois ficam de um lado)
         if (en.lado > 0 && noPosto) continue
         if (q && en.lado === q.r.lado && en.dist < q.outer + 0.5) continue
+        if (en.kind === ENF.fiacao && (q || noPosto)) continue // o fio cruzaria o elevado/a cobertura
         sprites.push({ kind: "deco", deco: en.kind, dir: en.seed, x: sx1 + sw1 * en.lado * en.dist, y: sy1, w: sw1 * en.escala })
       }
     }

@@ -6,6 +6,7 @@ import { type AutoDashEngine } from "../engine"
 import { shade } from "../math"
 import { rr } from "./primitives"
 import { ENF } from "../world/cenario"
+import { drawTokyo } from "./tokyo"
 
 const CASAS = ["#f5e6c8", "#cfe3f0", "#f2d0c4", "#e6efc9", "#e7d7f2", "#f7f1e1"]
 const TELHADOS = ["#9a3412", "#7c2d12", "#475569", "#334155"]
@@ -17,7 +18,8 @@ const de = <T,>(lista: readonly T[], seed: number): T => lista[Math.abs(seed) % 
 /** Desenha um enfeite de beira novo. Devolve false se o `kind` não é daqui. */
 export function drawEnfeite(eng: AutoDashEngine, kind: number, seed: number, x: number, y: number, w: number, amb: number): boolean {
   if (kind < 20) return false
-  if (w < 1.5) return true
+  if (w < 1.5 && kind !== ENF.fiacao) return true // o fio cruza a pista: a largura do poste não diz o tamanho dele
+  if (kind >= ENF.telaLED) return drawTokyo(eng, kind, seed, x, y, w, amb)
   const ctx = eng.ctx
   const noite = amb < 0.62
   const luz = Math.max(0.35, amb)

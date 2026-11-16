@@ -33,7 +33,18 @@ export interface BiomeDef {
   tracado?: Tracado
 }
 
-// paleta do ciclo de dia do solo (cidade). Movida de engine.ts para cá.
+// Cidade (playtest 16/11, bíblia de cenários: "Tokyo Drift = noite"): a cidade
+// nunca amanhece. O relógio segue, mas o céu passa de noite azul-petróleo a um
+// crepúsculo magenta e volta; amb fica abaixo de 0,62, então o neon, as janelas
+// e os postes ficam sempre acesos.
+export const CEU_TOKYO: SkyKey[] = [
+  { t: 0.125, top: "#0b0e1a", bot: "#3b1d5e", amb: 0.56 },
+  { t: 0.375, top: "#1a0b2e", bot: "#b8326e", amb: 0.58 },
+  { t: 0.625, top: "#050816", bot: "#16233f", amb: 0.44 },
+  { t: 0.875, top: "#0b0e1a", bot: "#1e3a5f", amb: 0.5 },
+]
+
+// paleta do ciclo de dia do solo (a cidade antiga; hoje sem uso no jogo). Movida de engine.ts para cá.
 export const SKY_KEYS: SkyKey[] = [
   { t: 0.125, top: "#2b8fd6", bot: "#bfe6f7", amb: 1.0 },
   { t: 0.375, top: "#3b2a63", bot: "#fb923c", amb: 0.8 },
@@ -45,7 +56,7 @@ export const BIOMES: Record<string, BiomeDef> = {
   cidade: {
     id: "cidade",
     nome: "Cidade",
-    ceu: SKY_KEYS,
+    ceu: CEU_TOKYO,
     ceuCorrida: { top: "#0a0618", bot: "#2a1140", amb: 0.44, ambChuva: 0.34 },
     camadas: { longe: ["ceu-sol", "montanhas"], meio: ["skyline"], perto: ["brilho-urbano"] },
     arvore: 0,

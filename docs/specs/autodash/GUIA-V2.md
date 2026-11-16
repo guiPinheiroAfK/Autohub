@@ -503,6 +503,19 @@ o viaduto tem carros saindo e entrando e um caminho por cima; o túnel aparece d
 
 Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontuação (seção 7).
 
+Atualização 16/11: o drift por pontos (7) entrou como mecânica do solo (`world/drift.ts`:
+Shift = freio de mão, pontos por velocidade × ângulo, zona de drift em dobro), sem
+combo por cadeia ainda.
+
+**Ideias futuras registradas (16/11):**
+- Bíblia de cenários (`CENARIOS.md`): distritos de Tokyo, Costa em 6 segmentos e Praia
+  como hub. Já entrou: Shibuya, Shinjuku e oficinas na cidade, sempre de noite.
+  Faltam: Shuto (elevado contínuo com luz de sódio), Wangan, Daikoku como hub, Touge,
+  a Costa em segmentos e a Praia.
+- Evento "Shibuya destruída": a cidade em ruínas por uma luta de dois personagens
+  poderosos ao fundo (pedido do usuário, só para o futuro). Personagens e visual
+  precisam ser nossos, não de anime existente.
+
 ## 10. Log de mudanças
 
 | Data | Commit | O que mudou | Snapshot do golden |
@@ -563,4 +576,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-16 | (pendências da Fase 8, este) | Posto: com você chegando (9 mil u), o carro da frente termina de abastecer, sai pelo pátio acelerando e entra na faixa da direita com seta. Viaduto: com você procurado, viatura de tocaia no acostamento embaixo dele, que liga a sirene e sai atrás quando você passa. Túnel: ronco de ventilação enquanto você está dentro. O desafiante do racha enxergando o jogador ficou de fora (quebrava o cenário calibrado do racha). Testes em `posto.cenario` e `viaduto.cenario`. | não alterado |
 | 2026-11-16 | f1ceaa8 | Posto mais completo: pátio de concreto com guia, setas pintadas e calçada da loja, dois carros estacionados na loja, frentista acenando (`cena` "frentista"), postes de luz, calibrador, lava-rápido e placa SAÍDA (ENF 33–35). Viaduto: quatro ruas da cidade cruzando no chão embaixo do elevado, dos dois lados e sem cruzar a pista, com carros passando de lado (só desenho). | não alterado (cenário é do solo) |
 | 2026-11-16 | (ladeira, este) | Playtest 16/11: "subindo o carro pesa demais, nem reduzindo muda nada" e "saindo do viaduto o carro nem embala". Subida 120·grade → `LADEIRA.sobe` 45·grade km/h/s (a de antes era ~3× a força do motor em marcha alta; agora 6% de rampa não derruba quem está no pé e a de 13% cobra devagar); descida igual (210). Em cima do elevado a rampa dele entra na inclinação (`ELEV_LADEIRA` 0,6 da derivada da altura): descer a rampa sem acelerar embala ~+28 km/h. Teste `ladeira.test.ts`. | **alterado**: a pista do golden tem morros; a subida mais leve muda a velocidade e, com ela, tudo que vem depois |
+| 2026-11-16 | (cidade Tokyo, este) | Playtest 16/11: "cidade com mais cara de Tokyo Drift". Bíblia de cenários trazida para `CENARIOS.md`. Trechos da cidade agora são distritos com 1 cor dominante + 1 de acento: **shibuya** (magenta + branco: telões que trocam de imagem, fachadas de letreiros, multidão com guarda-chuva transparente, máquina de bebida), **shinjuku** (ciano + magenta: prédios de letreiros, letreiros verticais, izakaya com lanternas, vapor de bueiro), **oficinas** (verde konbini: galpões de tuning com carro no elevador, pneus, konbini) e subúrbio; centro e campo saem da cidade. Poste com fiação atravessando a pista (o par da direita é achado pela distância fixa). Desenho em `render/tokyo.ts`, com LOD (longe: bloco + faixa; halo só bem de perto: eram 66 halos por quadro, mediana 4,8 ms contra 3,1 no subúrbio). Céu da cidade sempre de noite (`CEU_TOKYO`: noite azul-petróleo ↔ crepúsculo magenta, amb < 0,62). | **alterado**: o golden do solo roda na cidade (céu e enfeites novos) |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

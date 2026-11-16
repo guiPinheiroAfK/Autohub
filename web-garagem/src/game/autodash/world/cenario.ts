@@ -7,7 +7,12 @@
 // índice: sem sorteio no render, a mesma pista desenha sempre o mesmo cenário.
 // Desenho dos enfeites novos em render/cenario.ts.
 
-export type TipoTrecho = "centro" | "suburbio" | "campo" | "orla" | "mata"
+// Cidade (playtest 16/11, "mais cara de Tokyo Drift"; bíblia de cenários em
+// docs/specs/autodash/CENARIOS.md): distritos com 1 cor dominante + 1 de acento.
+// shibuya: magenta + branco LED (telas, multidão, fachadas); shinjuku: ciano +
+// magenta (letreiros verticais, lanternas de izakaya, vapor de bueiro);
+// oficinas: verde konbini + branco (galpões de tuning, pneus, máquinas de bebida).
+export type TipoTrecho = "centro" | "suburbio" | "campo" | "orla" | "mata" | "shibuya" | "shinjuku" | "oficinas"
 
 export interface Trecho { a: number; b: number; tipo: TipoTrecho }
 
@@ -18,7 +23,7 @@ export const CENARIO = {
 }
 
 export const TRECHOS_DO_BIOMA: Record<string, TipoTrecho[]> = {
-  cidade: ["centro", "suburbio", "campo"],
+  cidade: ["shibuya", "shinjuku", "oficinas", "suburbio"],
   costa: ["orla", "suburbio", "campo"],
   serra: ["mata", "campo", "suburbio"],   // Fase 8.5
   rodovia: ["campo", "suburbio", "campo", "mata"], // campo repetido: aparece mais
@@ -31,7 +36,16 @@ export const ENF = {
   celeiro: 26, quiosque: 27, guardaSol: 28, predioMedio: 29, cerca: 30,
   guardRail: 31, rocha: 32,
   calibrador: 33, lavaRapido: 34, placaSaida: 35, // posto (Fase 8.2, polimento)
+  letreiroVertical: 5, // render/backdrop.ts (drawDeco); seed é o índice da cor TOKYO
+  telaLED: 36, izakaya: 37, maquinaBebida: 38, konbini: 39, fiacao: 40,
+  pneus: 41, galpao: 42, multidao: 43, vapor: 44, fachadaShibuya: 45, fachadaShinjuku: 46,
 } as const
+
+/** Poste com fiação: fica sempre à esquerda nesta distância e escala; o desenho acha o par da direita por elas. */
+export const FIACAO = { dist: 1.22, escala: 0.05 }
+
+// letreiro vertical de Shinjuku: índices da paleta TOKYO de drawDeco (3 magenta, 4 ciano, 0 vermelho)
+const COR_SHINJUKU = [4, 3, 4, 0]
 
 export interface Enfeite {
   kind: number
@@ -97,6 +111,36 @@ export function enfeitesDoSegmento(trechos: Trecho[], idx: number, arvore: numbe
     if (idx % 10 === 5) add(ENF.poste, -1, 1.28, 0.05)
     if (idx % 90 === 45) add(ENF.ponto, 1, 1.42, 0.36)
     if (idx % 70 === 20) add(ENF.outdoor, 1, 1.75, 0.55)
+  } else if (tipo === "shibuya") {
+    // a vitrine: tela gigante, fachadas magenta/branco, multidão na calçada
+    if (idx % 3 === 0) {
+      for (const l of [-1, 1] as const) {
+        const k = h(l < 0 ? 1 : 3)
+        if (k < 0.3) add(ENF.telaLED, l, 2.0 + h(2) * 0.3, 0.7)
+        else if (k < 0.75) add(ENF.fachadaShibuya, l, 1.75 + h(4) * 0.3, 0.55)
+        else add(ENF.predioAlto, l, 2.1, 0.16)
+      }
+    }
+    if (idx % 7 === 4) add(ENF.multidao, lado(8), 1.3, 0.34)
+    if (idx % 26 === 13) add(ENF.fiacao, -1, FIACAO.dist, FIACAO.escala)
+    if (idx % 41 === 20) add(ENF.maquinaBebida, lado(9), 1.32, 0.16)
+  } else if (tipo === "shinjuku") {
+    // o neon vertical: letreiros verticais empilhados, izakaya, vapor e poças
+    if (idx % 3 === 0) {
+      for (const l of [-1, 1] as const) out.push({ kind: ENF.fachadaShinjuku, lado: l, dist: 1.7 + h(l < 0 ? 2 : 4) * 0.35, escala: 0.55, seed: Math.floor(h(l < 0 ? 5 : 6) * 1e6) })
+    }
+    if (idx % 3 === 1) out.push({ kind: ENF.letreiroVertical, lado: lado(8), dist: 1.38, escala: 0.2, seed: COR_SHINJUKU[Math.floor(h(9) * 4)] + 6 * idx })
+    if (idx % 19 === 9) add(ENF.izakaya, lado(10), 1.45, 0.42)
+    if (idx % 23 === 11) add(ENF.vapor, lado(11), 1.08, 0.3)
+    if (idx % 20 === 17) add(ENF.fiacao, -1, FIACAO.dist, FIACAO.escala)
+  } else if (tipo === "oficinas") {
+    // a garagem: galpões de tuning, pneus empilhados, konbini e máquina de bebida
+    if (idx % 8 === 0) add(ENF.galpao, idx % 16 === 0 ? -1 : 1, 1.9 + h(1) * 0.2, 0.8)
+    if (idx % 8 === 4) add(ENF.pneus, lado(2), 1.32, 0.16)
+    if (idx % 70 === 35) add(ENF.konbini, lado(3), 1.75, 0.65)
+    if (idx % 29 === 7) add(ENF.maquinaBebida, lado(4), 1.32, 0.16)
+    if (idx % 18 === 9) add(ENF.fiacao, -1, FIACAO.dist, FIACAO.escala)
+    if (idx % 5 === 2 && h(5) < 0.4) add(ENF.predioMedio, lado(6), 2.4, 0.62)
   } else if (tipo === "suburbio") {
     if (idx % 6 === 0) add(ENF.casa, lado(1), 1.75 + h(2) * 0.5, 0.5)
     if (idx % 6 === 3) add(ENF.muro, lado(3), 1.42, 0.45)

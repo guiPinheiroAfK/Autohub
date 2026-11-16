@@ -278,8 +278,8 @@ export function drawDeco(eng: AutoDashEngine, kind: number, dir: number, x: numb
         }
         ctx.stroke() // um stroke só pros 6 caracteres, não 6 strokes
       }
-      // halo via sprite cacheado
-      if (w > 8) {
+      // halo via sprite cacheado (só de perto: em Shinjuku há um a cada 3 segmentos)
+      if (w > 40) {
         const gw = w * 2.6
         ctx.drawImage(neonGlow(eng, cor), x - gw / 2, y - h * 0.5 - gw / 2, gw, gw)
       }

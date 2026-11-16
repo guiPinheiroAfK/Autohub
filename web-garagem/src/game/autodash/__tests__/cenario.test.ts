@@ -1,6 +1,6 @@
 // Fase 8.4: cenário de beira por trechos (world/cenario.ts).
 import { describe, it, expect } from "vitest"
-import { gerarTrechos, tipoNoSeg, enfeitesDoSegmento, CENARIO, TRECHOS_DO_BIOMA, hash01 } from "../world/cenario"
+import { gerarTrechos, tipoNoSeg, enfeitesDoSegmento, CENARIO, TRECHOS_DO_BIOMA, hash01, ENF, FIACAO } from "../world/cenario"
 
 describe("cenário por trechos", () => {
   it("os trechos cobrem a pista inteira, sem buraco e sem dois iguais seguidos", () => {
@@ -45,5 +45,33 @@ describe("cenário por trechos", () => {
     for (let idx = b.a; idx < b.a + CENARIO.transicao; idx++) tipos.add(tipoNoSeg(t, idx))
     expect(tipos.size).toBe(2)
     for (let idx = b.a + CENARIO.transicao; idx < b.b; idx++) expect(tipoNoSeg(t, idx)).toBe(b.tipo)
+  })
+})
+
+describe("cidade Tokyo (16/11)", () => {
+  it("a cidade alterna os distritos e cada um tem os seus enfeites", () => {
+    const t = gerarTrechos(6000, 3, "cidade")
+    const tipos = new Set(t.map(x => x.tipo))
+    for (const d of ["shibuya", "shinjuku", "oficinas"]) expect(tipos).toContain(d)
+    const kinds = (tipo: string) => {
+      const tr = t.find(x => x.tipo === tipo)!
+      const ks = new Set<number>()
+      for (let idx = tr.a + CENARIO.transicao; idx < tr.b; idx++) for (const e of enfeitesDoSegmento(t, idx, 0)) ks.add(e.kind)
+      return ks
+    }
+    expect(kinds("shibuya")).toContain(ENF.telaLED)
+    expect(kinds("shinjuku")).toContain(ENF.letreiroVertical)
+    expect(kinds("oficinas")).toContain(ENF.galpao)
+  })
+
+  it("o poste com fiação fica sempre à esquerda, na distância que o desenho usa para achar o par", () => {
+    const t = gerarTrechos(6000, 9, "cidade")
+    let n = 0
+    for (let idx = 0; idx < 6000; idx++) for (const e of enfeitesDoSegmento(t, idx, 0)) {
+      if (e.kind !== ENF.fiacao) continue
+      n++
+      expect(e.lado).toBe(-1); expect(e.dist).toBe(FIACAO.dist); expect(e.escala).toBe(FIACAO.escala)
+    }
+    expect(n).toBeGreaterThan(10)
   })
 })
