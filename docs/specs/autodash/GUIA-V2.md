@@ -442,13 +442,31 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
 - [ ] Bioma no solo muda ao longo da partida (a cada N níveis) com transição suave,
   em vez de ser escolhido só no menu.
 
+**8.6 Viaduto de verdade** (pedido de 16/11: "mais funcional e mais bonito")
+- [ ] Hoje o viaduto é um sprite que cruza por cima mais uma alça de acesso à direita
+  com carros entrando. Passa a ser um trevo: alça de SAÍDA antes (carros saindo da
+  pista com seta) e alça de ENTRADA depois, com carros usando as duas.
+- [ ] Caminho para subir: ramal (ADR 0014) que sobe a alça e cruza por cima do viaduto
+  e volta à pista mais à frente (atalho ou caminho alternativo com trânsito próprio).
+- [ ] Mais eventos no viaduto: carro parado no acostamento da alça, viatura de tocaia
+  embaixo (com estrelas), helicóptero perdendo você embaixo (já existe, fica visível).
+- [ ] Visual: pilares com sombra, juntas de dilatação, iluminação à noite, pichação.
+
+**8.7 Túnel raro** (como a ponte: zona longa que aparece de vez em quando)
+- [ ] Zona `tunnel`: entrada com boca de concreto, teto e paredes com luzes em fila
+  passando, escuro com faróis, saída com o clarão. Rara no sorteio (peso baixo).
+- [ ] Som: eco forte do motor (reaproveita o eco do viaduto, mais longo) e o ronco
+  de ventilação. Helicóptero e radar te perdem lá dentro.
+- [ ] Cartão de aviso "TÚNEL" e placa de faróis; chuva para lá dentro.
+
 Pendências que ficaram da rodada de som (15/11), fora desta fase: V6 biturbo ainda no
 VQ35 aproximado; W16 e rotativo só síntese; puxada de pé leve (E) não gravada.
 
 Critério de aceite da fase: build, lint e testes verdes; golden muda só em commits
 próprios com linha no log. No navegador: civil não bate na sua traseira parado; o
 posto tem carros e dá para parar na bomba; cada evento tem um detalhe novo visível de
-longe; dá para ver pelo menos 2 tipos de trecho de cenário numa partida; serra jogável.
+longe; dá para ver pelo menos 2 tipos de trecho de cenário numa partida; serra jogável;
+o viaduto tem carros saindo e entrando e um caminho por cima; o túnel aparece de vez em quando.
 
 ## 9. Ideias de rodadas e drift (para brainstorm, não implementar)
 
