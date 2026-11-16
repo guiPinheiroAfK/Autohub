@@ -31,9 +31,11 @@ export function drawGuardRail(eng: AutoDashEngine, r: RailSeg, amb: number) {
   const t1 = r.y1 - topo * r.s1, b1 = r.y1 - base * r.s1, t2 = r.y2 - topo * r.s2, b2 = r.y2 - base * r.s2
   const lados = r.so === -1 ? [[r.xl1, r.xl2]] : r.so === 1 ? [[r.xr1, r.xr2]] : [[r.xl1, r.xl2], [r.xr1, r.xr2]]
   for (const [x1, x2] of lados) {
-    if (r.idx % 2 === 0) { // poste
+    if (r.idx % 2 === 0) { // poste com o balizador refletivo (acende no farol à noite)
       ctx.fillStyle = shade("#475569", luz)
       ctx.fillRect(x1 - Math.max(0.5, 18 * r.s1), r.y1 - poste * r.s1, Math.max(1, 36 * r.s1), poste * r.s1)
+      ctx.fillStyle = amb < 0.62 ? "#fbbf24" : shade("#f59e0b", luz)
+      ctx.fillRect(x1 - Math.max(0.5, 14 * r.s1), r.y1 - (poste + 40) * r.s1, Math.max(1, 28 * r.s1), Math.max(1, 34 * r.s1))
     }
     ctx.fillStyle = shade("#94a3b8", luz) // lâmina
     ctx.beginPath(); ctx.moveTo(x1, t1); ctx.lineTo(x2, t2); ctx.lineTo(x2, b2); ctx.lineTo(x1, b1); ctx.closePath(); ctx.fill()
@@ -125,7 +127,7 @@ export function drawPortal(eng: AutoDashEngine, x: number, y: number, w: number,
 export function drawEnfeite(eng: AutoDashEngine, kind: number, seed: number, x: number, y: number, w: number, amb: number): boolean {
   if (kind < 20) return false
   if (w < 1.5 && kind !== ENF.fiacao) return true // o fio cruza a pista: a largura do poste não diz o tamanho dele
-  if (kind >= ENF.telaLED) return drawTokyo(eng, kind, seed, x, y, w, amb)
+  if (kind >= ENF.telaLED && drawTokyo(eng, kind, seed, x, y, w, amb)) return true
   const ctx = eng.ctx
   const noite = amb < 0.62
   const luz = Math.max(0.35, amb)
@@ -321,6 +323,55 @@ export function drawEnfeite(eng: AutoDashEngine, kind: number, seed: number, x: 
       ctx.fillRect(x - w / 2, y - bh * 0.95, w, Math.max(1, bh * 0.35))
       ctx.fillStyle = shade("#94a3b8", luz)
       ctx.fillRect(x - w / 2, y - bh * 0.62, w, Math.max(1, bh * 0.1))
+      return true
+    }
+    case ENF.capela: {
+      // capelinha de beira de estrada: branca, telhado de barro, cruz e porta azul
+      const bw = w, bh = w * 0.7
+      ctx.fillStyle = shade("#f1f5f9", luz)
+      ctx.fillRect(x - bw / 2, y - bh, bw, bh)
+      ctx.fillStyle = shade("#b45309", luz)
+      ctx.beginPath(); ctx.moveTo(x - bw * 0.6, y - bh); ctx.lineTo(x, y - bh - w * 0.4); ctx.lineTo(x + bw * 0.6, y - bh); ctx.closePath(); ctx.fill()
+      ctx.fillStyle = shade("#1d4ed8", luz)
+      rr(ctx, x - bw * 0.14, y - bh * 0.6, bw * 0.28, bh * 0.6, bw * 0.12)
+      if (w > 10) {
+        ctx.fillStyle = shade("#78350f", luz) // cruz
+        ctx.fillRect(x - w * 0.025, y - bh - w * 0.62, w * 0.05, w * 0.24)
+        ctx.fillRect(x - w * 0.09, y - bh - w * 0.55, w * 0.18, w * 0.05)
+      }
+      if (noite && w > 8) { ctx.fillStyle = "#fde68a"; ctx.fillRect(x - bw * 0.06, y - bh * 0.85, bw * 0.12, bh * 0.12) } // vela
+      return true
+    }
+    case ENF.barraca: {
+      // barraquinha de banana e artesanato: lona listrada, cachos pendurados
+      const bw = w, bh = w * 0.55
+      ctx.fillStyle = shade("#78350f", luz)
+      ctx.fillRect(x - bw * 0.45, y - bh, Math.max(1, w * 0.04), bh)
+      ctx.fillRect(x + bw * 0.41, y - bh, Math.max(1, w * 0.04), bh)
+      for (let k = 0; k < 5; k++) { // lona
+        ctx.fillStyle = shade(k % 2 ? "#f8fafc" : "#16a34a", luz)
+        ctx.fillRect(x - bw * 0.5 + k * bw * 0.2, y - bh - w * 0.12, bw * 0.2, w * 0.12)
+      }
+      ctx.fillStyle = shade("#a16207", luz) // bancada
+      ctx.fillRect(x - bw * 0.45, y - bh * 0.4, bw * 0.9, bh * 0.12)
+      if (w > 10) {
+        ctx.fillStyle = shade("#facc15", luz) // cachos de banana
+        for (let k = 0; k < 4; k++) ctx.fillRect(x - bw * 0.35 + k * bw * 0.2, y - bh * 0.85, bw * 0.1, bh * 0.25)
+      }
+      return true
+    }
+    case ENF.marcoKm: {
+      // marco quilométrico: poste branco com faixa e o número
+      const bh = w * 3
+      ctx.fillStyle = shade("#f8fafc", luz)
+      ctx.fillRect(x - w / 2, y - bh, w, bh)
+      ctx.fillStyle = shade("#0f172a", luz)
+      ctx.fillRect(x - w / 2, y - bh * 0.85, w, bh * 0.08)
+      if (w > 7) {
+        ctx.fillStyle = "#0f172a"
+        ctx.font = `bold ${Math.round(w * 0.8)}px 'Space Grotesk', sans-serif`
+        ctx.textAlign = "center"; ctx.fillText(String(20 + (seed % 60)), x, y - bh * 0.45); ctx.textAlign = "left"
+      }
       return true
     }
     case ENF.rocha: {

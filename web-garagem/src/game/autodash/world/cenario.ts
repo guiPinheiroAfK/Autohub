@@ -41,6 +41,7 @@ export const ENF = {
   telaLED: 36, izakaya: 37, maquinaBebida: 38, konbini: 39, fiacao: 40,
   pneus: 41, galpao: 42, multidao: 43, vapor: 44, fachadaShibuya: 45, fachadaShinjuku: 46,
   lojinha: 47, predioJP: 48, estacionamento: 49, pedestres: 50,
+  capela: 51, barraca: 52, marcoKm: 53, // serra (doc MONTANHA-COSTA-PRAIA: capelinha, barraquinha, marco de km)
 } as const
 
 /** Guard-rail contínuo dos trechos de mata: distância da borda (meias-pistas). */
@@ -211,6 +212,10 @@ export function enfeitesDoSegmento(trechos: Trecho[], idx: number, arvore: numbe
     if (idx % 2 === 1) add(h(1) < 0.7 ? ENF.pinheiro : arvore, lado(2), 1.6 + h(3) * 1.2, 0.22 + h(4) * 0.08)
     if (idx % 3 === 0 && h(5) < 0.55) add(ENF.pinheiro, lado(6), 2.3 + h(7) * 1.2, 0.24)
     if (idx % 31 === 9) add(ENF.rocha, lado(8), 1.45, 0.3)
+    // o que dá vida à estrada da serra (o lado do vale some no render: lá não tem chão)
+    if (idx % 250 === 0) add(ENF.marcoKm, lado(9), 1.12, 0.07)
+    if ((tipo === "portal" || tipo === "serraPe") && idx % 90 === 40) add(ENF.barraca, lado(10), 1.32, 0.42)
+    if ((tipo === "serraPe" || tipo === "serraMeio") && idx % 700 === 350) add(ENF.capela, lado(11), 1.15, 0.38)
   } else if (tipo === "mirante") {
     // mirante: a mata abre; barraquinha e quiosque, poucas árvores, o mar no
     // fundo. Playtest 16/11 ("mais completa"): estacionamento com carros de quem
