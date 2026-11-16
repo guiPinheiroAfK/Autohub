@@ -7,7 +7,7 @@ import { ESCALA_ACEL, type CarSpec } from "../data"
 import { relacao, fatorMarcha } from "../physics/cambio"
 import { emitSmoke, emitFlame } from "../fx/particles"
 import { climaAtual } from "./clima"
-import { type MotorFisico, forcaNoCorte, faseCorte, rampaGas, passoEixo, boostDoEixo, aliviaNaTroca, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, giroSolto } from "../physics/motores"
+import { type MotorFisico, forcaNoCorte, faseCorte, rampaGas, passoEixo, boostDoEixo, aliviaNaTroca, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, giroSolto } from "../physics/motores"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
 import { accelK, finalDriveOf, usoTracao } from "../physics/traction"
@@ -53,9 +53,9 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
       eng.rpm = giroNaTroca(mf, eng.rpm, alvo, dt, cambioDe(spec), blip)
     } else eng.rpm = alvo
   } else {
-    const targetRpm = mf.idle + throttle * (giroNaFrac(mf, 0.943) - mf.idle)
+    const targetRpm = mf.idle + throttle * (mf.corte + 20 - mf.idle) // pé no fundo bate no corte (antes parava em 94% da faixa)
     // giro solto: motor leve sobe e cai rápido, motor pesado é preguiçoso
-    eng.rpm = giroSolto(mf, eng.rpm, targetRpm, dt)
+    eng.rpm = Math.min(mf.corte, giroSolto(mf, eng.rpm, targetRpm, dt))
   }
   // turbo: enche com giro e pé, com atraso; esvazia na troca e ao aliviar.
   // É aqui que nasce o "lag": sai de curva em giro baixo e a força demora a vir.

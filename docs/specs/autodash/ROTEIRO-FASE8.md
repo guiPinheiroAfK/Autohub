@@ -116,6 +116,13 @@ Na placa "SAÍDA", entre na faixa da direita e siga o elevado.
   verticais, izakaya com lanternas vermelhas, vapor de bueiro), **oficinas**
   (galpões de tuning com carro no elevador, pneus empilhados, konbini verde) e o
   subúrbio. Postes com fiação atravessando por cima da pista nos três.
+- **Chegada e quarteirão (segunda rodada de 16/11):** a cidade começa no mato,
+  passa por outdoors e só então entra em Shibuya. Os prédios variam de tamanho,
+  largura, cor e recuo (lojinhas com toldo, prédios de 3 a 10 andares, terrenos de
+  estacionamento, vãos), com pedestres andando nas calçadas. As janelas não piscam
+  mais com o prédio andando.
+- **Corte de giro:** no grid (ponto morto) o pé no fundo agora bate no corte; no
+  corte, o ponteiro do conta-giros bate e volta junto com o som.
 - **Posto:** pátio de concreto com setas, carros na loja, frentista, calibrador,
   lava-rápido e placa SAÍDA. **Viaduto:** ruas da cidade cruzando embaixo do elevado.
 - **Drift (tecla 0 para a zona):** segure **Shift** (freio de mão) com o volante
@@ -126,7 +133,9 @@ Na placa "SAÍDA", entre na faixa da direita e siga o elevado.
 
 **Feedback ladeira/viaduto:**
 
-**Feedback cidade Tokyo:**
+**Feedback cidade Tokyo (chegada, quarteirão, pedestres):**
+
+**Feedback corte de giro:**
 
 **Feedback posto/ruas do viaduto:**
 

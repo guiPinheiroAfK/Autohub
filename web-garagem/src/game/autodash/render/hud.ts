@@ -7,7 +7,7 @@ import { formatHour } from "../world/clock"
 import { rr } from "./primitives"
 import { renderRearView } from "./player"
 import { SEG_LEN } from "../data"
-import { motorDe, faixa } from "../physics/motores"
+import { motorDe, faixa, giroDoSom } from "../physics/motores"
 import { giroVisto } from "../physics/rpm"
 import { wrapDz } from "../traffic/spawner"
 import { ramalNoSeg } from "../world/ramais"
@@ -296,7 +296,10 @@ export function renderTacho(eng: AutoDashEngine) {
   ctx.strokeStyle = "rgba(239,68,68,0.6)"
   ctx.beginPath(); ctx.arc(cx, cy, r, redStart, a1); ctx.stroke()
   // giro visto: o da física mais o giro solto da patinada (physics/rpm.ts)
-  const giro = giroVisto(eng)
+  // no corte, o ponteiro bate e volta na batida do som (playtest 16/11: "o corte
+  // de giro não funciona bem": o som pulsava e o ponteiro ficava parado no corte)
+  const noCorte = eng.gasF > 0.5 && eng.rpm >= mot.corte - 60
+  const giro = noCorte ? giroDoSom(mot, giroVisto(eng), 1, true, eng.somT) : giroVisto(eng)
   const jitter = giro >= verm - 150 ? (Math.random() - 0.5) * 0.03 : 0
   const rpmA = a0 + (a1 - a0) * clamp(giro / escala + jitter, 0, 1)
   // "glow" com traço duplo — shadowBlur por frame derruba o FPS
