@@ -48,7 +48,9 @@ rmsm = np.interp(tm, d["t"], d["rms"])
 fs_ = np.interp(tm, d["t"], np.convolve(d["f0"], np.ones(15) / 15, mode="same")) * H / K
 dfdt = np.gradient(fs_, tm)
 ok = dentro & (np.abs(fper - fm) / fm < 0.12)
-lim = 15.0 / K  # Hz/s na escala do grão
+# Hz/s na escala do grão. A puxada do dinamômetro (500 rpm/s) dá 500/120 = 4,17 Hz/s
+# com K = cilindros; 15/K passava disso no 3 cilindros (5) e tudo virava "estável".
+lim = 15.0 / max(K, 4)
 classe = np.where(dfdt > lim, 1, np.where(dfdt < -lim, 0, 2))  # 1 sobe (carga), 0 cai (alívio), 2 estável
 print("marcas", len(tm), "úteis", ok.sum(), "sobe", (ok & (classe == 1)).sum(), "cai", (ok & (classe == 0)).sum(), "estável", (ok & (classe == 2)).sum())
 np.savez(pref + "_marcas.npz", tm=tm, f=fper, classe=classe, ok=ok, rms=rmsm, dfdt=dfdt)

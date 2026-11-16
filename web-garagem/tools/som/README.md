@@ -186,6 +186,14 @@ do Enter (o Enter derrubou o EJ25 da pasta `atg-video-2`). Janelas nos cortes mo
 | `sim-v6-vq35hr` | `16_vq35hr_isr_tomei.mr` (nosso) | 6 | 40–50 | 12,7–25 | `LENTA=715` |
 | `sim-v10-lfa` | `atg-video-2/10_lfa_v10.mr` | 10 | 9–15,6 | 16,3–31,7 | 900 / 1190→8890 |
 | `sim-v12-f1` | `atg-video-2/12_ferrari_412_t2.mr` | 12 | 8–12 | 20–40,5 | `RETA="40:11440"`, só até 11690 (corte do jogo 9250) |
+| `sim-i6-m52` | `bmw/m52_main.mr` (nosso: M52B28 + carro e câmbio do F136) | 6 | 15,2–19,2 | 19,6–31,2 | 1050 / 1094→6906 |
+| `sim-boxer6-gt3` | `19_boxer6_gt3_leve.mr` (nosso, do EJ25) | 6 | 2,5–5,5 | 12,1–25,9 | 890 / 1024→7917; a 17 (20 kHz) engasgava o áudio |
+| `sim-i3-10` | `18_i3_10t.mr` (nosso, do Audi 5) | 3 | 14,5–20 | 27,4–37,7 | `LENTA=940`; `marcas.py` com limiar 15/max(K,4) |
+
+Motores escritos à mão: a hora de cada explosão tem de cair no PMS do cilindro.
+Em linha, o PMS é o ângulo do moente (mod 360); no boxer, banco 0 (+90°) é o ângulo
+do moente e banco 1 (−90°) é o moente + 180°. O ressalto do comando de cada cilindro
+vai na hora da explosão dele, na ordem do `add_cylinder` daquele banco.
 
 O VQ35HR é derivado do VQ35 aproximado: câmara de 61 cc (compressão 10,6), corte 7500,
 comandos de ~238°/236° e ~10 mm (Tomei 264), volante de 13 lb, admissão maior e as duas

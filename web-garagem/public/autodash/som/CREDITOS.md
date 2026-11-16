@@ -13,7 +13,6 @@ Os arquivos daqui são versões editadas (trechos recortados, mono, normalizados
 | `v8-escape.mp3` (meio, 2000–3650 rpm) | [nascar24chevyrev2](https://freesound.org/s/43485/) | enginemusic | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) |
 | `v8-escape.mp3` (alto, 3500–6000 rpm, filtrado) | [1953 Studebaker Idle up to 6000rpm](https://freesound.org/s/238847/), a mesma gravação de `v8-cruzado` | lonemonk | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `i6.mp3` / `.json` | [Import car revs on Chassis Dyno with Turbo.wav](https://freesound.org/s/496171/) | editboy23 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| `boxer6.mp3` / `.json` | [vehicle car porsche 911 revving engine motor boxer](https://freesound.org/s/772802/) | jerry.berumen | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `partida.mp3` | [Car Ignition Key - Engine Starting Running Idle 2.wav](https://freesound.org/s/50898/) | RutgerMuller | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 
 Os bancos `sim-*` foram **gravados por nós** no [Engine Simulator](https://github.com/ange-yaghi/engine-sim)
@@ -37,6 +36,9 @@ com as medidas do VQ35DE e 6 em linha com as do RB26DETT; arquivos `.mr` em
 | `sim-v8-454` | Chevrolet 454 big block (V8 cruzado), com o carro e o câmbio do arquivo do F136 |
 | `sim-i5-audi` | Audi 2.3 5 em linha |
 | `sim-boxer4-ej25` | Subaru EJ25 (boxer 4) |
+| `sim-i6-m52` | BMW M52B28 (6 em linha), com o carro e o câmbio do arquivo do F136 |
+| `sim-i3-10` | 3 em linha 1.0 nosso, derivado do Audi 5 (71,9 × 82 mm, moentes a 0/240/120, explosão a cada 240°) |
+| `sim-boxer6-gt3` | Boxer 6 nosso, derivado do EJ25 (seis moentes a 120°, cilindros opostos, ignição alternando as bancadas como no 911, 102 × 77,5 mm, corte 9200, simulação a 12 kHz) |
 | `sim-v6-vq35hr` | VQ35HR do 350Z, derivado nosso do V6 60° (coletores longos de mesmo comprimento num coletor só, comandos tipo Tomei 264, volante leve, admissão maior) |
 
 Como os arquivos foram processados: `web-garagem/tools/som/README.md`.

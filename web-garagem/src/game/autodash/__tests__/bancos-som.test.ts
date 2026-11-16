@@ -43,7 +43,8 @@ describe("bancos de som gravado", () => {
 
   it("os motores gravados no simulador cobrem da lenta perto do corte", () => {
     for (const [id, ate] of [["v10", 8500], ["i4", 8000], ["v6", 6200], ["i6", 5600], ["i6-corrida", 7500], ["v8-cruzado", 6000], ["v12", 10500],
-      ["v8-plano", 8500], ["v8-cruzado-ford", 5200], ["i5", 5600], ["boxer4", 6200]] as const) {
+      ["v8-plano", 8500], ["v8-cruzado-ford", 5200], ["i5", 5600], ["boxer4", 6200],
+      ["boxer6", 7500], ["i6-aspirado", 6500], ["i3", 5800], ["v6", 7000]] as const) {
       const j = JSON.parse(readFileSync(SOM + GRAVACAO_DO_PERFIL[id].banco + ".json", "utf8"))
       const rpm = (j.graos as number[][]).map(g => g[3] * 60 * j.voltasPorGrao)
       expect(Math.min(...rpm), id).toBeLessThan(1500)

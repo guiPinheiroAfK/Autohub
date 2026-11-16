@@ -202,6 +202,7 @@ export interface Gravacao {
 // Quase só gravação: a síntese fica como fundo (sint 0,05).
 const SIM = (banco: string): Gravacao => ({ banco, mix: 1, sint: 0.05 })
 export const GRAVACAO_DO_PERFIL: Record<string, Gravacao> = {
+  i3: SIM("sim-i3-10"),                              // 3 em linha 1.0 nosso (derivado do Audi 5), 940–6100 rpm
   i4: SIM("sim-i4-vtec"),                            // Honda B18C5 (VTEC), 1000–8400 rpm
   boxer4: SIM("sim-boxer4-ej25"),                    // Subaru EJ25, 880–6480 rpm
   i5: SIM("sim-i5-audi"),                            // Audi 2.3 5 em linha, 950–5890 rpm
@@ -211,10 +212,10 @@ export const GRAVACAO_DO_PERFIL: Record<string, Gravacao> = {
   "v8-cruzado-ford": SIM("sim-v8-454"),              // Chevrolet 454 big block, 710–5450 rpm
   "v8-plano": SIM("sim-v8-f136"),                    // Ferrari F136, 990–8860 rpm (era a Ferrari 360 só até 4400)
   i6: SIM("sim-i6-2jz"),                             // Toyota 2JZ, 1000–5900 rpm
-  "i6-aspirado": SIM("sim-i6-2jz"),
+  "i6-aspirado": SIM("sim-i6-m52"),                 // BMW M52B28, 1050–6900 rpm
   "i6-corrida": SIM("sim-i6-rb26"),                  // Nissan RB26 (aproximado), 1000–7900 rpm
-  boxer6: { banco: "boxer6", mix: 0.55 },            // Porsche 911, 670–3200 rpm
-  "boxer6-turbo": { banco: "boxer6", mix: 0.5 },
+  boxer6: SIM("sim-boxer6-gt3"),                     // boxer 6 nosso (GT3 aprox.), 890–7920 rpm
+  "boxer6-turbo": SIM("sim-boxer6-gt3"),
   v6: SIM("sim-v6-vq35hr"),                          // VQ35HR do 350Z (coletor longo ISR, Tomei 264), 715–7430 rpm
   "v6-biturbo": SIM("sim-v6-vq35"),                  // VQ35 aproximado, 1000–6550 rpm
   v10: SIM("sim-v10-lfa"),                           // Lexus LFA 1LR-GUE, 900–8890 rpm (regravado 15/11)
@@ -226,7 +227,6 @@ export const CREDITO_GRAVACAO: Record<string, string> = {
   "r19-i4": "Renault 19 · lovretta · CC0",
   "v8-escape": "Chrysler/Studebaker · lonemonk, NASCAR · enginemusic · CC BY",
   i6: "Supra no dinamômetro · editboy23 · CC0",
-  boxer6: "Porsche 911 · jerry.berumen · CC BY 4.0",
   "sim-v8-ls": "GM LS · Engine Simulator (AngeTheGreat, MIT)",
   "sim-v10-lfa": "Lexus LFA · Engine Simulator (AngeTheGreat, MIT)",
   "sim-v12-f1": "Ferrari 412 T2 · Engine Simulator (AngeTheGreat, MIT)",
@@ -239,6 +239,9 @@ export const CREDITO_GRAVACAO: Record<string, string> = {
   "sim-i5-audi": "Audi 2.3 5 cilindros · Engine Simulator (AngeTheGreat, MIT)",
   "sim-boxer4-ej25": "Subaru EJ25 · Engine Simulator (AngeTheGreat, MIT)",
   "sim-v6-vq35hr": "VQ35HR 350Z (coletor longo) · Engine Simulator (AngeTheGreat, MIT)",
+  "sim-boxer6-gt3": "Boxer 6 (GT3 aprox.) · Engine Simulator (AngeTheGreat, MIT)",
+  "sim-i6-m52": "BMW M52B28 · Engine Simulator (AngeTheGreat, MIT)",
+  "sim-i3-10": "3 em linha 1.0 (aprox.) · Engine Simulator (AngeTheGreat, MIT)",
 }
 
 export const TEXTURA: Gravacao = { banco: "r19-i4", mix: 0.22 }
