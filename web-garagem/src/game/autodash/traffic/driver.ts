@@ -220,10 +220,47 @@ export class PoliceDriver extends Driver {
   private static readonly DECEL = 170
   // distância em Z abaixo da qual a viatura NÃO entra na faixa do jogador
   private static readonly CLOSE = 1500
+  // freio planejado atrás do trânsito (km/h por segundo, abaixo do DECEL: folga)
+  private static readonly FREIO_TRANSITO = 120
+  // até onde ela olha o trânsito à frente (u): a 205 contra 60 km/h ela precisa
+  // de ~11500 u para frear; olhando só 1500 ela atravessava os carros (playtest 15/11).
+  // Precisa ver ANTES de passar da curva de freio: acima dela o freio não alcança.
+  private static readonly OLHA = 13000
+
+  /** Mais próximo à frente na faixa dela OU na faixa para onde está indo. */
+  private frente(self: Traffic, world: WorldView): Traffic | null {
+    let best: Traffic | null = null, bd = Infinity
+    for (const o of world.traffic) {
+      if (o === self || o.parked) continue
+      const d = world.wrapDz(o.z, self.z)
+      if (d <= 0 || d >= PoliceDriver.OLHA || d >= bd) continue
+      if (Math.abs(o.offset - self.offset) < 0.32 || Math.abs(o.offset - self.targetOffset) < 0.32) { best = o; bd = d }
+    }
+    return best
+  }
+
+  /** Mais rápido que ela pode andar em `lane` e ainda frear atrás de quem está lá (−1: ocupada do lado). */
+  private vNaFaixa(self: Traffic, world: WorldView, lane: number): number {
+    let v = Infinity
+    for (const o of world.traffic) {
+      if (o === self) continue
+      if (Math.abs(o.offset - lane) >= 0.32 && Math.abs(o.targetOffset - lane) >= 0.32) continue
+      const d = world.wrapDz(o.z, self.z)
+      if (Math.abs(d) < 700) return -1
+      if (d > 0 && d < PoliceDriver.OLHA) v = Math.min(v, this.vAtras(self, o, d))
+    }
+    return v
+  }
+
+  /** v² = va² folga + 2·a·d: a mais rápida que ainda para na traseira de `o` a `d` u. */
+  private vAtras(self: Traffic, o: Traffic, d: number): number {
+    const folga = d - (KINDS[self.kind].len + KINDS[o.kind].len) / 2 - 320 // para a ~1 carro de distância
+    return Math.max(0, o.speed) + Math.sqrt(2 * PoliceDriver.FREIO_TRANSITO * Math.max(0, folga) / KMH2UPS)
+  }
 
   drive(self: Traffic, world: WorldView, dt: number): number {
     const gap = world.wrapDz(self.z, world.playerZ) // >0: viatura à frente do jogador
-    const ahead = this.nearestAhead(self, world)
+    const ahead = this.frente(self, world)
 
     // REGRA DE OURO: a viatura só entra na faixa do jogador quando está LONGE em
     // Z. Colada, ela segura a linha — senão o movimento lateral vira um "pulo"
@@ -235,10 +272,14 @@ export class PoliceDriver extends Driver {
       let want: number | null = null
       if (ahead && ahead.speed < self.speed - 10) {
         // trânsito travando ELA (não o jogador): contorna pro lado livre
+        // só vai para a faixa que deixa andar mais rápido COM folga para frear
+        // (antes: livre por 800 u, e a 200 contra 90 km/h ela entrava na traseira)
+        const aqui = this.vAtras(self, ahead, world.wrapDz(ahead.z, self.z))
         for (const side of Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]) {
           const lane = self.offset + side
           if (lane < -0.9 || lane > 0.9) continue
-          if (!this.laneFree(self, world, lane, 800)) continue
+          const v = this.vNaFaixa(self, world, lane)
+          if (v < 0 || v < Math.min(self.speed, aqui + 15)) continue
           if (!canEnterPlayerLane && Math.abs(world.playerX - lane) < 0.3) continue
           want = lane; break
         }
@@ -285,6 +326,10 @@ export class PoliceDriver extends Driver {
       // pra trás, linear. A folga proporcional que existia aqui era uma mola
       // (longe acelera, perto afrouxa, contato recua) — a "gangorra" relatada.
       target = TOP
+    } else if (gap > 0) {
+      // passou do seu lado sem encostar: deixa você voltar à frente. Antes mirava
+      // a sua velocidade + 4 e ficava parada um pouco à sua frente (playtest 15/11)
+      target = Math.min(TOP, Math.max(0, world.playerSpeed - 15))
     } else {
       // primeira aproximação por trás: vem com tudo, folga encolhendo com a
       // distância pra chegar desacelerando e encostar em vez de passar reto
@@ -300,6 +345,10 @@ export class PoliceDriver extends Driver {
     }
     // respeita o trânsito: não mira acelerar pra dentro de um carro
     target = this.antiOverlap(self, world, ahead, target)
+    // e freia A TEMPO: a mais rápida que dá para ainda parar na traseira do
+    // carro da frente com FREIO_TRANSITO (v² = va² folga + 2·a·d). Sem isso ela
+    // chegava a 100 km/h de diferença e só via o carro a 300 u: passava por dentro.
+    if (ahead) target = Math.min(target, this.vAtras(self, ahead, world.wrapDz(ahead.z, self.z)))
     // ACELERAÇÃO LIMITADA: rampa self.speed até o alvo — é isso que faz ela não
     // grudar. Ela persegue o alvo, mas a arrancada fraca deixa o jogador abrir gap.
     const dv = target - self.speed

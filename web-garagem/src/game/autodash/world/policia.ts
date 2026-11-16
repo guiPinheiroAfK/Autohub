@@ -30,7 +30,8 @@ export type EventoPolicia = "pregos" | "bloqueio"
 
 /** Uma linha por estrela (índice 0 = ★). Fonte: GUIA-V2, Fase 6. */
 export const ESTRELAS: readonly NivelEstrela[] = [
-  { viaturas: 1, teto: 205, arrancada: 50, despisteS: 3, eventos: [], eventoCadaS: 0, helicoptero: false },
+  // 1★ mais leve (playtest 15/11): era 205 e 50, e a viatura sozinha já te segurava
+  { viaturas: 1, teto: 195, arrancada: 42, despisteS: 3, eventos: [], eventoCadaS: 0, helicoptero: false },
   { viaturas: 2, teto: 215, arrancada: 55, despisteS: 4, eventos: [], eventoCadaS: 0, helicoptero: false },
   { viaturas: 3, teto: 222, arrancada: 60, despisteS: 5, eventos: ["pregos"], eventoCadaS: 22, helicoptero: false },
   { viaturas: 4, teto: 228, arrancada: 65, despisteS: 6, eventos: ["bloqueio", "pregos"], eventoCadaS: 20, helicoptero: false },
