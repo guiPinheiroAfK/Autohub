@@ -36,7 +36,7 @@ export const MONTANHA = {
   completa: [["portal", 200], ["serraPe", 400], ["serraMeio", 2800], ["mirante", 400], ["serraDescida", 1900], ["serraBase", 300], ["costeira", 1200]] as Fases,
   // tecla 0: subida curta e direto para o mirante e a descida do touge
   curta: [["portal", 120], ["serraPe", 300], ["mirante", 300], ["serraDescida", 1900], ["serraBase", 300], ["costeira", 600]] as Fases,
-  altura: 26000,     // u no alto (a curta fica com um terço)
+  altura: 44000,     // u no alto (a curta fica com um terço). Playtest 16/11: "a serra precisava subir mais" (era 26 mil)
   religa: 300,       // segmentos para voltar ao relevo do começo da volta
   comboioCadaS: 9,   // s entre comboios de caminhão na subida
   lateral: 2.6,      // curva das curvas longas da subida pela lateral
@@ -127,7 +127,10 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
   const lim = limites(fases)
   const lado: -1 | 1 = hash01(a, 5) < 0.5 ? -1 : 1
   const altura = curta ? MONTANHA.altura / 3 : MONTANHA.altura
-  const fimSubida = lim.mirante[0], [iniDesc] = lim.serraDescida, [, fimDesc] = lim.serraBase
+  const fimSubida = lim.mirante[0], [iniDesc] = lim.serraDescida
+  // a descida amansa até a metade da costeira (com 44 mil u de altura, acabar na
+  // base dava rampa de 15%; assim fica perto de 11% no pior ponto)
+  const fimDesc = lim.costeira[0] + Math.floor((lim.costeira[1] - lim.costeira[0]) / 2)
   const suave = (t: number) => t * t * (3 - 2 * t)
   // relevo da viagem, somado ao nível em que a pista estava no começo dela
   const P = (k: number) => {

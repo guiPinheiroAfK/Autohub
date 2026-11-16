@@ -20,6 +20,7 @@ import { type ClimaId, type ClimaModo, CLIMAS } from "./world/weather"
 import { climaAtual, type ClimaVisto } from "./sim/clima"
 import type { Touge } from "./world/touge"
 import type { Montanha } from "./world/montanha"
+import { drawRespingos } from "./render/serra"
 import { type Ramal } from "./world/ramais"
 import { type TrechoInfo } from "./world/circuits"
 import { renderRoad } from "./render/road"
@@ -473,6 +474,7 @@ export class AutoDashEngine {
 
     // vinheta — dá peso à imagem (sprite cacheado)
     ctx.drawImage(vignetteTex(this), 0, 0)
+    drawRespingos(this) // respingo da cachoeira da serra na tela (render/serra.ts)
 
     switch (this.state) {
       case "menu": renderMenu(this); break
