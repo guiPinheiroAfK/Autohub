@@ -36,7 +36,7 @@ import { aderenciaOleo, passoOleo } from "../world/oleo"
 import { giroDaPartida } from "./partida"
 import { aplicarVacuo, specComVacuo, forcaTeto } from "./vacuo"
 import { atualizarSomEventos } from "../world/somEventos"
-import { regiaoNaVirada } from "../world/regiao"
+import { regiaoPorDistancia } from "../world/regiao"
 
 export function update(eng: AutoDashEngine, dt: number) {
   // câmera lenta do duelo de touge (world/touge.ts): o mundo inteiro anda mais devagar
@@ -254,6 +254,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.noRamal = ganho !== 1
   eng.position = ((eng.position + eng.speed * KMH2UPS * dt * ganho) % eng.trackLen + eng.trackLen) % eng.trackLen
   eng.km += eng.speed * dt / 3600
+  regiaoPorDistancia(eng, dt) // a região dura uma distância (world/regiao.ts)
 
   if (eng.goFlashT > 0) eng.goFlashT -= dt
   if (eng.mult2T > 0) eng.mult2T -= dt
@@ -272,7 +273,6 @@ export function update(eng: AutoDashEngine, dt: number) {
     eng.levelUpT = 1.5
     eng.audio.levelUp()
     eng.floaters.push({ text: `NÍVEL ${newLevel + 1} — TRÂNSITO MAIS BRAVO!`, color: "#fb923c", y: H * 0.32, life: 2.2, big: true })
-    regiaoNaVirada(eng, newLevel) // Fase 8.5: a região muda a cada 3 níveis
   }
   if (eng.levelUpT > 0) {
     eng.levelUpT -= dt

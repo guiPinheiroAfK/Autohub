@@ -225,6 +225,8 @@ export class AutoDashEngine {
   climaMix = 1                    // 0..1: quanto do clima novo já entrou
   biomaAnt: BiomeDef | null = null // região de antes, durante a transição (world/regiao.ts)
   biomaMix = 1
+  kmRegiao = 0 // km rodados na região atual (world/regiao.ts)
+  estagioTransito = 0 // estágio da intensidade do trânsito já anunciado (traffic/intensidade.ts)
   climaS = 0 // segundos de simulação desde a largada: as janelas de clima contam daqui
   get raining() { return CLIMAS[this.clima].chuva || (this.climaMix < 1 && !!this.climaAnt && this.climaAnt.chuvaK > 0) }
   // bioma da pista atual (ADR 0011). Definido em buildTrack, lido pelo render.

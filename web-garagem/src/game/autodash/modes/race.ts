@@ -63,7 +63,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.combustivel = 1; eng.postoLimite = COMBUSTIVEL.chamaPosto; eng.abastecendo = false; eng.juntoDaBomba = false; eng.elevJogador = 0; eng.dentroTunel = false; eng.claraoT = 0; eng.audio.ventilacao(false); eng.audio.bomba(false)
   eng.racha = null; eng.rachaT = RACHA.primeiroConviteS
   eng.touge = null
-  eng.montanha = null; eng.climaForcado = null
+  eng.montanha = null; eng.climaForcado = null; eng.kmRegiao = 0; eng.estagioTransito = 0
   if (eng.mode === "solo" && eng.bioma.id === "serra") spawnMontanha(eng)
   eng.comboio = null; eng.oleoT = 0
   eng.vacuo = 0; eng.vacuoS = 0; eng.estilingueT = 0

@@ -10,6 +10,7 @@ import { RACHA } from "../world/racha"
 import { infracao } from "../world/policia"
 import { perderDrift } from "../world/drift"
 import { emDuelo } from "../world/touge"
+import { intensidade, carrosAlvo, chanceOnda, tipoPorIntensidade, estagio, INTENSIDADE } from "./intensidade"
 
 export function seedTraffic(eng: AutoDashEngine, count: number) {
   eng.traffic = []
@@ -32,13 +33,17 @@ export function naFrenteDoRacha(eng: AutoDashEngine, z: number, lane: number): b
 }
 
 export function spawnTraffic(eng: AutoDashEngine, relAhead: number) {
-  const roll = Math.random()
-  const kind: TrafficKind = roll < 0.52 ? "car" : roll < 0.68 ? "moto" : roll < 0.87 ? "truck" : "bus"
+  const ki = intensidade(eng)
+  // onda: 2 ou 3 veículos lado a lado, sobrando uma faixa (fica mais comum com os pontos)
+  if (eng.mode !== "race" && Math.random() < chanceOnda(ki)) { spawnOnda(eng, relAhead, ki); return }
+  const kind: TrafficKind = eng.mode === "race"
+    ? (Math.random() < 0.7 ? "car" : "truck")
+    : tipoPorIntensidade(ki, Math.random())
   const k = KINDS[kind]
   const lane = eng.laneCenters[Math.floor(Math.random() * 4)]
   const z = ((eng.position + relAhead) % eng.trackLen + eng.trackLen) % eng.trackLen
   // não nasce em cima de outro nem na cara do desafiante do racha
-  if (naFrenteDoRacha(eng, z, lane)) return
+  if (naFrenteDoRacha(eng, z, lane) || fechariaTudo(eng, z, lane)) return
   for (const t of eng.traffic) {
     if (Math.abs(t.offset - lane) < 0.3 && Math.abs(wrapDz(eng, t.z, z)) < k.len + KINDS[t.kind].len) return
   }
@@ -54,6 +59,42 @@ export function spawnTraffic(eng: AutoDashEngine, relAhead: number) {
   })
 }
 
+/**
+ * Nascer em `lane` no ponto `z` fecharia as 4 faixas? (as outras 3 já têm alguém
+ * a menos de FECHA_Z): o trânsito bravo nunca vira parede, sempre sobra uma.
+ */
+const FECHA_Z = 900
+function fechariaTudo(eng: AutoDashEngine, z: number, lane: number): boolean {
+  const ocupadas = new Set<number>([Math.round(lane * 4)])
+  for (const t of eng.traffic) {
+    if (t.parked || Math.abs(wrapDz(eng, t.z, z)) > FECHA_Z) continue
+    ocupadas.add(Math.round(t.offset * 4))
+    ocupadas.add(Math.round(t.targetOffset * 4))
+  }
+  return [-3, -1, 1, 3].every(f => ocupadas.has(f))
+}
+
+/** Onda (bíblia de cenários 1.5): um pelotão lado a lado no mesmo ritmo, com uma faixa livre. */
+function spawnOnda(eng: AutoDashEngine, relAhead: number, ki: number) {
+  const n = ki > 0.5 && Math.random() < 0.6 ? 3 : 2
+  const livre = Math.floor(Math.random() * 4)
+  const faixas = [0, 1, 2, 3].filter(i => i !== livre).sort(() => Math.random() - 0.5).slice(0, n)
+  const z0 = ((eng.position + relAhead) % eng.trackLen + eng.trackLen) % eng.trackLen
+  const vel = 82 + Math.random() * 22
+  for (const f of faixas) {
+    const lane = eng.laneCenters[f]
+    const kind = tipoPorIntensidade(ki, Math.random())
+    const z = ((z0 + Math.random() * 500) % eng.trackLen + eng.trackLen) % eng.trackLen
+    if (naFrenteDoRacha(eng, z, lane) || fechariaTudo(eng, z, lane)) continue
+    if (eng.traffic.some(t => Math.abs(t.offset - lane) < 0.3 && Math.abs(wrapDz(eng, t.z, z)) < KINDS[kind].len + KINDS[t.kind].len)) continue
+    eng.traffic.push({
+      z, offset: lane, targetOffset: lane, speed: kind === "truck" ? Math.min(vel, 86) : vel, kind, role: "civilian",
+      color: TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)],
+      blinkT: 0, prevD: wrapDz(eng, z, eng.position + PLAYER_Z),
+    })
+  }
+}
+
 export function wrapDz(eng: AutoDashEngine, a: number, b: number) : number {
   let d = a - b
   if (d > eng.trackLen / 2) d -= eng.trackLen
@@ -66,9 +107,19 @@ const ultimaBuzina = new WeakMap<AutoDashEngine, number>()
 export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, demo: boolean) {
   // no circuito o desafio é o traçado, não a quantidade de carro: bem menos
   // trânsito, e sem escalar com nível (a corrida tem duração fixa em voltas)
+  // solo: a quantidade (e o jeito) segue a intensidade pelos pontos (traffic/intensidade.ts)
+  const ki = intensidade(eng)
   const target = eng.testeMotor ? 0 : eng.mode === "race"
       ? 5
-      : 14 + Math.min(14, Math.floor(eng.km * 1.3)) + eng.level * 3
+      : carrosAlvo(ki) + Math.min(4, Math.floor(eng.km * 0.4))
+  if (eng.mode === "solo" && !demo) {
+    const e = estagio(ki)
+    if (e > eng.estagioTransito) {
+      const s = INTENSIDADE.estagios[e]
+      eng.floaters.push({ text: `TRÂNSITO ${s.nome}`, color: s.cor, y: H * 0.4, life: 2, big: true })
+    }
+    eng.estagioTransito = e
+  }
   if (eng.traffic.length < target && !emDuelo(eng)) spawnTraffic(eng, DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))
   if (eng.immuneT > 0) eng.immuneT -= dt
   if (eng.policeHitT > 0) eng.policeHitT -= dt
@@ -84,6 +135,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
     demo,
     wrapDz: (a, b) => wrapDz(eng, a, b),
     curvaEm: z => segAt(eng, z).curve,
+    intensidade: ki,
     // civil preso atrás de você: uma buzina por vez, no máximo a cada 1,2 s
     buzinar: () => {
       if (eng.somT - (ultimaBuzina.get(eng) ?? -9) < 1.2) return

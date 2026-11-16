@@ -10,6 +10,7 @@
 import { KMH2UPS, DRAW_DIST, SEG_LEN } from "../data"
 import { KINDS, type Traffic, type TrafficRole, type WorldView } from "./types"
 import { RACHA } from "../world/racha"
+import { fatorTroca, INTENSIDADE } from "./intensidade"
 
 // E1 — caminhão trocando de faixa (Fase 5)
 export const CAMINHAO = {
@@ -56,6 +57,20 @@ export abstract class Driver {
     }
   }
 
+  /**
+   * Com `self` em `lane`, as 4 faixas ficariam ocupadas num raio de 900 u? (conta
+   * a faixa atual e a de destino dos outros). Usado para não fechar a pista.
+   */
+  protected fechariaTudo(self: Traffic, world: WorldView, lane: number): boolean {
+    const ocupadas = new Set<number>([Math.round((lane + 0.75) / 0.5)])
+    for (const o of world.traffic) {
+      if (o === self || o.parked || o.role === "police" || Math.abs(world.wrapDz(o.z, self.z)) > 900) continue
+      ocupadas.add(Math.round((o.offset + 0.75) / 0.5))
+      ocupadas.add(Math.round((o.targetOffset + 0.75) / 0.5))
+    }
+    return [0, 1, 2, 3].every(f => ocupadas.has(f))
+  }
+
   /** Verdadeiro se `lane` está livre num raio Z de `clearZ` (olha faixa atual E destino dos outros). */
   protected laneFree(self: Traffic, world: WorldView, lane: number, clearZ: number): boolean {
     for (const o of world.traffic) {
@@ -79,6 +94,8 @@ export abstract class Driver {
       const lane = self.offset + side
       if (lane < -0.9 || lane > 0.9) continue
       if (!this.laneFree(self, world, lane, clearZ)) continue
+      // nunca entrar na última faixa livre: o trânsito não vira parede
+      if (this.fechariaTudo(self, world, lane)) continue
       // não entrar na faixa do jogador se isso significa cortar na frente dele
       // (janela grande à frente = playerClearZ) ou raspar logo atrás (curta)
       if (checkPlayer && !world.demo && Math.abs(world.playerX - lane) < 0.3) {
@@ -194,7 +211,8 @@ export class CivilianDriver extends Driver {
       const urgency = brakeGap < 400 ? 0.7 : 1.0
       spd = Math.max(ahead.speed * urgency, self.speed - 40)
       const moto = self.kind === "moto"
-      const changeProb = moto ? 0.04 : 0.02 // moto puxa ultrapassagem mais cedo
+      // moto puxa ultrapassagem mais cedo; o trânsito bravo troca mais de faixa
+      const changeProb = (moto ? 0.04 : 0.02) * fatorTroca(world.intensidade ?? 0)
       if (self.blinkT <= 0 && self.targetOffset === self.offset && (self.kind === "car" || moto) && Math.random() < changeProb) {
         const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
         // clearZ menor = moto costura mais entre carros; player clearance alto = não corta na sua frente
@@ -240,6 +258,26 @@ export class CivilianDriver extends Driver {
       if (!ahead || world.wrapDz(eu.z, self.z) < world.wrapDz(ahead.z, self.z)) ahead = eu
     } else self.presoT = 0
 
+    // chegando ao lado de um grupo que, com ele, fecharia as 4 faixas: segura
+    // atrás do mais lento do grupo (o trânsito não vira parede)
+    if (!world.demo && this.fechariaTudo(self, world, self.offset)) {
+      let lento = Infinity, atras = false
+      for (const o of world.traffic) {
+        if (o === self || o.parked) continue
+        const d = world.wrapDz(o.z, self.z)
+        if (d > 0 && d < 900) { atras = true; lento = Math.min(lento, o.vReal ?? o.speed) }
+      }
+      if (atras && lento < Infinity) spd = Math.min(spd, lento - 12)
+    }
+    // trânsito pesado: freada brusca de vez em quando, com luz de freio. Nunca
+    // colado na sua frente (dá para ler e desviar).
+    const k = world.intensidade ?? 0
+    if (k > 0.5 && self.kind === "car" && !world.demo && !(self.sustoT && self.sustoT > 0)
+        && Math.random() < INTENSIDADE.freadaPorS * (k - 0.5) * 2 * dt) {
+      const dJog = world.wrapDz(self.z, world.playerZ)
+      if (dJog > 3000 || dJog < 0 || Math.abs(world.playerX - self.offset) > 0.4) self.sustoT = 1
+    }
+    if (self.sustoT && self.sustoT > 0) { self.sustoT -= dt; spd = Math.min(spd, self.speed * 0.55); self.freioT = Math.max(self.freioT ?? 0, 0.3) }
     spd = this.antiOverlap(self, world, ahead, spd)
     // luz de freio: andando bem abaixo do cruzeiro (trânsito ou você na frente)
     if (self.freioT && self.freioT > 0) self.freioT -= dt

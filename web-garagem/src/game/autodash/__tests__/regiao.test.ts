@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest"
 import { runScenario } from "./harness"
 import { BIOMES } from "../world/biomes"
-import { trocarRegiao, regiaoNaVirada, REGIAO } from "../world/regiao"
+import { trocarRegiao, regiaoPorDistancia, REGIAO } from "../world/regiao"
 import { TRECHOS_DO_BIOMA } from "../world/cenario"
 import { DRAW_DIST, SEG_LEN } from "../data"
 import { setClima, climaAtual, TRANSICAO } from "../sim/clima"
@@ -53,21 +53,29 @@ describe("biomas e regiões", () => {
     expect(ok).toBe(true)
   }, 60_000)
 
-  it("a região só muda a cada REGIAO.cadaNiveis níveis, no solo", async () => {
-    let trocas = 0, travou = false
-    await runScenario(60 * 4, 6, LARGADA, (i, eng) => {
+  it("a região dura uma distância e segue a viagem: cidade, rodovia, serra, praia", async () => {
+    const vistas: string[] = []
+    let antesDaHora = false, travouNaSerra = false
+    await runScenario(60 * 6, 6, LARGADA, (i, eng) => {
       if (i === 0) eng.render = () => {}
-      if (i !== 200) return
-      let id = eng.bioma.id
-      for (let n = 1; n <= 9; n++) {
-        regiaoNaVirada(eng, n)
-        if (eng.bioma.id !== id) { trocas++; id = eng.bioma.id }
-        // na serra a viagem segura a região até a praia
-        if (eng.montanha) { travou = travou || (regiaoNaVirada(eng, 99 * REGIAO.cadaNiveis), eng.bioma.id === id); eng.montanha.praia = true }
+      if (i !== 330) return // já correndo
+      vistas.push(eng.bioma.id)
+      for (let n = 0; n < 4; n++) {
+        const id = eng.bioma.id
+        eng.kmRegiao = REGIAO.km * 0.9; regiaoPorDistancia(eng, 0)
+        if (eng.bioma.id !== id) antesDaHora = true
+        eng.kmRegiao = REGIAO.km; regiaoPorDistancia(eng, 0)
+        if (id === "serra") {
+          // a serra só acaba na praia: a distância não troca a região
+          travouNaSerra = eng.bioma.id === "serra"
+          trocarRegiao(eng, "costa", false) // (o que a chegada na praia faz)
+        }
+        vistas.push(eng.bioma.id)
       }
     })
-    expect(trocas).toBe(Math.floor(9 / REGIAO.cadaNiveis))
-    expect(travou, "a região trocou no meio da viagem da serra").toBe(true)
+    expect(antesDaHora, "trocou antes da distância").toBe(false)
+    expect(travouNaSerra, "a serra trocou pela distância").toBe(true)
+    expect(vistas).toEqual(["cidade", "rodovia", "serra", "costa", "cidade"])
   }, 60_000)
 })
 

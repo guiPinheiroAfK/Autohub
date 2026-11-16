@@ -44,6 +44,12 @@ export const CEU_TOKYO: SkyKey[] = [
   { t: 0.875, top: "#0b0e1a", bot: "#1e3a5f", amb: 0.5 },
 ]
 
+// A viagem (playtest 16/11: "passando a placa da serra já fica escuro de novo"):
+// a cidade é sempre noite, e a rodovia, a serra e a costa são a parte de DIA da
+// viagem de 24 h da bíblia de cenários. O relógio segue mudando o tom (manhã,
+// tarde, pôr do sol), mas a chave de noite delas virou dia: antes, chegando na
+// serra com o relógio de madrugada, a luz caía para menos da metade.
+
 // paleta do ciclo de dia do solo (a cidade antiga; hoje sem uso no jogo). Movida de engine.ts para cá.
 export const SKY_KEYS: SkyKey[] = [
   { t: 0.125, top: "#2b8fd6", bot: "#bfe6f7", amb: 1.0 },
@@ -69,7 +75,7 @@ export const BIOMES: Record<string, BiomeDef> = {
     ceu: [
       { t: 0.125, top: "#38bdf8", bot: "#cffafe", amb: 1.0 },
       { t: 0.375, top: "#7c2d12", bot: "#fb923c", amb: 0.82 },
-      { t: 0.625, top: "#041c2b", bot: "#0f4c5c", amb: 0.42 },
+      { t: 0.625, top: "#5b3a7a", bot: "#ff7a59", amb: 0.74 }, // (era noite) pôr do sol coral: a praia da viagem
       { t: 0.875, top: "#0e7490", bot: "#fde68a", amb: 0.8 },
     ],
     ceuCorrida: { top: "#04161c", bot: "#0e3b43", amb: 0.46, ambChuva: 0.36 },
@@ -85,7 +91,7 @@ export const BIOMES: Record<string, BiomeDef> = {
     ceu: [
       { t: 0.125, top: "#5b8fc7", bot: "#d7e6ef", amb: 0.95 },
       { t: 0.375, top: "#4b3b62", bot: "#e7a56b", amb: 0.78 },
-      { t: 0.625, top: "#060b16", bot: "#1b2a3a", amb: 0.4 },
+      { t: 0.625, top: "#4a6f9a", bot: "#e8d3b0", amb: 0.8 }, // (era noite) tarde clara: a serra é de dia
       { t: 0.875, top: "#3c5a78", bot: "#efd3a6", amb: 0.76 },
     ],
     ceuCorrida: { top: "#070d18", bot: "#1d2c3c", amb: 0.42, ambChuva: 0.33 },
@@ -101,7 +107,7 @@ export const BIOMES: Record<string, BiomeDef> = {
     ceu: [
       { t: 0.125, top: "#3a9be0", bot: "#f3e8c8", amb: 1.0 },
       { t: 0.375, top: "#5b2b52", bot: "#ff9a4d", amb: 0.82 },
-      { t: 0.625, top: "#070a18", bot: "#20203a", amb: 0.42 },
+      { t: 0.625, top: "#6aa7dc", bot: "#fde7c2", amb: 0.86 }, // (era noite) fim de manhã: a rodovia é de dia
       { t: 0.875, top: "#4a5f8c", bot: "#ffd29a", amb: 0.8 },
     ],
     ceuCorrida: { top: "#0b0a1a", bot: "#2b1c36", amb: 0.44, ambChuva: 0.34 },

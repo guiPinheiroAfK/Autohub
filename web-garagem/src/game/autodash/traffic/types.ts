@@ -67,6 +67,7 @@ export interface Traffic {
   posto?: string       // id do posto onde este carro está abastecendo (world/posto.ts)
   saindoPosto?: boolean // terminou de abastecer: sai pelo pátio e entra na pista
   ang?: number         // derrapagem do desenho (rival do touge)
+  sustoT?: number      // s de freada brusca (trânsito pesado, traffic/intensidade.ts)
   tocaia?: boolean     // viatura parada embaixo do viaduto: sai atrás de você quando você passa
   top?: number         // viatura: teto de velocidade (km/h) da estrela atual (world/policia.ts)
   accel?: number       // viatura: arrancada (km/h/s) da estrela atual
@@ -85,4 +86,5 @@ export interface WorldView {
   wrapDz(a: number, b: number): number
   curvaEm?(z: number): number // curvatura da pista em z (o desafiante do racha alivia nas fechadas)
   buzinar?(self: Traffic): void // civil preso atrás do jogador (o engine limita a frequência)
+  intensidade?: number // 0..1: como o trânsito está bravo (traffic/intensidade.ts)
 }
