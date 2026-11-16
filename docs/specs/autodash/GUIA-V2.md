@@ -401,15 +401,15 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
 - [x] Teste (unidade, `civil-jogador.test.ts`): jogador parado numa faixa por 10 s com trânsito, zero
   sobreposição de corpo com civis; civil desvia ou para atrás.
 
-**8.2 Posto de verdade** (o pedido mais citado)
-- [ ] Cenário do posto: cobertura com teto iluminado à noite, 2–3 ilhas de bombas,
+**8.2 Posto de verdade** (o pedido mais citado) — feito em 16/11, exceto o carro saindo do posto
+- [x] Cenário do posto: cobertura com teto iluminado à noite, 2–3 ilhas de bombas,
   loja de conveniência com vitrine, totem de preço na entrada, faixa pintada de
   entrada e saída, calçada. Marca genérica (nada de marca real).
-- [ ] Carros no posto: 1–3 civis parados nas bombas (sprites `parked`), e às vezes um
+- [x] Carros no posto: 1–3 civis parados nas bombas (sprites `parked`). Falta: às vezes um
   saindo pela faixa de aceleração e entrando na pista com seta (usa a regra do 8.1).
-- [ ] Parada de verdade: parar no box da bomba (≤ 5 km/h) enche rápido (bico + barra
+- [x] Parada de verdade: parar no box da bomba (≤ 5 km/h) enche rápido (bico + barra
   de litros); passar devagar continua enchendo devagar como hoje. Som de bomba.
-- [ ] Teste: posto gera carros parados que nunca ficam na pista; abastecer parado é
+- [x] Teste: posto gera carros parados que nunca ficam na pista; abastecer parado é
   mais rápido que passando.
 
 **8.3 Eventos com mais detalhe** (visual + leitura)
@@ -534,4 +534,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-15 | (som: segunda sessão do simulador, este) | Bancos novos gravados no Engine Simulator: Ferrari F136 no V8 plano (era a Ferrari 360 só até 4400 rpm; banco `v8-plano` removido), Chevrolet 454 no V8 do Ford, Audi 2.3 no 5 cilindros, Subaru EJ25 no boxer 4 e um VQ35HR nosso (coletores longos de mesmo comprimento num escape só, Tomei 264, volante leve) no V6; V10 e V12 regravados (V12 da lenta a 11690 rpm). `trilha_dino.py` ganha `LENTA=` (o pente pega o dobro da lenta no boxer e no VQ35HR). Piso do ajuste de nível 0,25 → 0,2 (`NIVEL_PISO`). Janelas e arquivos `.mr` no README de `tools/som`. Não ouvido no jogo ainda. | não alterado (som não entra no golden) |
 | 2026-11-15 | (som: terceira sessão do simulador, este) | BMW M52 no 6 em linha aspirado (era o 2JZ), boxer 6 nosso (derivado do EJ25, ignição alternada como no 911) nos dois boxer 6 (era a gravação do 911 só até 3200 rpm; banco `boxer6` removido) e 3 em linha 1.0 nosso (derivado do Audi 5) no i3, que era só síntese. `marcas.py`: limiar 15/max(K,4) (no 3 cilindros a puxada virava "estável"). Não ouvido no jogo ainda. | não alterado (som não entra no golden) |
 | 2026-11-16 | (Fase 8.1, este) | Civil e comboio enxergam o jogador na faixa (até 12 mil u) e freiam a tempo (v² = v_jogador² + 2·75·folga), parando atrás; luz de freio nos civis abaixo do cruzeiro; preso atrás de você por 1,5 s buzina (baixa, no máximo a cada 1,2 s) e tenta passar pela faixa livre. Teste em `__tests__/civil-jogador.test.ts`. Desafiante do racha ainda não vê o jogador. | atualizado nos 3 cenários (luz de freio dos civis, inclusive no trânsito de fundo do menu, e a freada atrás do jogador); fim das partidas igual. |
+| 2026-11-16 | (Fase 8.2, este) | Posto de verdade: pátio com duas faixas de bomba e ilha no meio (guia amarela), cobertura com a marca genérica "POSTO AUTOHUB 24h", duas bombas com visor e mangueira, loja de conveniência com vitrine acesa à noite, totem de preço na entrada; 1–3 carros abastecendo na faixa de fora (estacionados, `eng.rngEv`). Bomba: passando devagar 4 L/s (era 10); parado ao lado da ilha 20 L/s; HUD com litros e dica. Som da bomba (clique, zumbido, trava). Estacionados vivem até 2×DRAW_DIST + 300 à frente (os do posto morriam ao nascer). Teste em `__tests__/posto.cenario.test.ts`. | não alterado (o posto não aparece nos replays) |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

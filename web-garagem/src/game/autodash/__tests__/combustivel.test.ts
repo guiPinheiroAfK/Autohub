@@ -26,7 +26,9 @@ describe("combustível", () => {
   })
   it("a bomba só enche devagar e para no cheio", () => {
     expect(abastecer(0.5, COMBUSTIVEL.abasteceVmax + 1, 1)).toBe(0.5)
-    expect(abastecer(0.5, 40, 1)).toBeCloseTo(0.7, 6)
+    expect(abastecer(0.5, 40, 1)).toBeCloseTo(0.5 + COMBUSTIVEL.abasteceLs / COMBUSTIVEL.tanqueL, 6)
+    // parado na bomba enche bem mais rápido que passando devagar (Fase 8.2)
+    expect(abastecer(0.2, 0, 1) - 0.2).toBeGreaterThan(3 * (abastecer(0.2, 40, 1) - 0.2))
     expect(abastecer(0.95, 40, 1)).toBe(1)
   })
   it("pane seca engasga em pulsos e nunca dá o pé inteiro", () => {

@@ -16,8 +16,8 @@ import { CLIMAS } from "../world/weather"
 import { type Traffic, KINDS } from "../traffic/types"
 import { poly } from "./primitives"
 import { drawRamalSeg } from "./ramal"
-import { drawPosto } from "./eventos"
-import { postoMeio, naFaixaDoPosto } from "../world/posto"
+import { drawPosto, drawPostoLoja, drawPostoTotem } from "./eventos"
+import { postoMeio, postoLoja, postoTotem, naFaixaDoPosto } from "../world/posto"
 import { type Ramal } from "../world/ramais"
 import { drawHolofote, drawHelicoptero, type PontoTela } from "./policia"
 import { lenteAtual } from "./fov"
@@ -61,7 +61,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // "escondido por morro" — aí sim o segmento some inteiro.
   let roadStarted = false
 
-  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
+  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
   const sprites: SpriteDraw[] = []
   // buckets de tráfego, obstáculos, placas e powerups por segmento
   const obsBySeg = new Map<number, Obstacle[]>()
@@ -398,6 +398,8 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     for (const r of eng.ramais) {
       if (r.posto) { // posto: cobertura com bombas no miolo da faixa de acesso
         if (idx === postoMeio(r)) sprites.push({ kind: "posto", x: sx1, y: sy1, w: sw1, ramal: r })
+        else if (idx === postoLoja(r)) sprites.push({ kind: "postoLoja", x: sx1, y: sy1, w: sw1, ramal: r })
+        else if (idx === postoTotem(r)) sprites.push({ kind: "postoTotem", x: sx1, y: sy1, w: sw1, ramal: r })
         continue
       }
       if (idx === r.a - 50 || idx === r.a - 12) {
@@ -496,6 +498,8 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     else if (s.kind === "bridge") drawBridge(eng, s.x, s.y, s.w, amb)
     else if (s.kind === "gate") drawTower(eng, s.x, s.y, s.w, amb)
     else if (s.kind === "posto") drawPosto(eng, s.ramal!, s.x, s.y, s.w, amb)
+    else if (s.kind === "postoLoja") drawPostoLoja(eng, s.ramal!, s.x, s.y, s.w, amb)
+    else if (s.kind === "postoTotem") drawPostoTotem(eng, s.ramal!, s.x, s.y, s.w, amb)
     else drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
   }
 

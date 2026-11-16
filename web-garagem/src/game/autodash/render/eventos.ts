@@ -6,9 +6,9 @@ import { KMH2UPS, SEG_LEN } from "../data"
 import { shade } from "../math"
 import { rr } from "./primitives"
 import { glass } from "../ui/widgets"
-import { type Ramal, ramalBordas, ramalPerfilOuZero } from "../world/ramais"
+import { type Ramal } from "../world/ramais"
 import { COMBUSTIVEL } from "../world/combustivel"
-import { combustivelAtivo, postoAFrente, postoMeio } from "../world/posto"
+import { combustivelAtivo, postoAFrente, postoMeio, postoPatio } from "../world/posto"
 import { wrapDz } from "../traffic/spawner"
 import { RACHA } from "../world/racha"
 import { vantagemM } from "../modes/racha"
@@ -20,50 +20,145 @@ export function piscaAlerta(): boolean {
   return Math.floor(performance.now() / 200) % 2 === 0
 }
 
+const FONTE_POSTO = "'Space Grotesk', 'Segoe UI', sans-serif"
+// marca genérica do posto (nada de marca real): verde e branco
+const POSTO_COR = { marca: "#16a34a", marcaNoite: "#22c55e", escuro: "#14532d", laje: "#e2e8f0" }
+
 /**
- * Cobertura do posto sobre a faixa de acesso, com as bombas na ilha de fora.
- * `x` e `w` são o centro e a meia-largura da pista na tela, no segmento do meio.
+ * Cobertura do posto (Fase 8.2): laje com a faixa da marca sobre as duas faixas
+ * de bomba, pilares na ilha e duas bombas (uma para cada faixa). `x` e `w` são o
+ * centro e a meia-largura da pista na tela, no segmento do meio do posto.
  */
 export function drawPosto(eng: AutoDashEngine, r: Ramal, x: number, y: number, w: number, amb: number) {
   if (w < 3) return
   const ctx = eng.ctx
-  const b = ramalBordas(r, ramalPerfilOuZero(r, postoMeio(r)))
+  const pt = postoPatio(r)
   const L = r.lado
-  const xa = x + L * w * (b.inner - 0.06), xb = x + L * w * (b.outer + 0.34)
-  const esq = Math.min(xa, xb), dir = Math.max(xa, xb), larg = dir - esq
-  const alto = w * 0.72, teto = Math.max(3, w * 0.13)
+  const X = (k: number) => x + L * w * k
+  const esq = Math.min(X(pt.inner - 0.08), X(pt.outer + 0.08)), dir = Math.max(X(pt.inner - 0.08), X(pt.outer + 0.08))
+  const larg = dir - esq
+  const alto = w * 0.62, teto = Math.max(3, w * 0.12)
   const noite = amb < 0.62
-  // pilares
-  ctx.fillStyle = shade("#cbd5e1", Math.max(0.45, amb))
-  const pw = Math.max(2, w * 0.05)
-  ctx.fillRect(esq + larg * 0.04, y - alto, pw, alto)
-  ctx.fillRect(dir - larg * 0.04 - pw, y - alto, pw, alto)
-  // bombas na ilha, do lado de fora da faixa
-  const ilha = x + L * w * (b.outer + 0.17)
-  ctx.fillStyle = shade("#94a3b8", Math.max(0.45, amb))
-  ctx.fillRect(ilha - w * 0.1, y - w * 0.02, w * 0.2, w * 0.02)
-  for (const d of [-0.05, 0.05]) {
-    const bx = ilha + d * w
-    ctx.fillStyle = shade("#1d4ed8", Math.max(0.5, amb))
-    rr(ctx, bx - w * 0.025, y - w * 0.16, w * 0.05, w * 0.15, w * 0.008)
-    ctx.fillStyle = noite ? "#bae6fd" : shade("#e0f2fe", amb)
-    ctx.fillRect(bx - w * 0.017, y - w * 0.14, w * 0.034, w * 0.03)
-  }
-  // luz embaixo da cobertura (à noite lava o asfalto)
+  const luz = Math.max(0.5, amb)
+  // luz da cobertura lavando o pátio à noite
   if (noite) {
-    ctx.fillStyle = "rgba(240,253,250,0.10)"
-    ctx.fillRect(esq, y - alto + teto, larg, alto - teto)
+    const g = ctx.createLinearGradient(0, y - alto, 0, y)
+    g.addColorStop(0, "rgba(240,253,250,0.22)"); g.addColorStop(1, "rgba(240,253,250,0.04)")
+    ctx.fillStyle = g
+    ctx.fillRect(esq, y - alto, larg, alto)
   }
-  // laje e faixa luminosa da cobertura
-  ctx.fillStyle = shade("#e2e8f0", Math.max(0.5, amb))
+  // pilares na ilha (dois, um em cada ponta da laje vista de frente)
+  const ilha = X(pt.ilha)
+  const pw = Math.max(2, w * 0.035)
+  ctx.fillStyle = shade("#cbd5e1", luz)
+  ctx.fillRect(ilha - pw / 2, y - alto, pw, alto)
+  // bombas: uma virada para cada faixa, com visor aceso e a mangueira
+  for (const lado of [-1, 1]) {
+    const bx = ilha + lado * L * w * 0.035
+    const bh = w * 0.17, bw = w * 0.045
+    ctx.fillStyle = shade("#f8fafc", luz)
+    rr(ctx, bx - bw / 2, y - bh, bw, bh, w * 0.006)
+    ctx.fillStyle = shade(POSTO_COR.marca, luz)
+    ctx.fillRect(bx - bw / 2, y - bh, bw, bh * 0.18)
+    ctx.fillStyle = noite ? "#a7f3d0" : shade("#0f172a", luz)
+    ctx.fillRect(bx - bw * 0.36, y - bh * 0.72, bw * 0.72, bh * 0.2)
+    ctx.strokeStyle = shade("#1e293b", luz)
+    ctx.lineWidth = Math.max(1, w * 0.006)
+    ctx.beginPath(); ctx.moveTo(bx + lado * L * bw * 0.5, y - bh * 0.55)
+    ctx.quadraticCurveTo(bx + lado * L * bw * 1.4, y - bh * 0.2, bx + lado * L * bw * 0.9, y - bh * 0.05)
+    ctx.stroke()
+  }
+  // laje: corpo claro, faixa da marca e o LED de baixo
+  ctx.fillStyle = shade(POSTO_COR.laje, luz)
   ctx.fillRect(esq, y - alto - teto, larg, teto)
-  ctx.fillStyle = noite ? "#22c55e" : shade("#16a34a", amb)
-  ctx.fillRect(esq, y - alto - teto * 0.45, larg, teto * 0.45)
+  ctx.fillStyle = noite ? POSTO_COR.marcaNoite : shade(POSTO_COR.marca, amb)
+  ctx.fillRect(esq, y - alto - teto * 0.55, larg, teto * 0.55)
+  ctx.fillStyle = noite ? "#f0fdf4" : shade("#f8fafc", luz)
+  ctx.fillRect(esq, y - alto, larg, Math.max(1, teto * 0.08))
   if (teto > 6) {
-    ctx.fillStyle = noite ? "#f0fdf4" : "#14532d"
-    ctx.font = `bold ${Math.round(teto * 0.5)}px 'Space Grotesk', 'Segoe UI', sans-serif`
+    ctx.fillStyle = noite ? "#f0fdf4" : "#f8fafc"
+    ctx.font = `bold ${Math.round(teto * 0.42)}px ${FONTE_POSTO}`
     ctx.textAlign = "center"
-    ctx.fillText("⛽ POSTO 24h", (esq + dir) / 2, y - alto - teto * 0.55)
+    ctx.fillText("⛽ POSTO AUTOHUB 24h", (esq + dir) / 2, y - alto - teto * 0.14)
+    ctx.textAlign = "left"
+  }
+}
+
+/** Loja de conveniência atrás do pátio: fachada de vidro, letreiro, porta e gelo na calçada. */
+export function drawPostoLoja(eng: AutoDashEngine, r: Ramal, x: number, y: number, w: number, amb: number) {
+  if (w < 3) return
+  const ctx = eng.ctx
+  const pt = postoPatio(r)
+  const L = r.lado
+  const xa = x + L * w * (pt.outer + 0.3), xb = x + L * w * (pt.outer + 1.7)
+  const esq = Math.min(xa, xb), larg = Math.abs(xb - xa)
+  const alto = w * 0.5
+  const noite = amb < 0.62
+  const luz = Math.max(0.45, amb)
+  // corpo e telhado
+  ctx.fillStyle = shade("#f1f5f9", luz)
+  ctx.fillRect(esq, y - alto, larg, alto)
+  ctx.fillStyle = shade("#475569", luz)
+  ctx.fillRect(esq - larg * 0.02, y - alto - w * 0.03, larg * 1.04, w * 0.03)
+  // letreiro
+  const lh = alto * 0.22
+  ctx.fillStyle = noite ? "#dc2626" : shade("#b91c1c", amb)
+  ctx.fillRect(esq, y - alto, larg, lh)
+  if (lh > 7) {
+    ctx.fillStyle = "#fef2f2"
+    ctx.font = `bold ${Math.round(lh * 0.6)}px ${FONTE_POSTO}`
+    ctx.textAlign = "center"
+    ctx.fillText("CONVENIÊNCIA 24h", esq + larg / 2, y - alto + lh * 0.76)
+    ctx.textAlign = "left"
+  }
+  // vitrine (acesa à noite) com prateleiras e a porta
+  const vy = y - alto + lh + alto * 0.08, vh = alto - lh - alto * 0.08
+  ctx.fillStyle = noite ? "#fef9c3" : shade("#93c5fd", luz)
+  ctx.fillRect(esq + larg * 0.05, vy, larg * 0.9, vh)
+  ctx.fillStyle = noite ? "rgba(146,64,14,0.35)" : "rgba(30,41,59,0.25)"
+  for (let i = 1; i <= 3; i++) ctx.fillRect(esq + larg * 0.07, vy + vh * i / 4, larg * 0.6, Math.max(1, vh * 0.04))
+  ctx.fillStyle = shade("#334155", luz)
+  ctx.fillRect(esq + larg * 0.72, vy + vh * 0.1, larg * 0.16, vh * 0.9)
+  // freezer de gelo na calçada
+  ctx.fillStyle = shade("#e0f2fe", luz)
+  ctx.fillRect(esq + larg * 0.9, y - alto * 0.3, larg * 0.08, alto * 0.3)
+  if (noite) { // brilho da vitrine no chão
+    ctx.fillStyle = "rgba(254,249,195,0.12)"
+    ctx.fillRect(esq - larg * 0.05, y - alto * 0.05, larg * 1.1, alto * 0.08)
+  }
+}
+
+/** Totem de preço na entrada do posto. */
+export function drawPostoTotem(eng: AutoDashEngine, r: Ramal, x: number, y: number, w: number, amb: number) {
+  if (w < 2) return
+  const ctx = eng.ctx
+  const pt = postoPatio(r)
+  const tx = x + r.lado * w * (pt.outer + 0.25)
+  const noite = amb < 0.62
+  const luz = Math.max(0.5, amb)
+  const ph = w * 0.95, pw = w * 0.3, ch = w * 0.5
+  ctx.fillStyle = shade("#64748b", luz)
+  ctx.fillRect(tx - w * 0.02, y - ph, w * 0.04, ph)
+  const top = y - ph - ch * 0.1
+  ctx.fillStyle = shade("#0f172a", luz)
+  rr(ctx, tx - pw / 2, top, pw, ch, w * 0.015)
+  ctx.fillStyle = noite ? POSTO_COR.marcaNoite : shade(POSTO_COR.marca, amb)
+  ctx.fillRect(tx - pw / 2, top, pw, ch * 0.22)
+  if (pw > 26) {
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#f8fafc"
+    ctx.font = `bold ${Math.round(ch * 0.13)}px ${FONTE_POSTO}`
+    ctx.fillText("⛽ AUTOHUB", tx, top + ch * 0.16)
+    const linhas: [string, string][] = [["GASOLINA", "6,29"], ["ETANOL", "4,19"], ["DIESEL", "5,99"]]
+    linhas.forEach(([n, v], i) => {
+      const ly = top + ch * (0.38 + i * 0.22)
+      ctx.textAlign = "left"; ctx.fillStyle = "#cbd5e1"
+      ctx.font = `bold ${Math.round(ch * 0.09)}px ${FONTE_POSTO}`
+      ctx.fillText(n, tx - pw * 0.44, ly)
+      ctx.textAlign = "right"; ctx.fillStyle = noite ? "#fb923c" : "#f97316"
+      ctx.font = `bold ${Math.round(ch * 0.14)}px ${FONTE_POSTO}`
+      ctx.fillText(v, tx + pw * 0.44, ly + ch * 0.02)
+    })
     ctx.textAlign = "left"
   }
 }
@@ -248,6 +343,18 @@ export function renderCombustivel(eng: AutoDashEngine) {
   ctx.fillStyle = reserva ? PERIGO.ambar : "#f8fafc"
   ctx.font = "bold 11px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillText("COMB", nx - 3, ny + nh + 18)
+  // na bomba: litros no tanque e a vazão (parado enche bem mais rápido)
+  if (eng.abastecendo) {
+    const litros = Math.round(eng.combustivel * COMBUSTIVEL.tanqueL)
+    const rapido = eng.juntoDaBomba && eng.speed <= COMBUSTIVEL.paradoVmax
+    ctx.fillStyle = "#86efac"
+    ctx.font = "bold 12px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`⛽ ${litros} L`, nx - 40, ny - 30)
+    ctx.fillStyle = rapido ? "#bbf7d0" : "rgba(248,250,252,0.7)"
+    ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(rapido ? "na bomba: rápido" : eng.juntoDaBomba ? "pare aqui: 5×" : "pare na bomba", nx - 40, ny - 16)
+    return
+  }
   // posto à frente: distância até a bomba
   const p = postoAFrente(eng)
   if (p) {

@@ -10,16 +10,36 @@ import { type AutoDashEngine, H, PLAYER_Z } from "../engine"
 import { CARS, DRAW_DIST, SEG_LEN } from "../data"
 import { wrapDz } from "../traffic/spawner"
 import { motorDe, fracGiro } from "../physics/motores"
-import { type Ramal, RAMAL_MIN, ramalNoSeg, sobreRamal } from "./ramais"
+import { type Ramal, RAMAL_MIN, RAMAL_ABRE, RAMAL_COLADO, ramalBordas, ramalNoSeg, sobreRamal } from "./ramais"
+import { TRAFFIC_COLORS } from "../traffic/types"
 import { COMBUSTIVEL, consumoDoCarro, consumoLs, gastar, abastecer, tetoDoPe } from "./combustivel"
 import { avisar } from "./avisos"
 
 // tamanho do posto em segmentos: um ramal mínimo mais um miolo de bomba
 export const POSTO_SEGS = RAMAL_MIN + 120
-// largura da faixa do posto (meias-pistas; uma faixa da pista vale 0,5) e o
-// canteiro entre ela e a pista no miolo
-const POSTO_LARG = 0.6
+// largura do pátio do posto (meias-pistas; uma faixa da pista vale 0,5) e o
+// canteiro entre ele e a pista no miolo. Fase 8.2: duas faixas de bomba com a
+// ilha no meio. A de dentro é a sua; na de fora ficam os carros abastecendo.
+const POSTO_LARG = 1.1
 const POSTO_AFAST = 0.22
+export const POSTO_FAIXA = 0.5   // largura de cada faixa de bomba
+export const POSTO_ILHA = 0.1    // largura da ilha entre as faixas
+export const BOMBA_SEGS = 9      // meia-extensão da ilha (segmentos): parar aqui enche rápido
+
+/** Bordas do pátio no miolo e o centro de cada faixa (meias-pistas, sem sinal do lado). */
+export function postoPatio(r: Ramal): { inner: number; outer: number; suaFaixa: number; ilha: number; outraFaixa: number } {
+  const b = ramalBordas(r, { f: 1, w: 1 })
+  return {
+    inner: b.inner, outer: b.outer,
+    suaFaixa: b.inner + POSTO_FAIXA / 2,
+    ilha: b.inner + POSTO_FAIXA + POSTO_ILHA / 2,
+    outraFaixa: b.inner + POSTO_FAIXA + POSTO_ILHA + POSTO_FAIXA / 2,
+  }
+}
+
+/** Segmentos do posto onde ficam a loja e o totem de preço (para o cenário). */
+export function postoLoja(r: Ramal): number { return postoMeio(r) + 14 }
+export function postoTotem(r: Ramal): number { return r.a + RAMAL_ABRE + RAMAL_COLADO + 4 }
 
 /** O combustível vale nesta rodada? Só no solo de verdade (não no teste de motor). */
 export function combustivelAtivo(eng: AutoDashEngine): boolean {
@@ -69,6 +89,19 @@ export function spawnPosto(eng: AutoDashEngine): boolean {
     afast: POSTO_AFAST, larg: POSTO_LARG, ganho: 1, posto: true,
   })
   eng.zones.push({ type: "posto", z: a * SEG_LEN, end: b * SEG_LEN, spawnT: 0 })
+  // carros abastecendo na faixa de fora (estacionados: sem IA, somem quando ficam para trás)
+  const r = eng.ramais[eng.ramais.length - 1]
+  const pt = postoPatio(r)
+  const n = 1 + Math.floor(eng.rngEv() * 3)
+  const z0 = postoMeio(r) * SEG_LEN
+  for (let i = 0; i < n; i++) {
+    const z = z0 + (i - (n - 1) / 2) * 520 + (eng.rngEv() - 0.5) * 120
+    eng.traffic.push({
+      z: ((z % eng.trackLen) + eng.trackLen) % eng.trackLen, offset: pt.outraFaixa * r.lado, targetOffset: pt.outraFaixa * r.lado,
+      speed: 0, kind: "car", role: "civilian", parked: true, blinkT: 0, prevD: 1,
+      color: TRAFFIC_COLORS[Math.floor(eng.rngEv() * TRAFFIC_COLORS.length)],
+    })
+  }
   const az = a * SEG_LEN
   const at = (d: number) => ((az + d) % eng.trackLen + eng.trackLen) % eng.trackLen
   eng.roadSigns.push(
@@ -76,16 +109,12 @@ export function spawnPosto(eng: AutoDashEngine): boolean {
       { z: at(-VIEW * 0.6), type: "posto", label: "À DIREITA" },
       { z: at(-VIEW * 0.28), type: "posto", label: "ENTRADA" },
   )
-  avisar(eng, { icone: "⛽", titulo: "POSTO", dica: `pela direita, até ${COMBUSTIVEL.abasteceVmax} km/h`, nivel: "info", z: az, fim: b * SEG_LEN })
+  avisar(eng, { icone: "⛽", titulo: "POSTO", dica: "pela direita: pare na bomba que enche rápido", nivel: "info", z: az, fim: b * SEG_LEN })
   return true
 }
 
-/**
- * TODO(som): bomba de combustível. A sessão de som implementa um
- * `AudioBus.abastecer(ligado)`; até lá isto não toca nada (sound/ e audio.ts
- * estão com outra frente de trabalho).
- */
-export function somAbastecer(_eng: AutoDashEngine, _ligado: boolean) { /* TODO(som) */ }
+/** Som da bomba (motor elétrico e o fluxo), ligado enquanto enche. */
+export function somAbastecer(eng: AutoDashEngine, ligado: boolean) { eng.audio.bomba(ligado) }
 
 /** Teto do pé pelo combustível (1 = normal; pane seca engasga). */
 export function peDoCombustivel(eng: AutoDashEngine): number {
@@ -105,7 +134,9 @@ export function atualizarCombustivel(eng: AutoDashEngine, dt: number, pe: number
   const q = eng.ramais.length ? ramalNoSeg(eng.ramais, Math.floor(playerZ / SEG_LEN) % eng.segments.length) : null
   const naBomba = !!q && !!q.r.posto && q.p.f > 0.5 && sobreRamal(q, eng.playerX) && eng.playerX > 1.05
   const enchendo = naBomba && eng.speed <= COMBUSTIVEL.abasteceVmax && eng.combustivel < 1
-  if (enchendo) eng.combustivel = abastecer(eng.combustivel, eng.speed, dt)
+  // parado só enche rápido junto da ilha; no resto do pátio vale a vazão de passagem
+  eng.juntoDaBomba = !!q && naBomba && Math.abs(Math.floor(playerZ / SEG_LEN) % eng.segments.length - postoMeio(q.r)) <= BOMBA_SEGS
+  if (enchendo) eng.combustivel = abastecer(eng.combustivel, eng.juntoDaBomba ? eng.speed : Math.max(eng.speed, COMBUSTIVEL.paradoVmax + 1), dt)
   if (enchendo !== eng.abastecendo) {
     eng.abastecendo = enchendo
     somAbastecer(eng, enchendo)

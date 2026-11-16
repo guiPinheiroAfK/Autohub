@@ -196,8 +196,9 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
       const rel = wrapDz(eng, t.z, eng.position)
       // o limite à frente passa do ponto em que os eventos nascem (1,7 × a
       // distância de desenho, world/events.ts): com DRAW_DIST + 140 as viaturas
-      // da blitz e do radar morriam no quadro em que nasciam
-      if (rel < -40 * SEG_LEN || rel > (DRAW_DIST * 2 + 140) * SEG_LEN) t.dead = true
+      // da blitz e do radar morriam no quadro em que nasciam. +300: os carros do
+      // posto ficam no meio dele, ~250 segmentos depois do começo (Fase 8.2)
+      if (rel < -40 * SEG_LEN || rel > (DRAW_DIST * 2 + 300) * SEG_LEN) t.dead = true
     } else if (t.role !== "police" && t.role !== "racha") {
       const rel = wrapDz(eng, t.z, eng.position)
       if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 80) * SEG_LEN) {

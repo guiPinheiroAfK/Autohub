@@ -231,6 +231,7 @@ export class AutoDashEngine {
   combustivel = 1   // tanque, 0..1 (world/combustivel.ts; só no solo)
   postoLimite = 0.45 // abaixo disso abre o próximo posto (world/posto.ts)
   abastecendo = false
+  juntoDaBomba = false // no pátio do posto, ao lado da ilha (world/posto.ts)
   racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
   rachaT = 45 // s de solo até o próximo convite
   comboio: Comboio | null = null // comboio com fresta em andamento (world/comboio.ts)

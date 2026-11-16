@@ -61,6 +61,7 @@ export class AudioBus {
   private eixo = 0          // rotação do eixo da turbina, 0..1 (tem inércia própria)
   private turbo: Turbo | null = null
   private gatilho = new GatilhoAlivio()
+  private bombaNo: { osc: OscillatorNode; g: GainNode } | null = null
   private corteMotor = 7900
   private lastT = 0
   private lastGas = 0
@@ -641,6 +642,7 @@ export class AudioBus {
   // `boost`: pressão do turbo vinda da física (0..1); −1 = o áudio estima sozinho.
   // `troca`: marcha sendo trocada (borboleta fechada para o turbo).
   engine(rpm: number, throttle: number, nitro: boolean, running: boolean, corte = false, boost = -1, troca = false) {
+    if (!running && this.bombaNo) this.bomba(false) // fim de partida no meio do abastecimento
     if (this.motor && this.ctx) { this.motorFrame(rpm, throttle, nitro, running, corte, boost, troca); return }
     if (!this.ctx || !this.engOsc1 || !this.engOsc2 || !this.engGain || !this.engFilter) return
     const t = this.ctx.currentTime
@@ -701,6 +703,30 @@ export class AudioBus {
     g.connect(this.master)
     src.start(0, this.trechoRuido(dur))
     src.stop(ctx.currentTime + dur)
+  }
+
+  /**
+   * Bomba de combustível (Fase 8.2): o clique do bico ao ligar e o zumbido baixo do
+   * motor elétrico enquanto enche; ao desligar, o "tec" do gatilho travando.
+   */
+  bomba(ligado: boolean) {
+    const ctx = this.ctx
+    if (!ctx || !this.master) return
+    if (ligado && !this.bombaNo) {
+      this.blip(1400, 25, 0.08, "square")
+      const osc = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain()
+      osc.type = "sawtooth"; osc.frequency.value = 118
+      lp.type = "lowpass"; lp.frequency.value = 520
+      g.gain.value = 0; g.gain.setTargetAtTime(0.035, ctx.currentTime, 0.08)
+      osc.connect(lp); lp.connect(g); g.connect(this.master); osc.start()
+      this.bombaNo = { osc, g }
+    } else if (!ligado && this.bombaNo) {
+      const { osc, g } = this.bombaNo
+      g.gain.setTargetAtTime(0, ctx.currentTime, 0.05)
+      osc.stop(ctx.currentTime + 0.3)
+      this.bombaNo = null
+      this.blip(900, 30, 0.07, "square")
+    }
   }
 
   ui() { this.blip(880, 70, 0.15) }

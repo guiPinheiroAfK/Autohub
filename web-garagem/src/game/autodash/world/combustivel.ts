@@ -16,7 +16,9 @@ export const COMBUSTIVEL = {
   chamaPosto: 0.45,      // abaixo disso o próximo posto é aberto à frente
   chamaPostoDeNovo: 0.2, // passou reto pelo posto: o próximo só quando cair aqui
   abasteceVmax: 70,      // km/h máximos para a bomba encher
-  abasteceLs: 10,        // L/s na bomba (20% do tanque por segundo)
+  abasteceLs: 4,         // L/s passando devagar pela bomba (8% do tanque por segundo)
+  paradoVmax: 5,         // km/h: abaixo disso é "parado na bomba" (Fase 8.2)
+  paradoLs: 20,          // L/s parado na bomba (40%/s: parar vale o tempo de frear e sair)
   panePe: 0.35,          // pé efetivo máximo na pane seca, quando o motor pega
   paneHz: 2.3,           // engasgos por segundo na pane seca
 } as const
@@ -47,10 +49,15 @@ export function gastar(tanque: number, ls: number, dt: number): number {
   return Math.max(0, tanque - (ls * dt) / COMBUSTIVEL.tanqueL)
 }
 
-/** Tanque (fração) depois de `dt` segundos na bomba. Só enche abaixo da velocidade limite. */
+/** Litros por segundo da bomba nesta velocidade (0 acima do limite). */
+export function vazaoBomba(kmh: number): number {
+  if (kmh > COMBUSTIVEL.abasteceVmax) return 0
+  return kmh <= COMBUSTIVEL.paradoVmax ? COMBUSTIVEL.paradoLs : COMBUSTIVEL.abasteceLs
+}
+
+/** Tanque (fração) depois de `dt` segundos na bomba. Parado enche bem mais rápido que passando devagar. */
 export function abastecer(tanque: number, kmh: number, dt: number): number {
-  if (kmh > COMBUSTIVEL.abasteceVmax) return tanque
-  return Math.min(1, tanque + (COMBUSTIVEL.abasteceLs * dt) / COMBUSTIVEL.tanqueL)
+  return Math.min(1, tanque + (vazaoBomba(kmh) * dt) / COMBUSTIVEL.tanqueL)
 }
 
 /**
