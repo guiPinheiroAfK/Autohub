@@ -91,7 +91,7 @@ export interface Seg { curve: number; y1: number; y2: number; sign?: number }
 // Fase 6: `pregos` = tapete de pregos da polícia (world/policia.ts).
 // "cena": cenografia de evento sem colisão (Fase 8.3); `visual` diz o desenho
 // (render/cena.ts). Um "barrier" com `visual` bate como cavalete e desenha outra coisa.
-export type VisualCena = "maquina" | "trabalhador" | "triangulo" | "detritos" | "guarda" | "radar" | "frentista"
+export type VisualCena = "maquina" | "trabalhador" | "triangulo" | "detritos" | "guarda" | "radar" | "frentista" | "pedra"
 export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" | "seta" | "oleo" | "pregos" | "cena"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean; lado?: number; pisado?: boolean; visual?: VisualCena }
 // Zona de evento no traçado:
 //  bridge    — ponte suspensa (estilo Golden Gate): você dirige EM CIMA, com
@@ -262,6 +262,7 @@ export class AutoDashEngine {
   rachaT = 45 // s de solo até o próximo convite
   comboio: Comboio | null = null // comboio com fresta em andamento (world/comboio.ts)
   oleoT = 0 // s restantes escorregando no óleo (world/oleo.ts)
+  respingoT = 0 // s restantes do respingo da cachoeira na tela (world/montanha.ts, render/serra.ts)
   vacuo = 0       // força do vácuo, 0..1 (sim/vacuo.ts)
   vacuoS = 0      // s seguidos no vácuo (o estilingue só vale depois de um tempo)
   estilingueT = 0 // s restantes do estilingue ao sair do vácuo

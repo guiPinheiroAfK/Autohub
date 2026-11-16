@@ -9,20 +9,26 @@
 //   PÉ           curvas suaves, a mata fecha
 //   SUBIDA       rodovia longa pela lateral da montanha: a encosta (paredão,
 //                cachoeira) de um lado, o VALE caindo do outro com guard-rail;
-//                comboios de caminhão; um banco de neblina no miolo
+//                comboios de caminhão; um banco de neblina no miolo; QUEDA DE
+//                BARREIRAS (pedras na faixa do paredão) e CAMINHÃO QUEBRADO (na
+//                faixa do vale), sempre numa faixa só e com placa antes; a
+//                cachoeira respinga na tela quando você passa
 //   MIRANTE      a mata abre, curva aberta, o mar aparece no fundo
 //   DESCIDA      caracol: é aqui que o rival do touge chama
 //   BASE         a descida amansa
 //   COSTEIRA     rodovia beira-mar até a praia; no fim a região vira a costa
 // Depois a pista religa no começo da volta (o relevo volta ao nível de lá).
-import { type AutoDashEngine, type Seg, H } from "../engine"
+import { type AutoDashEngine, type Seg, H, PLAYER_Z } from "../engine"
 import type { ClimaId } from "./weather"
 import { DRAW_DIST, SEG_LEN } from "../data"
 import { avisar } from "./avisos"
 import { hash01, gerarTrechos, tipoNoSeg, type TipoTrecho, type Trecho } from "./cenario"
 import { spawnTouge } from "./touge"
-import { spawnComboio } from "./comboio"
+import { spawnComboio, desfazer as desfazerComboio } from "./comboio"
 import { trocarRegiao } from "./regiao"
+import { wrapDz } from "../traffic/spawner"
+import { TRAFFIC_COLORS } from "../traffic/types"
+import { PAREDAO } from "../render/cenario"
 
 type Fases = [TipoTrecho, number][]
 export const MONTANHA = {
@@ -38,10 +44,29 @@ export const MONTANHA = {
   neblinaNoMeio: true,
 }
 
+// Playtest 16/11: "a serra precisava ter mais coisa caótica, mais emoção, sem
+// ser mais difícil". Momentos da subida: cada um fecha UMA faixa só, tem placa
+// e cartão de aviso antes e nasce perto (a 1,1 × a distância de desenho; carro
+// parado muito à frente é removido pelo spawner).
+export const MOMENTOS_SERRA = {
+  // [fração da serraMeio, tipo]
+  lista: [[0.25, "barreira"], [0.45, "caminhao"], [0.7, "barreira"], [0.85, "caminhao"]] as [number, TipoMomento][],
+  nasceA: 1.1,            // × DRAW_DIST segmentos à frente do jogador
+  placaAntes: 70,         // segmentos entre a placa e o começo do momento
+  pedras: [0, 9, 19, 30], // segmentos de cada pedra desde o começo da barreira
+  trianguloAntes: 2500,   // u entre o triângulo e o caminhão
+  comboioFolga: 1500,     // u: comboio a menos disto de um momento na tela se desfaz
+  respingoS: 1.4,         // s de respingo na tela ao passar pela cachoeira
+}
+
+export type TipoMomento = "barreira" | "caminhao"
+/** Momento da subida: `idx` é o segmento absoluto onde ele começa. */
+export interface MomentoSerra { idx: number; tipo: TipoMomento; feito: boolean }
+
 /** Lado da encosta (fixo por viagem): o vale com guard-rail fica do outro. */
 export function ladoParedao(eng: AutoDashEngine): -1 | 1 { return eng.montanha?.lado ?? -1 }
 
-export interface Montanha { a: number; lado: -1 | 1; fases: Fases; total: number; tougeFeito: boolean; comboioT: number; praia: boolean; clima: ClimaId }
+export interface Montanha { a: number; lado: -1 | 1; fases: Fases; total: number; tougeFeito: boolean; comboioT: number; praia: boolean; clima: ClimaId; momentos: MomentoSerra[] }
 
 /** Início (em segmentos desde `a`) e fim de cada fase. */
 function limites(fases: Fases): Record<string, [number, number]> {
@@ -157,7 +182,11 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
   const tr: Trecho[] = [{ a: base, b: a, tipo: tipoAqui }]
   for (const [f] of fases) tr.push({ a: a + lim[f][0], b: a + lim[f][1], tipo: f })
   eng.cenario = [...tr, ...gerarTrechos(N, eng.pistaSeed, eng.bioma.id)]
-  eng.montanha = { a, lado, fases, total, tougeFeito: false, comboioT: 3, praia: false, clima: eng.clima }
+  // os momentos da subida (nascem perto, em atualizarMontanha); a curta não tem serraMeio
+  const momentos: MomentoSerra[] = lim.serraMeio
+    ? MOMENTOS_SERRA.lista.map(([fr, tipo]) => ({ idx: a + lim.serraMeio[0] + Math.round((lim.serraMeio[1] - lim.serraMeio[0]) * fr), tipo, feito: false }))
+    : []
+  eng.montanha = { a, lado, fases, total, tougeFeito: false, comboioT: 3, praia: false, clima: eng.clima, momentos }
   const at = (k: number) => ((a + k) % N) * SEG_LEN
   eng.roadSigns.push(
     { z: at(lim.portal[0] + 30), type: "serra", label: "SERRA DO MAR" },
@@ -188,6 +217,20 @@ export function atualizarMontanha(eng: AutoDashEngine, playerZ: number, dt = 0) 
   // estava valendo na entrada da serra (passando o portal, a neblina sumia: a
   // viagem forçava céu limpo), e um banco de neblina no miolo da subida
   eng.climaForcado = MONTANHA.neblinaNoMeio && noMiolo(eng, idx) ? "neblina" : m.clima
+  // os momentos da subida nascem quando chegam perto
+  for (const mo of m.momentos) {
+    if (mo.feito) continue
+    const d = mo.idx - idx
+    if (d > DRAW_DIST * MOMENTOS_SERRA.nasceA) continue
+    mo.feito = true
+    if (d <= 0) continue // passou direto (pulo de posição): não nasce atrás
+    if (mo.tipo === "barreira") quedaDeBarreiras(eng, mo.idx)
+    else caminhaoQuebrado(eng, mo.idx)
+  }
+  liberarFaixaDosMomentos(eng, playerZ)
+  // passando pela cachoeira, o vento joga água na tela (render/serra.ts)
+  eng.respingoT = Math.max(0, eng.respingoT - dt)
+  if ((f === "serraMeio" || f === "serraDescida") && idx % PAREDAO.cachoeiraCada < 4) eng.respingoT = MOMENTOS_SERRA.respingoS
   // a subida é de caminhão: comboio atrás de comboio
   if (f === "serraMeio" && !eng.comboio) {
     m.comboioT -= dt
@@ -204,5 +247,74 @@ export function atualizarMontanha(eng: AutoDashEngine, playerZ: number, dt = 0) 
     m.praia = true
     eng.floaters.push({ text: "BEM-VINDO À PRAIA", color: "#fbbf24", y: H * 0.3, life: 2.4, big: true })
     trocarRegiao(eng, "costa", false)
+  }
+}
+
+/** Faixa colada ao paredão (barreira) ou ao vale (caminhão). */
+export function faixaDoMomento(eng: AutoDashEngine, tipo: TipoMomento): number {
+  const lado = ladoParedao(eng)
+  return tipo === "barreira" ? lado * 0.75 : -lado * 0.75
+}
+
+/** Pedras caídas na faixa do paredão, espalhadas; perdoáveis como cone (só tranco). */
+function quedaDeBarreiras(eng: AutoDashEngine, idx: number) {
+  const N = eng.segments.length
+  const at = (k: number) => ((((idx + k) % N) + N) % N) * SEG_LEN
+  const lado = ladoParedao(eng), faixa = faixaDoMomento(eng, "barreira")
+  for (const [i, k] of MOMENTOS_SERRA.pedras.entries()) {
+    // um pouco de variação dentro da faixa (a faixa tem 0,5 de largura)
+    const off = faixa + (hash01(idx, 40 + i) - 0.5) * 0.12
+    eng.obstacles.push({ z: at(k), offset: off, kind: "cone", visual: "pedra", w: 0.13 + hash01(idx, 50 + i) * 0.05, len: 90, lado })
+  }
+  // cascalho espalhado e um pedregulho maior no pé do paredão (só cenário)
+  eng.obstacles.push({ z: at(4), offset: lado * 0.62, kind: "cena", visual: "detritos", w: 0.3, len: 60, lado })
+  eng.obstacles.push({ z: at(14), offset: lado * 1.08, kind: "cena", visual: "pedra", w: 0.26, len: 60, lado })
+  eng.roadSigns.push({ z: at(-MOMENTOS_SERRA.placaAntes), type: "serra", label: "QUEDA DE BARREIRAS" })
+  const ultima = MOMENTOS_SERRA.pedras[MOMENTOS_SERRA.pedras.length - 1]
+  avisar(eng, { icone: "🪨", titulo: "QUEDA DE BARREIRAS", dica: `pedras à ${lado > 0 ? "direita" : "esquerda"}: desvie`, nivel: "perigo", z: at(0), fim: at(ultima) })
+}
+
+/** Caminhão quebrado com pisca-alerta na faixa do vale, triângulo antes. */
+function caminhaoQuebrado(eng: AutoDashEngine, idx: number) {
+  const N = eng.segments.length
+  const at = (k: number) => ((((idx + k) % N) + N) % N) * SEG_LEN
+  const z = at(0), faixa = faixaDoMomento(eng, "caminhao"), lado = Math.sign(faixa)
+  eng.traffic.push({
+    z, offset: faixa, targetOffset: faixa, speed: 0,
+    kind: "truck", role: "civilian", parked: true, alerta: true,
+    color: TRAFFIC_COLORS[Math.floor(hash01(idx, 60) * TRAFFIC_COLORS.length)],
+    blinkT: 0, prevD: wrapDz(eng, z, eng.position + PLAYER_Z),
+  })
+  const zt = ((z - MOMENTOS_SERRA.trianguloAntes) % eng.trackLen + eng.trackLen) % eng.trackLen
+  eng.obstacles.push({ z: zt, offset: faixa, kind: "cena", visual: "triangulo", w: 0.1, len: 40, lado })
+  eng.roadSigns.push({ z: at(-MOMENTOS_SERRA.placaAntes), type: "serra", label: "VEÍCULO PARADO" })
+  avisar(eng, { icone: "🚚", titulo: "VEÍCULO PARADO", dica: `caminhão à ${lado > 0 ? "direita" : "esquerda"}: desvie`, nivel: "perigo", z })
+}
+
+/**
+ * O trânsito civil sai da faixa fechada antes de chegar no momento (senão
+ * atravessava as pedras e o caminhão): vai para a faixa vizinha, de dentro.
+ * Comboio em cima de um momento na tela se desfaz.
+ */
+function liberarFaixaDosMomentos(eng: AutoDashEngine, playerZ: number) {
+  const m = eng.montanha
+  if (!m) return
+  for (const mo of m.momentos) {
+    if (!mo.feito) continue
+    const z0 = mo.idx * SEG_LEN
+    const comp = mo.tipo === "barreira" ? MOMENTOS_SERRA.pedras[MOMENTOS_SERRA.pedras.length - 1] * SEG_LEN : 0
+    if (wrapDz(eng, z0 + comp, playerZ) < -40 * SEG_LEN) continue // já ficou para trás
+    // comboio passando no momento que está na tela: se desfaz (três faixas
+    // fechadas mais a do momento seria parede; não pode ficar mais difícil)
+    const folga = MOMENTOS_SERRA.comboioFolga
+    if (eng.comboio && wrapDz(eng, z0, playerZ) < DRAW_DIST * SEG_LEN
+      && eng.comboio.membros.some(t => { const d = wrapDz(eng, t.z, z0); return d > -folga && d < comp + folga })) desfazerComboio(eng)
+    const faixa = faixaDoMomento(eng, mo.tipo), dentro = faixa - Math.sign(faixa) * 0.5
+    for (const t of eng.traffic) {
+      if (t.role !== "civilian" || t.parked || Math.abs(t.targetOffset - faixa) > 0.3) continue
+      const d = wrapDz(eng, z0, t.z) // >0: o momento está à frente do carro
+      if (d < -comp - 400 || d > 9000) continue
+      t.targetOffset = dentro; t.blinkT = Math.max(t.blinkT, 0.6)
+    }
   }
 }

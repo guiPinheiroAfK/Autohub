@@ -100,6 +100,39 @@ export function drawCena(eng: AutoDashEngine, o: Obstacle, x: number, y: number,
       for (let i = 0; i < 5; i++) ctx.fillRect(x + ((i * 53) % 9 - 4) / 4 * w * 0.4, y - w * 0.02, Math.max(1, w * 0.03), Math.max(1, w * 0.02))
       return true
     }
+    case "pedra": {
+      // pedra caída do paredão (queda de barreiras, world/montanha.ts): rocha
+      // cinza-marrom de faces chapadas, sombra no chão e lascas em volta.
+      // O formato varia pelo z (fixo), sem sorteio no render
+      const h = w * 0.62
+      const v = (Math.floor(o.z) % 7) / 7
+      ctx.fillStyle = "rgba(0,0,0,0.32)"
+      ctx.beginPath(); ctx.ellipse(x + lado * w * 0.06, y, w * 0.62, w * 0.12, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = shade("#6b5d50", luz) // face na sombra
+      ctx.beginPath()
+      ctx.moveTo(x - w * 0.5, y); ctx.lineTo(x - w * (0.46 - v * 0.08), y - h * 0.55); ctx.lineTo(x - w * 0.18, y - h * (0.95 + v * 0.1))
+      ctx.lineTo(x + w * 0.2, y - h); ctx.lineTo(x + w * 0.48, y - h * 0.5); ctx.lineTo(x + w * 0.52, y)
+      ctx.closePath(); ctx.fill()
+      ctx.fillStyle = shade("#8a7b6b", luz) // face iluminada (de cima)
+      ctx.beginPath()
+      ctx.moveTo(x - w * (0.46 - v * 0.08), y - h * 0.55); ctx.lineTo(x - w * 0.18, y - h * (0.95 + v * 0.1)); ctx.lineTo(x + w * 0.2, y - h)
+      ctx.lineTo(x + w * 0.48, y - h * 0.5); ctx.lineTo(x + w * 0.05, y - h * 0.42)
+      ctx.closePath(); ctx.fill()
+      if (w > 8) {
+        // trinca e o musgo no topo
+        ctx.strokeStyle = shade("#4a3f36", luz); ctx.lineWidth = Math.max(1, w * 0.025)
+        ctx.beginPath(); ctx.moveTo(x - w * 0.05, y - h * 0.9); ctx.lineTo(x + w * 0.04, y - h * 0.55); ctx.lineTo(x - w * 0.02, y - h * 0.2); ctx.stroke()
+        ctx.fillStyle = shade("#4d6b3a", luz)
+        ctx.fillRect(x - w * 0.12, y - h * (0.97 + v * 0.05), w * 0.22, Math.max(1, h * 0.06))
+      }
+      // lascas e terra espalhadas no asfalto
+      ctx.fillStyle = shade("#7a6a5a", luz)
+      for (let i = 0; i < 5; i++) {
+        const dx = ((i * 41) % 13 - 6) / 6 * w * 0.75, dy = ((i * 17) % 4) / 4 * w * 0.06
+        ctx.fillRect(x + dx, y - dy - w * 0.03, Math.max(1, w * 0.07), Math.max(1, w * 0.05))
+      }
+      return true
+    }
     case "guarda": {
       // policial com colete refletivo e a lanterna de sinalizar
       const h = w * 2.2

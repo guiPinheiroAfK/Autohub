@@ -212,10 +212,14 @@ export function enfeitesDoSegmento(trechos: Trecho[], idx: number, arvore: numbe
     if (idx % 3 === 0 && h(5) < 0.55) add(ENF.pinheiro, lado(6), 2.3 + h(7) * 1.2, 0.24)
     if (idx % 31 === 9) add(ENF.rocha, lado(8), 1.45, 0.3)
   } else if (tipo === "mirante") {
-    // mirante: a mata abre; barraquinha e quiosque, poucas árvores, o mar no fundo
+    // mirante: a mata abre; barraquinha e quiosque, poucas árvores, o mar no
+    // fundo. Playtest 16/11 ("mais completa"): estacionamento com carros de quem
+    // parou e gente na beira olhando a vista
     if (idx % 9 === 4 && h(1) < 0.5) add(ENF.pinheiro, lado(2), 2.2 + h(3), 0.22)
     if (idx % 70 === 30) add(ENF.quiosque, lado(4), 1.6, 0.45)
     if (idx % 45 === 10) add(ENF.guardaSol, lado(5), 1.9, 0.2)
+    if (idx % 35 === 20) add(ENF.estacionamento, lado(9), 1.75, 0.6)
+    if (idx % 8 === 2) add(ENF.pedestres, lado(10), 1.3, 0.3)
   } else if (tipo === "mata") {
     // mata de serra: pinheiros fechados e pedras. O guard-rail é contínuo e
     // desenhado pelo render da pista (GUARD_RAIL, render/cenario.ts drawGuardRail)

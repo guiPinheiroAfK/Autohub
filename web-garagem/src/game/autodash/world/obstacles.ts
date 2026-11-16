@@ -38,8 +38,10 @@ export function updateObstacles(eng: AutoDashEngine, playerZ: number) {
         eng.shakeT = Math.max(eng.shakeT, 0.3)
         eng.immuneT = Math.max(eng.immuneT, 0.25)
         eng.audio.offroad()
-        burst(eng, W / 2, H - 110, 10, ["#fb923c", "#fde68a"])
-        eng.floaters.push({ text: "CONE! 🚧", color: "#fb923c", y: H * 0.44, life: 0.9, big: false })
+        // a pedra da queda de barreiras (world/montanha.ts) é perdoável como o cone
+        const pedra = o.visual === "pedra"
+        burst(eng, W / 2, H - 110, 10, pedra ? ["#8a7b6b", "#d6d3d1"] : ["#fb923c", "#fde68a"])
+        eng.floaters.push({ text: pedra ? "PEDRA! 🪨" : "CONE! 🚧", color: pedra ? "#d6d3d1" : "#fb923c", y: H * 0.44, life: 0.9, big: false })
       } else if (eng.shield) {
         eng.shield = false
         eng.immuneT = 2.0

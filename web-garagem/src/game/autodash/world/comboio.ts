@@ -65,7 +65,8 @@ export function spawnComboio(eng: AutoDashEngine, u: () => number) {
   avisar(eng, { icone: "🚛", titulo: "COMBOIO", dica: "a fresta muda de faixa", nivel: "perigo", z, ref: membros[0], vivo: () => eng.comboio === c && !c.passou })
 }
 
-function desfazer(eng: AutoDashEngine) {
+/** Desfaz o comboio: os membros viram trânsito civil (também usado na serra, world/montanha.ts). */
+export function desfazer(eng: AutoDashEngine) {
   const c = eng.comboio
   if (c) for (const m of c.membros) if (!m.dead) m.role = "civilian"
   eng.comboio = null
