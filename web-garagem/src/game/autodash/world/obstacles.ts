@@ -6,6 +6,7 @@ import { CARS, SEG_LEN } from "../data"
 import { wrapDz } from "../traffic/spawner"
 import { pisarNoOleo } from "./oleo"
 import { furarPneu } from "./policia"
+import { perderDrift } from "./drift"
 
 export function updateObstacles(eng: AutoDashEngine, playerZ: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -33,7 +34,7 @@ export function updateObstacles(eng: AutoDashEngine, playerZ: number) {
         // cone é perdoável: tranco, perde velocidade e combo — não mata
         o.dead = true
         eng.speed *= 0.78
-        eng.combo = 0
+        eng.combo = 0; perderDrift(eng) // encostão ou cone no meio do drift perde os pontos
         eng.shakeT = Math.max(eng.shakeT, 0.3)
         eng.immuneT = Math.max(eng.immuneT, 0.25)
         eng.audio.offroad()

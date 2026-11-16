@@ -187,6 +187,18 @@ export function desenharPlacaEvento(eng: AutoDashEngine, sign: RoadSign, x: numb
     return true
   }
   if (sign.type === "tunel") { drawPlacaTunel(ctx, x, cy, r, amb); return true }
+  if (sign.type === "drift") {
+    const s = r * 1.9
+    ctx.fillStyle = shade("#ff2e88", Math.max(0.6, amb))
+    ctx.fillRect(x - s / 2, cy - s / 2, s, s)
+    if (r > 5) {
+      ctx.strokeStyle = "#f8fafc"; ctx.lineWidth = Math.max(1.5, r * 0.18)
+      ctx.beginPath(); ctx.moveTo(x - r * 0.1, cy + r * 0.7)
+      ctx.bezierCurveTo(x + r * 0.9, cy + r * 0.3, x - r * 0.9, cy - r * 0.3, x + r * 0.1, cy - r * 0.7)
+      ctx.stroke()
+    }
+    return true
+  }
   if (sign.type === "acidente") {
     // aviso de acidente: triângulo âmbar com "!" (paleta de perigo)
     ctx.fillStyle = shade(PERIGO.ambar, Math.max(0.6, amb))

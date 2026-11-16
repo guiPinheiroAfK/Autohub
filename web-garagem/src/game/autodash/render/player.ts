@@ -38,7 +38,11 @@ export function renderPlayer(eng: AutoDashEngine, amb: number) {
   const blinkT = Math.max(eng.immuneT, eng.policeHitT)
   const immuneBlink = blinkT > 0 && Math.floor(blinkT * 8) % 2 === 0
   if (immuneBlink) ctx.globalAlpha = 0.35
-  drawPlayerCar(ctx, W / 2, H - 34 + bounce, spec, custom, steer, braking, amb, eng.nitroOn && eng.nitroMeter > 1)
+  // drift: a traseira abre (gira em volta da frente do carro) e o volante vai todo para o lado
+  const giro = eng.driftAng
+  if (giro !== 0) { ctx.save(); ctx.translate(W / 2, H - 90 + bounce); ctx.rotate(-giro * 0.35); ctx.translate(-W / 2, -(H - 90 + bounce)) }
+  drawPlayerCar(ctx, W / 2 - giro * 40, H - 34 + bounce, spec, custom, giro !== 0 ? clamp(steer + giro * 2, -1, 1) : steer, braking, amb, eng.nitroOn && eng.nitroMeter > 1)
+  if (giro !== 0) ctx.restore()
   if (immuneBlink) ctx.globalAlpha = 1
 
   // sensação de velocidade: streaks varrendo as bordas. No nitro viram ciano

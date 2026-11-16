@@ -6,6 +6,7 @@ import { DRAW_DIST, SEG_LEN } from "../data"
 import { type TrafficKind, TRAFFIC_COLORS, KINDS } from "../traffic/types"
 import { RAMAL_ABRE, RAMAL_COLADO, ramalNoSeg, ramalCentro } from "./ramais"
 import { atualizarTunel } from "./tunel"
+import { atualizarZonaDrift } from "./drift"
 
 /**
  * Elevado do viaduto (Fase 8.6): quem está nele segue o centro do ramal; no fim
@@ -56,6 +57,7 @@ export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
   })
   // túnel (Fase 8.7): o mesmo eco fechado, o trecho inteiro
   atualizarTunel(eng, dt, playerZ)
+  atualizarZonaDrift(eng, playerZ)
   const fechado = sob || eng.dentroTunel
   if (fechado !== eng.sobViaduto) { eng.sobViaduto = fechado; eng.audio.ambiente(fechado ? "fechado" : "aberto") }
   for (const zn of eng.zones) {

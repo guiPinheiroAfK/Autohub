@@ -16,6 +16,7 @@ Preencha a linha **Feedback** de cada item (ok / estranho / quebrado + o que viu
 | **7** | viaduto com elevado |
 | **8** | túnel |
 | **9** | próxima região (bioma) |
+| **0** | zona de drift |
 
 ---
 
@@ -103,6 +104,33 @@ Na placa "SAÍDA", entre na faixa da direita e siga o elevado.
 - Sem a tecla, ele aparece raramente sozinho (bem menos que os outros eventos).
 
 **Feedback túnel:**
+
+## 8. Rodada de 16/11 (depois do primeiro teste da Fase 8)
+- **Ladeira:** subida moderada não come mais a velocidade de quem está no pé; a
+  mais forte cobra, mas devagar, e reduzir a marcha ajuda. Descendo a rampa do
+  elevado (tecla 7) sem acelerar, o carro embala (~+30 km/h).
+- **Cidade Tokyo** (bioma cidade, **[X]** na garagem até "Cidade"): sempre de
+  noite. Os trechos alternam **Shibuya** (magenta e branco: telões que trocam de
+  imagem, fachadas de letreiros, multidão com guarda-chuva transparente, máquina
+  de bebida), **Shinjuku** (ciano e magenta: prédios de letreiros, letreiros
+  verticais, izakaya com lanternas vermelhas, vapor de bueiro), **oficinas**
+  (galpões de tuning com carro no elevador, pneus empilhados, konbini verde) e o
+  subúrbio. Postes com fiação atravessando por cima da pista nos três.
+- **Posto:** pátio de concreto com setas, carros na loja, frentista, calibrador,
+  lava-rápido e placa SAÍDA. **Viaduto:** ruas da cidade cruzando embaixo do elevado.
+- **Drift (tecla 0 para a zona):** segure **Shift** (freio de mão) com o volante
+  virado acima de 70 km/h: a traseira abre, fumaça e chiado, "DRIFT +N" ao
+  soltar. Volante para dentro da curva segura o carro na curva fechada. Bater no
+  meio perde os pontos. Na zona ("ZONA DE DRIFT", curvas em S) os pontos valem
+  em dobro e o total aparece na saída.
+
+**Feedback ladeira/viaduto:**
+
+**Feedback cidade Tokyo:**
+
+**Feedback posto/ruas do viaduto:**
+
+**Feedback drift:**
 
 ## Geral
 Desempenho (travou? caiu o fps em algum trecho?), o que mais incomodou, o que

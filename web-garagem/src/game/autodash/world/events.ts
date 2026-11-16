@@ -10,10 +10,11 @@ import { spawnComboio } from "./comboio"
 import { spawnOleo } from "./oleo"
 import { avisar } from "./avisos"
 import { spawnTunel, TUNEL } from "./tunel"
+import { spawnZonaDrift, DRIFT } from "./drift"
 import { viaturaDeTocaia } from "./policia"
 import { RAMAL_ABRE, RAMAL_COLADO } from "./ramais"
 
-export type EventoMapa = "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap" | "obra" | "comboio" | "oleo" | "tunnel"
+export type EventoMapa = "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap" | "obra" | "comboio" | "oleo" | "tunnel" | "drift"
 
 /**
  * Ritmo dos eventos (um diretor de intensidade simples, pesquisa 4.2):
@@ -61,6 +62,7 @@ export function spawnEvent(eng: AutoDashEngine, kind: EventoMapa) {
   if (kind === "comboio") { spawnComboio(eng, eng.rngEv); return }
   if (kind === "oleo") { spawnOleo(eng, eng.rngEv() < 0.5 ? 1 : -1, eng.rngEv()); return }
   if (kind === "tunnel") { spawnTunel(eng); return }
+  if (kind === "drift") { spawnZonaDrift(eng); return }
   const at = (d: number) => ((eng.position + d) % eng.trackLen + eng.trackLen) % eng.trackLen
   // O perigo SEMPRE nasce além do horizonte de render (VIEW), e as placas
   // entram em cena antes dele. Sem isso o obstáculo brota no para-brisa: a
@@ -263,7 +265,9 @@ export function updateEventSpawner(eng: AutoDashEngine, dt: number, playerZ: num
       ? ["obstacles", "viaduct", "wrongway", "bridge", "blitz", "speedtrap", "obra", "comboio", "oleo"]
       : ["obstacles", "viaduct", "wrongway", "bridge", "obra", "comboio", "oleo"]
   // túnel raro (Fase 8.7): só entra no sorteio de vez em quando
-  const pool: readonly EventoMapa[] = eng.rngEv() < TUNEL.chance ? [...base, "tunnel"] : base
+  const comTunel: EventoMapa[] = eng.rngEv() < TUNEL.chance ? [...base, "tunnel"] : base
+  // zona de drift (16/11): só na cidade e na serra (curvas), como o túnel, de vez em quando
+  const pool: readonly EventoMapa[] = DRIFT.biomas.includes(eng.bioma.id) && eng.rngEv() < DRIFT.chance ? [...comTunel, "drift"] : comTunel
   const kind = sortearEvento(pool, eng.ultimosEventos, eng.rngEv())
   eng.ultimosEventos = [kind, ...eng.ultimosEventos].slice(0, RITMO.semRepetir)
   spawnEvent(eng, kind)

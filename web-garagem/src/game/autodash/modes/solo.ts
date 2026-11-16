@@ -6,6 +6,7 @@ import { wheelspinK } from "../physics/traction"
 import { motorDe, fracGiro } from "../physics/motores"
 import { postState } from "../net"
 import { myTelemetry, duelFinish } from "./duel"
+import { perderDrift } from "../world/drift"
 
 export function launch(eng: AutoDashEngine) {
   // qualidade da largada pela zona de RPM segurada no verde
@@ -32,6 +33,7 @@ export function launch(eng: AutoDashEngine) {
 }
 
 export function crash(eng: AutoDashEngine, byPolice = false) {
+  perderDrift(eng)
   // NA CORRIDA NÃO SE MORRE: bater custa quase toda a velocidade e o tempo
   // de retomar — que numa disputa por voltas já é punição suficiente. Encerrar
   // a prova por uma batida tirava o jogador da corrida inteira.

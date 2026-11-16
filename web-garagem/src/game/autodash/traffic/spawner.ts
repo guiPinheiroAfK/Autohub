@@ -8,6 +8,7 @@ import { DRIVERS } from "./driver"
 import { segAt } from "../world/track"
 import { RACHA } from "../world/racha"
 import { infracao } from "../world/policia"
+import { perderDrift } from "../world/drift"
 
 export function seedTraffic(eng: AutoDashEngine, count: number) {
   eng.traffic = []
@@ -123,7 +124,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           eng.steerVel += dir * 1.4
           eng.speed *= 0.9
           eng.shakeT = Math.max(eng.shakeT, 0.4)
-          eng.combo = 0
+          eng.combo = 0; perderDrift(eng) // encostão ou cone no meio do drift perde os pontos
           // janela de recuperação: sem isso vira pinball, um encostão atrás do
           // outro sem o jogador conseguir voltar pra pista
           eng.policeHitT = 1.2
@@ -149,7 +150,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           t.speed *= 0.97
           eng.shakeT = Math.max(eng.shakeT, 0.3)
           eng.immuneT = 0.5
-          eng.combo = 0
+          eng.combo = 0; perderDrift(eng) // encostão ou cone no meio do drift perde os pontos
           eng.audio.crash()
           burst(eng, W / 2 + dir * 60, H - 110, 12, ["#fde047", "#e2e8f0"])
         }

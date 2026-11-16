@@ -26,6 +26,7 @@ import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro, elevacao, elevacaoEm }
 const MURETA_ALT = 150
 export const ELEV_LADEIRA = 0.6 // fração da rampa do elevado que vira ladeira na física
 import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
+import { passoDrift, perderDrift } from "../world/drift"
 import { atualizarRacha } from "../modes/racha"
 import { atualizarObras } from "../world/obra"
 import { atualizarComboio } from "../world/comboio"
@@ -173,9 +174,11 @@ export function update(eng: AutoDashEngine, dt: number) {
   // força centrífuga — curva média se segura no volante; fechada em vmax pede freio
   const centrif = seg.curve * Math.pow(eng.speed / 240, 2.2) * (0.42 - grip * 0.22)
   eng.playerX -= centrif * dt
+  // drift com freio de mão (world/drift.ts): segura parte da curva, fuma e pontua
+  const drift = passoDrift(eng, dt, steerInput, seg.curve, centrif, playerZ)
   const slip = Math.abs(centrif) * speedF
   // chiado de curva ou de patinada no gás (eng.patina, do quadro anterior)
-  eng.audio.skid(Math.max(slip > 0.3 ? slip : 0, eng.patina, eng.oleoT > 0 ? 0.6 : 0))
+  eng.audio.skid(Math.max(slip > 0.3 ? slip : 0, eng.patina, eng.oleoT > 0 ? 0.6 : 0, drift))
   passoOleo(eng, dt)
   if (slip > 0.45 && Math.abs(eng.steerVel) > 0.3 && Math.random() < 0.5) emitSmoke(eng, 1, "#6b7280")
   eng.bgShift += seg.curve * eng.speed * dt * 0.6
@@ -187,6 +190,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   // fora da pista
   if (Math.abs(eng.playerX) > 1.05 && !(ramal && sobreRamal(ramal, eng.playerX))) {
     eng.offroadT += dt
+    perderDrift(eng)
     eng.speed = Math.max(Math.min(eng.speed, 60), eng.speed - 160 * dt)
     eng.shakeT = 0.1
     eng.combo = 0

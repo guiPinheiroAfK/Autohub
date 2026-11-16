@@ -43,6 +43,15 @@ export function renderHud(eng: AutoDashEngine) {
     ctx.fillRect(240, 50, 52 * clamp(eng.comboT / 4, 0, 1), 5)
   }
 
+  // drift em andamento (world/drift.ts): contador no alto, x2 na zona
+  if (eng.driftPts >= 1) {
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#ff2e88"
+    ctx.font = "bold 30px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`DRIFT ${Math.floor(eng.driftPts)}${eng.naZonaDrift ? "  x2" : ""}`, W / 2, H * 0.22)
+    ctx.textAlign = "left"
+  }
+
   // clima/hora + badges
   const sky = skyNow(eng)
   ctx.textAlign = "right"
