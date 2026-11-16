@@ -459,6 +459,26 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
   Falta: o ronco de ventilação e o radar.
 - [x] Cartão de aviso "TÚNEL" e placa de faróis; chuva para lá dentro.
 
+Como testar a Fase 8 (no solo; as teclas de número só valem correndo):
+1. NPCs (8.1): pare ou ande devagar numa faixa com trânsito vindo atrás. O carro de
+   trás acende a luz de freio, para atrás de você, buzina depois de ~1,5 s e passa
+   pela faixa livre. Ninguém deve entrar na sua traseira parado.
+2. Posto (8.2): tecla **1** (ou gaste até 45%). Entre pela direita, siga na faixa de
+   dentro e pare ao lado da ilha: o HUD mostra os litros e enche rápido (~2,5 s o
+   tanque). Passando devagar enche bem menos. Olhe a loja, o totem e os carros na
+   faixa de fora.
+3. Viaduto (8.6): tecla **7**. Na placa "SAÍDA", entre na faixa da direita e siga o
+   elevado: a câmera sobe, há mureta dos dois lados e nitro lá em cima; ele desce e
+   devolve você à pista. Repare nos carros subindo e descendo e, de baixo, nas luzes
+   e pichações do viaduto.
+4. Túnel (8.7): tecla **8**. Boca na montanha, luzes no teto, faróis acendendo, eco,
+   a saída clara lá no fundo e o clarão ao sair. Com chuva, ela para lá dentro; com
+   estrelas da polícia (garagem [L]), o helicóptero te perde.
+5. Cenário (8.4): só dirigir. A cada ~10–20 s a beira muda de tipo (centro com
+   prédios, subúrbio com casas, campo com cercas e plantação). Na garagem, **[X]**
+   troca o bioma para a costa: orla com quiosques, guarda-sóis e palmeiras; o mar do
+   fundo quase não anda na curva.
+
 Pendências que ficaram da rodada de som (15/11), fora desta fase: V6 biturbo ainda no
 VQ35 aproximado; W16 e rotativo só síntese; puxada de pé leve (E) não gravada.
 
