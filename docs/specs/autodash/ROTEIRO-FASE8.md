@@ -141,6 +141,22 @@ Na placa "SAÍDA", entre na faixa da direita e siga o elevado.
 
 **Feedback drift:**
 
+## 9. Rodada 3 de 16/11
+- **Elevado (7):** suba e siga com trânsito em cima: os carros do tabuleiro à sua
+  frente têm de aparecer (antes sumiam e dava para bater neles).
+- **Guard-rail (começo da cidade e serra):** lâmina contínua dos dois lados, com postes.
+- **Troca de região (9):** o céu e o fundo mudam aos poucos (~5 s) e o cenário em
+  volta só muda depois do horizonte. **Clima:** a chuva começa e para aos poucos (~8 s).
+- **Cidade:** prédios mais espaçados e desencontrados, alguns recuados.
+
+**Feedback elevado:**
+
+**Feedback guard-rail:**
+
+**Feedback transições:**
+
+**Feedback cidade:**
+
 ## Geral
 Desempenho (travou? caiu o fps em algum trecho?), o que mais incomodou, o que
 mais gostou:

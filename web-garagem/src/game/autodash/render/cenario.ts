@@ -15,6 +15,33 @@ const GUARDA = ["#ef4444", "#3b82f6", "#f59e0b", "#10b981", "#ec4899"]
 
 const de = <T,>(lista: readonly T[], seed: number): T => lista[Math.abs(seed) % lista.length]
 
+/** Um segmento de guard-rail contínuo (os dois lados): bordas perto/longe na tela. */
+export interface RailSeg { idx: number; xl1: number; xl2: number; xr1: number; xr2: number; y1: number; y2: number; s1: number; s2: number }
+
+/**
+ * Guard-rail da serra (playtest 16/11: "os guard-rails do começo são um monte de
+ * desenho cinza que não faz nada"). Antes era um sprite solto por segmento,
+ * alternando de lado; agora é a lâmina CONTÍNUA dos dois lados, ligando um
+ * segmento ao outro, com o reflexo e um poste a cada 2 segmentos.
+ */
+export function drawGuardRail(eng: AutoDashEngine, r: RailSeg, amb: number) {
+  const ctx = eng.ctx
+  const luz = Math.max(0.4, amb)
+  const topo = 230, base = 120, poste = 250 // altura (mundo) da lâmina e do poste
+  const t1 = r.y1 - topo * r.s1, b1 = r.y1 - base * r.s1, t2 = r.y2 - topo * r.s2, b2 = r.y2 - base * r.s2
+  for (const [x1, x2] of [[r.xl1, r.xl2], [r.xr1, r.xr2]]) {
+    if (r.idx % 2 === 0) { // poste
+      ctx.fillStyle = shade("#475569", luz)
+      ctx.fillRect(x1 - Math.max(0.5, 18 * r.s1), r.y1 - poste * r.s1, Math.max(1, 36 * r.s1), poste * r.s1)
+    }
+    ctx.fillStyle = shade("#94a3b8", luz) // lâmina
+    ctx.beginPath(); ctx.moveTo(x1, t1); ctx.lineTo(x2, t2); ctx.lineTo(x2, b2); ctx.lineTo(x1, b1); ctx.closePath(); ctx.fill()
+    ctx.fillStyle = shade("#e2e8f0", luz) // reflexo no meio da lâmina
+    const m1 = (t1 + b1) / 2, m2 = (t2 + b2) / 2, e1 = (b1 - t1) * 0.14, e2 = (b2 - t2) * 0.14
+    ctx.beginPath(); ctx.moveTo(x1, m1 - e1); ctx.lineTo(x2, m2 - e2); ctx.lineTo(x2, m2 + e2); ctx.lineTo(x1, m1 + e1); ctx.closePath(); ctx.fill()
+  }
+}
+
 /** Desenha um enfeite de beira novo. Devolve false se o `kind` não é daqui. */
 export function drawEnfeite(eng: AutoDashEngine, kind: number, seed: number, x: number, y: number, w: number, amb: number): boolean {
   if (kind < 20) return false

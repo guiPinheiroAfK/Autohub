@@ -17,6 +17,7 @@ import { skyNow, renderBackdrop } from "./render/backdrop"
 import { type BiomeDef, biomeById } from "./world/biomes"
 import { type Clock, type HoraModo, newClock } from "./world/clock"
 import { type ClimaId, type ClimaModo, CLIMAS } from "./world/weather"
+import { climaAtual } from "./sim/clima"
 import { type Ramal } from "./world/ramais"
 import { type TrechoInfo } from "./world/circuits"
 import { renderRoad } from "./render/road"
@@ -218,8 +219,12 @@ export class AutoDashEngine {
   clima: ClimaId = "limpo"
   climaModo: ClimaModo = "sorteio"
   climaSeed = 0
+  climaAnt: ClimaId | null = null // clima de antes, durante a transição (sim/clima.ts)
+  climaMix = 1                    // 0..1: quanto do clima novo já entrou
+  biomaAnt: BiomeDef | null = null // região de antes, durante a transição (world/regiao.ts)
+  biomaMix = 1
   climaS = 0 // segundos de simulação desde a largada: as janelas de clima contam daqui
-  get raining() { return CLIMAS[this.clima].chuva }
+  get raining() { return CLIMAS[this.clima].chuva || (this.climaMix < 1 && !!this.climaAnt && CLIMAS[this.climaAnt].chuva) }
   // bioma da pista atual (ADR 0011). Definido em buildTrack, lido pelo render.
   bioma: BiomeDef = biomeById(undefined)
   // circuito fixo da corrida (ADR 0014). Vazios na pista procedural.
@@ -448,7 +453,7 @@ export class AutoDashEngine {
     renderParticles(this)
 
     if (this.raining && !this.dentroTunel) {
-      ctx.strokeStyle = "rgba(190,215,240,0.35)"
+      ctx.strokeStyle = `rgba(190,215,240,${(0.35 * climaAtual(this).chuvaK).toFixed(3)})` // a chuva engrossa e afina na transição
       ctx.lineWidth = 1.5
       ctx.beginPath()
       for (const d of this.drops) {

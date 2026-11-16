@@ -12,14 +12,14 @@ import { AutoDashEngine, PLAYER_Z, H, W, type Pickup, type Obstacle, type RoadSi
 import { SEG_LEN, CAM_HEIGHT, ROAD_WIDTH, PAINTS, KMH2UPS, DRAW_DIST } from "../data"
 import { segAt } from "../world/track"
 import { shade, clamp, hexToRgb, mixHex } from "../math"
-import { CLIMAS } from "../world/weather"
+import { climaAtual } from "../sim/clima"
 import { type Traffic, KINDS } from "../traffic/types"
 import { poly } from "./primitives"
 import { drawRamalSeg, drawElevadoSeg, type ElevadoSeg } from "./ramal"
 import { drawTunelSeg, drawClarao, type TunelSeg } from "./tunel"
 import { TUNEL } from "../world/tunel"
-import { drawEnfeite } from "./cenario"
-import { enfeitesDoSegmento, ENF } from "../world/cenario"
+import { drawEnfeite, drawGuardRail, type RailSeg } from "./cenario"
+import { enfeitesDoSegmento, ENF, tipoNoSeg, GUARD_RAIL } from "../world/cenario"
 import { elevacao, elevacaoEm, ramalBordas, ramalPerfilOuZero, ramalNoSeg, RAMAL_ABRE, RAMAL_COLADO } from "../world/ramais"
 import { drawPosto, drawPostoLoja, drawPostoTotem } from "./eventos"
 import { postoMeio, postoLoja, postoTotem, postoPatio, naFaixaDoPosto } from "../world/posto"
@@ -68,7 +68,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   let roadStarted = false
   let cobriuTunel = false // dentro do túnel: o primeiro segmento já cobriu a tela
 
-  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem" | "elevado" | "tunel"; el?: ElevadoSeg; tn?: TunelSeg; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
+  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem" | "elevado" | "tunel" | "rail"; el?: ElevadoSeg; tn?: TunelSeg; rl?: RailSeg; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
   const sprites: SpriteDraw[] = []
   // buckets de tráfego, obstáculos, placas e powerups por segmento
   const obsBySeg = new Map<number, Obstacle[]>()
@@ -212,6 +212,11 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     // O sprite é alto e entra pela borda de baixo, então aqui a gente pula só
     // o ASFALTO e continua emitindo os veículos.
     const nearField = !roadStarted && sy2 >= maxY
+    // ...mas só ATRÁS do jogador. Em cima do elevado a câmera está 4100 u acima
+    // da pista e o asfalto lá embaixo fica fora da tela por um bom trecho À
+    // FRENTE: ali não é campo próximo, e os carros e pickups do tabuleiro têm de
+    // aparecer (playtest 16/11: carros do elevado invisíveis, e dava para bater).
+    const pertoDaCamera = nearField && dz1 < PLAYER_Z - lente.avanco + SEG_LEN
     if (sy2 >= maxY && roadStarted) continue // escondido por morro: some tudo mesmo
     if (nearField && dz1 < NEAR_SPRITE_MIN) continue // tão perto que nem o topo aparece
 
@@ -378,7 +383,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         // pra ela que isso existe, pra não "teleportar" ao vir de trás. Pro
         // trânsito comum era regressão — um carro colado atrás na sua faixa
         // era desenhado com 3x a largura do seu carro, englobando você.
-        if (nearField && t.role !== "police" && t.role !== "racha") continue
+        if (pertoDaCamera && t.role !== "police" && t.role !== "racha") continue
         const pct = (t.z - z1) / SEG_LEN
         const sx = sx1 + (sx2 - sx1) * pct
         const sy = sy1 + (sy2 - sy1) * pct
@@ -433,14 +438,20 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         camAcima: camY > seg.y1 + h1, alt: Math.floor(idx / 3) % 2 === 0,
       } })
     }
-    if (idx === heliIdx && !nearField) {
+    if (idx === heliIdx && !pertoDaCamera) {
       const pct = (heli!.z - z1) / SEG_LEN
       const sw = sw1 + (sw2 - sw1) * pct
       luz = { x: sx1 + (sx2 - sx1) * pct + sw * heli!.x, y: sy1 + (sy2 - sy1) * pct, w: sw }
     }
     // do campo próximo só saem VEÍCULOS: cenário e pickups ali ficariam
     // gigantes e sem leitura, e não é informação que o jogador precise
-    if (nearField) continue
+    if (pertoDaCamera) continue
+
+    // guard-rail contínuo nos trechos de mata (só no solo; nada na ponte e no túnel)
+    if (eng.mode !== "race" && !onBridge && !tunelSpan.has(idx) && tipoNoSeg(eng.cenario, idx) === "mata") {
+      const g = GUARD_RAIL.dist
+      sprites.push({ kind: "rail", x: 0, y: 0, w: 0, rl: { idx, xl1: sx1 - sw1 * g, xl2: sx2 - sw2 * g, xr1: sx1 + sw1 * g, xr2: sx2 + sw2 * g, y1: sy1, y2: sy2, s1, s2 } })
+    }
 
     if (idx === ghostIdx) {
       const pct = (ghostZ - z1) / SEG_LEN
@@ -594,6 +605,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     else if (s.kind === "postoTotem") drawPostoTotem(eng, s.ramal!, s.x, s.y, s.w, amb)
     else if (s.kind === "elevado") drawElevadoSeg(eng, s.el!, amb, roadL, roadD, laneC)
     else if (s.kind === "tunel") drawTunelSeg(eng, s.tn!, amb)
+    else if (s.kind === "rail") drawGuardRail(eng, s.rl!, amb)
     else if (!drawEnfeite(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)) drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
   }
 
@@ -609,7 +621,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // visibilidade do clima (ADR 0013): neblina e chuva engolem o fundo da pista.
   // Desenhado DEPOIS dos sprites de propósito: carro e obstáculo distantes só
   // aparecem quando chegam mais perto — é o efeito de jogo, não só o visual.
-  const fogK = 1 - CLIMAS[eng.clima].visib
+  const fogK = 1 - climaAtual(eng).visib // misturado na troca de clima
   if (fogK > 0.01) {
     const fc = hexToRgb(mixHex(fogColor, amb > 0.6 ? "#d5dae2" : "#545d70", 0.6))
     const top = maxY - 60, alto = 90 + 560 * fogK

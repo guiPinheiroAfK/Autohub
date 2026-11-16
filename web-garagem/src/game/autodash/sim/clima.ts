@@ -2,17 +2,42 @@
 // e world/weather.ts) ao engine: largada, avanço por quadro e efeitos da troca.
 import type { AutoDashEngine } from "../engine"
 import { advanceClock, newClock, TICK_S, type HoraModo } from "../world/clock"
-import { CLIMAS, climaNoTick, type ClimaId, type ClimaModo } from "../world/weather"
+import { CLIMAS, climaNoTick, type ClimaId, type ClimaModo, type ClimaDef } from "../world/weather"
 import { initRain } from "../fx/particles"
 
-export function climaAtual(eng: AutoDashEngine) {
-  return CLIMAS[eng.clima]
+/**
+ * Transições (playtest 16/11: "a mudança de bioma e de clima está muito bruta").
+ * O clima novo entra misturado ao anterior em `climaS` (luz, névoa, aderência,
+ * freio e a chuva aparecendo/sumindo); a região nova, em `biomaS` (céu e fundo).
+ */
+export const TRANSICAO = { climaS: 8, biomaS: 5 }
+
+export interface ClimaVisto extends ClimaDef { chuvaK: number } // chuvaK: 0..1, intensidade da chuva
+
+const mistura = (a: number, b: number, k: number) => a + (b - a) * k
+
+/** Clima em vigor, já misturado com o anterior durante a transição. */
+export function climaAtual(eng: AutoDashEngine): ClimaVisto {
+  const cur = CLIMAS[eng.clima]
+  const k = eng.climaMix ?? 1
+  if (k >= 1 || !eng.climaAnt) return { ...cur, chuvaK: cur.chuva ? 1 : 0 }
+  const ant = CLIMAS[eng.climaAnt]
+  return {
+    ...cur,
+    grip: mistura(ant.grip, cur.grip, k), freio: mistura(ant.freio, cur.freio, k),
+    visib: mistura(ant.visib, cur.visib, k), amb: mistura(ant.amb, cur.amb, k),
+    cinza: mistura(ant.cinza, cur.cinza, k),
+    chuva: cur.chuva || ant.chuva,
+    chuvaK: mistura(ant.chuva ? 1 : 0, cur.chuva ? 1 : 0, k),
+  }
 }
 
-/** Troca o clima e dispara o que muda junto (gotas e som de chuva). */
-export function setClima(eng: AutoDashEngine, id: ClimaId) {
+/** Troca o clima e dispara o que muda junto (gotas e som de chuva). `suave`: com transição. */
+export function setClima(eng: AutoDashEngine, id: ClimaId, suave = false) {
   if (id === eng.clima) return
   const era = CLIMAS[eng.clima].chuva, vai = CLIMAS[id].chuva
+  eng.climaAnt = eng.clima
+  eng.climaMix = suave ? 0 : 1
   eng.clima = id
   if (vai && !era) { initRain(eng); eng.audio.rain(true) }
   if (!vai && era) eng.audio.rain(false)
@@ -34,7 +59,9 @@ export function iniciarTempo(eng: AutoDashEngine, hora: HoraModo, clima: ClimaMo
 export function tickTempo(eng: AutoDashEngine, dt: number) {
   advanceClock(eng.clock, dt)
   eng.climaS += dt
-  setClima(eng, climaNoTick(eng.climaModo, eng.bioma.climas, eng.climaSeed, Math.floor(eng.climaS / TICK_S)))
+  if (eng.climaMix < 1) eng.climaMix = Math.min(1, eng.climaMix + dt / TRANSICAO.climaS)
+  if (eng.biomaMix < 1) eng.biomaMix = Math.min(1, eng.biomaMix + dt / TRANSICAO.biomaS)
+  setClima(eng, climaNoTick(eng.climaModo, eng.bioma.climas, eng.climaSeed, Math.floor(eng.climaS / TICK_S)), true)
 }
 
 /** Seed do clima quando a pista não tem uma (solo): hash do traçado, sem Math.random. */

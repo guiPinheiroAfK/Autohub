@@ -4,7 +4,7 @@ import { drawTraffic } from "./objects"
 import { AutoDashEngine, H, W } from "../engine"
 import { type LayerKind } from "../world/biomes"
 import { dayFrac } from "../world/clock"
-import { CLIMAS } from "../world/weather"
+import { climaAtual } from "../sim/clima"
 import { shade, mix, mixHex } from "../math"
 import { rr } from "./primitives"
 import { type Traffic } from "../traffic/types"
@@ -28,6 +28,16 @@ export function renderBackdrop(eng: AutoDashEngine, amb: number) {
   for (const k of c.longe) CAMADAS[k](eng, amb)
   for (const k of c.meio) CAMADAS[k](eng, amb)
   for (const k of c.perto) CAMADAS[k](eng, amb)
+  // troca de região: o fundo de antes some aos poucos por cima do novo
+  // (antes era um corte seco escondido por uma escurecida)
+  const ant = eng.biomaAnt
+  if (ant && eng.biomaMix < 1) {
+    const ctx = eng.ctx
+    ctx.save()
+    ctx.globalAlpha = 1 - eng.biomaMix
+    for (const k of [...ant.camadas.longe, ...ant.camadas.meio, ...ant.camadas.perto]) if (k !== "ceu-sol") CAMADAS[k](eng, amb)
+    ctx.restore()
+  }
 }
 
 // céu, nuvens, sol e lua
@@ -559,11 +569,19 @@ export function drawTower(eng: AutoDashEngine, x: number, y: number, w: number, 
 }
 
 export function skyNow(eng: AutoDashEngine) : { top: string; bot: string; amb: number } {
+  const novo = ceuDoBioma(eng, eng.bioma)
+  const ant = eng.biomaAnt
+  if (!ant || eng.biomaMix >= 1) return novo
+  // troca de região: o céu passa de um para o outro
+  const velho = ceuDoBioma(eng, ant), k = eng.biomaMix
+  return { top: mixHex(velho.top, novo.top, k), bot: mixHex(velho.bot, novo.bot, k), amb: velho.amb + (novo.amb - velho.amb) * k }
+}
+
+function ceuDoBioma(eng: AutoDashEngine, bio: AutoDashEngine["bioma"]) : { top: string; bot: string; amb: number } {
   // corrida à noite (padrão) mantém o céu neon fixo do bioma — o clima
   // "Velozes e Furiosos" vive de racha noturno. Os outros horários e o solo
   // seguem o relógio em ticks (ADR 0013) pelas chaves de céu do bioma.
-  const bio = eng.bioma
-  const cl = CLIMAS[eng.clima]
+  const cl = climaAtual(eng) // já misturado na troca de clima
   let top: string, bot: string, amb: number
   if (eng.mode === "race" && eng.horaModo === "noite") {
     const cr = bio.ceuCorrida

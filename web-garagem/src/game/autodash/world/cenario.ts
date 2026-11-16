@@ -42,6 +42,9 @@ export const ENF = {
   lojinha: 47, predioJP: 48, estacionamento: 49, pedestres: 50,
 } as const
 
+/** Guard-rail contínuo dos trechos de mata: distância da borda (meias-pistas). */
+export const GUARD_RAIL = { dist: 1.16 }
+
 /** Poste com fiação: fica sempre à esquerda nesta distância e escala; o desenho acha o par da direita por elas. */
 export const FIACAO = { dist: 1.22, escala: 0.05 }
 
@@ -60,14 +63,14 @@ interface Lote { kind: number; dist: number; escala: number }
 // pesos de cada distrito: [lote, peso]. `null` é vão (terreno vazio, recuo).
 const LOTES: Record<string, [Lote | null, number][]> = {
   shibuya: [
-    [{ kind: ENF.telaLED, dist: 2.0, escala: 0.7 }, 1.2], [{ kind: ENF.fachadaShibuya, dist: 1.75, escala: 0.55 }, 2],
+    [{ kind: ENF.telaLED, dist: 2.0, escala: 0.7 }, 1], [{ kind: ENF.fachadaShibuya, dist: 1.75, escala: 0.55 }, 1.3],
     [{ kind: ENF.predioJP, dist: 1.85, escala: 0.6 }, 2.8], [{ kind: ENF.lojinha, dist: 1.55, escala: 0.42 }, 2],
-    [{ kind: ENF.predioAlto, dist: 2.3, escala: 0.16 }, 0.8], [{ kind: ENF.estacionamento, dist: 1.7, escala: 0.6 }, 0.6], [null, 0.6],
+    [{ kind: ENF.predioAlto, dist: 2.3, escala: 0.16 }, 0.8], [{ kind: ENF.estacionamento, dist: 1.7, escala: 0.6 }, 0.9], [null, 1.1],
   ],
   shinjuku: [
-    [{ kind: ENF.fachadaShinjuku, dist: 1.75, escala: 0.55 }, 2.6], [{ kind: ENF.predioJP, dist: 1.85, escala: 0.6 }, 2.4],
+    [{ kind: ENF.fachadaShinjuku, dist: 1.75, escala: 0.55 }, 1.8], [{ kind: ENF.predioJP, dist: 1.85, escala: 0.6 }, 2.6],
     [{ kind: ENF.lojinha, dist: 1.55, escala: 0.42 }, 1.4], [{ kind: ENF.izakaya, dist: 1.45, escala: 0.42 }, 1.2],
-    [{ kind: ENF.predioAlto, dist: 2.3, escala: 0.16 }, 1], [{ kind: ENF.estacionamento, dist: 1.7, escala: 0.6 }, 0.5], [null, 0.5],
+    [{ kind: ENF.predioAlto, dist: 2.3, escala: 0.16 }, 1], [{ kind: ENF.estacionamento, dist: 1.7, escala: 0.6 }, 0.8], [null, 0.9],
   ],
   oficinas: [
     [{ kind: ENF.galpao, dist: 1.95, escala: 0.8 }, 2.4], [{ kind: ENF.lojinha, dist: 1.55, escala: 0.42 }, 1.4],
@@ -154,18 +157,21 @@ export function enfeitesDoSegmento(trechos: Trecho[], idx: number, arvore: numbe
     if (idx % 70 === 20) add(ENF.outdoor, 1, 1.75, 0.55)
   } else if (tipo === "shibuya" || tipo === "shinjuku" || tipo === "oficinas") {
     // QUARTEIRÃO VARIADO (playtest 16/11: "tudo do mesmo tamanho, cheio de
-    // prédio, sem personalidade"): um lote a cada 3 segmentos de cada lado,
-    // sorteado pelo peso do distrito, com largura e recuo próprios. Nem todo
-    // prédio tem neon; tem lojinha, terreno de estacionamento e vão vazio.
-    if (idx % 3 === 0) {
-      for (const l of [-1, 1] as const) {
-        const lote = loteDoDistrito(tipo, h(l < 0 ? 1 : 3))
-        if (lote) add(lote.kind, l, lote.dist + h(l < 0 ? 2 : 4) * 0.3, lote.escala * (0.85 + h(l < 0 ? 5 : 6) * 0.3))
-      }
+    // prédio, sem personalidade" e, depois, "ainda meio poluída"): um lote a
+    // cada 4 segmentos de cada lado, os dois lados desencontrados, sorteado pelo
+    // peso do distrito. Largura de 0,7× a 1,4×; um em quatro bem recuado (fica
+    // atrás, dá respiro). Nem todo prédio tem neon; tem lojinha, estacionamento e vão.
+    for (const l of [-1, 1] as const) {
+      if ((idx + (l < 0 ? 0 : 2)) % 4 !== 0) continue
+      const u = (k: number) => hash01(idx * 2 + (l < 0 ? 0 : 1), k)
+      const lote = loteDoDistrito(tipo, u(1))
+      if (!lote) continue
+      const recuo = u(2) < 0.25 ? 0.4 + u(3) * 0.5 : u(3) * 0.25
+      out.push({ kind: lote.kind, lado: l, dist: lote.dist + recuo, escala: lote.escala * (0.7 + u(4) * 0.7), seed: Math.floor(u(5) * 1e6) })
     }
     if (tipo !== "oficinas" && idx % 6 === 4) add(ENF.pedestres, lado(8), 1.24, 0.3)
     if (tipo === "shibuya" && idx % 23 === 11) add(ENF.multidao, lado(12), 1.3, 0.34)
-    if (tipo === "shinjuku" && idx % 3 === 1 && h(9) < 0.5) out.push({ kind: ENF.letreiroVertical, lado: lado(10), dist: 1.38, escala: 0.2, seed: COR_SHINJUKU[Math.floor(h(11) * 4)] + 6 * idx })
+    if (tipo === "shinjuku" && idx % 4 === 1 && h(9) < 0.4) out.push({ kind: ENF.letreiroVertical, lado: lado(10), dist: 1.38, escala: 0.2, seed: COR_SHINJUKU[Math.floor(h(11) * 4)] + 6 * idx })
     if (tipo === "shinjuku" && idx % 29 === 14) add(ENF.vapor, lado(13), 1.08, 0.3)
     if (tipo === "oficinas" && idx % 8 === 4) add(ENF.pneus, lado(14), 1.32, 0.16)
     if (idx % 37 === 20) add(ENF.maquinaBebida, lado(15), 1.32, 0.16)
@@ -189,8 +195,8 @@ export function enfeitesDoSegmento(trechos: Trecho[], idx: number, arvore: numbe
     if (idx % 160 === 80) add(ENF.celeiro, lado(6), 2.5, 0.7)
     if (idx % 97 === 40) add(ENF.outdoor, lado(7), 1.75, 0.55)
   } else if (tipo === "mata") {
-    // mata de serra: guard-rail dos dois lados, pinheiros fechados e pedras
-    add(ENF.guardRail, idx % 2 === 0 ? -1 : 1, 1.16, 0.42)
+    // mata de serra: pinheiros fechados e pedras. O guard-rail é contínuo e
+    // desenhado pelo render da pista (GUARD_RAIL, render/cenario.ts drawGuardRail)
     if (idx % 2 === 1) add(h(1) < 0.75 ? ENF.pinheiro : arvore, lado(2), 1.5 + h(3) * 1.4, 0.22 + h(4) * 0.08)
     if (idx % 3 === 0 && h(5) < 0.5) add(ENF.pinheiro, lado(6), 2.2 + h(7) * 1.2, 0.24)
     if (idx % 37 === 9) add(ENF.rocha, lado(8), 1.45, 0.3)
