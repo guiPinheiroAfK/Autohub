@@ -126,13 +126,13 @@ Na placa "SAÍDA", entre na faixa da direita e siga o elevado.
 - **Posto:** pátio de concreto com setas, carros na loja, frentista, calibrador,
   lava-rápido e placa SAÍDA. **Viaduto:** ruas da cidade cruzando embaixo do elevado.
 - **Montanha e duelo de touge (tecla 0, ou chegando na serra pela tecla 9):** a
-  pista sobe a serra (paredão de pedra com cachoeira de um lado, guard-rail do
-  outro, neblina no meio), chega no mirante (o mar aparece no fundo) e o rival
-  chama para a descida. Na descida, sem trânsito, cada curva pede na tela:
-  **S** (freia antes), **Shift** (na entrada: escorrega de lado), **W** segurado
-  durante o drift e **Espaço** (nitro na saída). O anel fecha na hora de cada um.
-  Acertou tudo: CURVA PERFEITA e o rival perde vida; errou o Shift ou quase tudo:
-  sai de frente e você perde. Barras dos dois no alto.
+  subida é longa, com comboios de caminhão, paredão com cachoeira e neblina; no
+  mirante o mar aparece e o rival se apresenta (faixas de cinema). Na descida,
+  sem trânsito, cada curva: **S** (freia antes), **Shift** na entrada (o jogo
+  fica em câmera lenta até você apertar), depois o **drift é seu**: segure o
+  ponteiro do medidor na faixa verde com o **W** (abre) e o volante (contra-
+  esterço fecha); passou do vermelho, **roda**. **Espaço** na saída. Com metade
+  da vida o rival acorda: tempo mais apertado e ele fecha a sua linha.
 
 **Feedback ladeira/viaduto:**
 

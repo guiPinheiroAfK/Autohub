@@ -59,7 +59,7 @@ export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
   // túnel (Fase 8.7): o mesmo eco fechado, o trecho inteiro
   atualizarTunel(eng, dt, playerZ)
   atualizarTouge(eng, dt, playerZ)
-  atualizarMontanha(eng, playerZ)
+  atualizarMontanha(eng, playerZ, dt)
   const fechado = sob || eng.dentroTunel
   if (fechado !== eng.sobViaduto) { eng.sobViaduto = fechado; eng.audio.ambiente(fechado ? "fechado" : "aberto") }
   for (const zn of eng.zones) {

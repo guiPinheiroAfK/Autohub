@@ -601,7 +601,11 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       const fade = clamp(((s.dz ?? Infinity) - FADE_IN_START) / FADE_IN_LEN, 0, 1)
       if (fade <= 0) continue
       if (fade < 1) ctx.globalAlpha = fade
-      drawTraffic(eng, s.t!, s.x, s.y, s.w, amb)
+      if (s.t!.ang) { // rival do touge derrapando: gira em volta do pé
+        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(-s.t!.ang * 0.5); ctx.translate(-s.x - s.t!.ang * s.w * 0.4, -s.y)
+        drawTraffic(eng, s.t!, s.x, s.y, s.w, amb)
+        ctx.restore()
+      } else drawTraffic(eng, s.t!, s.x, s.y, s.w, amb)
       if (fade < 1) ctx.globalAlpha = 1
     }
     else if (s.kind === "pu") drawPickup(eng, s.p!, s.x, s.y, s.w, amb)

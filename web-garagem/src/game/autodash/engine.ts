@@ -253,6 +253,7 @@ export class AutoDashEngine {
   driftPts = 0         // pontos do drift em andamento
   driftRetoT = 0       // s reto depois de soltar o Shift
   touge: Touge | null = null // duelo de touge em andamento (world/touge.ts)
+  escalaTempo = 1 // câmera lenta do duelo (1 = normal)
   montanha: Montanha | null = null // a montanha da serra na pista (world/montanha.ts)
   climaForcado: ClimaId | null = null // clima imposto pelo lugar (neblina no meio da serra)
   racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
@@ -428,9 +429,9 @@ export class AutoDashEngine {
     // tremor por trauma, trepidação do grid e zoom por velocidade e nitro
     aplicarCamera(this, ctx)
     // a câmera deita junto com o volante
-    if (this.state === "racing" && Math.abs(this.steerVel) > 0.04) {
+    if (this.state === "racing" && (Math.abs(this.steerVel) > 0.04 || this.driftAng !== 0)) {
       ctx.translate(W / 2, H)
-      ctx.rotate(-this.steerVel * 0.011)
+      ctx.rotate(-this.steerVel * 0.011 - this.driftAng * 0.05) // no drift a câmera inclina junto
       ctx.translate(-W / 2, -H)
     }
 

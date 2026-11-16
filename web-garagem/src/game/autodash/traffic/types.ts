@@ -66,6 +66,7 @@ export interface Traffic {
   placa?: string       // faixa escrita na traseira (o último caminhão do comboio: "CARGA LONGA")
   posto?: string       // id do posto onde este carro está abastecendo (world/posto.ts)
   saindoPosto?: boolean // terminou de abastecer: sai pelo pátio e entra na pista
+  ang?: number         // derrapagem do desenho (rival do touge)
   tocaia?: boolean     // viatura parada embaixo do viaduto: sai atrás de você quando você passa
   top?: number         // viatura: teto de velocidade (km/h) da estrela atual (world/policia.ts)
   accel?: number       // viatura: arrancada (km/h/s) da estrela atual

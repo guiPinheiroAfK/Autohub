@@ -14,15 +14,18 @@ import { DRAW_DIST, SEG_LEN } from "../data"
 import { avisar } from "./avisos"
 import { hash01, type TipoTrecho } from "./cenario"
 import { spawnTouge } from "./touge"
+import { spawnComboio } from "./comboio"
 
 type Fases = [TipoTrecho, number][]
 export const MONTANHA = {
   // [fase, segmentos]
-  completa: [["serraPe", 420], ["serraMeio", 1150], ["mirante", 340], ["serraDescida", 760], ["serraBase", 260]] as Fases,
+  // playtest 16/11 (2): "a subida precisa ser maior e mais desafiadora": meio
+  // bem mais longo, montanha mais alta e comboios de caminhão no meio
+  completa: [["serraPe", 360], ["serraMeio", 1500], ["mirante", 300], ["serraDescida", 1020], ["serraBase", 200]] as Fases,
   // tecla 0: subida curta, mirante e a descida do touge (para testar sem esperar)
-  curta: [["serraPe", 320], ["mirante", 260], ["serraDescida", 760], ["serraBase", 260]] as Fases,
-  rampaSobe: 0.075, // inclinação média da subida (a altura sai dela)
-  rampaDesce: 0.06, // inclinação média da descida (mais suave: descer embala muito)
+  curta: [["serraPe", 320], ["mirante", 260], ["serraDescida", 1020], ["serraBase", 200]] as Fases,
+  altura: 18000,    // u no alto (a curta fica com a metade)
+  comboioCadaS: 9,  // s entre comboios de caminhão no meio da subida
   serpentina: 4.6, // curva das serpentinas do meio
   caracol: 6.4,    // curva da descida (o touge reescreve a dele por cima)
   neblinaNoMeio: true,
@@ -31,7 +34,7 @@ export const MONTANHA = {
 /** Lado do paredão (fixo por montanha): o barranco com guard-rail fica do outro. */
 export function ladoParedao(eng: AutoDashEngine): -1 | 1 { return eng.montanha?.lado ?? -1 }
 
-export interface Montanha { a: number; lado: -1 | 1; fases: Fases; total: number; tougeFeito: boolean }
+export interface Montanha { a: number; lado: -1 | 1; fases: Fases; total: number; tougeFeito: boolean; comboioT: number }
 
 /** Fase da montanha no segmento `idx` (null fora dela). */
 export function faseNoSeg(eng: AutoDashEngine, idx: number): TipoTrecho | null {
@@ -69,7 +72,7 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
   for (const [f, n] of fases) { lim[f] = [acc, acc + n]; acc += n }
   const fimSubida = lim.mirante[0]
   const [iniDesc] = lim.serraDescida, [, fimDesc] = lim.serraBase
-  const altura = Math.min(fimSubida * MONTANHA.rampaSobe, (fimDesc - iniDesc) * MONTANHA.rampaDesce) * SEG_LEN
+  const altura = curta ? MONTANHA.altura / 2 : MONTANHA.altura
   const suave = (t: number) => t * t * (3 - 2 * t)
   const P = (k: number) => {
     if (k <= 0 || k >= MONTANHA_SEGS) return 0
@@ -91,7 +94,7 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
     else s.curve = Math.sin(k / 80) * 2 * borda
   }
   // os segmentos depois da montanha seguem no relevo de antes (P volta a 0)
-  eng.montanha = { a, lado, fases, total: MONTANHA_SEGS, tougeFeito: false }
+  eng.montanha = { a, lado, fases, total: MONTANHA_SEGS, tougeFeito: false, comboioT: 3 }
   // trechos de cenário da montanha (por cima dos do bioma)
   acc = 0
   const tr: { a: number; b: number; tipo: TipoTrecho }[] = []
@@ -114,7 +117,7 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
 }
 
 /** Um quadro: neblina no meio da serra; touge chamando no fim do mirante; fim. */
-export function atualizarMontanha(eng: AutoDashEngine, playerZ: number) {
+export function atualizarMontanha(eng: AutoDashEngine, playerZ: number, dt = 0) {
   const m = eng.montanha
   if (!m) return
   const N = eng.segments.length
@@ -122,6 +125,11 @@ export function atualizarMontanha(eng: AutoDashEngine, playerZ: number) {
   const f = faseNoSeg(eng, idx)
   // neblina na altura da pista no meio da subida (passa aos poucos: setClima suave)
   eng.climaForcado = MONTANHA.neblinaNoMeio && f === "serraMeio" ? "neblina" : null
+  // a subida é de caminhão: comboio atrás de comboio no meio da serra
+  if (f === "serraMeio" && !eng.comboio) {
+    m.comboioT -= dt
+    if (m.comboioT <= 0) { spawnComboio(eng, eng.rngEv); m.comboioT = MONTANHA.comboioCadaS }
+  }
   // no mirante, o rival da serra chama para descer (o touge cobre a descida)
   if (f === "mirante" && !m.tougeFeito) {
     let fimMirante = 0

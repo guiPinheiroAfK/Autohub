@@ -38,6 +38,8 @@ import { atualizarSomEventos } from "../world/somEventos"
 import { regiaoNaVirada } from "../world/regiao"
 
 export function update(eng: AutoDashEngine, dt: number) {
+  // câmera lenta do duelo de touge (world/touge.ts): o mundo inteiro anda mais devagar
+  if (eng.state === "racing" && eng.escalaTempo < 1) dt *= eng.escalaTempo
   const spec = CARS[eng.cfg.carIdx]
   const voice = AutoDashEngine.ENGINE_VOICE[spec.body] ?? [1, 1]
   eng.audio.setEngine(voice[0], voice[1])

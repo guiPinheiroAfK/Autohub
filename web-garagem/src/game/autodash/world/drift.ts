@@ -38,7 +38,7 @@ export function freioDeMao(eng: AutoDashEngine): boolean {
  * intensidade (0..1) para o chiado.
  */
 export function passoDrift(eng: AutoDashEngine, dt: number, steerInput: number, curva: number, centrif: number): number {
-  if (eng.touge) return passoTouge(eng, dt, curva, centrif)
+  if (eng.touge) return passoTouge(eng, dt, curva, centrif, steerInput)
   const puxando = freioDeMao(eng) && eng.speed > DRIFT.vMin
   if (puxando && (steerInput !== 0 || eng.driftAng !== 0)) {
     const dir = steerInput !== 0 ? Math.sign(steerInput) : Math.sign(eng.driftAng)

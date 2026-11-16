@@ -6,7 +6,7 @@
 // quem não aperta nada erra todas, sai de frente e perde.
 import { describe, it, expect } from "vitest"
 import { runScenario } from "./harness"
-import { spawnTouge, comandoTouge, comandoAtual, TOUGE } from "../world/touge"
+import { spawnTouge, comandoTouge, comandoAtual, anguloDrift, TOUGE } from "../world/touge"
 import { perderDrift } from "../world/drift"
 
 const LARGADA = (i: number, api: { tap(k: string): void; down(k: string): void }) => {
@@ -17,8 +17,8 @@ const LARGADA = (i: number, api: { tap(k: string): void; down(k: string): void }
   if (i === 27) api.down("w")
 }
 
-async function duelo(apertar: boolean) {
-  let abriu = false, venceu: boolean | null = null, perfeitos = 0, maxAng = 0, semTransito = true
+async function duelo(apertar: boolean, girar = false) {
+  let abriu = false, venceu: boolean | null = null, perfeitos = 0, maxAng = 0, semTransito = true, zonaVista = false, rodou = false
   await runScenario(60 * 70, 8, LARGADA, (i, eng) => {
     if (i === 0) eng.render = () => {}
     eng.immuneT = 10; eng.combustivel = 1; eng.eventTimer = 1e9
@@ -28,25 +28,45 @@ async function duelo(apertar: boolean) {
     if (tg.fase === "batalha") semTransito = semTransito && eng.traffic.every((t: { role: string }) => t.role === "racha" || t.role === "police")
     eng.playerX = Math.max(-0.9, Math.min(0.9, eng.playerX)) // o "piloto" não sai da pista
     if (tg.fase === "batalha" && apertar) {
-      // o "piloto" aperta cada comando quando o anel fecha (W já está segurado)
+      // o "piloto" aperta cada comando quando o anel fecha e, de lado, segura o
+      // ângulo no meio da faixa verde no pé (tira o W acima, põe abaixo)
       const at = comandoAtual(eng)
-      if (at && at.cmd !== "w" && Math.abs(at.t) < 0.03) comandoTouge(eng, at.cmd)
+      if (at && at.cmd !== "drift" && Math.abs(at.t) < 0.03) comandoTouge(eng, at.cmd)
+      const dr = anguloDrift(eng)
+      if (dr && dr.ang > (TOUGE.zona[0] + TOUGE.zona[1]) / 2) eng.keys.delete("w"); else eng.keys.add("w")
+      if (dr) zonaVista = true
+    }
+    if (tg.fase === "batalha" && girar) {
+      // o "piloto" afobado: entra certo, mas pisa fundo e vira para dentro
+      const at = comandoAtual(eng)
+      if (at && at.cmd === "shift" && Math.abs(at.t) < 0.03) comandoTouge(eng, "shift")
+      eng.keys.add("w")
+      const c = tg.curvas[tg.atual]
+      if (anguloDrift(eng)) eng.keys.add(c && c.dir > 0 ? "d" : "a"); else { eng.keys.delete("a"); eng.keys.delete("d") }
+      if (tg.curvas.some((k: { rodou: boolean }) => k.rodou)) rodou = true
     }
     maxAng = Math.max(maxAng, Math.abs(eng.driftAng))
     perfeitos = tg.curvas.filter((c: { final: string | null }) => c.final === "perfeito").length
     if (tg.fase === "fim" && venceu === null) venceu = tg.vidaRival < tg.vidaVoce
   })
-  return { abriu, venceu, perfeitos, maxAng, semTransito }
+  return { abriu, venceu, perfeitos, maxAng, semTransito, zonaVista, rodou }
 }
 
 describe("duelo de touge", () => {
-  it("S, Shift, W e Espaço na hora em cada curva: curva PERFEITA, o carro escorrega e você vence", async () => {
+  it("S, Shift, ângulo na faixa verde e Espaço em cada curva: curva PERFEITA e você vence", async () => {
     const r = await duelo(true)
     expect(r.abriu).toBe(true)
     expect(r.perfeitos).toBeGreaterThanOrEqual(Math.ceil(100 / TOUGE.dano.perfeito))
     expect(r.maxAng, "o carro não escorregou").toBeGreaterThan(0.4)
     expect(r.venceu).toBe(true)
     expect(r.semTransito, "nasceu trânsito no duelo").toBe(true)
+    expect(r.zonaVista).toBe(true)
+  }, 120_000)
+
+  it("pé no fundo e volante para dentro no drift: o carro roda", async () => {
+    const r = await duelo(false, true)
+    expect(r.abriu).toBe(true)
+    expect(r.rodou, "não rodou").toBe(true)
   }, 120_000)
 
   it("sem apertar: erra as curvas e perde o duelo", async () => {
