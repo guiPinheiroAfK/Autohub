@@ -372,6 +372,84 @@ Pendente / não verificado:
 
 Fases 4 em diante só são detalhadas quando a anterior for aprovada.
 
+### Fase 8 — Mundo com detalhe (NPCs, posto, eventos, cenário, biomas) — `planejada` (16/11)
+
+Pedido do playtest de 15–16/11: "elevar os detalhes do jogo". A jogabilidade base
+foi aprovada; esta fase é sobre o mundo ao redor. Ordem por impacto e risco: primeiro
+o que é bug ou atrito em toda partida, depois o que é visual.
+
+Fatos do código hoje (16/11):
+- `CivilianDriver` (traffic/driver.ts) procura o carro da frente só em `world.traffic`:
+  **o jogador não entra na busca**. Parado ou lento na faixa, o civil chega por trás e
+  só a colisão do spawner resolve. É a queixa "eles não param quando eu tô na frente".
+- Cenário de beira (render/road.ts) é um padrão fixo de 3 enfeites: árvore do bioma a
+  cada 4 segmentos, poste a cada 10, prédio a cada 51. Nada muda ao longo da pista.
+- Bioma (world/biomes.ts) muda só céu, camadas de fundo e a árvore. O traçado
+  (world/track.ts) é o mesmo para qualquer bioma: a costa tem o mesmo desenho de pista.
+- Posto (world/posto.ts, render/eventos.ts) é cobertura + bombas num ramal; não há
+  carros, loja nem parada de verdade (abastece andando a até 70 km/h).
+
+Checklist (cada item é um commit verificável; golden muda só em commit próprio):
+
+**8.1 NPCs respeitam o jogador** (bug de jogo, pequeno)
+- [ ] Civil, caminhão, comboio e desafiante do racha veem o jogador como "carro da
+  frente" na faixa (mesma busca de `ahead`, com a velocidade real do jogador).
+- [ ] Freio com distância de parada (a regra `vAtras` da viatura, 15/11) em vez de
+  `ahead.speed × 0,7` quando o gap fica curto; luz de freio acesa quando freia.
+- [ ] Parado atrás de você por mais de ~1,5 s: buzina curta e tenta passar pela faixa
+  livre (sem cortar ninguém). Lento demais na faixa da esquerda: farol alto.
+- [ ] Teste de cenário: jogador parado numa faixa por 10 s com trânsito, zero
+  sobreposição de corpo com civis; civil desvia ou para atrás.
+
+**8.2 Posto de verdade** (o pedido mais citado)
+- [ ] Cenário do posto: cobertura com teto iluminado à noite, 2–3 ilhas de bombas,
+  loja de conveniência com vitrine, totem de preço na entrada, faixa pintada de
+  entrada e saída, calçada. Marca genérica (nada de marca real).
+- [ ] Carros no posto: 1–3 civis parados nas bombas (sprites `parked`), e às vezes um
+  saindo pela faixa de aceleração e entrando na pista com seta (usa a regra do 8.1).
+- [ ] Parada de verdade: parar no box da bomba (≤ 5 km/h) enche rápido (bico + barra
+  de litros); passar devagar continua enchendo devagar como hoje. Som de bomba.
+- [ ] Teste: posto gera carros parados que nunca ficam na pista; abastecer parado é
+  mais rápido que passando.
+
+**8.3 Eventos com mais detalhe** (visual + leitura)
+- [ ] Obra: máquina (retroescavadeira), cavaletes com luz piscando, trabalhador com
+  bandeira, placas "OBRAS 500 m".
+- [ ] Acidente/óleo: dois carros batidos no acostamento com pisca-alerta, triângulo,
+  viatura ou guincho parado; mancha com reflexo.
+- [ ] Blitz/radar: cones em funil, viatura com giroflex, guarda com colete; placa do
+  radar com a velocidade.
+- [ ] Comboio: batedor com giroflex âmbar na frente e placa "CARGA LONGA".
+- [ ] Cada evento com 1 som próprio curto (buzina de caminhão, sirene curta, britadeira).
+
+**8.4 Cenário por trechos** (sistema, depois conteúdo)
+- [ ] `world/cenario.ts`: o bioma passa a ter TRECHOS (dados): tipo, comprimento,
+  densidade e lista de enfeites com lado, distância da pista e variação. A pista
+  alterna trechos (ex.: cidade densa → subúrbio → campo) com transição.
+- [ ] Enfeites novos (sprites em canvas, sem imagem externa): prédios de alturas e
+  cores variadas, casas e muros, outdoor, ponto de ônibus, passarela, guard-rail
+  contínuo, cerca, plantação, placas de saída, árvores de 3 tipos.
+- [ ] Orçamento de desempenho: teto de enfeites por quadro e o corte de distância que
+  a corrida já usa (o desenho de beira era 70% do quadro na corrida).
+
+**8.5 Biomas novos e pista por bioma**
+- [ ] Traçado por bioma (perfil de curvas e morros como dados): cidade (curvas médias),
+  costa (orla com curvas longas e abertas), serra (curvas fechadas e subidas).
+- [ ] Bioma **serra**: montanhas perto, pinheiros, neblina frequente, guard-rail,
+  túnel curto (reaproveita o eco do viaduto no som).
+- [ ] Bioma **rodovia/interior**: retas longas, campo, caminhões mais frequentes,
+  pôr do sol largo, postos mais espaçados (o combustível passa a importar).
+- [ ] Bioma no solo muda ao longo da partida (a cada N níveis) com transição suave,
+  em vez de ser escolhido só no menu.
+
+Pendências que ficaram da rodada de som (15/11), fora desta fase: V6 biturbo ainda no
+VQ35 aproximado; W16 e rotativo só síntese; puxada de pé leve (E) não gravada.
+
+Critério de aceite da fase: build, lint e testes verdes; golden muda só em commits
+próprios com linha no log. No navegador: civil não bate na sua traseira parado; o
+posto tem carros e dá para parar na bomba; cada evento tem um detalhe novo visível de
+longe; dá para ver pelo menos 2 tipos de trecho de cenário numa partida; serra jogável.
+
 ## 9. Ideias de rodadas e drift (para brainstorm, não implementar)
 
 1. **Sprint A → B:** sem volta, do ponto A ao B. Ganha quem chega primeiro; o trajeto escolhido (atalho ou não) define o tempo.
