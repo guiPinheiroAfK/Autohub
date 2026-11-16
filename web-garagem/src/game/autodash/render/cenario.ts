@@ -158,6 +158,52 @@ export function drawEnfeite(eng: AutoDashEngine, kind: number, seed: number, x: 
       ctx.fillRect(x + w * 0.15, y - w * 0.18, w * 0.35, Math.max(1, w * 0.05))
       return true
     }
+    case ENF.calibrador: {
+      // calibrador de pneu e água: poste azul com o visor e a mangueira enrolada
+      const h = w * 1.6
+      ctx.fillStyle = shade("#1d4ed8", Math.max(0.5, amb))
+      rr(ctx, x - w * 0.18, y - h, w * 0.36, h, w * 0.05)
+      ctx.fillStyle = noite ? "#bfdbfe" : shade("#e0f2fe", luz)
+      ctx.fillRect(x - w * 0.12, y - h * 0.85, w * 0.24, h * 0.18)
+      ctx.strokeStyle = shade("#0f172a", luz); ctx.lineWidth = Math.max(1, w * 0.05)
+      ctx.beginPath(); ctx.arc(x + w * 0.28, y - h * 0.45, w * 0.14, 0, Math.PI * 2); ctx.stroke()
+      if (w > 18) {
+        ctx.fillStyle = "#f8fafc"; ctx.font = `bold ${Math.round(w * 0.16)}px 'Space Grotesk', 'Segoe UI', sans-serif`
+        ctx.textAlign = "center"; ctx.fillText("AR", x, y - h * 0.5); ctx.textAlign = "left"
+      }
+      return true
+    }
+    case ENF.lavaRapido: {
+      // lava-rápido: galpão aberto com os rolos de escova e o letreiro azul
+      const bw = w, bh = w * 0.5
+      ctx.fillStyle = shade("#e2e8f0", luz)
+      ctx.fillRect(x - bw / 2, y - bh, bw, bh)
+      ctx.fillStyle = shade("#1e293b", luz)
+      ctx.fillRect(x - bw * 0.3, y - bh * 0.8, bw * 0.6, bh * 0.8) // boca do túnel de lavagem
+      ctx.fillStyle = shade("#38bdf8", Math.max(0.5, amb))
+      ctx.fillRect(x - bw * 0.22, y - bh * 0.75, bw * 0.08, bh * 0.7)
+      ctx.fillRect(x + bw * 0.14, y - bh * 0.75, bw * 0.08, bh * 0.7)
+      ctx.fillStyle = noite ? "#38bdf8" : shade("#0284c7", amb)
+      ctx.fillRect(x - bw / 2, y - bh - w * 0.12, bw, w * 0.12)
+      if (w > 40) {
+        ctx.fillStyle = "#f8fafc"; ctx.font = `bold ${Math.round(w * 0.08)}px 'Space Grotesk', 'Segoe UI', sans-serif`
+        ctx.textAlign = "center"; ctx.fillText("LAVA-RÁPIDO", x, y - bh - w * 0.035); ctx.textAlign = "left"
+      }
+      return true
+    }
+    case ENF.placaSaida: {
+      // placa verde de SAÍDA do posto, com a seta para a pista
+      const h = w * 2.2
+      ctx.fillStyle = shade("#64748b", luz)
+      ctx.fillRect(x - w * 0.04, y - h, w * 0.08, h)
+      ctx.fillStyle = shade("#15803d", Math.max(0.55, amb))
+      ctx.fillRect(x - w * 0.5, y - h - w * 0.45, w, w * 0.45)
+      if (w > 16) {
+        ctx.fillStyle = "#f8fafc"; ctx.font = `bold ${Math.round(w * 0.2)}px 'Space Grotesk', 'Segoe UI', sans-serif`
+        ctx.textAlign = "center"; ctx.fillText("SAÍDA ←", x, y - h - w * 0.15); ctx.textAlign = "left"
+      }
+      return true
+    }
     case ENF.guardRail: {
       // guard-rail metálico: postes e a lâmina com o reflexo
       const bh = w * 0.16

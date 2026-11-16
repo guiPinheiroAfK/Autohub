@@ -30,6 +30,7 @@ export const ENF = {
   casa: 20, muro: 21, ponto: 22, arvoreLarga: 23, pinheiro: 24, plantacao: 25,
   celeiro: 26, quiosque: 27, guardaSol: 28, predioMedio: 29, cerca: 30,
   guardRail: 31, rocha: 32,
+  calibrador: 33, lavaRapido: 34, placaSaida: 35, // posto (Fase 8.2, polimento)
 } as const
 
 export interface Enfeite {

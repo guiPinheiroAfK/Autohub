@@ -64,6 +64,23 @@ export function drawCena(eng: AutoDashEngine, o: Obstacle, x: number, y: number,
       ctx.fillRect(tx - w * 0.2, ty - w * 0.14, w * 0.2, w * 0.14)
       return true
     }
+    case "frentista": {
+      // frentista de uniforme verde ao lado da bomba, acenando
+      const h = w * 2.2
+      ctx.fillStyle = shade("#1f2937", luz)
+      ctx.fillRect(x - w * 0.18, y - h * 0.45, w * 0.14, h * 0.45)
+      ctx.fillRect(x + w * 0.04, y - h * 0.45, w * 0.14, h * 0.45)
+      ctx.fillStyle = shade("#16a34a", Math.max(0.55, amb))
+      ctx.fillRect(x - w * 0.24, y - h * 0.8, w * 0.48, h * 0.38)
+      ctx.fillStyle = shade("#d6a77a", luz)
+      ctx.beginPath(); ctx.arc(x, y - h * 0.88, w * 0.13, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = shade("#16a34a", Math.max(0.55, amb)) // boné
+      ctx.fillRect(x - w * 0.15, y - h * 0.97, w * 0.3, h * 0.05)
+      const ang = Math.sin(performance.now() / 300) * 0.4
+      ctx.strokeStyle = shade("#16a34a", Math.max(0.55, amb)); ctx.lineWidth = Math.max(1, w * 0.1)
+      ctx.beginPath(); ctx.moveTo(x + w * 0.22, y - h * 0.74); ctx.lineTo(x + w * 0.22 + Math.cos(ang - 1.2) * w * 0.35, y - h * 0.74 + Math.sin(ang - 1.2) * w * 0.35); ctx.stroke()
+      return true
+    }
     case "triangulo": {
       // triângulo de sinalização no asfalto (refletivo)
       const h = w * 0.9

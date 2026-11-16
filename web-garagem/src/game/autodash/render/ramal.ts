@@ -13,7 +13,7 @@ import { shade } from "../math"
 export function drawRamalSeg(
   eng: AutoDashEngine, idx: number,
   sx1: number, sw1: number, ry1: number, sx2: number, sw2: number, ry2: number,
-  alt: boolean, roadL: string, roadD: string, rumbA: string, rumbB: string, laneC: string,
+  alt: boolean, roadL: string, roadD: string, rumbA: string, rumbB: string, laneC: string, amb = 1,
 ) {
   const ctx = eng.ctx
   for (const r of eng.ramais) {
@@ -50,6 +50,22 @@ export function drawRamalSeg(
     // com a guia amarela; fora da ilha, o tracejado que separa as faixas
     if (r.posto && p1.f >= 0.999 && p2.f >= 0.999) {
       const m = postoMeio(r)
+      // pátio de concreto (mais claro que o asfalto) e a calçada da loja até ela
+      ctx.fillStyle = "rgba(214,220,228,0.24)"
+      poly(ctx, sx1 + L * sw1 * b1.inner, ry1, sx1 + L * sw1 * b1.outer, ry1, sx2 + L * sw2 * b2.outer, ry2, sx2 + L * sw2 * b2.inner, ry2)
+      if (Math.abs(idx - (m + 14)) <= 16) {
+        ctx.fillStyle = shade(alt ? "#b6bcc6" : "#aeb4be", Math.max(0.45, amb))
+        poly(ctx, sx1 + L * sw1 * (b1.outer + 0.1), ry1, sx1 + L * sw1 * (b1.outer + 1.9), ry1, sx2 + L * sw2 * (b2.outer + 1.9), ry2, sx2 + L * sw2 * (b2.outer + 0.1), ry2)
+      }
+      // guia branca separando o pátio do canteiro
+      ctx.fillStyle = shade("#f1f5f9", Math.max(0.5, amb))
+      poly(ctx, sx1 + L * sw1 * (b1.inner - 0.015), ry1, sx1 + L * sw1 * b1.inner, ry1, sx2 + L * sw2 * b2.inner, ry2, sx2 + L * sw2 * (b2.inner - 0.015), ry2)
+      // setas pintadas na sua faixa (sentido do posto)
+      if ((idx - r.a) % 26 === 0 && Math.abs(idx - m) > BOMBA_SEGS + 4) {
+        const c1 = b1.inner + POSTO_FAIXA / 2, c2 = b2.inner + POSTO_FAIXA / 2
+        ctx.fillStyle = "rgba(248,250,252,0.7)"
+        poly(ctx, sx1 + L * sw1 * (c1 - 0.08), ry1, sx1 + L * sw1 * (c1 + 0.08), ry1, sx2 + L * sw2 * c2, ry2, sx2 + L * sw2 * c2, ry2)
+      }
       const a = b1.inner + POSTO_FAIXA, c = a + POSTO_ILHA
       const a2 = b2.inner + POSTO_FAIXA, c2 = a2 + POSTO_ILHA
       if (Math.abs(idx - m) <= BOMBA_SEGS) {

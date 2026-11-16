@@ -25,7 +25,7 @@ describe("posto com carros", () => {
       if (!r || visto) return
       visto = true
       const pt = postoPatio(r)
-      const meus = eng.traffic.filter(t => t.parked && t.role === "civilian")
+      const meus = eng.traffic.filter(t => t.parked && t.posto === r.id) // os das bombas (os da loja não têm posto)
       parados = meus.length
       for (const t of meus) {
         const x = t.offset * r.lado

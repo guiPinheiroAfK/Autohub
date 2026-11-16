@@ -19,10 +19,10 @@ import { drawRamalSeg, drawElevadoSeg, type ElevadoSeg } from "./ramal"
 import { drawTunelSeg, drawClarao, type TunelSeg } from "./tunel"
 import { TUNEL } from "../world/tunel"
 import { drawEnfeite } from "./cenario"
-import { enfeitesDoSegmento } from "../world/cenario"
-import { elevacao, elevacaoEm, ramalBordas, ramalPerfilOuZero, ramalNoSeg } from "../world/ramais"
+import { enfeitesDoSegmento, ENF } from "../world/cenario"
+import { elevacao, elevacaoEm, ramalBordas, ramalPerfilOuZero, ramalNoSeg, RAMAL_ABRE, RAMAL_COLADO } from "../world/ramais"
 import { drawPosto, drawPostoLoja, drawPostoTotem } from "./eventos"
-import { postoMeio, postoLoja, postoTotem, naFaixaDoPosto } from "../world/posto"
+import { postoMeio, postoLoja, postoTotem, postoPatio, naFaixaDoPosto } from "../world/posto"
 import { type Ramal } from "../world/ramais"
 import { drawHolofote, drawHelicoptero, type PontoTela } from "./policia"
 import { lenteAtual } from "./fov"
@@ -96,6 +96,10 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // alça de acesso do viaduto: por segmento, a largura do braço extra à
   // direita (1 = faixa paralela cheia, 0 = já fundiu na via)
   const viaductRamp = new Map<number, number>()
+  // ruas da cidade cruzando embaixo do elevado (Fase 8.6, polimento): por
+  // segmento, a posição dentro da rua (0..RUA_SEGS-1). Não cruzam a pista.
+  const ruaCruzando = new Map<number, number>()
+  const RUA_SEGS = 7
   for (const zn of eng.zones) {
     if (zn.type === "viaduct") {
       const a = Math.floor(zn.z / SEG_LEN) % N
@@ -104,6 +108,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       // vai afunilando até fundir na via (a zona vermelha do teu desenho).
       // É por ela que os carros descem e entram na estrada.
       // (a alça de aceleração antiga deu lugar ao elevado, Fase 8.6)
+      if (eng.ramais.some(r => r.alto)) for (const off of [-150, -70, 45, 125]) for (let i = 0; i < RUA_SEGS; i++) ruaCruzando.set(((a + off + i) % N + N) % N, i)
     }
     else if (zn.type === "bridge") {
       const a = Math.floor(zn.z / SEG_LEN) % N
@@ -309,8 +314,22 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
               sx2 + sw2 * (0.97 + 0.62 * vrF2), ry2, sx2 + sw2 * 0.97, ry2)
         }
       }
+      // rua cruzando (dos dois lados, fora da pista): asfalto até a borda da tela
+      const rua = ruaCruzando.get(idx)
+      if (rua !== undefined) {
+        ctx.fillStyle = alt ? roadL : roadD
+        poly(ctx, sx1 - sw1 * 40, ry1, sx1 - sw1 * 1.14, ry1, sx2 - sw2 * 1.14, ry2, sx2 - sw2 * 40, ry2)
+        poly(ctx, sx1 + sw1 * 1.14, ry1, sx1 + sw1 * 40, ry1, sx2 + sw2 * 40, ry2, sx2 + sw2 * 1.14, ry2)
+        if (rua === Math.floor(RUA_SEGS / 2)) { // faixa central tracejada da rua
+          ctx.fillStyle = laneC
+          for (let k = 1.5; k < 14; k += 1.2) {
+            poly(ctx, sx1 + sw1 * k, ry1, sx1 + sw1 * (k + 0.5), ry1, sx2 + sw2 * (k + 0.5), ry2, sx2 + sw2 * k, ry2)
+            poly(ctx, sx1 - sw1 * (k + 0.5), ry1, sx1 - sw1 * k, ry1, sx2 - sw2 * k, ry2, sx2 - sw2 * (k + 0.5), ry2)
+          }
+        }
+      }
       // ramal paralelo (atalho) dos circuitos fixos
-      if (eng.ramais.length) drawRamalSeg(eng, idx, sx1, sw1, ry1, sx2, sw2, ry2, alt, roadL, roadD, rumbA, rumbB, laneC)
+      if (eng.ramais.length) drawRamalSeg(eng, idx, sx1, sw1, ry1, sx2, sw2, ry2, alt, roadL, roadD, rumbA, rumbB, laneC, amb)
       // linhas de faixa
       if (alt) {
         ctx.fillStyle = laneC
@@ -370,6 +389,20 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         const el = t.offset > 0.95 || t.offset < -0.95 ? elevacaoEm(eng.ramais, idx, t.offset) : 0
         const sySobe = el > 0 ? sy - el * (s1 + (s2 - s1) * pct) : sy
         sprites.push({ kind: "car", t, x: sx + sw * t.offset, y: sySobe, w: sw * KINDS[t.kind].w, dz: dz1 + SEG_LEN * pct })
+      }
+    }
+    // carros nas ruas que cruzam embaixo do elevado (vão e voltam de lado, sem
+    // entrar na pista): duas mãos, uma em cada metade da rua
+    const ruaAqui = ruaCruzando.get(idx)
+    if (ruaAqui === 1 || ruaAqui === RUA_SEGS - 2) {
+      const mao = ruaAqui === 1 ? 1 : -1, agora = performance.now() / 1000
+      for (let k = 0; k < 3; k++) {
+        const fase = ((agora * 0.55 * mao + k / 3 + idx * 0.37) % 1 + 1) % 1
+        for (const lado of [-1, 1]) {
+          const off = lado * (1.6 + fase * 9)
+          const fake: Traffic = { z: z1, offset: off, targetOffset: off, speed: 60, kind: "car", role: "civilian", color: PAINTS[(idx + k * 3 + (lado > 0 ? 1 : 0)) % PAINTS.length], blinkT: 0, prevD: 1 }
+          sprites.push({ kind: "car", t: fake, x: sx1 + sw1 * off, y: sy1, w: sw1 * KINDS.car.w, dz: dz1 })
+        }
       }
     }
     // túnel: paredes e teto deste segmento (também no campo próximo: é o teto
@@ -451,6 +484,13 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         if (idx === postoMeio(r)) sprites.push({ kind: "posto", x: sx1, y: sy1, w: sw1, ramal: r })
         else if (idx === postoLoja(r)) sprites.push({ kind: "postoLoja", x: sx1, y: sy1, w: sw1, ramal: r })
         else if (idx === postoTotem(r)) sprites.push({ kind: "postoTotem", x: sx1, y: sy1, w: sw1, ramal: r })
+        // polimento do posto: postes de luz nas pontas do pátio, calibrador,
+        // lava-rápido depois da loja e a placa de SAÍDA
+        const pm = postoMeio(r), pt = postoPatio(r), X = (k: number) => sx1 + r.lado * sw1 * k
+        if (idx === pm - 22 || idx === pm + 22 || idx === pm + 60) sprites.push({ kind: "deco", deco: ENF.poste, x: X(pt.outer + 0.12), y: sy1, w: sw1 * 0.05 })
+        if (idx === pm + 34) sprites.push({ kind: "deco", deco: ENF.calibrador, dir: 1, x: X(pt.outer + 0.18), y: sy1, w: sw1 * 0.12 })
+        if (idx === pm + 46) sprites.push({ kind: "deco", deco: ENF.lavaRapido, dir: 1, x: X(pt.outer + 1.1), y: sy1, w: sw1 * 1.0 })
+        if (idx === r.b - RAMAL_ABRE - RAMAL_COLADO - 10) sprites.push({ kind: "deco", deco: ENF.placaSaida, dir: 1, x: X(pt.outer + 0.2), y: sy1, w: sw1 * 0.2 })
         continue
       }
       if (idx === r.a - 50 || idx === r.a - 12) {
@@ -472,7 +512,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       // cenário por trechos (Fase 8.4, world/cenario.ts): centro, subúrbio, campo, orla
       const noPosto = naFaixaDoPosto(eng.ramais, idx)
       const q = eng.ramais.length ? ramalNoSeg(eng.ramais, idx) : null
-      for (const en of enfeitesDoSegmento(eng.cenario, idx, eng.bioma.arvore)) {
+      for (const en of ruaCruzando.has(idx) ? [] : enfeitesDoSegmento(eng.cenario, idx, eng.bioma.arvore)) {
         // nada em cima do pátio do posto nem do ramal/elevado (os dois ficam de um lado)
         if (en.lado > 0 && noPosto) continue
         if (q && en.lado === q.r.lado && en.dist < q.outer + 0.5) continue

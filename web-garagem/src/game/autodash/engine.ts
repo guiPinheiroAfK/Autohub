@@ -88,7 +88,7 @@ export interface Seg { curve: number; y1: number; y2: number; sign?: number }
 // Fase 6: `pregos` = tapete de pregos da polícia (world/policia.ts).
 // "cena": cenografia de evento sem colisão (Fase 8.3); `visual` diz o desenho
 // (render/cena.ts). Um "barrier" com `visual` bate como cavalete e desenha outra coisa.
-export type VisualCena = "maquina" | "trabalhador" | "triangulo" | "detritos" | "guarda" | "radar"
+export type VisualCena = "maquina" | "trabalhador" | "triangulo" | "detritos" | "guarda" | "radar" | "frentista"
 export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" | "seta" | "oleo" | "pregos" | "cena"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean; lado?: number; pisado?: boolean; visual?: VisualCena }
 // Zona de evento no traçado:
 //  bridge    — ponte suspensa (estilo Golden Gate): você dirige EM CIMA, com

@@ -102,6 +102,15 @@ export function spawnPosto(eng: AutoDashEngine): boolean {
       color: TRAFFIC_COLORS[Math.floor(eng.rngEv() * TRAFFIC_COLORS.length)],
     })
   }
+  // o frentista na ilha e dois carros estacionados na frente da loja (Fase 8.2, polimento)
+  eng.obstacles.push({ z: z0 - 260, offset: pt.ilha * r.lado, kind: "cena", visual: "frentista", w: 0.1, len: 40, lado: r.lado })
+  for (const dz of [-380, 320]) {
+    const lz = ((postoLoja(r) * SEG_LEN + dz) % eng.trackLen + eng.trackLen) % eng.trackLen
+    eng.traffic.push({
+      z: lz, offset: (pt.outer + 0.62) * r.lado, targetOffset: (pt.outer + 0.62) * r.lado, speed: 0, kind: "car", role: "civilian",
+      parked: true, blinkT: 0, prevD: 1, color: TRAFFIC_COLORS[Math.floor(eng.rngEv() * TRAFFIC_COLORS.length)],
+    })
+  }
   const az = a * SEG_LEN
   const at = (d: number) => ((az + d) % eng.trackLen + eng.trackLen) % eng.trackLen
   eng.roadSigns.push(
