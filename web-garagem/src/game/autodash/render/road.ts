@@ -18,7 +18,9 @@ import { poly } from "./primitives"
 import { drawRamalSeg, drawElevadoSeg, type ElevadoSeg } from "./ramal"
 import { drawTunelSeg, drawClarao, type TunelSeg } from "./tunel"
 import { TUNEL } from "../world/tunel"
-import { elevacao, elevacaoEm, ramalBordas, ramalPerfilOuZero } from "../world/ramais"
+import { drawEnfeite } from "./cenario"
+import { enfeitesDoSegmento } from "../world/cenario"
+import { elevacao, elevacaoEm, ramalBordas, ramalPerfilOuZero, ramalNoSeg } from "../world/ramais"
 import { drawPosto, drawPostoLoja, drawPostoTotem } from "./eventos"
 import { postoMeio, postoLoja, postoTotem, naFaixaDoPosto } from "../world/posto"
 import { type Ramal } from "../world/ramais"
@@ -466,16 +468,16 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       // Emitir isso custa draw call cheia por quase nenhum pixel — era 70%
       // do frame. A névoa do horizonte esconde o corte.
       // beira limpa na corrida (só a zebra roxa marca a pista)
-    } else if (idx % 4 === 0) {
-      const side = idx % 8 === 0 ? -1 : 1
-      // nada de árvore em cima da faixa do posto (ela ocupa a beira direita)
-      if (side < 0 || !naFaixaDoPosto(eng.ramais, idx)) {
-        sprites.push({ kind: "deco", deco: eng.bioma.arvore, x: sx1 + sw1 * side * (1.55 + ((idx * 7) % 5) * 0.14), y: sy1, w: sw1 * 0.22 })
+    } else {
+      // cenário por trechos (Fase 8.4, world/cenario.ts): centro, subúrbio, campo, orla
+      const noPosto = naFaixaDoPosto(eng.ramais, idx)
+      const q = eng.ramais.length ? ramalNoSeg(eng.ramais, idx) : null
+      for (const en of enfeitesDoSegmento(eng.cenario, idx, eng.bioma.arvore)) {
+        // nada em cima do pátio do posto nem do ramal/elevado (os dois ficam de um lado)
+        if (en.lado > 0 && noPosto) continue
+        if (q && en.lado === q.r.lado && en.dist < q.outer + 0.5) continue
+        sprites.push({ kind: "deco", deco: en.kind, dir: en.seed, x: sx1 + sw1 * en.lado * en.dist, y: sy1, w: sw1 * en.escala })
       }
-    } else if (idx % 10 === 5) {
-      sprites.push({ kind: "deco", deco: 1, x: sx1 - sw1 * 1.28, y: sy1, w: sw1 * 0.05 })
-    } else if (idx % 51 === 17 && !naFaixaDoPosto(eng.ramais, idx)) {
-      sprites.push({ kind: "deco", deco: 2, x: sx1 + sw1 * 1.75, y: sy1, w: sw1 * 0.55 })
     }
   }
 
@@ -551,7 +553,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     else if (s.kind === "postoTotem") drawPostoTotem(eng, s.ramal!, s.x, s.y, s.w, amb)
     else if (s.kind === "elevado") drawElevadoSeg(eng, s.el!, amb, roadL, roadD, laneC)
     else if (s.kind === "tunel") drawTunelSeg(eng, s.tn!, amb)
-    else drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
+    else if (!drawEnfeite(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)) drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
   }
 
   // névoa suave no horizonte — esfuma a pista e os sprites distantes

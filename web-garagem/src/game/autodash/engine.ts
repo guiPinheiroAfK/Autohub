@@ -33,6 +33,7 @@ import { renderDuelLobby, renderDuelCode, renderDuelWaiting, renderDuelSpectate,
 import { onKeyDown, onKeyUp } from "./input/keyboard"
 import { type AbaGaragem } from "./render/menus/estetica"
 import { onMouseDown, onMouseUp, onMouseMove, onWheel, onCtx } from "./input/pointer"
+import { type Trecho } from "./world/cenario"
 
 // AutoDash — engine pseudo-3D (estilo NFS de PSP) em Canvas 2D puro.
 // Estrada por segmentos projetados, tráfego, clima, câmbio com RPM e ranking local.
@@ -223,6 +224,7 @@ export class AutoDashEngine {
   noRamal = false // o jogador está no miolo de um ramal (para anunciar a entrada uma vez)
   ramais: Ramal[] = []
   trechos: TrechoInfo[] = []
+  cenario: Trecho[] = [] // trechos de cenário de beira (world/cenario.ts, Fase 8.4)
   demoT = 0
   revAmostraT = 0 // acelerada de amostra na garagem ao trocar o motor
 

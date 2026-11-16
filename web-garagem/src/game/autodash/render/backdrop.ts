@@ -117,7 +117,9 @@ function camadaBrilhoUrbano(eng: AutoDashEngine, amb: number) {
 // Costa: o mar, as palmeiras e o píer são a mesma margem distante e andam
 // juntos na curva. Antes as palmeiras corriam a 0,6 por cima de um mar a 0,25
 // e o píer ficava parado na tela: a paisagem "escorregava" e dava enjoo.
-const COSTA_PARALLAX = 0.25
+// 16/11: 0,25 ainda "virava junto" na curva (mais que as montanhas da cidade,
+// 0,18). O mar é a margem mais distante: quase parado.
+const COSTA_PARALLAX = 0.08
 
 // mar no horizonte: faixa de água com cintilação que anda com a pista
 function camadaMar(eng: AutoDashEngine, amb: number) {

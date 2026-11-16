@@ -3,6 +3,7 @@ import { AutoDashEngine, type Seg } from "../engine"
 import { mulberry32 } from "../math"
 import { SEG_LEN } from "../data"
 import { biomeById, biomeDaCorrida } from "./biomes"
+import { gerarTrechos } from "./cenario"
 
 export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() * 2 ** 31), corrida = false) {
   const rnd = mulberry32(seed)
@@ -62,6 +63,8 @@ export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() 
   }
   addRoad(40, 40, 40, 0, -lastY) // fecha o loop plano
   eng.trackLen = eng.segments.length * SEG_LEN
+  // cenário de beira por trechos (Fase 8.4): hash da seed, não mexe no sorteio da pista
+  eng.cenario = gerarTrechos(eng.segments.length, seed, eng.bioma.id)
 
   sinalizarCurvas(eng, corrida)
   if (corrida) conesDeCurva(eng)
