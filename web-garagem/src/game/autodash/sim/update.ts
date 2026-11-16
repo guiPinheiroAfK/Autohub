@@ -24,6 +24,7 @@ import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro, elevacao, elevacaoEm }
 
 // altura (unidades de mundo) a partir da qual o elevado tem mureta
 const MURETA_ALT = 150
+export const ELEV_LADEIRA = 0.6 // fração da rampa do elevado que vira ladeira na física
 import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
 import { atualizarRacha } from "../modes/racha"
 import { atualizarObras } from "../world/obra"
@@ -218,7 +219,11 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.elevJogador = elevacaoEm(eng.ramais, idxP, eng.playerX)
 
   // ---------- motor, câmbio, força e velocidade (sim/longitudinal.ts) ----------
-  const grade = (seg.y2 - seg.y1) / SEG_LEN // ~±0.13 nas ladeiras fortes
+  // ~±0.13 nas ladeiras fortes. Em cima do elevado soma a rampa dele (playtest
+  // 16/11: "saindo do viaduto o carro nem embala"): antes a altura do elevado
+  // era só da câmera. ELEV_LADEIRA amacia a rampa (até ~0,18 no meio dela).
+  let grade = (seg.y2 - seg.y1) / SEG_LEN
+  if (ramal && ramal.r.alto && eng.elevJogador > 0) grade += ELEV_LADEIRA * (elevacao(ramal.r, idxP + 1) - elevacao(ramal.r, idxP)) / SEG_LEN
   // vácuo (E9) do quadro anterior sobe o teto em até 4% (sim/vacuo.ts)
   const nitroActive = passoLongitudinal(eng, specComVacuo(spec, forcaTeto(eng)), mf, { throttle, braking, centrif, grade, dt })
   // combustível (só no solo): gasta pelo pé, giro e nitro; abastece no posto

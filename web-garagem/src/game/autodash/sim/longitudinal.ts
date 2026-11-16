@@ -15,6 +15,9 @@ import { autoShift } from "../physics/gearbox"
 import { arrasto, arrastoExcedente, tetoSuave } from "../physics/arrasto"
 import { giroNaTroca, cambioDe, KICK } from "../physics/troca"
 
+/** Ladeira (km/h/s por unidade de inclinação). grade 0,13 é a mais forte da pista. */
+export const LADEIRA = { sobe: 45, desce: 210 }
+
 export interface EntradaLongitudinal {
   throttle: number  // 0 ou 1 (teclado, mouse, toque)
   braking: boolean
@@ -124,8 +127,12 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   // FÍSICA DE LADEIRA: descida empurra o carro (dá pra passar do top speed —
   // segura no freio), subida cobra potência. O limite por marcha logo abaixo
   // age como freio motor: descer em marcha baixa segura o carro sozinho.
-  if (grade < 0) eng.speed += -grade * 210 * dt
-  else eng.speed -= grade * 120 * dt
+  // Playtest 16/11: "subindo o carro pesa demais, só perde velocidade e nem a
+  // marcha de baixo muda nada". A subida tirava 120·grade km/h/s, umas 3× a
+  // força do motor em marcha alta; agora tira LADEIRA.sobe·grade, perto do
+  // que o motor empurra numa marcha abaixo: reduzir segura a velocidade.
+  if (grade < 0) eng.speed += -grade * LADEIRA.desce * dt
+  else eng.speed -= grade * LADEIRA.sobe * dt
 
   // trava antiga, agora só de segurança (o arrasto excedente segura antes)
   const maxSpd = spec.topSpeed * (nitroActive ? 1.12 : 1) + (grade < 0 ? -grade * 420 : 0)
