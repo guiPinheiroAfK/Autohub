@@ -3,10 +3,22 @@ import { AutoDashEngine, W, H, PLAYER_Z } from "../engine"
 import { glass } from "../ui/widgets"
 import { clamp } from "../math"
 import { skyNow } from "./backdrop"
+import { formatHour } from "../world/clock"
 import { rr } from "./primitives"
 import { renderRearView } from "./player"
-import { SEG_LEN, RPM_REDLINE } from "../data"
+import { SEG_LEN } from "../data"
+import { motorDe, faixa, giroDoSom } from "../physics/motores"
+import { giroVisto } from "../physics/rpm"
 import { wrapDz } from "../traffic/spawner"
+import { ramalNoSeg } from "../world/ramais"
+import { CARS } from "../data"
+import { perfilDoCarro, GRAVACAO_DO_PERFIL, CREDITO_GRAVACAO } from "../sound/profiles"
+import { relacoes } from "../physics/cambio"
+import { renderCombustivel, renderRacha, renderVacuo } from "./eventos"
+import { renderEstrelas } from "./policia"
+import { renderAvisos } from "./avisos"
+import { renderTouge } from "./touge"
+import { altitudeM } from "../world/altitude"
 
 export function renderHud(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -20,6 +32,8 @@ export function renderHud(eng: AutoDashEngine) {
   const best = eng.scores[0]
   ctx.fillText(`recorde ${best ? best.score.toLocaleString("pt-BR") : 0}  ·  ${eng.km.toFixed(1)} km`, 28, 62)
 
+  if (eng.testeMotor) painelTesteMotor(eng)
+
   // combo
   if (eng.combo > 0) {
     ctx.fillStyle = "#fde047"
@@ -31,15 +45,38 @@ export function renderHud(eng: AutoDashEngine) {
     ctx.fillRect(240, 50, 52 * clamp(eng.comboT / 4, 0, 1), 5)
   }
 
+  // drift em andamento (world/drift.ts): contador no alto, x2 na zona
+  if (eng.driftPts >= 1) {
+    ctx.textAlign = "center"
+    ctx.fillStyle = "#ff2e88"
+    ctx.font = "bold 30px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`DRIFT ${Math.floor(eng.driftPts)}`, W / 2, H * 0.22)
+    ctx.textAlign = "left"
+  }
+
+  renderTouge(eng)
+
   // clima/hora + badges
   const sky = skyNow(eng)
   ctx.textAlign = "right"
   ctx.font = "20px 'Space Grotesk', 'Segoe UI', sans-serif"
-  ctx.fillText(eng.raining ? "🌧" : sky.amb < 0.6 ? "🌙" : "☀️", W - 20, 34)
+  const icone = eng.raining ? "🌧" : eng.clima === "neblina" ? "🌫" : eng.clima === "nublado" ? "☁️" : sky.amb < 0.6 ? "🌙" : "☀️"
+  ctx.fillText(icone, W - 20, 34)
+  // relógio do jogo (ADR 0013): aparece no solo e na corrida (este HUD é comum aos dois)
+  ctx.font = "bold 14px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillStyle = "rgba(248,250,252,0.8)"
+  ctx.fillText(formatHour(eng.clock.tick), W - 52, 31)
   ctx.font = "bold 13px 'Space Grotesk', 'Segoe UI', sans-serif"
   let by = 58
   ctx.fillStyle = "rgba(248,250,252,0.6)"
   ctx.fillText(`NÍVEL ${eng.level + 1}`, W - 20, by); by += 20
+  // altímetro na viagem da serra (world/altitude.ts)
+  const alt = altitudeM(eng)
+  if (alt !== null) {
+    ctx.fillStyle = "#a7f3d0"; ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`⛰ ${alt.toLocaleString("pt-BR")} m`, W - 20, by); by += 22
+    ctx.font = "bold 13px 'Space Grotesk', 'Segoe UI', sans-serif"
+  }
   if (eng.shield) { ctx.fillStyle = "#60a5fa"; ctx.fillText("● ESCUDO", W - 20, by); by += 20 }
   if (eng.mult2T > 0) { ctx.fillStyle = "#fde047"; ctx.fillText(`● 2X ${Math.ceil(eng.mult2T)}s`, W - 20, by); by += 20 }
   ctx.textAlign = "left"
@@ -72,10 +109,15 @@ export function renderHud(eng: AutoDashEngine) {
   ctx.fillStyle = "#f8fafc"
   ctx.font = "bold 11px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillText("NOS", nx + 1, ny + nh + 18)
+  renderCombustivel(eng) // só no solo (Fase 5)
+  renderRacha(eng)
+  renderAvisos(eng) // cartões dos eventos à frente (só no solo)
+  renderVacuo(eng) // solo e corrida
 
   if (eng.mode === "duel" && eng.duel) renderDuelBar(eng)
   renderMinimap(eng)
   renderRearView(eng) // só aparece durante perseguição
+  renderEstrelas(eng) // nível de procurado (só com calor; Fase 6)
 }
 
 export function renderMinimap(eng: AutoDashEngine) {
@@ -97,7 +139,7 @@ export function renderMinimap(eng: AutoDashEngine) {
   ctx.lineCap = "round"
   ctx.beginPath()
   ctx.moveTo(ox, oy)
-  const pts: { x: number; y: number }[] = [{ x: ox, y: oy }]
+  const pts: { x: number; y: number; h: number }[] = [{ x: ox, y: oy, h: 0 }]
   for (let n = 0; n < 160; n += 2) {
     const s = eng.segments[(start + n) % N]
     // ângulo suave e travado a ~60°: o traçado sempre progride pra cima,
@@ -106,10 +148,27 @@ export function renderMinimap(eng: AutoDashEngine) {
     hx += Math.sin(heading) * 1.0
     hy -= Math.cos(heading) * 1.0
     ctx.lineTo(ox + hx, oy + hy)
-    pts.push({ x: ox + hx, y: oy + hy })
+    pts.push({ x: ox + hx, y: oy + hy, h: heading })
   }
   ctx.stroke()
   ctx.lineWidth = 1
+
+  // ramais (atalhos) à frente: traço verde ao lado da pista, do lado do ramal
+  if (eng.ramais.length) {
+    ctx.strokeStyle = "#4ade80"
+    ctx.lineWidth = 2.5
+    ctx.beginPath()
+    let aberto = false
+    for (let k = 1; k < pts.length; k++) {
+      const q = ramalNoSeg(eng.ramais, (start + k * 2) % N)
+      if (!q || q.p.w <= 0) { aberto = false; continue }
+      const off = (2.5 + 4.5 * q.p.f) * q.r.lado
+      const px = pts[k].x + Math.cos(pts[k].h) * off, py = pts[k].y + Math.sin(pts[k].h) * off
+      if (aberto) ctx.lineTo(px, py); else { ctx.moveTo(px, py); aberto = true }
+    }
+    ctx.stroke()
+    ctx.lineWidth = 1
+  }
 
   // travessia d'água: o trecho de ponte aparece em azul no GPS (halo = lago)
   const bset = new Set<number>()
@@ -237,16 +296,25 @@ export function renderTacho(eng: AutoDashEngine) {
 
   const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25
   // arco de giro preenchido até o RPM atual
-  const redStart = a0 + (a1 - a0) * (RPM_REDLINE / 8000)
+  // escala e faixa vermelha do motor do carro (V8 de 71 vai até 7, V12 até 10)
+  const mot = motorDe(eng)
+  const escala = Math.ceil((mot.corte + 300) / 1000) * 1000
+  const verm = mot.redline, laranja = mot.redline - 0.2 * faixa(mot)
+  const redStart = a0 + (a1 - a0) * (verm / escala)
   ctx.strokeStyle = "rgba(148,163,184,0.35)"
   ctx.lineWidth = 7
   ctx.beginPath(); ctx.arc(cx, cy, r, a0, redStart); ctx.stroke()
   ctx.strokeStyle = "rgba(239,68,68,0.6)"
   ctx.beginPath(); ctx.arc(cx, cy, r, redStart, a1); ctx.stroke()
-  const jitter = eng.rpm >= RPM_REDLINE - 150 ? (Math.random() - 0.5) * 0.03 : 0
-  const rpmA = a0 + (a1 - a0) * clamp(eng.rpm / 8000 + jitter, 0, 1)
+  // giro visto: o da física mais o giro solto da patinada (physics/rpm.ts)
+  // no corte, o ponteiro bate e volta na batida do som (playtest 16/11: "o corte
+  // de giro não funciona bem": o som pulsava e o ponteiro ficava parado no corte)
+  const noCorte = eng.gasF > 0.5 && eng.rpm >= mot.corte - 60
+  const giro = noCorte ? giroDoSom(mot, giroVisto(eng), 1, true, eng.somT) : giroVisto(eng)
+  const jitter = giro >= verm - 150 ? (Math.random() - 0.5) * 0.03 : 0
+  const rpmA = a0 + (a1 - a0) * clamp(giro / escala + jitter, 0, 1)
   // "glow" com traço duplo — shadowBlur por frame derruba o FPS
-  ctx.strokeStyle = eng.rpm > RPM_REDLINE ? "#ef4444" : eng.rpm > 6200 ? "#fb923c" : "#38bdf8"
+  ctx.strokeStyle = giro > verm ? "#ef4444" : giro > laranja ? "#fb923c" : "#38bdf8"
   ctx.globalAlpha = 0.28
   ctx.lineWidth = 13
   ctx.beginPath(); ctx.arc(cx, cy, r, a0, rpmA); ctx.stroke()
@@ -256,15 +324,16 @@ export function renderTacho(eng: AutoDashEngine) {
   // ticks
   ctx.fillStyle = "rgba(248,250,252,0.7)"
   ctx.font = "10px 'Space Grotesk', 'Segoe UI', sans-serif"
-  for (let i = 0; i <= 8; i++) {
-    const a = a0 + (a1 - a0) * (i / 8)
+  const marcas = escala / 1000
+  for (let i = 0; i <= marcas; i++) {
+    const a = a0 + (a1 - a0) * (i / marcas)
     const tx = cx + Math.cos(a) * (r - 16), ty = cy + Math.sin(a) * (r - 16)
     ctx.textAlign = "center"
     ctx.fillText(String(i), tx, ty + 3)
   }
   // agulha (com tremida na limitadora)
   const na = rpmA
-  ctx.strokeStyle = eng.rpm > RPM_REDLINE ? "#ef4444" : "#f8fafc"
+  ctx.strokeStyle = giro > verm ? "#ef4444" : "#f8fafc"
   ctx.lineWidth = 3
   ctx.beginPath()
   ctx.moveTo(cx - Math.cos(na) * 10, cy - Math.sin(na) * 10)
@@ -332,6 +401,12 @@ export function renderSemaphore(eng: AutoDashEngine) {
     ctx.textAlign = "center"
     ctx.fillText("GO!", cx, top + 100)
     ctx.textAlign = "left"
+  } else if (eng.partidaT > 0) {
+    ctx.fillStyle = "rgba(248,250,252,0.7)"
+    ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.textAlign = "center"
+    ctx.fillText("ligando…", cx, top + 82)
+    ctx.textAlign = "left"
   } else if (eng.countT > 0.5) {
     ctx.fillStyle = "rgba(248,250,252,0.85)"
     ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
@@ -342,8 +417,31 @@ export function renderSemaphore(eng: AutoDashEngine) {
     ctx.fillStyle = "rgba(74,222,128,0.55)"
     rr(ctx, zx + 180 * (3600 / 8000), top + 94, 180 * ((6300 - 3600) / 8000), 10, 5)
     ctx.fillStyle = "#f8fafc"
-    const rx = zx + 180 * clamp(eng.rpm / 8000, 0, 1)
+    const rx = zx + 180 * clamp(eng.giroSom / 8000, 0, 1)
     ctx.fillRect(rx - 2, top + 90, 4, 18)
     ctx.textAlign = "left"
   }
+}
+
+// Teste de motor (garagem → Z): qual motor está tocando, de onde vem o som e as teclas.
+function painelTesteMotor(eng: AutoDashEngine) {
+  const ctx = eng.ctx, spec = CARS[eng.cfg.carIdx]
+  const escolha = eng.cfg.customs[eng.cfg.carIdx]?.motor ?? ""
+  const perfil = perfilDoCarro(spec.body, escolha), m = motorDe(eng)
+  const grav = GRAVACAO_DO_PERFIL[perfil.id]
+  const x = W / 2 - 230, y = 84
+  glass(eng, x, y, 460, 74)
+  ctx.textAlign = "center"
+  ctx.fillStyle = "#fde047"
+  ctx.font = "bold 15px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText(`TESTE DE MOTOR · ${perfil.nome}${escolha ? "" : " (original)"}`, W / 2, y + 22)
+  ctx.fillStyle = "rgba(248,250,252,0.8)"
+  ctx.font = "12px 'Space Grotesk', 'Segoe UI', sans-serif"
+  const som = grav ? `gravação real: ${CREDITO_GRAVACAO[grav.banco] ?? grav.banco}` : "síntese (modelo físico) + textura gravada"
+  ctx.fillText(`${spec.name} · ${relacoes(spec).length} marchas · lenta ${m.idle} · corte ${m.corte}${m.turbo ? " · turbo" : ""} · ${Math.round(giroVisto(eng))} rpm`, W / 2, y + 42)
+  ctx.fillText(som, W / 2, y + 58)
+  ctx.fillStyle = "rgba(248,250,252,0.5)"
+  ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText("[  ]  ou  ,  .  troca o motor  ·  Q/E marcha  ·  N ponto morto  ·  P pausa  ·  sem trânsito", W / 2, y + 90)
+  ctx.textAlign = "left"
 }

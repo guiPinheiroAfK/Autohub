@@ -1,11 +1,16 @@
 // AutoDash — input/keyboard.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
+import { biomeById, proximoBioma } from "../world/biomes"
+import { proximaHora } from "../world/clock"
+import { proximoClima } from "../world/weather"
+import { infracao, definirEstrelas } from "../world/policia"
 import { enterFromMenu } from "../flow"
 import { confirmName } from "../flow"
 import { toMenu } from "../flow"
 import { flashBeam } from "../flow"
-import { ensureAudio } from "../flow"
+import { ensureAudio, trocarMotor, trocarMotorTeste, limparTestes } from "../flow"
 import { startRace } from "../modes/race"
-import { abrirRaceLobby } from "../modes/race"
+import { abrirRaceLobby, reconhecerPista, sairReconhecimento } from "../modes/race"
+import { mudarPista } from "../render/menus/race"
 import { correrComBots } from "../modes/race"
 import { abrirCodigoSala } from "../modes/race"
 import { duelRematch } from "../modes/duel"
@@ -13,6 +18,9 @@ import { duelJoin } from "../modes/duel"
 import { AutoDashEngine, H } from "../engine"
 import { saveConfig, CARS, PAINTS, STRIPES, NEONS, WHEELS, WINGS } from "../data"
 import { shiftUp, shiftDown } from "../physics/gearbox"
+import { teclaDebugEvento, iniciarTesteFase5 } from "../world/debug-eventos"
+import { teclaEstetica } from "../render/menus/estetica"
+import { apertouShift, comandoTouge } from "../world/touge"
 
 export function toggleMute(eng: AutoDashEngine) {
   eng.cfg.sound = !eng.cfg.sound
@@ -58,6 +66,12 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
 
   eng.keys.add(k)
   if (k === " ") eng.nitroOn = true
+  // duelo de touge: S (freio), Shift (freio de mão) e Espaço (nitro) na hora certa
+  if (!e.repeat && eng.touge) {
+    if (k === "shift") apertouShift(eng)
+    else if (k === "s" || k === "arrowdown") comandoTouge(eng, "freio")
+    else if (k === " ") comandoTouge(eng, "nitro")
+  }
   // [M] alterna o som (menos em pause/game over, onde M = menu)
   if (k === "m" && ["racing", "countdown", "menu", "garage", "duellobby"].includes(eng.state)) {
     toggleMute(eng)
@@ -78,7 +92,14 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "arrowright") { eng.cfg.carIdx = (eng.cfg.carIdx + 1) % CARS.length; saveConfig(eng.cfg); eng.audio.ui() }
       if (k === "arrowdown") eng.raceVoltas = Math.max(1, eng.raceVoltas - 1)
       if (k === "arrowup") eng.raceVoltas = Math.min(9, eng.raceVoltas + 1)
+      if (k === "p") mudarPista(eng, 1)
+      if (k === "o") { eng.cfg.horaCorrida = proximaHora(eng.cfg.horaCorrida); saveConfig(eng.cfg); eng.audio.ui() }
+      if (k === "k") { eng.cfg.climaCorrida = proximoClima(eng.cfg.climaCorrida); saveConfig(eng.cfg); eng.audio.ui() }
+      if (k === "r") reconhecerPista(eng)
       if (k === "escape") toMenu(eng)
+      break
+    case "racerecon":
+      sairReconhecimento(eng) // qualquer tecla volta ao lobby
       break
     case "racecode":
       if (k === "enter") void eng.entrarSalaOnline()
@@ -105,6 +126,8 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "m" || k === "escape") toMenu(eng)
       break
     case "garage": {
+      // Fase 7: aba estética, prévia na pista e as teclas novas (S W A F Q D H P)
+      if (teclaEstetica(eng, k)) break
       const custom = eng.cfg.customs[eng.cfg.carIdx]
       if (k === "arrowleft") { eng.cfg.carIdx = (eng.cfg.carIdx + CARS.length - 1) % CARS.length; eng.audio.ui() }
       if (k === "arrowright") { eng.cfg.carIdx = (eng.cfg.carIdx + 1) % CARS.length; eng.audio.ui() }
@@ -115,9 +138,20 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "g") { custom.wing = (custom.wing + 1) % WINGS.length; eng.audio.ui() }
       if (k === "t") { eng.cfg.transmission = eng.cfg.transmission === "auto" ? "manual" : "auto"; eng.audio.ui() }
       if (k === "y") { eng.cfg.steering = eng.cfg.steering === "mouse" ? "keyboard" : "mouse"; eng.audio.ui() }
+      if (k === "x") { eng.cfg.biome = proximoBioma(eng.cfg.biome); eng.bioma = biomeById(eng.cfg.biome); eng.audio.ui() }
+      if (k === "o") { eng.cfg.hora = proximaHora(eng.cfg.hora); eng.audio.ui() }
+      if (k === "e") trocarMotor(eng)
+      if (k === "k") { eng.cfg.clima = proximoClima(eng.cfg.clima); eng.audio.ui() }
       if (k === "n") { eng.nameBuf = eng.cfg.pilotName; eng.afterName = "garage"; eng.state = "nameentry"; eng.audio.ui() }
-      if (["c", "v", "b", "r", "g", "t", "y"].includes(k) || k.startsWith("arrow")) saveConfig(eng.cfg)
-      if (k === "enter") startAndSave(eng)
+      if (["c", "v", "b", "r", "g", "t", "y", "x"].includes(k) || k.startsWith("arrow")) saveConfig(eng.cfg)
+      if (k === "enter") { limparTestes(eng); startAndSave(eng) }
+      // teste de motor: pista vazia, sem trânsito; [ e ] (ou , e .) trocam o motor andando
+      if (k === "z") { limparTestes(eng); eng.testeMotor = true; startAndSave(eng) }
+      // teste da Fase 5: tanque baixo (posto à frente) e convite de racha em 4 s
+      // ([H] e [P] são da aba estética e da prévia da Fase 7)
+      if (k === "j") { limparTestes(eng); iniciarTesteFase5(eng) }
+      // teste de polícia: larga já perseguido, sem eventos de mapa; 0–5 definem as estrelas
+      if (k === "l") { limparTestes(eng); eng.testePolicia = true; startAndSave(eng) }
       if (k === "escape") eng.state = "menu"
       break
     }
@@ -135,9 +169,16 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "e") tryShift(eng, 1)
       if (k === "n") toNeutral(eng)
       if (k === "f") flashBeam(eng)
-      // (as teclas de debug de playtest — O perseguição, L nível, B/V/J/K/I/U
-      // eventos — foram removidas: tudo isso agora é sorteado pelo próprio
-      // jogo em updateEventSpawner)
+      if (eng.testeMotor && (k === "]" || k === ".")) trocarMotorTeste(eng, 1)
+      if (eng.testeMotor && (k === "[" || k === ",")) trocarMotorTeste(eng, -1)
+      // 1–6: eventos da Fase 5 (world/debug-eventos.ts); no teste de polícia os
+      // dígitos 0–5 são as estrelas, então os eventos ficam desligados ali
+      if (!eng.testePolicia) teclaDebugEvento(eng, k)
+      // (as teclas de debug de playtest — L nível, B/V/J/K/I/U eventos — foram
+      // removidas: tudo isso agora é sorteado pelo próprio jogo em
+      // updateEventSpawner). O voltou na Fase 6: sobe uma estrela de procurado.
+      if (k === "o" && eng.mode === "solo" && eng.state === "racing" && !eng.testeMotor) infracao(eng, "debug")
+      if (eng.testePolicia && eng.state === "racing" && /^[0-5]$/.test(k)) definirEstrelas(eng, Number(k))
       break
     case "paused":
       if (k === "escape" || k === "p" || k === "enter") eng.state = "racing"
@@ -146,7 +187,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       break
     case "gameover":
       if (k === "enter") startRace(eng)
-      if (k === "g") eng.state = "garage"
+      if (k === "g") { limparTestes(eng); eng.state = "garage" }
       if (k === "m") eng.state = "menu"
       break
   }

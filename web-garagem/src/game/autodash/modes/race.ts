@@ -1,40 +1,83 @@
 // AutoDash — modes/race.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine } from "../engine"
 import { buildTrack } from "../world/track"
+import { buildCircuit, circuitoDaSeed, CIRCUITS } from "../world/circuits"
 import { seedTraffic } from "../traffic/spawner"
-import { RPM_IDLE } from "../data"
+import { motorDe } from "../physics/motores"
 import { RaceSession } from "../race/session"
+import { iniciarTempo, seedDoTracado } from "../sim/clima"
+import { mulberry32 } from "../math"
+import { COMBUSTIVEL } from "../world/combustivel"
+import { RACHA } from "../world/racha"
+import { prepararTesteFase5 } from "../world/debug-eventos"
+import { novoProcurado } from "../world/policia"
+import { PARTIDA_S } from "../sim/partida"
+import { RITMO } from "../world/events"
+import { spawnMontanha } from "../world/montanha"
 
 export function startRace(eng: AutoDashEngine, seed?: number) {
   const corrida = eng.mode === "race"
   // limpa ANTES de construir: no circuito o buildTrack semeia os cones das
   // curvas, e zerar depois apagaria justamente eles
-  eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = corrida ? 1e9 : 12
-  buildTrack(eng, seed, corrida)
-  seedTraffic(eng, corrida ? 5 : 14)
+  eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = corrida ? 1e9 : RITMO.primeiroS
+  eng.ultimosEventos = []
+  if (eng.sobViaduto) { eng.sobViaduto = false; eng.audio.ambiente("aberto") }
+  // a pista da corrida vem da seed: circuito fixo ou procedural (ADR 0014)
+  const circuito = corrida && seed !== undefined ? circuitoDaSeed(seed) : null
+  if (circuito) buildCircuit(eng, circuito)
+  else buildTrack(eng, seed, corrida)
+  // teste de motor: pista vazia (sem trânsito, eventos, polícia nem powerups)
+  if (eng.testeMotor) { eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = 1e9 }
+  // teste de polícia: sem evento de mapa sorteado (só os da polícia), estrelas pelas teclas 0–5
+  if (eng.testePolicia) eng.eventTimer = 1e9
+  seedTraffic(eng, eng.testeMotor ? 0 : corrida ? 5 : 14)
   eng.position = 0
   eng.speed = 0
   eng.playerX = 0
   eng.steerVel = 0
   eng.gear = 0
-  eng.rpm = RPM_IDLE
+  eng.rpm = motorDe(eng).idle
+  eng.giroSom = eng.rpm
+  eng.boost = 0
   eng.score = 0; eng.km = 0; eng.combo = 0; eng.comboT = 0
   eng.nitroMeter = 0; eng.nitroOn = false
   eng.shield = false; eng.immuneT = 0; eng.policeHitT = 0; eng.policeEscapeT = 0; eng.policeChaseT = 0; eng.mult2T = 0
+  eng.policia = novoProcurado()
   eng.level = 0; eng.levelUpT = 0
-  eng.powerups = []; eng.puTimer = 6
+  eng.powerups = []; eng.puTimer = eng.testeMotor ? 1e9 : 6
   eng.curveWarn = 0; eng.collWarn = null
   eng.newRecord = false; eng.beamT = 0; eng.beamCdT = 0; eng.pitchY = 0
   eng.shiftT = 0; eng.wheelspinT = 0; eng.bogT = 0
-  eng.crashed = false; eng.crashByPolice = false
+  eng.crashed = false; eng.crashByPolice = false; eng.noRamal = false
   eng.raceFinished = false; eng.raceSpectT = 0
-  eng.raining = false; eng.rainRollT = 0
-  eng.audio.rain(false)
-  eng.particles = []; eng.floaters = []
+  // relógio e clima (ADR 0013). Corrida com bots usa a escolha do lobby; sala
+  // online e duelo usam o padrão, para todo mundo ver o mesmo céu e o mesmo clima.
+  const online = !!eng.race && !eng.race.offline
+  const hora = eng.mode === "race" ? (online ? "noite" : eng.cfg.horaCorrida)
+    : eng.mode === "duel" ? "ciclo" : eng.cfg.hora
+  const clima = eng.mode === "race" ? (online ? "sorteio" : eng.cfg.climaCorrida)
+    : eng.mode === "duel" ? "sorteio" : eng.cfg.clima
+  iniciarTempo(eng, hora, clima, seed ?? seedDoTracado(eng))
+  // eventos da Fase 5: sorteio próprio (não mexe na sequência do Math.random) e tanque cheio
+  eng.rngEv = mulberry32((eng.climaSeed ^ 0x5f3759df) >>> 0)
+  eng.combustivel = 1; eng.postoLimite = COMBUSTIVEL.chamaPosto; eng.abastecendo = false; eng.juntoDaBomba = false; eng.elevJogador = 0; eng.dentroTunel = false; eng.claraoT = 0; eng.audio.ventilacao(false); eng.audio.bomba(false)
+  eng.racha = null; eng.rachaT = RACHA.primeiroConviteS
+  eng.touge = null
+  eng.montanha = null; eng.climaForcado = null; eng.kmRegiao = 0; eng.estagioTransito = 0
+  if (eng.mode === "solo" && eng.bioma.id === "serra") spawnMontanha(eng)
+  eng.comboio = null; eng.oleoT = 0
+  eng.vacuo = 0; eng.vacuoS = 0; eng.estilingueT = 0
+  if (eng.testeFase5 && eng.mode === "solo") prepararTesteFase5(eng)
+  eng.particles = []; eng.floaters = []; eng.avisos = []
   eng.countT = 0
   // no duelo o verde é fixo pra manter os dois relógios alinhados
   eng.greenAt = eng.mode === "duel" ? 3.3 : 2.4 + 0.7 + Math.random() * 0.9
   eng.greenFired = false
+  // partida do motor: animação sem tempo contado, antes do semáforo. O duelo fica
+  // de fora: o relógio do servidor já reserva os 3,3 s até o verde (GUIA-V2)
+  eng.partidaT = eng.mode === "duel" ? 0 : PARTIDA_S
+  // motor de arranque (gravação real); o ronco entra quando o motor pega
+  eng.audio.partida(eng.partidaT > 0 ? eng.partidaT : undefined)
   eng.state = "countdown"
 }
 
@@ -48,8 +91,33 @@ export function abrirRaceLobby(eng: AutoDashEngine) {
 export function correrComBots(eng: AutoDashEngine) {
   eng.audio.ui()
   eng.mode = "race"
-  eng.race = RaceSession.soloComBots(eng.cfg.pilotName || "VOCÊ", eng.raceVoltas, eng.raceBots)
+  eng.race = RaceSession.soloComBots(eng.cfg.pilotName || "VOCÊ", eng.raceVoltas, eng.raceBots, 0.6, eng.racePista)
   startRace(eng, eng.race.cfg.seed)
+}
+
+/** Reconhecimento de percurso: sobrevoo de uma volta do circuito escolhido, sem rivais. */
+export function reconhecerPista(eng: AutoDashEngine) {
+  const def = CIRCUITS[eng.racePista - 1]
+  if (!def) return
+  eng.audio.ui()
+  eng.mode = "race" // a pista é desenhada como a da corrida (zebra roxa, linha de largada)
+  eng.race = null
+  eng.obstacles = []; eng.zones = []; eng.roadSigns = []
+  if (eng.sobViaduto) { eng.sobViaduto = false; eng.audio.ambiente("aberto") }
+  buildCircuit(eng, def)
+  eng.traffic = []
+  eng.position = 0
+  eng.playerX = 0
+  eng.demoT = 0
+  eng.state = "racerecon"
+  eng.fadeT = 0.22
+}
+
+export function sairReconhecimento(eng: AutoDashEngine) {
+  eng.audio.ui()
+  eng.mode = "solo"
+  eng.state = "racelobby"
+  eng.fadeT = 0.22
 }
 
 export function abrirCodigoSala(eng: AutoDashEngine) {

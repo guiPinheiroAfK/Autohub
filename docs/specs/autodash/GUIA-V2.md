@@ -31,7 +31,7 @@ Prioridade: fazer tudo em fases, uma por vez, com parada para o usuário testar.
 - Custo zero de infra (ADR 0004). Netlify + Neon free tier.
 - Gerenciador de pacotes: **npm** em `web-garagem/` (não criar `bun.lock`).
 - Migrations já aplicadas no Neon não são editadas; mudança de schema vira nova versão.
-- Teclas de debug (`O L B V J K I U`) ficam ativas: são ferramenta de teste do usuário.
+- Teclas de debug ficam ativas: são ferramenta de teste do usuário. Das antigas (`O L B V J K I U`) só sobrou o `O` (sobe uma estrela); as outras viraram sorteio do jogo. Fase 5 somou `1`–`6` no solo (posto, racha, obra, comboio, óleo, reserva); no dev server elas também expõem o engine em `globalThis.__autodash`.
 
 ### Verificação obrigatória em cada commit
 ```bash
@@ -57,12 +57,12 @@ Pasta: `web-garagem/src/game/autodash/`
 | Orquestração | `engine.ts` (~660 linhas) | Campos, render, bind/unbind. Módulos recebem `eng` como primeiro argumento |
 | Simulação | `sim/update.ts` | Um quadro da simulação |
 | Física | `physics/rpm.ts`, `physics/gearbox.ts` | Curva de torque, RPM, câmbio |
-| Mundo | `world/track.ts`, `world/zones.ts`, `world/obstacles.ts`, `world/events.ts` | Geração de pista, zonas, obstáculos, eventos e perseguição |
+| Mundo | `world/track.ts`, `world/zones.ts`, `world/obstacles.ts`, `world/events.ts`, `world/policia.ts` | Geração de pista, zonas, obstáculos, eventos; polícia por estrelas (calor, despiste, pregos, bloqueio, helicóptero) |
 | Tráfego | `traffic/types.ts`, `traffic/driver.ts`, `traffic/spawner.ts` | IA por papel (civil, polícia) com registro `DRIVERS` |
 | Modos | `modes/solo.ts`, `modes/race.ts`, `modes/duel.ts` | Largada, colisão, lobbies |
 | Corrida | `race/session.ts`, `race/bots.ts`, `race/net.ts`, `race/types.ts` | Sessão, bots, rede com dead reckoning |
 | Rede | `net.ts` (duelo), `net-http.ts` (helper comum) | Polling |
-| Render | `render/road.ts`, `render/backdrop.ts`, `render/objects.ts`, `render/player.ts`, `render/hud.ts`, `render/race-hud.ts`, `render/particles.ts`, `render/textures.ts`, `render/primitives.ts`, `render/menus/*.ts` | Desenho por área |
+| Render | `render/road.ts`, `render/backdrop.ts`, `render/objects.ts`, `render/player.ts`, `render/hud.ts`, `render/race-hud.ts`, `render/particles.ts`, `render/textures.ts`, `render/primitives.ts`, `render/policia.ts`, `render/menus/*.ts` | Desenho por área |
 | Entrada | `input/keyboard.ts`, `input/pointer.ts`, `input/touch.ts` | Teclado, mouse, toque |
 | UI e fluxo | `ui/widgets.ts`, `flow.ts` | Botões de canvas, navegação entre telas |
 | Dados | `data.ts` | Carros (`CARS`), pinturas, faixas, neon, rodas, asas, constantes de câmbio, leaderboard, config |
@@ -77,9 +77,11 @@ API: `api/src/routes/autodash.ts`. Tabelas: `autodash_scores`, `autodash_rooms`,
 - **Clima:** chuva (`eng.raining`) só no modo solo. Sem neve, neblina ou efeito na física.
 - **Ciclo de dia:** só no solo (`SKY_KEYS`).
 - **Eventos (solo):** ponte, viaduto, obstáculos, mão dupla, blitz, radar (`speedtrap`), perseguição policial.
+- **Fase 5 (solo):** combustível e posto (`world/combustivel.ts`, `world/posto.ts`), racha (`world/racha.ts`, `modes/racha.ts`), obra, comboio e óleo (`world/obra.ts`, `world/comboio.ts`, `world/oleo.ts`), caminhão que troca de faixa (`traffic/driver.ts`). Vácuo (`sim/vacuo.ts`) vale no solo e na corrida. Desenho em `render/eventos.ts`.
 - **Cenário:** um tema urbano (árvores, postes, outdoors, prédios em `render/backdrop.ts`). Sem biomas.
 - **Carros:** lista pequena em `CARS`. Customização estética: pintura, faixa, neon, rodas, asa.
-- **Tração e câmbio:** sem distinção FWD/RWD/AWD. Câmbio é só marcha automática ou manual com 1 curva de torque.
+- **Tração:** FWD, RWD e AWD com divisão e pneu, em `physics/traction.ts` (Fase 2). Padrão continua RWD com pneu padrão.
+- **Câmbio:** ainda só marcha automática ou manual, com 6 marchas e 1 curva de torque. Relação final já vale. Tipo de câmbio pendente.
 
 ## 6. Decisões tomadas (com data)
 
@@ -126,59 +128,467 @@ Origem: QA respondido pelo usuário em 2026-11-13.
 - D24 (13/11): Custo zero continua como meta. Se não der, planejar hospedagem paga no futuro.
 - D25 (13/11): Prazo informal: entregar o máximo até 17/11. Não é prazo fixo.
 
+**Partida do motor**
+- D27 (14/11): A partida do motor (chave virando, motor pegando) é só animação e **não conta tempo**. `PARTIDA_S = 1,3 s` em `sim/partida.ts`, na lógica, nunca no áudio (os testes rodam sem áudio). `eng.partidaT` conta para trás dentro do estado `countdown`: `countT` fica em 0, o semáforo não acende (o HUD diz "ligando…"), o pé não sobe giro (giro vai de ~22% da lenta até a lenta na pegada), a câmera dá um tranco, e o ronco só entra quando a etapa acaba. Pontuação, km, combustível e polícia já não rodam em `countdown`. Vale para solo, corrida com bots, corrida online e os modos de teste (`testeMotor`, `testeFase5`, `testePolicia`). **O duelo fica de fora** (`partidaT = 0`): `modes/duel.ts` calcula `countT` pelo relógio do servidor (`3,3 − restante`) e os dois lados precisam ver o verde no mesmo instante; encaixar a partida dentro desses 3,3 s tiraria o início do semáforo e o duelo já reserva esse tempo. No duelo o arranque gravado toca como antes. Na corrida online a sessão (`RaceSession`) só anda depois do verde, então a partida não mexe nela.
+
 **Formato de trabalho**
 - D26 (13/11): Este arquivo é o guia. O prompt apenas aponta para ele.
 
 ## 7. Decisões em aberto
 
 - **Dinheiro / moeda do jogo:** tem que existir? Como combustível e progresso se encaixam sem quebrar as rodadas infinitas? Propor 2 ou 3 opções em documento.
-- **Polícia:** escalas de estrelas, o que cada nível faz, como encerra a perseguição.
+- **Polícia:** escalas de estrelas, o que cada nível faz, como encerra a perseguição. **Escolha provisória (14/11, sessão da Fase 6, sem o dono):** escala de `docs/pesquisa/visual-e-desafio.md` 4.6 (★ radar, ★★ cola, ★★★ pregos, ★★★★ bloqueio, ★★★★★ helicóptero); perseguição encerra por despiste (ninguém te vê por N s) ou prisão (encostão te joga fora da pista, ou batida no bloqueio). Números na tabela `ESTRELAS` (`world/policia.ts`) e na Fase 6 abaixo. Confirmar no playtest.
+- **Polícia — recompensa:** despistar dá pontos (1.500 × estrelas) e passar na fresta do bloqueio dá 2.500. Provisório até decidir moeda (ver Dinheiro).
 - **Drift:** pontuação, critérios e como entra nas rodadas.
 - **Biomas:** lista final e ordem de implementação além de cidade e costa.
 - **Modelo de física:** quantos parâmetros por pneu e por carro (ver ADR 0012 quando existir).
+- **Combustível acabar (Fase 5):** fim de corrida ou só perda de potência? **Escolha provisória: só perda de potência** (pane seca: motor engasga, posto garantido logo à frente). Motivo: D19 pede que o combustível não quebre as rodadas infinitas, e D6 diz que punição reduz velocidade, nunca encerra.
+- **Combustível na corrida e no duelo (Fase 5):** **provisório: só no solo.** A corrida tem duração fixa em voltas e o duelo precisa dos dois carros iguais; posto na corrida exige decidir pit stop.
+- **Preço do combustível (Fase 5):** **provisório: grátis**, custa só o tempo de passar a 70 km/h pela faixa do posto. Dinheiro segue em aberto (acima).
+- **Recompensa do racha (Fase 5):** **provisório: reputação** (um contador salvo na config) mais pontos da rodada. Ideia 10 da seção 9: reputação, não moeda. O que a reputação libera fica para a decisão de progressão (D17).
+- **Aceitar o racha (Fase 5):** **provisório: piscar o farol [F]**, que já é o gesto de "bora" na rua. No toque ainda não há botão de farol (pendente).
+- **Estética (Fase 7, provisório desde 14/11):** bodykit só visual e liberado; rivais online sem bodykit; FOV dinâmico ligado por padrão (+4° no topo) com opção de desligar. Confirmar no playtest.
 
 ## 8. Fases
 
 Cada fase termina com parada para o usuário testar. Não começar a próxima sem aprovação.
 
-### Fase 0 — Planejamento (sem mudança de jogo) — `pendente`
-- [ ] Este guia completo e revisado.
-- [ ] ADR 0011: modelo de dados de bioma e camadas de cenário.
-- [ ] ADR 0012: modelo de física (tração, pneus, câmbio, clima como entrada da física).
-- [ ] ADR 0013: relógio em ticks e clima.
-- [ ] Lista de 10 ideias para rodadas de corrida e drift, neste arquivo, seção 9.
+### Fase 0 — Planejamento (sem mudança de jogo) — `concluída` (hash no log)
+- [x] Este guia completo e revisado.
+- [x] ADR 0011: modelo de dados de bioma e camadas de cenário.
+- [x] ADR 0012: modelo de física (tração, pneus, câmbio, clima como entrada da física).
+- [x] ADR 0013: relógio em ticks e clima.
+- [x] Lista de 10 ideias para rodadas de corrida e drift, neste arquivo, seção 9.
+- [x] Spec `docs/specs/autodash/v2-mostwanted.md`.
 
 Critério de aceite: usuário aprova os ADRs e a lista.
 
-### Fase 1 — Biomas e camadas — `pendente`
-- [ ] Tabela de dados de bioma: nome, paleta, camadas, pesos de decoração, clima permitido.
-- [ ] Converter o cenário urbano atual no bioma "cidade", com 3 camadas (longe, meio, perto).
-- [ ] Bioma "costa" usando o mesmo sistema (horizonte com mar, palmeiras, píer).
+### Fase 1 — Biomas e camadas — `concluída` (hashes no log)
+- [x] Tabela de dados de bioma (`world/biomes.ts`): nome, céu, camadas, árvore de beira, climas. Peso de decoração fica para a Fase 3 (hoje só a árvore).
+- [x] Converter o cenário urbano atual no bioma "cidade", com 3 camadas (longe, meio, perto).
+- [x] Bioma "costa" usando o mesmo sistema (horizonte com mar, palmeiras, píer).
+- [x] Seletor de bioma na garagem (tecla X e pill).
 
 Critério de aceite: solo e corrida leem o bioma da tabela. Snapshot do golden muda só pela camada intencional, em commit próprio. Browser: menu, corrida e troca de bioma funcionam.
 
-### Fase 2 — Tração, pneus e câmbio (dados e física, sem visual novo) — `pendente`
-- [ ] Carro ganha: tração (FWD/RWD/AWD + divisão), tipo de pneu, tipo de câmbio, relação final.
-- [ ] Física lê esses dados: limite de tração por eixo, perda de tração na saída de curva, aceleração em reta por tração.
-- [ ] Quatro carros de teste: FWD, RWD, AWD 50/50, AWD 30/70.
-- [ ] Testes unitários da matemática de tração (funções puras).
+### Fase 2 — Tração, pneus e câmbio (dados e física, sem visual novo) — `concluída` (hashes no log)
+- [x] Carro ganha: tração (FWD/RWD/AWD + divisão), tipo de pneu, relação final.
+- [ ] **Pendente (próxima fase de câmbio):** tipo de câmbio (5 e 6 marchas, CVT, manual, híbrido) e embreagem. Hoje `GEAR_RATIOS` tem 6 marchas fixas.
+- [x] Física lê esses dados: limite de tração por eixo, perda de tração na saída de curva (círculo de atrito), aceleração em reta por tração, relação final.
+- [x] Quatro carros de teste: FWD, RWD, AWD 50/50, AWD 30/70 (no fim de `CARS`).
+- [x] Testes unitários da matemática de tração (`__tests__/traction.test.ts`, 14 casos).
+- Nitro não passa pelo limite de tração (decisão registrada no ADR 0012).
 
 Critério de aceite: o carro padrão continua idêntico (ou o snapshot muda com justificativa). Os quatro carros de teste se comportam diferente de forma perceptível no navegador.
 
-### Fase 3 — Pistas de corrida e lobby — `pendente`
-### Fase 4 — Clima e ciclo de dia em ticks, com efeito na física — `pendente`
-### Fase 5 — Eventos novos (racha, combustível) — `pendente`
-### Fase 6 — Polícia por estrelas — `pendente`
-### Fase 7 — Customização estética (bodykit, som, efeitos) — `pendente`
+### Fase 3 — Pistas de corrida e lobby — `concluída` (hashes no log; aguardando playtest)
+Decisões e alternativa rejeitada em [ADR 0014](../../adr/0014-autodash-circuitos-e-ramais.md).
+- [x] Circuitos fixos como dados (`world/circuits.ts`): Anel de Shibuya, Serra do Píer (costa), Marginal Neon.
+- [x] Atalhos e ramificações como **ramal paralelo** na mesma fita (`world/ramais.ts`): sem checkpoint, sem teleporte; grama entre pista e ramal; `ganho` de avanço no miolo.
+- [x] Bots pegam o ramal; minimapa e prévia mostram o ramal; placas de atalho.
+- [x] Lobby com escolha de pista (P/setas), painel com traçado, km, curvas, atalhos e bioma.
+- [x] Reconhecimento de percurso: sobrevoo de uma volta com nome dos trechos (tecla R).
+- [x] Sala online: pista na seed (`seed % 8`); API aceita `seed` opcional, sem migration.
+- [x] Tração agora também muda direção e patinada (correção da revisão da Fase 2).
+- Pendente / não verificado: ramal com geometria própria (bifurcação de verdade); o trecho separado do ramal só foi visto no começo, no navegador; tsc da api não rodou; bots no ramal sem playtest; `ganho` e larguras são palpite a calibrar.
 
-Fases 3 em diante só são detalhadas quando a anterior for aprovada.
+### Fase 4 — Clima e ciclo de dia em ticks, com efeito na física — `implementada` (hashes no log; aguardando playtest)
+Decisões no [ADR 0013](../../adr/0013-autodash-relogio-em-ticks.md). Começada sem a aprovação da Fase 3 por pedido do usuário ("pode seguir").
+- [x] Relógio em ticks (`world/clock.ts`): 1/20 s, dia de 24000 ticks (20 min), tick 0 = amanhecer. Pausa e menus não avançam.
+- [x] Horários: ciclo (começa às 9h, mesmo céu de largada de antes), amanhecer, dia, pôr do sol, noite (fixos).
+- [x] Clima como dados (`world/weather.ts`): limpo, nublado, chuva, neblina, com aderência, freio, visibilidade e luz. Chuva mantém os números de antes.
+- [x] Clima vira só na janela de 1 minuto, pela seed da pista (largada sempre limpa). Antes era `Math.random` a cada 18 s.
+- [x] Neblina: névoa por cima dos sprites esconde o trânsito distante. Nublado e neblina puxam o céu pro cinza.
+- [x] Garagem (solo) e lobby (corrida com bots): horário [O] e clima [K]. Sala online e duelo usam o padrão (noite + sorteio / ciclo + sorteio).
+- [x] HUD (solo e corrida) com relógio e ícone do clima. 11 testes (`__tests__/clock-weather.test.ts`).
+- Pendente / não verificado: neve (sem bioma neve); velocidade do relógio `custom` (×0,5, ×2) existe no dado mas não tem botão; o ciclo agora leva 20 min (antes 10 km, ~3 min a 200 km/h) — calibrar no playtest; render conferido só por sondas de pixel (aba do navegador oculta), não por screenshot.
+### Fase 5 — Eventos novos (racha, combustível) — `implementada` (hashes no log; aguardando playtest)
+Começada em paralelo à Fase 4 em playtest, por pedido do usuário (Fases 5, 6 e 7 em sessões separadas). Eventos de tráfego vêm da pesquisa [visual-e-desafio.md](../../pesquisa/visual-e-desafio.md), seção 4.5. Dados em `world/` como tabela; lógica fora de `engine.ts` (o engine só ganha campos e tipos).
+
+Checklist:
+- [x] **Sorteio próprio dos eventos novos** (`eng.rngEv`, mulberry32 da seed do clima). Os eventos antigos passaram para o `eng.rngEv` em 15/11, junto com o ritmo dos eventos.
+- [x] **Combustível (só solo):** tanque por carro em `world/combustivel.ts` (tabela). Consumo cresce com o pé, com o giro (fração da faixa do motor) e com o nitro: trocar cedo economiza, o que dá lógica ao câmbio (D19). HUD com barra "COMB" ao lado do NOS, aviso de reserva e distância até o posto.
+- [x] **Posto de combustível:** aparece quando o tanque passa de 45% para baixo (e de novo se você passou reto e caiu para 20%). É uma "reta com posto": o trecho perde a curva (como a ponte) e ganha uma faixa de acesso à direita, feita com o **ramal paralelo** do ADR 0014 (`ganho = 1`). Abastece andando a até 70 km/h no miolo da faixa (+20% do tanque por segundo). Placas "POSTO 2 km / 1 km / ENTRADA". O posto é zona: não empilha com outro evento (alívio, pesquisa 4.2).
+- [x] **Pane seca:** tanque vazio não encerra a rodada. O motor engasga (pé efetivo pulsando entre 0 e 35%) e um posto é garantido logo à frente.
+- [x] **Convite de racha (D18, ideia 10):** depois de ~45 s de solo, um desafiante (tabela `DESAFIANTES` em `world/racha.ts`) encosta na faixa ao lado com pisca-alerta e "chama na seta". Piscar o farol [F] aceita. A disputa é um sprint de 2,5 km; ganhar vale **reputação** (+1, salva na config, sem dinheiro) e pontos. Ignorar por 7 s recusa: ele buzina e vai embora. Encostar no desafiante é encostão (empurra, perde velocidade), não batida fatal.
+- [x] **E7 rival que fecha (no racha):** com você até ~8 carros atrás, numa faixa vizinha, ele "olha" (luz de freio e balanço de 0,03) e fecha a sua linha 0,5 s depois, no máximo 1 vez a cada 10 s. Reage com atraso: a finta funciona. Nunca entra na faixa se você está colado (a trava do `applyMovement` continua valendo).
+- [x] **Desafiante do racha respeita o trânsito (15/11, playtest):** ele atravessava os carros, andava sem trânsito e abria mais de 1 km. No cenário `__tests__/racha.cenario.test.ts`, semente 11, eram 10 carros atravessados e média de 96% da máxima.
+  - Agora ele freia a tempo pelo carro da frente (`freiaAte`, enxerga 9000 à frente, desconta o passo do quadro e usa a velocidade que o civil ANDOU, `vReal`, não o cruzeiro). Também tem freio de pânico quando alguém entra colado e acende a luz de freio ao frear forte.
+  - Contorna cedo e alivia nas curvas fechadas. A arrancada perde fôlego perto da máxima, como a do seu carro. Não fica montado entre duas faixas.
+  - Fora de vista, onde o jogo não tem trânsito, anda a 88% da máxima. O trânsito não nasce nem é reciclado na cara dele.
+  - Resultado: 0 carros atravessados em 3 sementes, média de 70–73% da máxima. Números em `RACHA` (`world/racha.ts`).
+- [x] **E9 vácuo (solo e corrida):** colado atrás de um veículo rápido (mesma faixa, até ~5 carros) o carro ganha até +4% de velocidade máxima. Ao sair do vácuo, "estilingue" de 1 s. HUD com ícone "VÁCUO" e linhas de ar. Vale para trânsito, desafiante do racha e rivais da corrida.
+- [x] **E1 caminhão trocando de faixa:** caminhão passa a trocar de faixa às vezes, com seta acesa ≥ 1,2 s e "ensaio" de 0,05 de `offset` antes de ir. Nunca entra na sua faixa se você chegaria nele em menos de 1,2 s.
+- [x] **E4 obra com estreitamento:** evento novo no sorteio. Duas faixas de um lado fecham por ~3 s a 200 km/h, com seta luminosa piscando (paleta de perigo da pesquisa 1.8), cones na divisa e cavaletes no trecho fechado. O trânsito migra para o lado livre.
+- [x] **E6 comboio com fresta:** três veículos lado a lado no mesmo ritmo, uma faixa livre. A fresta anda: o vizinho dá seta 1,2 s e fecha, abrindo outra. Passar pela fresta vale bônus ×3 de quase-batida. Depois de ~16 s o comboio se desfaz.
+- [x] **E15 óleo após acidente:** carro batido no acostamento com pisca-alerta e mancha de óleo na faixa ao lado. Em cima da mancha a aderência cai para 35% por 0,7 s (escorrega, sem morte).
+- [x] Teclas de debug de playtest (só no solo, correndo): **1** posto, **2** convite de racha, **3** obra, **4** comboio, **5** óleo, **6** tanque na reserva, **7** viaduto com elevado (Fase 8.6), **8** túnel (Fase 8.7), **9** próxima região (Fase 8.5).
+- [x] Testes unitários das funções puras (consumo, abastecimento, vácuo).
+
+Critério de aceite: build, lint e testes verdes. Golden muda só em commits próprios (HUD do combustível; caminhão e vácuo mudam o trânsito e a corrida). No navegador: o posto aparece e abastece; a pane seca não encerra a rodada; o convite de racha aparece, aceita com [F] e termina com resultado; obra, comboio e óleo aparecem e se leem a tempo; vácuo aparece no HUD atrás de um carro.
+
+**Como testar** (solo, `http://localhost:5173/autodash`):
+1. Menu → [ENTER] → garagem → **[J]** (pílula "racha [J]"). Largada normal com o tanque em 40%.
+2. Logo depois do verde: medidor **COMB** ao lado do NOS e "⛽ … m" acima dele; placas azuis com bomba (POSTO, À DIREITA, ENTRADA).
+3. Pegue a faixa da direita que descola da pista e passe pela cobertura "POSTO 24h" a **até 70 km/h**: "ABASTECENDO", a barra sobe ~20% por segundo. Acima de 70 aparece "reduza pra 70".
+4. ~4 s depois do verde (acima de 70 km/h) um desafiante encosta ao lado com **pisca-alerta** e o painel "te chamou pro racha". Pisque o farol **[F]** em até 7 s para aceitar (ou ignore: ele buzina e vai embora).
+5. Na disputa: painel com "faltam … m" e a vantagem (▲ azul na frente, ▼ laranja atrás). Fique atrás dele numa faixa vizinha: ele acende o freio, balança e **fecha a sua faixa** 0,5 s depois. Finta (troca de lado) funciona. Encostar empurra, não mata.
+6. Fim: placa quadriculada CHEGADA; vencer mostra "+1 REP" (a reputação fica salva na config).
+7. Cole atrás de qualquer carro rápido na mesma faixa: "💨 VÁCUO +n%" acima do carro e linhas de ar; ao sair, "ESTILINGUE".
+8. Durante o solo, teclas **3** obra, **4** comboio, **5** óleo, **6** tanque na reserva, **1** posto, **2** racha. Observe: seta âmbar piscando e trânsito saindo do lado fechado (obra); fresta que anda com seta de 1,3 s e "FRESTA!" ao passar (comboio); carro batido com pisca-alerta e "ÓLEO!" com o carro dançando (óleo); caminhões dando seta longa e "ensaiando" antes de trocar de faixa.
+9. Pane seca: tecla 6, depois passe reto pelo posto. Com o tanque a zero o carro engasga, não acaba a rodada, e outro posto abre.
+
+Como ficou (diferenças do plano):
+- Vácuo passa da máxima porque `sim/update.ts` entrega ao passo longitudinal um `topSpeed` até 4% maior (`specComVacuo`); `sim/longitudinal.ts` não mudou. Medido em reta atrás de um caminhão (força 0,9): 246 → 253 km/h em 12 s. O teto desce em 1 s ao sair (estilingue), sem degrau.
+- Desafiante do racha acelera ~10–13 km/h/s (o carro padrão faz ~8–12 entre 120 e 200). O primeiro valor (30–40) deixava o jogador para trás sem chance.
+- Comboio fica 18 s (não 16) e a fresta só anda se a faixa destino estiver livre: com trânsito em volta ela anda pouco.
+- Posto: placas "POSTO / À DIREITA / ENTRADA" (sem km: as distâncias do jogo não são km reais); o HUD mostra os metros até a bomba pela escala do hodômetro.
+
+Pendente / não verificado:
+- Playtest de verdade: tudo foi conferido no navegador avançando quadros por script (o painel do navegador estava oculto e o `requestAnimationFrame` parava), com teclas de debug e posições forçadas. Não foi jogado com teclado em tempo real; som não foi ouvido.
+- Números de palpite a calibrar: consumo (tanque de ~4 min de pé no fundo), 20% por segundo na bomba, ritmo e `fecha` dos desafiantes, chance do caminhão (1 troca a cada ~11 s por caminhão), aderência no óleo (35%), força do vácuo.
+- ~~Eventos antigos no `Math.random`~~: resolvido em 15/11 (ritmo dos eventos). A polícia (`world/policia.ts`) ainda usa `Math.random`.
+- Achado fora do escopo: as viaturas estacionadas da blitz e do radar nascem a 102 mil unidades e o spawner mata estacionado acima de 88 mil, então provavelmente somem no primeiro quadro (leitura de código, não verificado; interessa à Fase 6).
+
+Fora desta fase (registrado para depois): diretor de intensidade (pesquisa 4.2), quase-batida graduada (4.4), E7 nos bots da corrida, som do abastecimento (função `somAbastecer` existe e não toca nada: implementação fica com a sessão de som), botão de toque para aceitar o racha.
+### Fase 6 — Polícia por estrelas — `implementada` (hashes no log; juntada à Fase 5 em 14/11; aguardando playtest)
+Feita em paralelo com a Fase 5 por pedido do usuário. Insumo: `docs/pesquisa/visual-e-desafio.md` 4.5–4.6 (E8, E10, E13). Lógica em `world/policia.ts` (estado, tabela, regras), desenho em `render/policia.ts`; `engine.ts` ganha só o campo `policia`.
+
+**Regras (provisórias, ver Decisões em aberto)**
+- **Calor** de 0 a 5,99; estrelas = parte inteira. Sobe com infração e com tempo de perseguição; nunca passa de 5★.
+  - Infrações: radar (+1), furar blitz (+2), encostão em viatura (+0,25), bater no bloqueio = preso.
+  - Tempo: +1★ a cada 30 s em que a polícia te **vê** (viatura a menos de 10.000 u, ou você dentro do holofote).
+- **Despiste:** depois de 6 s de perseguição, ficar sem ser visto pelo tempo da tabela faz as viaturas desistirem e o helicóptero ir embora (+1.500 pontos × estrelas). Aí o calor **esfria**: perde 1★ a cada 8 s, com as estrelas piscando. Infração nova durante o esfriamento reabre a perseguição no nível atual.
+- **Prisão** (fim da partida solo, texto de polícia no game over): encostão que te joga fora da pista (já existia) ou batida em viatura do bloqueio.
+- **Fuga honesta (ADR 0008):** o teto da viatura sobe com as estrelas, mas é sempre `topSpeed do carro − 8 km/h`, no máximo. O helicóptero segue a mesma regra (−10). Em reta limpa todo carro escapa.
+
+| ★ | Viaturas | Teto (km/h) | Arrancada (km/h/s) | Despiste (s) | Evento |
+|---|---|---|---|---|---|
+| 1 | 1 | 205 | 50 | 3 | radar e blitz (o gatilho) |
+| 2 | 2 | 215 | 55 | 4 | viaturas na cola (a perseguição de antes) |
+| 3 | 3 | 222 | 60 | 5 | E8 tapete de pregos a cada ~22 s |
+| 4 | 4 | 228 | 65 | 6 | + E10 bloqueio com fresta (alterna com os pregos) |
+| 5 | 4 | 234 | 70 | 7 | + E13 helicóptero com holofote |
+
+**Checklist**
+- [x] Nível de procurado: tabela `ESTRELAS`, calor, infrações, tempo, despiste, esfriamento (`world/policia.ts`). Radar e blitz viram infração (`world/zones.ts`). 7 testes das regras puras (`__tests__/policia.test.ts`) e 3 cenários no engine real (`__tests__/policia.cenario.test.ts`, 3★, 4★ e 5★, sem render, menos de 1 s).
+- [x] Viaturas como estratégia de tráfego: `PoliceDriver` lê teto e arrancada da viatura (`Traffic.top`, `Traffic.accel`), definidos pela estrela. Reforço chega por trás quando a estrela sobe (nunca nasce na frente).
+- [x] HUD de estrelas no topo, à direita do retrovisor (abaixo da barra no duelo): estrelas cheias e vazias, progresso da próxima, "TE VIRAM" em vermelho e azul, barra de despiste, estrela piscando no esfriamento, aviso de pneu furado e de holofote.
+- [x] E8 tapete de pregos (≥3★): placas, viatura no acostamento, tapete com reflexo âmbar em 2–3 faixas, sempre uma faixa livre. Pneu furado por 8 s: teto ×0,75, aderência ×0,8, faísca no aro. Não para nem teleporta.
+- [x] E10 bloqueio com fresta (≥4★): três viaturas atravessadas (tipo `roadblock`), a fresta numa faixa do meio e o acostamento livre. Civis que chegam encostam na fresta. Fresta dá bônus; acostamento perde velocidade no chão; bater = preso.
+- [x] E13 helicóptero (5★): holofote no asfalto logo à frente do carro, segue com atraso; dentro dele você é visto. Teto 230 (sempre 10 abaixo do carro). Embaixo do viaduto ele te perde por 4 s. Sprite no céu com facho e farol.
+- [x] Tecla de debug **O** (só solo, correndo): sobe uma estrela. Volta para a lista O L B V J K I U.
+- [x] Atalho de teste **[L] na garagem** (era [P]; mudou no merge com a Fase 7) (como o [Z] do motor): larga já perseguido em 1★, sem evento de mapa sorteado; correndo, **0–5** põem a caçada direto na estrela (0 encerra) e o calor não sobe sozinho. A garagem mostra "testes: [Z] motor · [P] polícia".
+- [x] Gancho da sirene: `eng.policia.sirene` (0..1, pela viatura mais perto). **TODO (sessão do som):** tocar a sirene com pan pela viatura; aqui só o valor é calculado.
+
+Critério de aceite: sem perseguição o jogo é idêntico (golden inalterado, ou muda só em commit próprio e justificado). No navegador: furar o radar dá 1★ e uma viatura; a estrela sobe com o tempo; 3★ traz pregos, 4★ bloqueio, 5★ helicóptero; despistar zera as viaturas e as estrelas esfriam. Build, lint e test verdes.
+
+**Como testar** (garagem → **[L]**, pílula "polícia [L]"; segure W):
+1. **1★** (largada): uma viatura chega por trás; o painel à direita do retrovisor diz "TE VIRAM" e o aviso "TESTE · estrelas nas teclas 0–5". Abra distância em reta: a barra "DESPISTANDO" enche, as viaturas desistem (+pontos) e a estrela esfria piscando.
+2. **2★** (tecla 2): duas viaturas, o ritmo de perseguição de antes.
+3. **3★** (tecla 3): três viaturas; em ~2 s, três placas PARE ("PREGOS 2 km/1 km") e um tapete prateado com reflexo âmbar em 2 faixas, viatura parada no acostamento. Ache a faixa livre; se passar por cima: "PNEU FURADO", faísca no aro, carro preso em 75% da velocidade final por 8 s.
+4. **4★** (tecla 4): quatro viaturas; giroflex no horizonte e placas "BLOQUEIO"; três viaturas atravessadas com a fresta numa faixa do meio. Fresta = "PASSOU NA FRESTA! +2500"; acostamento passa mas freia na grama; bater = "POLÍCIA TE PEGOU". Os eventos alternam bloqueio e pregos.
+5. **5★** (tecla 5): "HELICÓPTERO!", facho e círculo de luz no capô ("NO HOLOFOTE"). Pé no fundo em reta (acima de 230 km/h) deixa a luz para trás ("FORA DO HOLOFOTE"); embaixo de viaduto: "TE PERDEU DE VISTA".
+6. **0** encerra a caçada. Fora do teste, o caminho natural é radar (1★) ou blitz (2★) a partir do nível 4, e a tecla **O** sobe uma estrela.
+
+**Resultado (14/11):** golden inalterado em todos os commits. Conferido no navegador (porta 5182, quadro a quadro, porque o painel do navegador estava oculto e o `requestAnimationFrame` parava): HUD ao lado do retrovisor; 3★ com três viaturas no retrovisor; placa PARE de longe; tapete com faixa livre; bloqueio com giroflex visível de longe e "PASSOU NA FRESTA! +2500"; helicóptero com holofote no capô, que perde o carro acima de 230 km/h e deixa despistar.
+- **Bug antigo corrigido no caminho** (380d989): as viaturas paradas da blitz e do radar morriam no quadro em que nasciam (o tráfego matava parado a mais de `DRAW_DIST + 140` segmentos, e os eventos nascem a 1,7 × `DRAW_DIST`). Agora aparecem.
+- Pendente / não verificado:
+  - Sirene: só o valor `eng.policia.sirene` existe. **TODO da sessão do som** (`audio.ts` e `sound/` não foram tocados).
+  - Os eventos da polícia sorteiam com `Math.random` (como `world/events.ts`). Trocar pelo RNG da seed junto com o diretor de intensidade (pesquisa 4.2).
+  - Eventos da polícia não criam zona: o sorteio comum (blitz, obra) pode cair perto de um tapete ou bloqueio.
+  - `spawnPoliceChase` (`world/events.ts`) ficou sem uso. Não removido para não conflitar com a Fase 5; apagar depois do merge.
+  - Balanço (tabela, 30 s por estrela, 8 s de esfriamento, despiste por estrela, alvo e teto do helicóptero) é palpite: calibrar no playtest. Reforço nasce a 150 km/h quando o carro está devagar e pode ultrapassar e "desistir" (lógica antiga do `PoliceDriver`); só aparece com a tecla O em baixa velocidade.
+  - Não testado: duelo (HUD abaixo da barra), celular, helicóptero perdendo o carro sob o viaduto (só no teste de regra, não na tela), fila de civis na fresta.
+### Fase 7 — Customização estética (bodykit, som, efeitos) — `pendente` (som do motor antecipado)
+- [x] Som de motor por pulsos de combustão (`sound/`), um perfil por motor (14 motores) e um motor por carro; turbo, flutter/blow-off, compressor Roots, estouros. Pesquisa em [docs/pesquisa/som-motor.md](../../pesquisa/som-motor.md).
+- [x] Motor original de cada carro segue a inspiração dele (Mustang 71 → V8 cruzado Ford, Miata → I4 1.6, Silvia S15 → I4 turbo, RX-7 FD → rotativo, Supra A80 → I6 biturbo, R32 → I6 de corrida, 911 992 → boxer 6 biturbo, Z → V6 aspirado). Decisão do usuário (13/11): "depende do carro"; por enquanto o jogador escolhe.
+- [x] Garagem: seletor de motor [E] salvo por carro (`CarCustom.motor`), com acelerada de amostra ao trocar.
+- [x] Motor real na física (`physics/motores.ts`): cada motor tem lenta, faixa vermelha, corte e curva de força de um motor real da mesma família (V8 de 71 corta em 6000 com força embaixo; VTEC e V10 passam de 8500; V12 vai a 9250), e o turbo tem atraso de verdade (enche com giro e pé, segura na troca, esvazia ao aliviar). Câmbio automático, largada, conta-giros e corte do som seguem a faixa do motor. A velocidade de cada marcha é a mesma para todo motor e a área da curva é igualada: o motor muda ONDE está a força, o `power` do carro continua decidindo quanto ele anda. Medido em reta (0–200 com largada): carros dentro de ±12% do antes, exceto SYLVA (+22%) e TARGA (+15%), que ficam perto da máxima e amplificam a diferença. Trocar o motor na garagem troca também a física (swap).
+- [x] Som por **guias de onda** (modelo físico, `sound/waveguide-synth.ts`): port do enginesound (DasEtwas, MIT; Baldan et al. 2015) com carga do acelerador e corte por cilindro. Volume por tabela pré-calculada (`sound/ganhos-motor.ts`, regenerar com `GERAR_GANHOS=1`).
+- [x] **Turbo** com eixo de inércia própria: apito sobe em cada marcha e desce assobiando depois do alívio; turbina por motor (faixa do apito, tempo de desaceleração, biturbo/quadri desafinados).
+- [x] **Turbo por modelo no worklet** (`sound/turbo-synth.ts`, 15/11): o apito deixou de ser três senos. Agora é a passagem das pás com largura (ruído ressonante no tom), tremor do eixo e pulsar no ritmo do escape (biturbo: duas turbinas defasadas). O sopro do compressor pulsa com a admissão. Blow-off com estalo da válvula e jato que desce de tom com a pressão. Flutter em surtos cada vez mais lentos, com pio do eixo e apito engasgando. Assobio audível na descida do eixo depois do alívio. O gatilho do alívio agora trava entre 0,5 e 0,3 (`GatilhoAlivio`), então o pedal analógico também alivia. Render offline: `render-motor.test.ts` gera `_turbo.wav` (puxada, alívio, troca, alívio) para os motores turbo. Amostras em `docs/pesquisa/audio-turbo/`.
+- [x] **Playtest 15/11 (tarde):**
+  - Turbo: o eixo do som agora segue o fluxo do escape (giro), não só a pressão. Com o W sempre apertado o apito ficava parado no máximo; agora sobe dentro de cada marcha e cai na troca (`eixoDoSom`).
+  - Costa: o mar, as palmeiras e o píer andam juntos na curva (`COSTA_PARALLAX`). As palmeiras corriam a 0,6 por cima de um mar a 0,25 e o píer ficava parado na tela, o que dava enjoo.
+  - SYLVA (S15) era o esportivo mais lento ("parece um Onix turbo"): turbo cheio em 3500 com atraso de 0,33 e peso 0,3, e power 45 → 50. O 0–200 caiu de 30,7 s para 24,6 s (tabela em `medidas.test.ts`).
+- [x] **Câmbio por carro** (`physics/cambio.ts`): MUSCLE 4, ROADSTER/ROTOR/KAIJU 5, TARGA 8, FANTASMA 9; 1ª e última iguais para todos.
+- [x] **Giro com caráter**: giro solto por motor, limitador duro/suave, lenta irregular (V8 bravo e rotativo).
+- [x] **V8 novo (14/11):** banco `v8-escape` (Chrysler 1964 na lenta + NASCAR no meio + Studebaker filtrado no alto) nos dois V8 cruzados; mixagem com a gravação mandando (`sint`, `corpo`, `topoHz`, `burble` em `Gravacao`); `v8-plano` com a mesma mixagem e o banco antigo. Diagnóstico, números e candidatos em [docs/pesquisa/som-motor-2.md](../../pesquisa/som-motor-2.md) (Parte V8); receita em `web-garagem/tools/som/README.md`; áudio de antes e depois em `docs/pesquisa/audio-v8/`. **Falta ouvir.** Roteiro abaixo.
+- Próximo passo de fidelidade (precisa de aprovação para baixar arquivos): híbrido com gravações CC0 (pesquisa, seção 4) como textura e eventos (partida, pops reais).
+- Em aberto: inspiração do GT (V10), do NINJA (I4) e do ALTA (I4) foi palpite pelo nome; FANTASMA confirmado como Koenigsegg (V8 plano biturbo). Calibrar de ouvido: não foi ouvido, só medido offline.
+
+#### Roteiro de escuta dos V8 (teste de motor: garagem → [Z]; `[` e `]` trocam o motor)
+
+Para cada um dos três (`V8 virabrequim cruzado`, `V8 cruzado aspirado, ordem Ford`, `V8 virabrequim plano`), com o carro que quiser. Antes, ouça `docs/pesquisa/audio-v8/antes_*.mp3` e `depois_*.mp3` (varredura de 15 s feita offline, sem estouros nem compressor do jogo).
+
+1. **Lenta** (solto, motor ligado): tem de soar como escape grave e irregular (cruzado), sem zumbido liso de um tom só. Era síntese pura; agora é a gravação do Chrysler.
+2. **Acelerada no grid** (segure o gás na contagem, ou em ponto morto com [N]): o giro sobe de ~800 a ~4000; ouça se há um "degrau" de timbre em torno de 1000–2000 rpm (o buraco entre as gravações, onde o grão é esticado) e se a subida fica fraca demais perto de 1500 rpm (a lenta ficou mais baixa que antes).
+3. **Puxada em 3ª** de 2000 até o corte: o timbre deve engrossar e subir de forma contínua. Pontos a conferir: a emenda em ~3500 rpm (NASCAR → Studebaker) e o alto (5000–6000), que antes era fino e agora é filtrado em 3 kHz: abafado demais ou bom?
+4. **Corte de giro** (6200–6400 nos cruzados): o limitador bate com falha de ignição; a síntese assume acima de ~7600 rpm.
+5. **Desaceleração**: tire o pé a partir de ~3000 rpm. O cruzado deve "borbulhar" (estouros graves e mais seguidos que antes); o plano não borbulha.
+
+Se algo estiver errado, os botões são `sint` (mais síntese = mais corpo e mais zumbido), `corpo` e `topoHz` (timbre) e `burble` em `GRAVACAO_DO_PERFIL`, em `sound/profiles.ts`; o filtro do Studebaker e a curva de volume por giro estão no comando de `juntar.py` do README das ferramentas.
+
+#### Fase 7 — parte visual (bodykit, efeitos, prévia, câmera, torque) — `implementada` (hashes no log; aguardando playtest)
+Fontes: D12, D16 e D17; `docs/pesquisa/visual-e-desafio.md` §1.4 (prévia da pintura contra a cena) e §2.2 (FOV dinâmico); `docs/pesquisa/fisica-carro.md` R2 (zoom ≤ 1,05, `PLAYER_Z` não pode mudar); ADR 0012 (torque no HUD). **Estética não muda a física**: nenhum campo novo é lido por `sim/`, `physics/` ou pela colisão.
+
+Checklist:
+- [x] **Bodykit como dados** (`cosmetic/bodykit.ts`), salvo em `CarCustom` por carro: kit de carroceria (sem kit, saias laterais, saias + difusor, widebody), aerofólio (os 3 de antes + asa alta), aro (padrão, aro fundo, corrida, turbofan), altura (original, rebaixado, stance com cambagem). Desenhado no sprite do carro (`drawPlayerCar`) e na garagem. Configuração salva por versão antiga carrega com o padrão (sem kit, aro padrão, altura original), que desenha **igual** a antes.
+- [x] **Efeitos**: cor da fumaça do escape (padrão, branca, preta, azul, rosa, verde) e cor da chama do nitro (laranja, azul, roxa, verde). Neon por baixo continua o de antes (`NEONS`). Padrão desenha igual.
+- [x] **Atalho de vitrine** [1] (garagem e prévia): presets prontos de bodykit, neon e escape para comparar; volta ao seu no fim do ciclo.
+- [x] **Garagem, aba estética** [H]: as opções novas ficam numa aba própria do painel, para não espremer a aba do carro. Teclas novas: [S] kit, [W] aro, [A] altura, [F] fumaça, [Q] chama, [D] câmera; as antigas ([C] [V] [B] [R] [G]) seguem valendo nas duas abas.
+- [x] **Prévia na pista** [P]: esconde o painel e mostra o carro no tamanho do jogo, na pista do bioma escolhido, no horário e clima escolhidos (O, K e X trocam ao vivo). Mostra o contraste da pintura contra o asfalto da cena (razão WCAG, §1.4) e avisa quando a pintura "some" (< 2:1).
+- [x] **FOV dinâmico** (só desenho): o campo de visão abre de 100° para até 104° entre 150 km/h e a máxima, com a câmera andando junto para o carro do jogador ficar no mesmo lugar e no mesmo tamanho ("dolly zoom"). `CAM_DEPTH` e `PLAYER_Z` não mudam; a colisão não muda. Opção na garagem para desligar ("câmera: fixa"), contra enjoo.
+- [x] **Torque no HUD**: mini curva de força do motor ao lado do conta-giros, com um ponto no giro atual e a faixa de força máxima marcada (pendência do ADR 0012).
+
+Critério de aceite:
+- Carro com customização padrão desenha igual a antes: o golden só muda pelos itens novos de tela (aba da garagem, câmera, torque), cada um em commit `test:` próprio com linha no Log.
+- Nenhum valor de física muda: `medidas.test.ts` e os testes de tração passam sem mexer.
+- Navegador: cada peça do bodykit aparece na garagem e na pista; fumaça e chama trocam de cor; a prévia muda com bioma, horário e clima; a 200 km/h o fundo "abre" sem o carro mexer na tela; nada de tremor novo.
+- Desempenho: o bodykit são até ~8 formas a mais por quadro, sem gradiente novo por quadro.
+
+Decisões provisórias (a confirmar pelo dono, ver seção 7):
+- Bodykit é **só visual** e liberado desde o começo (D17 trava só tuning e aerodinâmica com efeito). Aerofólio e difusor não dão pressão aerodinâmica.
+- Na corrida online e nos bots, os outros veem só a pintura (a rede leva só `paint`); bodykit dos rivais fica para depois.
+- FOV dinâmico ligado por padrão, com teto de +4° (abaixo dos +6° da pesquisa) por ainda existir o zoom de velocidade do R2; os dois juntos ficam ≤ 1,05 de escala no carro.
+- Luz de recorte, grading (G2), bloom falso (G6) e a opção "Visual leve/completo" da pesquisa ficam fora desta leva.
+
+Como testar (garagem do solo, `/autodash` → ENTER):
+1. **[H]** abre a aba estética. **[1]** é o atalho de vitrine: cada toque troca o carro inteiro por um visual pronto (rua limpa, drift JDM, time attack, neon noturno; a pintura fica a sua) e, depois do último, volta exatamente ao seu. Observe: saias, difusor, alargadores com rebites, aro, carro mais baixo com roda inclinada (stance), asa alta.
+2. **[S] [W] [A] [G]** trocam kit, aro, altura e aerofólio uma peça por vez; **[F] [Q]** a cor da fumaça e da chama; **[C]** a pintura. A linha "pintura no asfalto desta cena" fica vermelha quando a pintura some (< 2:1).
+3. **[P]** prévia na pista: o carro no tamanho do jogo. **[X] [O] [K]** trocam bioma, horário e clima ao vivo; **[1]** continua trocando o visual. Segure **[espaço]** (chama do nitro) e **[W]** (fumaça). Observe se a pintura e o neon aparecem à noite e na chuva. **[P]** ou **[ESC]** volta.
+4. **FOV e câmera:** **ENTER** (ou **[Z]**, pista vazia), acelere até passar de 150 km/h e segure; depois o nitro. Observe: o fundo e a pista "abrem" devagar (uns 7% no longe) sem o carro mudar de lugar nem de tamanho, e sem tremor novo; numa batida a lente fecha em ~0,6 s, sem tranco. Compare com **[D]** na aba estética (câmera: fixa). Se der enjoo, anote a velocidade.
+5. **Torque:** ao lado do conta-giros (só no PC). O ponto deve andar pela curva com o giro; nos turbo, a curva azul sobe até a cinza quando o turbo enche. A faixa verde é o pico de força: trocar perto dela.
+
+Pendente / não verificado:
+- Playtest: nada foi jogado por gente; os números (altura, abertura da lente, tamanho dos alargadores) são palpite a calibrar.
+- O FOV foi conferido por teste numérico da lente (`__tests__/fov.test.ts`) e por screenshot a ~210 km/h sem defeito, mas não lado a lado com a câmera fixa; enjoo só se mede jogando. No navegador, o painel ficou oculto e os quadros foram tocados por um laço de `MessageChannel` no lugar do `requestAnimationFrame` (ADR 0007).
+- Vitrine [1]: o "seu" visual guardado vive só na sessão; recarregar a página no meio do ciclo faz o preset atual virar o seu. Trocar de carro no meio deixa o carro anterior com o preset aplicado.
+- Asa alta encosta de leve no texto de crédito da gravação na garagem (motor com gravação real).
+- Bodykit não vai para a rede: rivais online e o fantasma do duelo aparecem sem kit.
+- Torque no HUD fica fora no celular; sem lugar definido para ele com os botões de toque.
+- Estouro do escape (pop) com chama visual: depende do evento de estouro do som (`sound/`, outra sessão); não ligado.
+
+Fases 4 em diante só são detalhadas quando a anterior for aprovada.
+
+### Fase 8 — Mundo com detalhe (NPCs, posto, eventos, cenário, biomas) — `planejada` (16/11)
+
+Pedido do playtest de 15–16/11: "elevar os detalhes do jogo". A jogabilidade base
+foi aprovada; esta fase é sobre o mundo ao redor. Ordem por impacto e risco: primeiro
+o que é bug ou atrito em toda partida, depois o que é visual.
+
+Fatos do código hoje (16/11):
+- `CivilianDriver` (traffic/driver.ts) procura o carro da frente só em `world.traffic`:
+  **o jogador não entra na busca**. Parado ou lento na faixa, o civil chega por trás e
+  só a colisão do spawner resolve. É a queixa "eles não param quando eu tô na frente".
+- Cenário de beira (render/road.ts) é um padrão fixo de 3 enfeites: árvore do bioma a
+  cada 4 segmentos, poste a cada 10, prédio a cada 51. Nada muda ao longo da pista.
+- Bioma (world/biomes.ts) muda só céu, camadas de fundo e a árvore. O traçado
+  (world/track.ts) é o mesmo para qualquer bioma: a costa tem o mesmo desenho de pista.
+- Posto (world/posto.ts, render/eventos.ts) é cobertura + bombas num ramal; não há
+  carros, loja nem parada de verdade (abastece andando a até 70 km/h).
+
+Checklist (cada item é um commit verificável; golden muda só em commit próprio):
+
+**8.1 NPCs respeitam o jogador** (bug de jogo, pequeno) — feito em 16/11, exceto o farol alto e o racha
+- [x] Civil, caminhão e comboio (o desafiante do racha ainda não) veem o jogador como "carro da
+  frente" na faixa (mesma busca de `ahead`, com a velocidade real do jogador).
+- [x] Freio com distância de parada (a regra `vAtras` da viatura, 15/11) em vez de
+  `ahead.speed × 0,7` quando o gap fica curto; luz de freio acesa quando freia.
+- [x] Parado atrás de você por mais de ~1,5 s: buzina curta e tenta passar pela faixa
+  livre (sem cortar ninguém). Lento demais na faixa da esquerda: farol alto.
+- [x] Teste (unidade, `civil-jogador.test.ts`): jogador parado numa faixa por 10 s com trânsito, zero
+  sobreposição de corpo com civis; civil desvia ou para atrás.
+
+**8.2 Posto de verdade** (o pedido mais citado) — feito em 16/11
+- [x] Cenário do posto: cobertura com teto iluminado à noite, 2–3 ilhas de bombas,
+  loja de conveniência com vitrine, totem de preço na entrada, faixa pintada de
+  entrada e saída, calçada. Marca genérica (nada de marca real).
+- [x] Carros no posto: 1–3 civis parados nas bombas (sprites `parked`). Feito: um
+  saindo pela faixa de aceleração e entrando na pista com seta (usa a regra do 8.1).
+- [x] Parada de verdade: parar no box da bomba (≤ 5 km/h) enche rápido (bico + barra
+  de litros); passar devagar continua enchendo devagar como hoje. Som de bomba.
+- [x] Teste: posto gera carros parados que nunca ficam na pista; abastecer parado é
+  mais rápido que passando.
+
+**8.3 Eventos com mais detalhe** (visual + leitura) — feito em 16/11
+- [x] Obra: máquina (retroescavadeira), cavaletes com luz piscando, trabalhador com
+  bandeira, placas "OBRAS 500 m".
+- [x] Acidente/óleo: dois carros batidos no acostamento com pisca-alerta, triângulo,
+  viatura ou guincho parado; mancha com reflexo.
+- [x] Blitz/radar: cones em funil, viatura com giroflex, guarda com colete; placa do
+  radar com a velocidade.
+- [x] Comboio: batedor com giroflex âmbar na frente e placa "CARGA LONGA".
+- [x] Cada evento com 1 som próprio curto (buzina de caminhão, sirene curta, britadeira).
+
+**8.4 Cenário por trechos** (sistema, depois conteúdo) — feito em 16/11 (sem passarela e guard-rail contínuo)
+- [x] `world/cenario.ts`: o bioma passa a ter TRECHOS (dados): tipo, comprimento,
+  densidade e lista de enfeites com lado, distância da pista e variação. A pista
+  alterna trechos (ex.: cidade densa → subúrbio → campo) com transição.
+- [x] Enfeites novos (sprites em canvas, sem imagem externa): prédios de alturas e
+  cores variadas, casas e muros, outdoor, ponto de ônibus, passarela, guard-rail
+  contínuo, cerca, plantação, placas de saída, árvores de 3 tipos.
+- [x] Orçamento de desempenho: teto de enfeites por quadro e o corte de distância que
+  a corrida já usa (o desenho de beira era 70% do quadro na corrida).
+
+**8.5 Biomas novos e pista por bioma** — feito em 16/11 (sem túnel próprio da serra; o túnel raro serve a todos)
+- [x] Traçado por bioma (perfil de curvas e morros como dados): cidade (curvas médias),
+  costa (orla com curvas longas e abertas), serra (curvas fechadas e subidas).
+- [x] Bioma **serra**: montanhas perto, pinheiros, neblina frequente, guard-rail,
+  túnel curto (reaproveita o eco do viaduto no som).
+- [x] Bioma **rodovia/interior**: retas longas, campo, caminhões mais frequentes,
+  pôr do sol largo, postos mais espaçados (o combustível passa a importar).
+- [x] Bioma no solo muda ao longo da partida (a cada N níveis) com transição suave,
+  em vez de ser escolhido só no menu.
+
+**8.6 Viaduto de verdade** (pedido de 16/11: "mais funcional e mais bonito") — feito em 16/11 (elevado no lugar de "subir no viaduto"; viatura de tocaia feita; falta o carro parado na alça)
+- [x] Hoje o viaduto é um sprite que cruza por cima mais uma alça de acesso à direita
+  com carros entrando. Passa a ser um trevo: alça de SAÍDA antes (carros saindo da
+  pista com seta) e alça de ENTRADA depois, com carros usando as duas.
+- [x] Caminho para subir: ramal (ADR 0014) que sobe a alça e cruza por cima do viaduto
+  e volta à pista mais à frente (atalho ou caminho alternativo com trânsito próprio).
+- [ ] Mais eventos no viaduto: carro parado no acostamento da alça, viatura de tocaia
+  embaixo (com estrelas), helicóptero perdendo você embaixo (já existe, fica visível).
+- [x] Visual: pilares com sombra, juntas de dilatação, iluminação à noite, pichação.
+
+**8.7 Túnel raro** (como a ponte: zona longa que aparece de vez em quando) — feito em 16/11
+- [x] Zona `tunnel`: entrada com boca de concreto, teto e paredes com luzes em fila
+  passando, escuro com faróis, saída com o clarão. Rara no sorteio (peso baixo).
+- [x] Som: eco forte do motor (reaproveita o eco do viaduto). Helicóptero te perde lá dentro.
+  Ventilação feita; falta o radar.
+- [x] Cartão de aviso "TÚNEL" e placa de faróis; chuva para lá dentro.
+
+Como testar a Fase 8 (roteiro completo com linha de feedback: [ROTEIRO-FASE8.md](ROTEIRO-FASE8.md)):
+1. NPCs (8.1): pare ou ande devagar numa faixa com trânsito vindo atrás. O carro de
+   trás acende a luz de freio, para atrás de você, buzina depois de ~1,5 s e passa
+   pela faixa livre. Ninguém deve entrar na sua traseira parado.
+2. Posto (8.2): tecla **1** (ou gaste até 45%). Entre pela direita, siga na faixa de
+   dentro e pare ao lado da ilha: o HUD mostra os litros e enche rápido (~2,5 s o
+   tanque). Passando devagar enche bem menos. Olhe a loja, o totem e os carros na
+   faixa de fora.
+3. Viaduto (8.6): tecla **7**. Na placa "SAÍDA", entre na faixa da direita e siga o
+   elevado: a câmera sobe, há mureta dos dois lados e nitro lá em cima; ele desce e
+   devolve você à pista. Repare nos carros subindo e descendo e, de baixo, nas luzes
+   e pichações do viaduto.
+4. Túnel (8.7): tecla **8**. Boca na montanha, luzes no teto, faróis acendendo, eco,
+   a saída clara lá no fundo e o clarão ao sair. Com chuva, ela para lá dentro; com
+   estrelas da polícia (garagem [L]), o helicóptero te perde.
+5. Cenário (8.4): só dirigir. A cada ~10–20 s a beira muda de tipo (centro com
+   prédios, subúrbio com casas, campo com cercas e plantação). Na garagem, **[X]**
+   troca o bioma para a costa: orla com quiosques, guarda-sóis e palmeiras; o mar do
+   fundo quase não anda na curva.
+
+Pendências que ficaram da rodada de som (15/11), fora desta fase: V6 biturbo ainda no
+VQ35 aproximado; W16 e rotativo só síntese; puxada de pé leve (E) não gravada.
+
+Critério de aceite da fase: build, lint e testes verdes; golden muda só em commits
+próprios com linha no log. No navegador: civil não bate na sua traseira parado; o
+posto tem carros e dá para parar na bomba; cada evento tem um detalhe novo visível de
+longe; dá para ver pelo menos 2 tipos de trecho de cenário numa partida; serra jogável;
+o viaduto tem carros saindo e entrando e um caminho por cima; o túnel aparece de vez em quando.
 
 ## 9. Ideias de rodadas e drift (para brainstorm, não implementar)
 
-_Preencher na Fase 0._
+1. **Sprint A → B:** sem volta, do ponto A ao B. Ganha quem chega primeiro; o trajeto escolhido (atalho ou não) define o tempo.
+2. **Arrancada (drag):** 400 m em reta, semáforo, troca de marcha. Pontua o tempo de 0 a 100 km/h e o tempo final.
+3. **Rally:** trechos cronometrados em terra, com aderência variável. Estourar o tempo do trecho soma penalidade, sem reset.
+4. **Contrarrelógio com fantasma:** corre contra o melhor tempo salvo. O fantasma é o replay do melhor tempo.
+5. **Eliminação:** a cada volta sai o último colocado. Vence o último pé no acelerador. Sem teleporte.
+6. **Corrida de rota:** pista com ramificações. Cada atalho tem mais risco e mais tráfego, mas economiza tempo.
+7. **Drift por pontos:** ângulo e tempo de drift viram pontos, com combo por cadeia. Bater zera o combo, não a corrida.
+8. **Drift em dupla (tandem):** dois carros, pontos por proximidade e sincronia. Quem sai na frente perde pontos.
+9. **Corrida de chuva com névoa:** visibilidade cai e o alcance encurta. Pontua por volta limpa, sem bater.
+10. **Racha com desafio:** duas ou três paradas com a posição final como desafio, sem dinheiro. Pontos de reputação, não moeda.
+
+Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontuação (seção 7).
+
+Atualização 16/11: o drift por pontos (7) entrou como mecânica do solo (`world/drift.ts`:
+Shift = freio de mão, pontos por velocidade × ângulo, zona de drift em dobro), sem
+combo por cadeia ainda.
+
+**Ideias futuras registradas (16/11):**
+- Bíblia de cenários (`CENARIOS.md`): distritos de Tokyo, Costa em 6 segmentos e Praia
+  como hub. Já entrou: Shibuya, Shinjuku e oficinas na cidade, sempre de noite.
+  Faltam: Shuto (elevado contínuo com luz de sódio), Wangan, Daikoku como hub, Touge,
+  a Costa em segmentos e a Praia.
+- Evento "Shibuya destruída": a cidade em ruínas por uma luta de dois personagens
+  poderosos ao fundo (pedido do usuário, só para o futuro). Personagens e visual
+  precisam ser nossos, não de anime existente.
 
 ## 10. Log de mudanças
 
 | Data | Commit | O que mudou | Snapshot do golden |
 |---|---|---|---|
 | 2026-11-13 | (esta spec) | Criação do guia vivo | não alterado |
+| 2026-11-13 | ea1e68f | Fase 1a: `BIOMES` como dados, cidade com desenho idêntico. | não alterado |
+| 2026-11-13 | c37ea84 | Fase 1b: camada perto da cidade (brilho urbano no horizonte, só à noite). | atualizado nas 2 cenas de corrida (noturnas). O replay solo não mudou (fato). O motivo escrito no commit ("trecho de dia") não foi verificado. |
+| 2026-11-13 | c6d8999 | Fase 1c-i: bioma costa (mar, palmeiras, píer, palmeira de beira). | não alterado |
+| 2026-11-13 | d0f8e39 | Fase 1c-ii: seletor de bioma na garagem (tecla X e pill). | atualizado no replay solo (+98 chamadas pela pill nova). Cenas de corrida não mudaram. |
+| 2026-11-13 | b6451b0 | Fase 2a: tração, pneus e relação final na física (`physics/traction.ts`); carro padrão inalterado. | não alterado |
+| 2026-11-13 | 9f4cd77 | Fase 2b: quatro carros de teste de tração. | atualizado no replay solo (garagem mostra "1 / 16"; só o hash muda, as chamadas de desenho não). Cenas de corrida não mudaram. |
+| 2026-11-13 | d637260 | Revisão da Fase 2: `steerK` (direção por tração) e `wheelspinK` (patinada); seletor de bioma troca o cenário na hora. | não alterado |
+| 2026-11-13 | 5ee3269 | Garagem mostra tração e pneu do carro. | atualizado no replay solo (+14 chamadas de texto). |
+| 2026-11-13 | 81ce03d, e1174c3, 35a7804 | Fase 3a: ADR 0014; circuitos fixos e ramais (dados, física, render); bots, minimapa e prévia com ramais. | não alterado |
+| 2026-11-13 | a87237c | Fase 3b: escolha de pista, prévia e reconhecimento no lobby; pista na seed; API aceita seed. | atualizado nas 2 cenas de corrida (largam no circuito fixo; lobby com painel). Solo e duelo não mudaram. |
+| 2026-11-13 | 6cbd80b | Câmbio automático reduz marcha sem gás e faz kickdown (antes ficava preso na 6ª acima de ~42 km/h). | atualizado nas 2 cenas de corrida (dirigem no automático). |
+| 2026-11-13 | fb780c5, d8efd4a | Fase 4: relógio em ticks e clima como dados; ligados à física, céu, névoa, HUD e menus. | atualizado nos 3 cenários: HUD com relógio, pills novas, sorteio de clima fora do `Math.random`. |
+| 2026-11-13 | 5b01da3, dbb3f8a | Som de motor por pulsos (AudioWorklet), perfis por motor, turbo, compressor e estouros. | não alterado (harness sem áudio). |
+| 2026-11-13 | f3e02e6 | Motor por carro segue a inspiração; seletor de motor na garagem [E] com acelerada de amostra. | atualizado no replay solo (pill nova na garagem). |
+| 2026-11-13 | 8cceb5a | Motor real na física: lenta, corte, curva e turbo por motor; câmbio, largada e conta-giros seguem o motor. | atualizado nos 3 cenários (carro padrão agora com V10 de 8700 e conta-giros até 9). |
+| 2026-11-14 | 115de27, 684bca6, b0a95b7, b1e8816 | Som por guias de onda, turbo com eixo, câmbio por carro (4 a 9 marchas), giro com caráter. | atualizado (solo pela garagem; cenários pelo giro do grid). |
+| 2026-11-14 | 9f709ef … c5d95e7 | Feel da física (R1–R6, P4, P5 de `docs/pesquisa/fisica-carro.md`): giro na troca, limitador físico, patinada visível, câmera (zoom, trauma, chute), spool por giro, rampa do acelerador, eixo do turbo com memória, teto suave. Trava de equilíbrio em `__tests__/medidas.test.ts`. | atualizado em R1 e R3 (giro no hash), R2 (câmera nas 2 corridas), P5 (corrida com bots) e em 2904a91 (estado do áudio). Detalhe na seção "Aplicado" da pesquisa. |
+| 2026-11-14 | dc3a831 … e0b6a30 | Motor com gravação real CC0 (Renault 19, grãos síncronos ao giro, `sound/motor-gravado.ts`, `tools/som/`) nos 4 cilindros e como textura nos demais; partida com chave no grid; ambiente por convolução e eco sob o viaduto; revisão do som (janela com giro variando, falha do limitador, NaN, corrida no carregamento, folga antes da saturação). Pesquisa de gravações por família em `docs/pesquisa/gravacoes-motor.md` (baixar exige aprovação por arquivo). | atualizado em 2904a91 (estado do áudio). |
+| 2026-11-14 | (este) | Giro solto com velocidade máxima por motor (`giroSolto`); conta-giros e som seguem `giroSom`, que desliza até o giro da física (τ 45 ms) e não pula na troca; carga mínima de 0,45 na troca (som não corta); apito do turbo pela pressão da física. Modo de teste de motor: garagem [Z], pista vazia, `[ ]` troca o motor. | atualizado nos 3 cenários: conta-giros desenha `giroSom` e o giro do grid sobe mais devagar. |
+| 2026-11-14 | c5a233d | Fase 5 detalhada no guia (checklist, aceite, decisões provisórias). | não alterado |
+| 2026-11-14 | 6f350ff, 4f8689f | Fase 5: combustível e posto no solo (tanque, consumo por pé/giro/nitro, posto como ramal, pane seca). | atualizado no replay solo: medidor COMB no HUD. |
+| 2026-11-14 | dccd3c0 | Fase 5: convite de racha com reputação e rival que fecha (E7). | não alterado (o convite vem depois do fim dos replays). |
+| 2026-11-14 | b0f8e84, 9e5cc4c | Fase 5: obra com estreitamento (E4), comboio com fresta (E6), óleo após acidente (E15) no sorteio de eventos. | atualizado no replay solo: o evento sorteado do replay mudou. |
+| 2026-11-14 | c9d0bcd, 754833d, 661cf0a | Fase 5: vácuo com estilingue (E9) e caminhão trocando de faixa (E1). | atualizado: corrida com bots pelo vácuo, solo pelo caminhão (atribuição medida). Clique e duelo não mudam. |
+| 2026-11-14 | 87fbcba | Atalho de teste da Fase 5 na garagem [H] e roteiro "Como testar". | atualizado no replay solo: pílula nova na garagem (+98 chamadas). |
+| 2026-11-14 | 606bfc6, aeac94c, ad362c4, e29459e, e334e16 | Fase 6: GUIA detalhado; nível de procurado (calor, infrações, despiste, esfriamento, viaturas por estrela, tecla O); HUD de estrelas; tapete de pregos (E8); teste de cenário com sonda no harness. | não alterado |
+| 2026-11-14 | 380d989 | Viaturas paradas da blitz e do radar morriam ao nascer (limite à frente menor que o ponto de nascimento dos eventos). | não alterado (os replays não chegam à blitz) |
+| 2026-11-14 | cdabbe9, 221bdd3, f124c6f | Fase 6: bloqueio com fresta (E10), helicóptero com holofote (E13), anúncio de estrela sem empilhar. | não alterado |
+| 2026-11-14 | 6d3adc8, (este) | Atalho de teste de polícia: garagem [P], estrelas 0–5. Texto "testes: [Z] motor · [P] polícia" na garagem. | atualizado no replay solo (+35 chamadas: o texto na garagem). Cenas de corrida e duelo não mudaram. |
+| 2026-11-14 | (merge da Fase 6) | Fases 5 e 6 juntas no branch do v2. Atalhos de teste da garagem viram três pílulas: motor [Z], racha [H], polícia [P] (depois [J] e [L], no merge da Fase 7); no teste de polícia os dígitos são só estrelas (eventos 1–6 da Fase 5 desligados). `limparTestes` em flow.ts. | atualizado no replay solo (+196 chamadas: as três pílulas no lugar de pílula + texto). Fim de partida igual. |
+| 2026-11-14 | 64129fa, 4ad9eb5 | Fase 7 visual: guia detalhado; bodykit (kit, aro, altura, asa alta) e cor de fumaça e chama como dados em `CarCustom`, desenhados no sprite. Padrão desenha igual. | não alterado |
+| 2026-11-14 | 582df8a, a8f9843 | Garagem: aba estética [H] e prévia na pista [P] com contraste da pintura no asfalto. | atualizado no replay solo (pills das abas, +196 chamadas). |
+| 2026-11-14 | 32d23eb, 082980c | FOV dinâmico (dolly zoom, só desenho; `CAM_DEPTH`/`PLAYER_Z` iguais), desligável na garagem. | atualizado no replay solo e na corrida com bots (passam de 150 km/h). |
+| 2026-11-14 | f733ffd, fb74fe0 | Torque do motor no HUD (mini curva e ponto no giro). | atualizado nos 3 cenários que dirigem. |
+| 2026-11-14 | (merge da Fase 7) | Fases 5, 6 e 7 juntas. [H] e [P] da garagem ficam com a Fase 7 (aba estética e prévia); teste da Fase 5 vai para [J] e teste de polícia para [L]. O [F] não colide (farol na corrida, cor da fumaça na garagem). | atualizado (solo e cenários) pela soma das três fases. |
+| 2026-11-15 | (neutro, aceleração, este) | Neutro escolhe a marcha pela velocidade; ESCALA_ACEL 0,65 (aceleração mais real, mesma final); fatorTroca e motor i6-aspirado; corte sem ruído sorteado; limitador no master. | atualizado (solo e cenários): as arrancadas ficam mais longas com ESCALA_ACEL. Fim das partidas igual. |
+| 2026-11-14 | (partida) | Partida do motor como animação de 1,3 s antes do semáforo (D27): `countT` parado, sem luzes, sem gás, sem contagem de nada; HUD "ligando…" e tranco da câmera; ronco entra no fim. Duelo fica de fora. Teste em `__tests__/partida.test.ts`. | atualizado nos 3 cenários que largam (solo, corrida com bots, clique): a largada atrasa ~1,3 s. Duelo não mudou. |
+| 2026-11-14 | (som V8) | V8 novo: banco `v8-escape` (CC BY: lonemonk e enginemusic, créditos atualizados), `juntar.py`, render offline do motor (`render-motor.test.ts`, só com `RENDER_MOTOR`), mixagem `sint`/`corpo`/`topoHz`/`burble` por gravação, `bancos-som.test.ts`. | não alterado (os replays usam o V10 e não carregam áudio) |
+| 2026-11-15 | (merge partida + V8) | Branch da partida e do V8 junto às correções de neutro e aceleração. | atualizado (solo e cenários): soma da largada 1,3 s mais tarde com ESCALA_ACEL. |
+| 2026-11-15 | (som: corte e V8, este) | Corte do limitador no som na batida da física (13 Hz, 55% cortado), na gravação e na síntese; antes era falha sorteada por explosão (chiado) e, no V8, a falha nem acontecia (sem grão de alívio no giro do corte). Estampido do corte grave. Grão em banco ralo: sorteio entre ≥12 candidatos sem repetir os 4 últimos (fim do pente acima de 4800 rpm). Alto do `v8-escape` com timbre casado ao meio (`casar_timbre.py`). Medido no render offline (`render-motor.test.ts` agora com 1,5 s de corte): ritmo do corte 1,2 → 9,1 no V8 cruzado; laço 0%. Pendente: V8 plano acima de 4200 rpm é só síntese (periódica). Playtest de 15/11: ainda ruim — começa razoável e, ao acelerar, "perde a textura original" e fica opaco (troca de fonte e esticamento). Precisa de outra abordagem, não de mais ajuste. | não alterado (som não entra no golden) |
+| 2026-11-15 | (som: bancos do simulador, este) | Nova abordagem do som: 7 motores gravados no Engine Simulator (MIT) com puxada no dinamômetro, um motor da lenta ao corte, sem emenda: V8 GM LS, V10 LFA, V12 412 T2, I4 VTEC (B18C5), V6 (VQ35 aprox.), I6 2JZ e I6 (RB26 aprox.). Bancos `sim-*` (`trilha_dino.py`, `nivelar_lenta.py`); perfis quase só gravação (sint 0,05). V8 aprovado de ouvido pelo usuário antes de virar banco. Piso do ajuste de nível 0,4 → 0,25. | atualizado no replay solo (+35 chamadas: crédito da gravação do V10 na garagem). |
+| 2026-11-15 | (eventos e polimento, este) | Cartão de aviso dos eventos no HUD (`world/avisos.ts`, `render/avisos.ts`): ícone, nome, dica, segundos até chegar, "AGORA" e "fim N s" nas zonas longas; substitui o texto de 1,6 s em todos os eventos (inclusive pregos e bloqueio). Textos flutuantes não se sobrepõem (`arrumarFloaters`). Ritmo (`RITMO` em `world/events.ts`): o relógio só conta sem evento rolando, 20–30 s no nível 1 caindo 2,5 s por nível até 9–16 s, 8 s de respiro na virada de nível, sem repetir os 2 últimos; sorteio dos eventos antigos no `eng.rngEv`. Teste em `__tests__/eventos-ritmo.test.ts`. | atualizado no replay solo (14479914 → 14487408 chamadas): o primeiro evento, aos 12 s, agora desenha o cartão e o sorteio interno vem da seed. Fim de partida igual. |
+| 2026-11-15 | 931dfef, 9bda450, (volume, este) | Playtest 15/11. Turbo: na troca de marcha a pressão alivia (`aliviaNaTroca`) e o som do turbo vê carga zero (pssh e apito caindo); antes ficava cheio, como antilag. Força depois da troca igual (medidas inalteradas). Polícia: viatura olha o trânsito até 13 mil u e freia a tempo (não passa por dentro dos carros), só troca para faixa com folga, não fica parada logo à sua frente; 1★ com teto 195 e arrancada 42. Volume do motor 0,5 → 0,8 no master (+4 dB, `VOLUME_MOTOR`). | não alterado |
+| 2026-11-15 | (som: segunda sessão do simulador, este) | Bancos novos gravados no Engine Simulator: Ferrari F136 no V8 plano (era a Ferrari 360 só até 4400 rpm; banco `v8-plano` removido), Chevrolet 454 no V8 do Ford, Audi 2.3 no 5 cilindros, Subaru EJ25 no boxer 4 e um VQ35HR nosso (coletores longos de mesmo comprimento num escape só, Tomei 264, volante leve) no V6; V10 e V12 regravados (V12 da lenta a 11690 rpm). `trilha_dino.py` ganha `LENTA=` (o pente pega o dobro da lenta no boxer e no VQ35HR). Piso do ajuste de nível 0,25 → 0,2 (`NIVEL_PISO`). Janelas e arquivos `.mr` no README de `tools/som`. Não ouvido no jogo ainda. | não alterado (som não entra no golden) |
+| 2026-11-15 | (som: terceira sessão do simulador, este) | BMW M52 no 6 em linha aspirado (era o 2JZ), boxer 6 nosso (derivado do EJ25, ignição alternada como no 911) nos dois boxer 6 (era a gravação do 911 só até 3200 rpm; banco `boxer6` removido) e 3 em linha 1.0 nosso (derivado do Audi 5) no i3, que era só síntese. `marcas.py`: limiar 15/max(K,4) (no 3 cilindros a puxada virava "estável"). Não ouvido no jogo ainda. | não alterado (som não entra no golden) |
+| 2026-11-16 | (Fase 8.1, este) | Civil e comboio enxergam o jogador na faixa (até 12 mil u) e freiam a tempo (v² = v_jogador² + 2·75·folga), parando atrás; luz de freio nos civis abaixo do cruzeiro; preso atrás de você por 1,5 s buzina (baixa, no máximo a cada 1,2 s) e tenta passar pela faixa livre. Teste em `__tests__/civil-jogador.test.ts`. Desafiante do racha ainda não vê o jogador. | atualizado nos 3 cenários (luz de freio dos civis, inclusive no trânsito de fundo do menu, e a freada atrás do jogador); fim das partidas igual. |
+| 2026-11-16 | (Fase 8.2, este) | Posto de verdade: pátio com duas faixas de bomba e ilha no meio (guia amarela), cobertura com a marca genérica "POSTO AUTOHUB 24h", duas bombas com visor e mangueira, loja de conveniência com vitrine acesa à noite, totem de preço na entrada; 1–3 carros abastecendo na faixa de fora (estacionados, `eng.rngEv`). Bomba: passando devagar 4 L/s (era 10); parado ao lado da ilha 20 L/s; HUD com litros e dica. Som da bomba (clique, zumbido, trava). Estacionados vivem até 2×DRAW_DIST + 300 à frente (os do posto morriam ao nascer). Teste em `__tests__/posto.cenario.test.ts`. | não alterado (o posto não aparece nos replays) |
+| 2026-11-16 | (Fase 8.6, este) | Viaduto vira trevo com ELEVADO: ramal à direita (ADR 0014) que sai colado da pista, descola, sobe até 4100 u no cruzamento (platô) e desce, devolvendo à pista (`alto`/`topo` no Ramal, `elevacao`, `VIADUTO` em world/events.ts). Câmera sobe junto (`eng.elevJogador`); mureta dos dois lados no alto (raspar segura o carro); embaixo não dá para entrar nos pilares. Desenho do elevado como sprite por segmento (tabuleiro, muretas com junta, parede, pilares, fundo da laje visto de baixo, postes). Carros sobem (seta na faixa colada) e descem entrando na via; nitro, x2 e nitro no platô. Viaduto com juntas, postes acesos à noite e pichação nos pilares; a alça desenhada antiga e a faixa de aceleração saíram. Reciclagem limpa o estado de elevado do carro (ele voltava teleportado para cima). Teste em `__tests__/viaduto.cenario.test.ts`. | não alterado (o viaduto não aparece nos replays) |
+| 2026-11-16 | (Fase 8.7, este) | Túnel raro (`world/tunel.ts`, `render/tunel.ts`): zona de 280 segmentos (cabe na distância de desenho: a saída aparece no fundo), relevo plano e curvas suavizadas; entra no sorteio só com 30% de chance por evento. Boca com montanha e pórtico "TÚNEL DA SERRA"; dentro, paredes com azulejo, teto, duas filas de luz, placa de emergência, asfalto escurecido, faróis acesos, sem chuva, eco (o mesmo do viaduto) e o helicóptero cego; a luz do fim do túnel e o clarão na saída. Placas "TÚNEL 2 km / 1 km / ACENDA OS FARÓIS" e cartão. Tecla 8 no solo. Teste em `__tests__/tunel.cenario.test.ts`. | atualizado no replay solo: o sorteio do túnel usa um número a mais de `eng.rngEv`, então o evento sorteado no replay muda. Fim de partida igual. |
+| 2026-11-16 | (Fase 8.4, este) | Cenário de beira por trechos (`world/cenario.ts`, `render/cenario.ts`): a pista do solo alterna trechos de 320–720 segmentos (cidade: centro, subúrbio, campo; costa: orla, subúrbio, campo), com 40 segmentos de mistura na transição; enfeites por hash do índice (sem sorteio no render), no máximo 3 por segmento. Enfeites novos: casa, muro, cerca, ponto de ônibus, árvore larga, pinheiro, plantação, celeiro, quiosque, guarda-sol, prédio médio. Nada em cima do posto nem do ramal/elevado. ~3,2 ms por quadro medido no navegador. Costa: mar, palmeiras e píer do fundo a 0,08 da curva (era 0,25, mais que as montanhas da cidade; ainda "viravam junto"). Teste em `__tests__/cenario.test.ts`. | atualizado nos 4 cenários: o solo (+20% de chamadas: o cenário novo) e a estrada de fundo do menu nos outros três. Fim das partidas igual. |
+| 2026-11-16 | (Fase 8.3 e óleo, este) | Cenografia dos eventos (`render/cena.ts`; obstáculo `cena` não bate, `barrier` com `visual` bate e desenha outra coisa): obra com retroescavadeira na faixa fechada e trabalhadores com bandeira; lâmpada piscando em todo cavalete; acidente com o segundo carro batido, guincho com giroflex âmbar, triângulo e cacos; blitz com guardas de colete e lanterna; radar com o poste e a câmera; comboio com faixa "CARGA LONGA" e batedor de giroflex âmbar no acostamento. Sons (`world/somEventos.ts`): britadeira perto da obra, buzina a ar ao encostar no comboio, sirene curta antes da blitz. Óleo (playtest: "não faz nada"): tranco lateral ao pisar, rabeada 1,1 → 3,4 por 1,2 s, roda patinando, -6% de velocidade, fumaça e câmera. Testes em `__tests__/oleo.cenario.test.ts`. | não alterado |
+| 2026-11-16 | (Fase 8.5, este) | Biomas com traçado próprio (`tracado` no bioma: curva, morro, reta; só no corpo da pista procedural do solo, a cidade fica igual). Serra (curva ×1,2, morro ×1,8, retas ×0,6; pinheiral no fundo, árvore pinheiro, neblina com peso dobrado, trecho "mata" com guard-rail, pinheiros e pedras) e rodovia (curva ×0,55, morro ×0,6, retas ×1,8; colinas no fundo, árvore larga, campo mais frequente). Costa com curva ×0,8 e morro ×0,5. Região muda a cada 3 níveis no solo (`world/regiao.ts`): bioma, fundo, árvore, trechos e climas; as curvas fora da tela são reescaladas pelo traçado novo (os morros ficam). Tecla 9 troca na hora. Teste em `__tests__/regiao.test.ts`. | não alterado |
+| 2026-11-16 | (pendências da Fase 8, este) | Posto: com você chegando (9 mil u), o carro da frente termina de abastecer, sai pelo pátio acelerando e entra na faixa da direita com seta. Viaduto: com você procurado, viatura de tocaia no acostamento embaixo dele, que liga a sirene e sai atrás quando você passa. Túnel: ronco de ventilação enquanto você está dentro. O desafiante do racha enxergando o jogador ficou de fora (quebrava o cenário calibrado do racha). Testes em `posto.cenario` e `viaduto.cenario`. | não alterado |
+| 2026-11-16 | f1ceaa8 | Posto mais completo: pátio de concreto com guia, setas pintadas e calçada da loja, dois carros estacionados na loja, frentista acenando (`cena` "frentista"), postes de luz, calibrador, lava-rápido e placa SAÍDA (ENF 33–35). Viaduto: quatro ruas da cidade cruzando no chão embaixo do elevado, dos dois lados e sem cruzar a pista, com carros passando de lado (só desenho). | não alterado (cenário é do solo) |
+| 2026-11-16 | (ladeira, este) | Playtest 16/11: "subindo o carro pesa demais, nem reduzindo muda nada" e "saindo do viaduto o carro nem embala". Subida 120·grade → `LADEIRA.sobe` 45·grade km/h/s (a de antes era ~3× a força do motor em marcha alta; agora 6% de rampa não derruba quem está no pé e a de 13% cobra devagar); descida igual (210). Em cima do elevado a rampa dele entra na inclinação (`ELEV_LADEIRA` 0,6 da derivada da altura): descer a rampa sem acelerar embala ~+28 km/h. Teste `ladeira.test.ts`. | **alterado**: a pista do golden tem morros; a subida mais leve muda a velocidade e, com ela, tudo que vem depois |
+| 2026-11-16 | (cidade Tokyo, este) | Playtest 16/11: "cidade com mais cara de Tokyo Drift". Bíblia de cenários trazida para `CENARIOS.md`. Trechos da cidade agora são distritos com 1 cor dominante + 1 de acento: **shibuya** (magenta + branco: telões que trocam de imagem, fachadas de letreiros, multidão com guarda-chuva transparente, máquina de bebida), **shinjuku** (ciano + magenta: prédios de letreiros, letreiros verticais, izakaya com lanternas, vapor de bueiro), **oficinas** (verde konbini: galpões de tuning com carro no elevador, pneus, konbini) e subúrbio; centro e campo saem da cidade. Poste com fiação atravessando a pista (o par da direita é achado pela distância fixa). Desenho em `render/tokyo.ts`, com LOD (longe: bloco + faixa; halo só bem de perto: eram 66 halos por quadro, mediana 4,8 ms contra 3,1 no subúrbio). Céu da cidade sempre de noite (`CEU_TOKYO`: noite azul-petróleo ↔ crepúsculo magenta, amb < 0,62). | **alterado**: o golden do solo roda na cidade (céu e enfeites novos) |
+| 2026-11-16 | (drift, este) | Drift com freio de mão (`world/drift.ts`): Shift com o volante virado acima de 70 km/h abre a traseira (até 0,5 rad, só desenho: o carro gira e desliza na tela), fuma e chia, perde 7 km/h/s e, com o volante para dentro da curva, anula 60% da força que joga para fora. Pontos = velocidade × ângulo; soltar fecha com "DRIFT +N" (mínimo 30); bater, encostão, cone ou sair da pista perdem os pontos. Zona de drift (evento `drift`, tecla 0; sozinho só na cidade e na serra, 35% de chance por sorteio, como o túnel): 300 segmentos de S com curva 5,5 além do horizonte, placas magenta, pontos em dobro e o total na saída. Contador no alto da tela. Teste `drift.test.ts`. | **alterado** (só o do solo): a cidade faz um sorteio a mais por evento |
+| 2026-11-16 | (cidade variada, este) | Playtest 16/11: "o começo só tem casinha escrito TUNE", "tudo do mesmo tamanho, sem personalidade", "otimizar os vidros", "pessoinhas andando". A cidade agora chega pelo mato (360 segmentos), passa pela entrada com outdoors, postes e casas espaçadas (420) e entra em Shibuya (`CHEGADA_CIDADE`). Distritos viram QUARTEIRÃO VARIADO: um lote a cada 3 segmentos de cada lado, sorteado por peso do distrito (`LOTES`), com largura e recuo próprios: lojinha de 1–2 andares com toldo, prédio de 3 a 10 andares em 9 cores de fachada (caixa d'água, outdoor no teto ou nada; letreiro vertical em 1 de 3), estacionamento com carros e placa P, vão vazio; neon só em parte. Pedestres andando (pernas em passo, grupos que deslizam pela calçada, guarda-chuva). Janelas do prédio alto e do médio por andar/coluna: antes o padrão vinha da posição na tela e piscava com o prédio andando. LOD: vidro em bloco a meia distância, pedestre some longe. Mediana 4,7 ms (Shibuya) e 3,9 ms (Shinjuku). | **alterado**: cenário da cidade (chegada, lotes, pedestres) |
+| 2026-11-16 | (corte de giro, este) | Playtest 16/11: "o corte de giro não funciona muito bem". Achado: em ponto morto (grid e neutro) o pé no fundo parava em 94% da faixa e nunca batia no corte; engatado, só o som pulsava e o ponteiro ficava parado. Agora o giro solto vai até o corte (o bate-volta aleatório do grid saiu) e, no corte, o ponteiro bate e volta na mesma batida do som (`giroDoSom`). Largada: acima de 84% da faixa já era patinada, então o grid com o pé no fundo continua patinando. Precisa de playtest para dizer se era isso. | **alterado**: o giro do grid mudou (pé no fundo até o corte) |
+| 2026-11-16 | (rodada 3 do playtest, este) | 1) **Carros invisíveis no elevado** ("ficam invisíveis mas estão ali, já morri assim"): em cima do elevado a câmera sobe 4100 u e a pista de baixo fica fora da tela por um trecho À FRENTE do jogador; o render tratava isso como campo próximo (entre a câmera e você) e não desenhava civis, pickups nem obstáculos dali. Agora o campo próximo vale só atrás do jogador (`pertoDaCamera` em render/road.ts). Conferido no navegador: carro no tabuleiro à frente aparece. 2) **Guard-rail**: era um sprite solto por segmento alternando de lado ("desenho cinza que não faz nada"); agora é a lâmina contínua dos dois lados nos trechos de mata, com reflexo e poste a cada 2 segmentos (`drawGuardRail`, sprite `rail`). 3) **Transições**: clima novo se mistura ao anterior em 8 s (luz, névoa, aderência, freio e a chuva engrossando/afinando; `climaAtual` devolve o clima misturado); região nova em 5 s (céu misturado e o fundo antigo sumindo por cima), sem a escurecida, e o cenário que está na tela continua até depois do horizonte. 4) **Cidade menos poluída**: lote a cada 4 segmentos, lados desencontrados, largura 0,7–1,4×, um em quatro bem recuado; menos fachada de neon, mais vão e estacionamento. | **alterado** (render da pista e clima) |
+| 2026-11-16 | (touge, este) | Playtest 16/11: "o drift ficou confuso; melhor algo fechado, tipo batalha de chefe de PS2: aperta na hora certa e escorrega". A zona de drift sai; entra o **duelo de touge** (`world/touge.ts`, HUD em `render/touge.ts`): um rival (RYO, KEN ou NAOMI) desafia você numa sequência de 6 curvas fechadas (curva 6,8) além do horizonte, sem trânsito à frente. Cada curva tem placa no ponto de entrada e um anel que fecha até ele: Shift no tempo certo dá PERFEITO (±0,12 s: drift de roteiro, anula a força da curva, sem perder velocidade, rival −25) ou BOM (±0,30 s: anula 75%, perde um pouco, rival −12); cedo, tarde ou nada é ERROU (sai de frente, −22 km/h/s, você −30). Fora da pista tira vida devagar. Barras de vida dos dois no alto; o rival anda à sua frente na distância da diferença entre as barras. Vencer: +1 reputação e 3000 pontos. Tecla 0 abre; sozinho só na serra (35% por sorteio). O freio de mão livre (Shift fora do duelo) continua. Teste `touge.test.ts` (apertando na hora vence; sem apertar perde). | **alterado** (solo): a cidade saiu do sorteio do evento de drift |
+| 2026-11-16 | (montanha e touge v2, este) | Playtest 16/11: "o x1 na linha reta não tem graça e a gente bate no trânsito; tinha que ser na serra, com curvas e drift de verdade, e não só o Shift: W, S, nitro" + doc `MONTANHA-COSTA-PRAIA.md`. **Montanha** (`world/montanha.ts`): chegando na serra, a pista além do horizonte vira subida → mirante → descida, em fases (pé 420, meio 1150, mirante 340, descida 760, base 260 segmentos; a tecla 0 abre uma versão curta sem o meio). Relevo somado ao de antes, começando e terminando em zero (sem degrau), altura pela inclinação média (subida 7,5%, descida 6%; ~12 mil u). Pé: curvas suaves; meio: serpentinas, paredão de pedra contínuo com mata no topo, água escorrendo e cachoeira a cada 90 segmentos, guard-rail só no barranco, neblina imposta (`climaForcado`, entra e sai pela transição de clima); mirante: curva aberta, quiosque, o MAR aparece no fundo (fica na descida); descida: caracol com paredão. Placas amarelas da serra. Na montanha só saem eventos que não reescrevem a pista (obra, comboio, óleo, obstáculos, blitz, radar); viaduto, ponte, túnel e mão dupla ficam de fora. **Touge v2**: o rival chama no fim do mirante e o duelo é a descida, sem trânsito nenhum (não nasce carro). Cada curva pede S (frear, 0,6 s antes da entrada), SHIFT (na entrada; decide o drift), W segurado (≥75% da curva) e ESPAÇO (nitro na saída, +18 km/h). Até 5 pontos: 5 PERFEITA, 4 ÓTIMO, 3 BOM tiram 25/18/10 do rival; ≤2 ou SHIFT errado tira 25 de você. Drift de roteiro mais aberto (até 0,8 rad; o carro gira 0,5× isso na tela e desliza 70 px), fumaça e borracha. HUD: anel com a tecla da vez e a barra do W. Testes `touge.test.ts` (sequência na hora vence, sem trânsito; sem apertar perde) e `montanha.test.ts`. | não alterado (o golden do solo é na cidade) |
+| 2026-11-16 | (touge chefe, este) | Playtest 16/11 (3): "a subida precisa ser maior e mais desafiadora; na descida o jogo tinha que ficar mais lento, com mais animação e escorregada; botar liberdade e parecer uma mini boss fight". **Subida**: meio da serra 1150 → 1500 segmentos, montanha com 18 mil u (a curta, 9 mil), comboio de caminhão a cada 9 s no meio. **Drift com controle**: depois do SHIFT o ângulo é do jogador: W abre (0,55 rad/s), sem gás fecha (0,9), contra-esterço fecha (1,2), volante para dentro abre (0,3) e a curva abre um pouco. Faixa verde 0,45–0,85 rad: a força da curva some e o carro segura a linha; abaixo de 0,18 sai de frente; acima de 1,15 RODA (−15 de vida, metade da velocidade, o carro gira). A nota da curva vai até 6 (S 1, SHIFT 2, tempo na faixa verde 2, ESPAÇO 1): 6 PERFEITA, 5 ÓTIMO, 4 BOM; ≤3 ou rodou é ERROU. **Clima de chefe**: faixas de cinema, cartão de apresentação do rival (2,6 s), câmera lenta (`escalaTempo` 0,4 chegando na entrada da curva sem o Shift, 0,8 durante o drift; o mundo inteiro anda mais devagar), câmera inclinando com o drift, o rival derrapando nas curvas e, com metade da vida, o rival ACORDA (janelas 0,09/0,22 s e ele passa a fechar a sua linha). Medidor de ângulo no HUD. Teste: o piloto que segura o ângulo vence; pé no fundo e volante para dentro roda. | não alterado (o golden do solo é na cidade) |
+| 2026-11-16 | (serra viagem e touge v4, este) | Playtest 16/11 (4): "a entrada da serra está +-; o clima muda sozinho; a subida tem que ser maior: rodovia subindo a lateral da montanha, depois a descida e lá embaixo a rodovia do mar caindo na praia; as batalhas estão estranhas, o carro tinha que fazer mais manobras e acelerar confunde". **Clima**: a transição parte do que está na tela (`climaAnt` é o clima visto, não o id; trocando no meio de outra transição a imagem pulava) e a viagem da serra tem clima fixo (limpo, neblina só no terço do meio da subida). **Serra como viagem** (`world/montanha.ts`): a pista além do horizonte é trocada (a volta cresce: 4188 → ~7400 segmentos; o que está na tela e atrás fica): portal de pedra "SERRA DO MAR" (200), pé (400), subida pela lateral (2800: curvas longas com cotovelos, encosta com paredão de um lado e o VALE do outro, no lugar da grama o fundo do vale na névoa, sem árvore desse lado; comboios), mirante (400), descida (1300, o touge), base (300), rodovia costeira (1200, mar no fundo, palmeiras) e, no fim, a região vira a costa ("BEM-VINDO À PRAIA"); depois religa no relevo do começo da volta (300). 26 mil u de altura (a curta, um terço). Trânsito, eventos e placas que estavam além do horizonte saem. A região não troca no meio da viagem. **Touge v4**: roteiro grampo, S, rápida, grampo, S, grampo. Ângulo só no VOLANTE (para dentro abre 0,9 rad/s, para fora fecha 1,3, solto fecha 0,15); o W só segura a velocidade. Medidor com a seta do lado a apertar (ABRE ▶ / ◀ FECHA). "S": no meio, apertar o lado de fora troca o drift de lado (anel TROCA, câmera lenta, +1 ponto). Rápida: faixa verde 0,3–0,6. Primeira curva de TREINO (câmera mais lenta, dica embaixo, sem dano em você). No fim, o perdedor abre a faixa e você passa ("PASSOU O ...!"). | não alterado |
+| 2026-11-16 | (touge v5, este) | Playtest 16/11 (5): "passando o arco da serra a neblina some; o carro perde velocidade sem trocar de marcha, tinha que acelerar sozinho; parece clicar em botões aleatórios, os comandos têm que aparecer no lugar certo; a luta mais luta, com momentos de correr por conta e voltar para as cenas". Pesquisa antes: canyon duel do NFS Carbon (perna de caça: pontos por ficar colado; perna de liderança: perde se ele colar), SP battle do Tokyo Xtreme Racer (barra de espírito que esvazia ficando para trás ou batendo) e textos sobre QTE (comando no cenário, com os controles normais, poucas vezes, erro pune de leve). **Neblina**: a viagem guarda o clima da entrada (antes forçava céu limpo no portal). **Duelo em atos**: CAÇA → ULTRAPASSAGEM → LIDERANÇA. Trechos livres (230 segmentos de curvas abertas): você pilota; colado (< ~5 m) tira espírito de quem está na frente, longe (> ~20 m) de quem está atrás. Cenas (grampo, S, grampo...): o que fazer está PINTADO NA PISTA com um painel em cima que acende na hora: faixa vermelha (segurar S dentro), linha amarela (Shift ao cruzar, câmera lenta), linha azul no S (virar para fora), linha verde (Espaço). Sem anel no meio da tela. Ultrapassagem: numa reta o rival encosta de um lado e tira o pé, setas no chão mostram o outro; passou, tira 15 dele e vira LIDERANÇA; não passou, tira 15 de você. **Gás e câmbio automáticos** no duelo (só o freio tira o pé). Distâncias reescaladas (~475 u por metro: o rival andava a 1,5 m) e o HUD mostra os metros e o ato. Descida da viagem 1300 → 1900 segmentos. | não alterado |
+| 2026-11-16 | (regiões, trânsito e céu, este) | Playtest 16/11 (6): "os biomas às vezes ficam muito curtos", "mudar como o trânsito complica conforme sobem os pontos", "passando a placa da serra já fica escuro de novo". **Regiões por distância** (`world/regiao.ts`): 9 km rodados em cada uma (antes, a cada 3 níveis; com combo, racha e touge o nível subia rápido e a região durava pouco). Ordem da viagem de 24 h da bíblia: cidade (noite) → rodovia → serra (a viagem da montanha, que acaba sozinha na praia) → costa → cidade. **Intensidade do trânsito** (`traffic/intensidade.ts`, 0..1 por pontos até 90 mil): quantidade 12 → 30 (com teto), mistura de tipos (calmo 78% carro; caótico mais moto e caminhão), ONDAS (pelotões de 2–3 lado a lado, chance 4% → 32%), troca de faixa ×0,7 → ×2,6, freada brusca com luz de freio acima de 0,5 (nunca colada na sua frente). Estágios avisados: CALMO, MOVIMENTADO, PESADO, CAÓTICO. A pista nunca fecha: ninguém nasce nem troca de faixa fechando as 4, e quem chega por trás de um grupo de 3 segura atrás (paredes à frente no máximo do trânsito: 2,5% → 0,4% do tempo). **Céu**: rodovia, serra e costa são a parte de dia da viagem; a chave de noite delas virou tarde/pôr do sol (chegando na serra de madrugada, a luz caía para menos da metade). Testes `intensidade.test.ts` e região. | **alterado**: o trânsito sorteia diferente (todos os modos) e o céu da costa mudou |
+| 2026-11-16 | (serra com emoção, este) | Playtest 16/11 (6): "a serra precisava subir mais e ter mais coisa caótica, mais emoção, sem ser mais difícil". Altímetro no HUD (40 → 1.100 m, `world/altitude.ts`) e os morros do fundo afundando até 9% da tela no alto. Montanha 26 mil → 44 mil u; a descida amansa até a metade da costeira (pior rampa ~11%). Momentos da subida (feitos por outro Claude em paralelo, `feat/serra-momentos`, revisados e trazidos): QUEDA DE BARREIRAS (pedras perdoáveis como cone na faixa do paredão, ~25% e ~70% do meio) e CAMINHÃO QUEBRADO (pisca-alerta na faixa do vale, triângulo antes; ~45% e ~85%), sempre uma faixa só, placa e cartão antes, criados a 1,1 × distância de desenho (o spawner apaga parado longe); o trânsito sai da faixa fechada e comboio em cima de um momento se desfaz. Respingo da cachoeira na tela (`render/serra.ts`) e mirante com estacionamento e pedestres. Teste `serra-momentos.test.ts`. | não alterado (só na serra) |
+| 2026-11-16 | (serra: beira de estrada, este) | Doc MONTANHA-COSTA-PRAIA (detalhes da serra): capelinha de beira de estrada (branca, telhado de barro, vela à noite), barraquinha de banana e artesanato no pé, marco quilométrico a cada 250 segmentos e balizador refletivo âmbar nos postes do guard-rail (acende à noite). | **alterado**: o balizador aparece na mata do começo da cidade (menu e largada) |
+| 2026-11-16 | (túnel e viaduto da serra, este) | Pedido: "não esquece do túnel". Pesquisa: a pista de descida da Imigrantes tem 21 km com 3 túneis (8,2 km, quase 40%) e viadutos de até 70 m na neblina; e ritmo de fase (tensão e alívio, respiro depois do trecho difícil, curva de intensidade planejada). Curva da serra: portal calmo → subida com caminhões e barreira (tensão) → TÚNEL atravessando a montanha em 50% da subida (respiro fechado: escuro, eco, faróis) → saída num VIADUTO alto (220 segmentos, vale dos dois lados, laje de concreto na borda, guard-rail dos dois lados, curvas suavizadas, placa "VIADUTO: VENTO LATERAL", neblina imposta do começo ao fim: a revelação) → mirante → descida do duelo → costeira. O túnel é o mesmo do sorteio (`abrirTunel(eng, z)`, boca na montanha, "TÚNEL DA SERRA"), aberto a 1,9 × a distância de desenho para as placas virem antes. Momentos da subida mudaram de lugar (22%, 40%, 76%, 90%) para não cair no túnel nem no viaduto; o banco de neblina do miolo foi para 25–45% (antes do túnel). Sem pilares no viaduto: no pseudo-3D o pilar longe pintava por cima do asfalto perto. Teste em `montanha.test.ts`. | não alterado (só na serra) |
+| 2026-11-16 | (efeitos do duelo, este) | Pedido: "mais efeitos e animações mais elaboradas no x1". Feito por outro Claude em paralelo (revisado e trazido): só desenho, sem regra nova (`render/tougeFx.ts`, fila `tg.fx` no duelo). Drift com fumaça densa das rodas traseiras (a de fora solta mais), borracha e faísca; marcas de pneu do rival na pista; luz de freio do rival nas entradas; faísca no encostão. Acertos com impact frame (clarão, soco de zoom, linhas radiais) e texto com contorno que entra grande e assenta; erros com vinheta vermelha e tremor; câmera lenta com tinta fria e linhas quase paradas. Barras de espírito com o pedaço que cai, pisca abaixo de 25% e aura do rival acordado. Apresentação com faixa inclinada que corre e o nome que bate. Sem shadowBlur nem gradiente por quadro; pools com teto. | não alterado (só no duelo) |
+| 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

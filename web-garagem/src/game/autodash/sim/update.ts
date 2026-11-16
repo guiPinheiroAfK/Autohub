@@ -1,23 +1,55 @@
 // AutoDash — sim/update.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine, PLAYER_Z, H, W, PU_NITRO, PU_SHIELD, PU_X2 } from "../engine"
-import { CARS, KMH2UPS, RPM_IDLE, RPM_LIMITER, GEAR_RATIOS, SEG_LEN, RPM_PER_KMH, DRAW_DIST } from "../data"
+import { CARS, KMH2UPS, SEG_LEN, DRAW_DIST } from "../data"
+import { fatorMarcha } from "../physics/cambio"
 import { duelNet } from "../modes/duel"
 import { startRace } from "../modes/race"
 import { segAt } from "../world/track"
 import { updateTraffic, wrapDz } from "../traffic/spawner"
-import { updateFx, emitSmoke, emitFlame, burst, initRain } from "../fx/particles"
+import { updateFx, emitSmoke, emitEscape, burst } from "../fx/particles"
+import { climaAtual, tickTempo } from "./clima"
+import { perfilDoCarro, REV_AMOSTRA_S } from "../sound/profiles"
+import { motorDe, giroNaFrac, boostAlvo, passoBoost, giroSolto, suavizarGiro, giroDoSom, rampaGas, SOLTO_SOBE_S } from "../physics/motores"
 import { launch } from "../modes/solo"
 import { clamp } from "../math"
-import { rpmFor, powerCurve } from "../physics/rpm"
-import { shiftUp, shiftDown } from "../physics/gearbox"
+import { powerCurve, giroVisto } from "../physics/rpm"
+import { steerK, tyreOf } from "../physics/traction"
+import { passoLongitudinal } from "./longitudinal"
+import { passoCamera } from "../render/camera"
 import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
+import { atualizarPolicia, aderenciaPolicia } from "../world/policia"
+import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro, elevacao, elevacaoEm } from "../world/ramais"
+
+// altura (unidades de mundo) a partir da qual o elevado tem mureta
+const MURETA_ALT = 150
+export const ELEV_LADEIRA = 0.6 // fração da rampa do elevado que vira ladeira na física
+import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
+import { passoDrift, perderDrift } from "../world/drift"
+import { emDuelo } from "../world/touge"
+import { atualizarRacha } from "../modes/racha"
+import { atualizarObras } from "../world/obra"
+import { atualizarComboio } from "../world/comboio"
+import { atualizarAvisos } from "../world/avisos"
+import { aderenciaOleo, passoOleo } from "../world/oleo"
+import { giroDaPartida } from "./partida"
+import { aplicarVacuo, specComVacuo, forcaTeto } from "./vacuo"
+import { atualizarSomEventos } from "../world/somEventos"
+import { regiaoPorDistancia } from "../world/regiao"
 
 export function update(eng: AutoDashEngine, dt: number) {
+  // câmera lenta do duelo de touge (world/touge.ts): o mundo inteiro anda mais devagar
+  if (eng.state === "racing" && eng.escalaTempo < 1) dt *= eng.escalaTempo
   const spec = CARS[eng.cfg.carIdx]
   const voice = AutoDashEngine.ENGINE_VOICE[spec.body] ?? [1, 1]
   eng.audio.setEngine(voice[0], voice[1])
+  eng.audio.setProfile(perfilDoCarro(spec.body, eng.cfg.customs[eng.cfg.carIdx]?.motor))
+  // lado físico do mesmo motor: lenta, faixa vermelha, corte, curva e turbo
+  const mf = motorDe(eng)
+  eng.audio.setTurbo(mf.turbo, mf.corte)
+  eng.somT += dt // relógio do som (limitador batendo, lenta irregular)
+  passoCamera(eng, dt) // trauma, ruído e rampa do nitro da câmera
 
   duelNet(eng, dt)
 
@@ -25,6 +57,18 @@ export function update(eng: AutoDashEngine, dt: number) {
   if (eng.state === "racewait" && eng.race) {
     eng.race.update(dt, 0, 0, 0, false, eng.trackLen)
     if (eng.race.phase === "countdown") { startRace(eng, eng.race.cfg.seed) }
+  }
+
+  // reconhecimento de percurso: a câmera faz uma volta sozinha (sem rivais nem trânsito)
+  if (eng.state === "racerecon") {
+    eng.demoT += dt
+    eng.speed = 200
+    eng.position = (eng.position + eng.speed * KMH2UPS * dt) % eng.trackLen
+    eng.playerX = 0
+    eng.bgShift += segAt(eng, eng.position + PLAYER_Z).curve * eng.speed * dt * 0.6
+    updateFx(eng, dt)
+    eng.audio.engine(0, 0, false, false)
+    return
   }
 
   if (["menu", "garage", "duellobby", "duelcode", "duelwaiting", "duelresult",
@@ -37,7 +81,8 @@ export function update(eng: AutoDashEngine, dt: number) {
     eng.bgShift += segAt(eng, eng.position + PLAYER_Z).curve * eng.speed * dt * 0.6
     updateTraffic(eng, dt, eng.position + PLAYER_Z, true)
     updateFx(eng, dt) // floaters/partículas sobrando da corrida ainda precisam morrer
-    eng.audio.engine(0, 0, false, false)
+    if (eng.state === "garage" && eng.revAmostraT > 0) acelerarAmostra(eng, dt)
+    else eng.audio.engine(0, 0, false, false)
     return
   }
   if (eng.state === "paused" || eng.state === "gameover" || eng.state === "nameentry" || eng.state === "duelspectate") {
@@ -53,15 +98,38 @@ export function update(eng: AutoDashEngine, dt: number) {
   // desaceleração e não pode mais acelerar (bug: a física acelerava antes de
   // o bloco de chegada zerar a marcha)
   if (eng.raceFinished) throttle = 0
+  // duelo de touge (playtest 16/11: "o carro perde velocidade demais sem trocar de
+  // marcha; tinha que acelerar sozinho e ir trocando"): o gás é automático (só o
+  // freio tira) e o câmbio vira automático (sim/longitudinal.ts)
+  if (emDuelo(eng) && !braking) throttle = 1
+  // pane seca (Fase 5): sem combustível o motor engasga e o pé efetivo cai
+  throttle *= peDoCombustivel(eng)
+
+  if (eng.state === "countdown" && eng.partidaT > 0) {
+    // partida: só animação. Sem semáforo, sem pé no gás, motor mudo até pegar
+    eng.partidaT = Math.max(0, eng.partidaT - dt)
+    eng.gasF = rampaGas(mf, eng.gasF, 0, dt)
+    eng.rpm = giroDaPartida(mf.idle, eng.partidaT)
+    eng.boost = 0; eng.eixo = 0
+    eng.giroSom = eng.rpm
+    eng.audio.engine(eng.rpm, 0, false, eng.partidaT <= 0, false, 0)
+    updateFx(eng, dt)
+    return
+  }
 
   if (eng.state === "countdown") {
     eng.countT += dt
+    eng.gasF = rampaGas(mf, eng.gasF, throttle, dt) // pé no fundo no grid: no verde já está em 1
     // rev livre no grid
-    const targetRpm = RPM_IDLE + throttle * (7500 - RPM_IDLE)
-    eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * 5)
-    if (eng.rpm > RPM_LIMITER) eng.rpm = RPM_LIMITER - Math.random() * 300
+    const targetRpm = mf.idle + throttle * (mf.corte + 20 - mf.idle) // pé no fundo bate no corte (antes parava em 94% da faixa)
+    // giro solto: motor leve sobe e cai rápido, motor pesado é preguiçoso
+    eng.rpm = giroSolto(mf, eng.rpm, targetRpm, dt)
+    if (eng.rpm > mf.corte) eng.rpm = mf.corte // o bate-volta do corte é do som e do ponteiro (giroDoSom)
+    // em ponto morto o turbo quase não enche (sem carga)
+    eng.boost = passoBoost(mf, eng.boost, boostAlvo(mf, eng.rpm, throttle) * 0.35, dt, eng.rpm)
+    eng.eixo = eng.boost // no verde o eixo parte da pressão do grid
     // burnout no grid: acelerando no ponto morto, pneu fuma (só na corrida)
-    if (eng.mode === "race" && throttle > 0.5 && eng.rpm > 4500 && Math.random() < 0.6) {
+    if (eng.mode === "race" && throttle > 0.5 && eng.rpm > giroNaFrac(mf, 0.514) && Math.random() < 0.6) {
       emitSmoke(eng, 2, "#d8dbe2")
     }
     if (eng.countT >= eng.greenAt) {
@@ -75,15 +143,22 @@ export function update(eng: AutoDashEngine, dt: number) {
         if (eng.countT >= tl && eng.countT - dt < tl) eng.audio.semaphoreRed()
       }
     }
-    eng.audio.engine(eng.rpm, throttle, false, true)
+    const corteGrid = eng.rpm >= mf.corte - 60
+    eng.giroSom = suavizarGiro(eng.giroSom, eng.rpm, dt)
+    eng.audio.engine(giroDoSom(mf, eng.giroSom, throttle, corteGrid, eng.somT), throttle, false, true, corteGrid, eng.boost)
     updateFx(eng, dt)
     return
   }
 
   // ---------- racing ----------
-  const grip = spec.grip * (eng.raining ? 0.62 : 1)
+  // óleo (E15): aderência cai por um instante em cima da mancha; pneu furado
+  // pelos pregos (Fase 6) também
+  const grip = spec.grip * tyreOf(spec).grip * climaAtual(eng).grip * aderenciaOleo(eng) * aderenciaPolicia(eng)
   const playerZ = eng.position + PLAYER_Z
   const seg = segAt(eng, playerZ)
+  // ramal (atalho) neste ponto da pista, se houver (ADR 0014). Sem ramais: null.
+  const ramal = eng.ramais.length
+    ? ramalNoSeg(eng.ramais, Math.floor(playerZ / SEG_LEN) % eng.segments.length) : null
 
   // direção — input suavizado, mais firme em alta velocidade
   let steerInput = 0
@@ -94,7 +169,11 @@ export function update(eng: AutoDashEngine, dt: number) {
     if (eng.keys.has("d") || eng.keys.has("arrowright") || eng.touchSteerRight) steerInput += 1
   }
   const speedF = Math.min(1, eng.speed / 240)
-  const maxSteer = (0.95 + grip * 0.85) * (1 - 0.38 * speedF) * (0.35 + 0.65 * Math.min(1, eng.speed / 55))
+  // tração na direção: dianteira com torque abre a curva no gás e fecha ao aliviar
+  // (ADR 0012). Usa o giro do quadro anterior; RWD devolve 1 e nada muda.
+  const aNdir = throttle && eng.gear >= 1 && eng.shiftT <= 0
+    ? powerCurve(eng, eng.rpm) * fatorMarcha(eng, eng.gear) : 0
+  const maxSteer = (0.95 + grip * 0.85) * (1 - 0.38 * speedF) * (0.35 + 0.65 * Math.min(1, eng.speed / 55)) * steerK(spec, aNdir)
   eng.steerVel += (steerInput * maxSteer - eng.steerVel) * Math.min(1, dt * 9)
   if (eng.levelUpT > 0) eng.steerVel += Math.sin(eng.levelUpT * 22) * 0.9 * dt // rabeio da virada de nível
   eng.playerX += eng.steerVel * dt
@@ -102,8 +181,12 @@ export function update(eng: AutoDashEngine, dt: number) {
   // força centrífuga — curva média se segura no volante; fechada em vmax pede freio
   const centrif = seg.curve * Math.pow(eng.speed / 240, 2.2) * (0.42 - grip * 0.22)
   eng.playerX -= centrif * dt
+  // drift com freio de mão (world/drift.ts): segura parte da curva, fuma e pontua
+  const drift = passoDrift(eng, dt, steerInput, seg.curve, centrif)
   const slip = Math.abs(centrif) * speedF
-  eng.audio.skid(slip > 0.3 ? slip : 0)
+  // chiado de curva ou de patinada no gás (eng.patina, do quadro anterior)
+  eng.audio.skid(Math.max(slip > 0.3 ? slip : 0, eng.patina, eng.oleoT > 0 ? 0.6 : 0, drift))
+  passoOleo(eng, dt)
   if (slip > 0.45 && Math.abs(eng.steerVel) > 0.3 && Math.random() < 0.5) emitSmoke(eng, 1, "#6b7280")
   eng.bgShift += seg.curve * eng.speed * dt * 0.6
 
@@ -112,69 +195,66 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.pitchY += (pitchTarget - eng.pitchY) * Math.min(1, dt * 8)
 
   // fora da pista
-  if (Math.abs(eng.playerX) > 1.05) {
+  if (Math.abs(eng.playerX) > 1.05 && !(ramal && sobreRamal(ramal, eng.playerX))) {
     eng.offroadT += dt
+    perderDrift(eng)
     eng.speed = Math.max(Math.min(eng.speed, 60), eng.speed - 160 * dt)
     eng.shakeT = 0.1
     eng.combo = 0
     if (Math.random() < 0.3) eng.audio.offroad()
     emitSmoke(eng, 3, "#a3a3a3")
   } else eng.offroadT = 0
-  eng.playerX = clamp(eng.playerX, -1.6, 1.6)
+  if (ramal) {
+    // do lado do ramal a pista é mais larga: o limite vai até depois dele
+    const lim = Math.max(1.6, ramal.outer + 0.45)
+    eng.playerX = ramal.r.lado > 0 ? clamp(eng.playerX, -1.6, lim) : clamp(eng.playerX, -lim, 1.6)
+  } else eng.playerX = clamp(eng.playerX, -1.6, 1.6)
 
-  // ---------- motor ----------
-  if (eng.shiftT > 0) eng.shiftT -= dt
-  if (eng.wheelspinT > 0) eng.wheelspinT -= dt
-  if (eng.bogT > 0) eng.bogT -= dt
-
-  if (eng.gear >= 1) eng.rpm = rpmFor(eng, eng.speed, eng.gear)
-  else {
-    const targetRpm = RPM_IDLE + throttle * (7500 - RPM_IDLE)
-    eng.rpm += (targetRpm - eng.rpm) * Math.min(1, dt * 5)
+  // elevado do viaduto (Fase 8.6): mureta dos dois lados enquanto está alto. Em
+  // cima, não cai; embaixo, não entra nos pilares. Raspar na mureta segura o carro.
+  const idxP = Math.floor(playerZ / SEG_LEN) % eng.segments.length
+  if (ramal && ramal.r.alto && elevacao(ramal.r, idxP) > MURETA_ALT) {
+    const xs = eng.playerX * ramal.r.lado
+    // em cima = já estava no tabuleiro no quadro anterior (entra pela rampa,
+    // ainda baixa, e a partir daí a mureta segura)
+    const emCima = eng.elevJogador > 0
+    const c = emCima ? clamp(xs, ramal.inner + 0.06, ramal.outer - 0.06) : Math.min(xs, ramal.inner - 0.12)
+    if (c !== xs) {
+      eng.playerX = c * ramal.r.lado
+      eng.speed = Math.max(0, eng.speed - 90 * dt)
+      eng.steerVel *= 0.3
+      eng.shakeT = Math.max(eng.shakeT, 0.12)
+      if (Math.random() < 0.5) emitSmoke(eng, 2, "#fde047")
+    }
   }
+  eng.elevJogador = elevacaoEm(eng.ramais, idxP, eng.playerX)
 
-  // câmbio automático
-  if (eng.cfg.transmission === "auto" && eng.gear >= 1 && eng.shiftT <= 0) {
-    if (throttle && eng.rpm > 6900 && eng.gear < 6) shiftUp(eng)
-    else if (eng.rpm < 2000 && eng.gear > 1) shiftDown(eng)
+  // ---------- motor, câmbio, força e velocidade (sim/longitudinal.ts) ----------
+  // ~±0.13 nas ladeiras fortes. Em cima do elevado soma a rampa dele (playtest
+  // 16/11: "saindo do viaduto o carro nem embala"): antes a altura do elevado
+  // era só da câmera. ELEV_LADEIRA amacia a rampa (até ~0,18 no meio dela).
+  let grade = (seg.y2 - seg.y1) / SEG_LEN
+  if (ramal && ramal.r.alto && eng.elevJogador > 0) grade += ELEV_LADEIRA * (elevacao(ramal.r, idxP + 1) - elevacao(ramal.r, idxP)) / SEG_LEN
+  // vácuo (E9) do quadro anterior sobe o teto em até 4% (sim/vacuo.ts)
+  const nitroActive = passoLongitudinal(eng, specComVacuo(spec, forcaTeto(eng)), mf, { throttle, braking, centrif, grade, dt })
+  // combustível (só no solo): gasta pelo pé, giro e nitro; abastece no posto
+  atualizarCombustivel(eng, dt, eng.gasF, nitroActive)
+  // vácuo (E9): colado atrás de alguém rápido, empurrão até +4% da máxima
+  aplicarVacuo(eng, spec, throttle, dt)
+
+  // no miolo do ramal o avanço rende mais (linha de dentro). Fora dele, ganho = 1.
+  const ganho = ganhoRamal(ramal, eng.playerX)
+  if (ganho !== 1 && !eng.noRamal && ramal) {
+    const pct = Math.round((ganho - 1) * 100)
+    eng.floaters.push({
+      text: `${ramal.r.nome.toUpperCase()}  ${pct >= 0 ? "+" : ""}${pct}%`,
+      color: "#4ade80", y: H * 0.3, life: 1.6, big: false,
+    })
   }
-
-  let accel = 0
-  if (eng.gear >= 1 && throttle && eng.shiftT <= 0) {
-    const gearF = Math.pow(GEAR_RATIOS[eng.gear - 1] / GEAR_RATIOS[0], 0.9)
-    accel = spec.power * powerCurve(eng, eng.rpm) * gearF
-    if (eng.rpm >= RPM_LIMITER - 50) { accel = 0; if (Math.random() < 0.4) eng.audio.limiter() }
-    if (eng.wheelspinT > 0) { accel *= 0.35; emitSmoke(eng, 2, "#e2e8f0") }
-    if (eng.bogT > 0) accel *= 0.5
-  }
-  if (eng.nitroOn && eng.nitroMeter > 1 && eng.gear >= 1) {
-    accel += 42
-    eng.nitroMeter = Math.max(0, eng.nitroMeter - 38 * dt)
-    emitFlame(eng)
-  }
-  const nitroActive = eng.nitroOn && eng.nitroMeter > 1
-
-  eng.speed += accel * dt
-  if (braking) eng.speed -= (eng.raining ? 78 : 105) * dt
-  eng.speed -= (5 + eng.speed * 0.028) * dt // arrasto
-
-  // FÍSICA DE LADEIRA: descida empurra o carro (dá pra passar do top speed —
-  // segura no freio), subida cobra potência. O limite por marcha logo abaixo
-  // age como freio motor: descer em marcha baixa segura o carro sozinho.
-  const grade = (seg.y2 - seg.y1) / SEG_LEN // ~±0.13 nas ladeiras fortes
-  if (grade < 0) eng.speed += -grade * 210 * dt
-  else eng.speed -= grade * 120 * dt
-
-  const maxSpd = spec.topSpeed * (nitroActive ? 1.12 : 1) + (grade < 0 ? -grade * 420 : 0)
-  eng.speed = clamp(eng.speed, 0, maxSpd)
-  // limite por marcha (estourou o giro = não anda mais) — e freio motor na descida
-  if (eng.gear >= 1) {
-    const gearTop = (RPM_LIMITER - RPM_IDLE) / (GEAR_RATIOS[eng.gear - 1] * RPM_PER_KMH)
-    eng.speed = Math.min(eng.speed, gearTop)
-  }
-
-  eng.position = ((eng.position + eng.speed * KMH2UPS * dt) % eng.trackLen + eng.trackLen) % eng.trackLen
+  eng.noRamal = ganho !== 1
+  eng.position = ((eng.position + eng.speed * KMH2UPS * dt * ganho) % eng.trackLen + eng.trackLen) % eng.trackLen
   eng.km += eng.speed * dt / 3600
+  regiaoPorDistancia(eng, dt) // a região dura uma distância (world/regiao.ts)
 
   if (eng.goFlashT > 0) eng.goFlashT -= dt
   if (eng.mult2T > 0) eng.mult2T -= dt
@@ -224,6 +304,16 @@ export function update(eng: AutoDashEngine, dt: number) {
           if (Math.abs(t.offset - x) < 0.3 || Math.abs(t.targetOffset - x) < 0.3) return false
         }
         return true
+      },
+      ramal: (z) => {
+        if (!eng.ramais.length) return null
+        const idx = Math.floor(z / SEG_LEN) % eng.segments.length
+        const q = ramalNoSeg(eng.ramais, idx)
+        if (!q) return null
+        return {
+          centro: ramalCentro(q), ganho: q.r.ganho, miolo: q.p.f > 0.5,
+          voltar: idx > (q.r.a + q.r.b) / 2 && q.p.f === 0,
+        }
       },
     })
     // cruzou a linha: anúncio grande, som e tremida — o jogador tem que
@@ -276,6 +366,8 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   updateEventSpawner(eng, dt, playerZ)
+  atualizarAvisos(eng, dt, playerZ)
+  atualizarRacha(eng, dt) // convite de racha (Fase 5, só no solo)
 
   // powerups na pista
   eng.puTimer -= dt
@@ -302,23 +394,19 @@ export function update(eng: AutoDashEngine, dt: number) {
   eng.powerups = eng.powerups.filter(p => !p.taken && wrapDz(eng, p.z, eng.position) > -20 * SEG_LEN)
 
   // fumaça de escape / arrancada
-  if (throttle && eng.speed < 40 && eng.gear >= 1) emitSmoke(eng, 2, "#cbd5e1")
-  else if (throttle && Math.random() < 0.3) emitSmoke(eng, 1, "#64748b")
+  if (throttle && eng.speed < 40 && eng.gear >= 1) emitEscape(eng, 2, "#cbd5e1")
+  else if (throttle && Math.random() < 0.3) emitEscape(eng, 1, "#64748b")
 
-  // clima
-  eng.rainRollT += dt
-  if (eng.rainRollT > 18) {
-    eng.rainRollT = 0
-    if (!eng.raining && Math.random() < 0.18) { eng.raining = true; eng.rainT = 22 + Math.random() * 20; initRain(eng); eng.audio.rain(true) }
-  }
-  if (eng.raining) {
-    eng.rainT -= dt
-    if (eng.rainT <= 0) { eng.raining = false; eng.audio.rain(false) }
-  }
+  // relógio e clima (ADR 0013): o clima só vira na janela de ticks
+  tickTempo(eng, dt)
 
   updateTraffic(eng, dt, playerZ, false)
   updateZones(eng, dt, playerZ)
+  atualizarObras(eng, dt, playerZ)              // E4: trânsito sai do lado fechado
+  atualizarComboio(eng, dt, playerZ, eng.rngEv) // E6: a fresta anda
+  atualizarSomEventos(eng, dt, playerZ)          // Fase 8.3: britadeira, buzina a ar, sirene
   updateObstacles(eng, playerZ)
+  atualizarPolicia(eng, dt, playerZ)
 
   // aviso de curva fechada à frente
   eng.curveWarn = 0
@@ -350,5 +438,23 @@ export function update(eng: AutoDashEngine, dt: number) {
   }
 
   updateFx(eng, dt)
-  eng.audio.engine(eng.rpm, throttle, nitroActive, true)
+  const noCorte = throttle > 0 && eng.rpm >= mf.corte - 60
+  eng.giroSom = suavizarGiro(eng.giroSom, eng.rpm, dt)
+  eng.audio.engine(giroDoSom(mf, giroVisto(eng), throttle, noCorte, eng.somT), throttle, nitroActive, true, noCorte, eng.boost, eng.gear >= 1 && eng.shiftT > 0)
+}
+
+// Acelerada de amostra na garagem: lenta, pé no fundo até ~6800 rpm e solta
+// (dá pra ouvir o ronco, o turbo aliviando e os estouros do motor escolhido).
+function acelerarAmostra(eng: AutoDashEngine, dt: number) {
+  eng.revAmostraT = Math.max(0, eng.revAmostraT - dt)
+  const e = REV_AMOSTRA_S - eng.revAmostraT
+  // lenta → pé no fundo até o corte (na rapidez de giro do motor) → segura no
+  // limitador → solta e o giro cai na rapidez do motor
+  const m = motorDe(eng), solto = m.solto ?? [5, 5]
+  const sobe = 0.15 + SOLTO_SOBE_S / solto[0], segura = sobe + 0.45 // mesma subida do giro solto (giroSolto)
+  let rpm = m.idle, gas = 0, corte = false
+  if (e > 0.15 && e < sobe) { gas = 1; rpm = m.idle + (m.corte - m.idle) * Math.pow((e - 0.15) / (sobe - 0.15), 0.85) }
+  else if (e >= sobe && e < segura) { gas = 1; rpm = m.corte; corte = true }
+  else if (e >= segura) rpm = m.idle + (m.corte - m.idle) * Math.exp(-(e - segura) * solto[1] * 0.8)
+  eng.audio.engine(giroDoSom(m, rpm, gas, corte, eng.somT), gas, false, true, corte, -1)
 }

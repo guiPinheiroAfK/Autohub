@@ -4,6 +4,9 @@ import { shade, clamp } from "../math"
 import { CARS, type CarCustom, PAINTS } from "../data"
 import { drawPlayerCar, rr } from "./primitives"
 import { type Traffic, KINDS } from "../traffic/types"
+import { desenharPlacaEvento, desenharObstaculoEvento } from "./eventos"
+import { drawPregos, drawPlacaPolicia, drawViaturaAtravessada } from "./policia"
+import { drawCena } from "./cena"
 
 export function drawPickup(eng: AutoDashEngine, p: Pickup, x: number, y: number, w: number, amb: number) {
   if (w < 2.5) return
@@ -56,7 +59,7 @@ export function drawGhost(eng: AutoDashEngine, x: number, y: number, w: number, 
   const spec = CARS[clamp(Math.floor(opp?.car ?? 0), 0, CARS.length - 1)]
   const custom: CarCustom = {
     paint: clamp(Math.floor(opp?.paint ?? 0), 0, PAINTS.length - 1),
-    stripe: 0, neon: 0, wheel: 0,
+    stripe: 0, neon: 0, wheel: 0, motor: "",
     wing: spec.body === "muscle" || spec.body === "ninja" ? 1 : 2,
   }
   ctx.save()
@@ -75,7 +78,10 @@ export function drawGhost(eng: AutoDashEngine, x: number, y: number, w: number, 
 
 export function drawObstacle(eng: AutoDashEngine, o: Obstacle, x: number, y: number, w: number, amb: number) {
   if (w < 2) return
+  if (drawCena(eng, o, x, y, w, amb)) return // cenografia dos eventos (render/cena.ts, Fase 8.3)
+  if (desenharObstaculoEvento(eng, o, x, y, w, amb)) return // seta da obra e óleo (render/eventos.ts)
   const ctx = eng.ctx
+  if (o.kind === "pregos") { drawPregos(ctx, x, y, w, amb); return }
   if (o.kind === "cone") {
     const h = w * 1.5
     ctx.fillStyle = "rgba(0,0,0,0.3)"
@@ -96,6 +102,16 @@ export function drawObstacle(eng: AutoDashEngine, o: Obstacle, x: number, y: num
     for (let i = 0; i < 6; i++) {
       ctx.fillStyle = shade(i % 2 === 0 ? "#ef4444" : "#f8fafc", amb)
       ctx.fillRect(x - w / 2 + (w / 6) * i, by, w / 6 + 1, h)
+    }
+    // lâmpada piscando em cima do cavalete (Fase 8.3): lê de longe à noite
+    if (Math.floor(performance.now() / 400) % 2 === 0) {
+      const lr = Math.max(1.5, w * 0.05)
+      ctx.fillStyle = "#fbbf24"
+      ctx.beginPath(); ctx.arc(x - w * 0.4, by - lr, lr, 0, Math.PI * 2); ctx.fill()
+      if (amb < 0.75 && w > 8) {
+        ctx.fillStyle = "rgba(251,191,36,0.22)"
+        ctx.beginPath(); ctx.arc(x - w * 0.4, by - lr, lr * 4, 0, Math.PI * 2); ctx.fill()
+      }
     }
   }
 }
@@ -149,6 +165,24 @@ export function drawRoadSign(eng: AutoDashEngine, sign: RoadSign, x: number, y: 
       ctx.moveTo(x + r * 0.52, cy + r * 0.5); ctx.lineTo(x + r * 0.05, cy - r * 0.1)
       ctx.stroke()
     }
+  } else if (sign.type === "atalho") {
+    // ATALHO: placa verde retangular com seta apontando para o lado do ramal
+    const pw = r * 2.6, ph = r * 1.5
+    ctx.fillStyle = shade("#15803d", Math.max(0.55, amb))
+    ctx.fillRect(x - pw / 2, cy - ph / 2, pw, ph)
+    ctx.strokeStyle = shade("#f8fafc", Math.max(0.6, amb))
+    ctx.lineWidth = Math.max(1, r * 0.1)
+    ctx.strokeRect(x - pw / 2, cy - ph / 2, pw, ph)
+    if (r > 5) {
+      const d = sign.lado ?? 1
+      ctx.beginPath()
+      ctx.moveTo(x - d * pw * 0.3, cy); ctx.lineTo(x + d * pw * 0.3, cy)
+      ctx.moveTo(x + d * pw * 0.12, cy - ph * 0.26); ctx.lineTo(x + d * pw * 0.3, cy)
+      ctx.lineTo(x + d * pw * 0.12, cy + ph * 0.26)
+      ctx.stroke()
+    }
+  } else if (sign.type === "policia") {
+    drawPlacaPolicia(ctx, x, cy, r, amb)
   } else if (sign.type === "bridgewarn") {
     // aviso de ponte: losango amarelo com o vão desenhado
     ctx.fillStyle = shade("#fbbf24", amb)
@@ -162,6 +196,8 @@ export function drawRoadSign(eng: AutoDashEngine, sign: RoadSign, x: number, y: 
       ctx.fillRect(x - r * 0.38, cy + r * 0.08, r * 0.1, r * 0.3)  // pilares
       ctx.fillRect(x + r * 0.28, cy + r * 0.08, r * 0.1, r * 0.3)
     }
+  } else if (desenharPlacaEvento(eng, sign, x, cy, r, amb)) {
+    // placas dos eventos da Fase 5 (render/eventos.ts)
   } else {
     // mão dupla/contramão: proibido (círculo vermelho, barra branca)
     ctx.fillStyle = shade("#dc2626", amb)
@@ -183,6 +219,8 @@ export function drawRoadSign(eng: AutoDashEngine, sign: RoadSign, x: number, y: 
 }
 
 export function drawTraffic(eng: AutoDashEngine, t: Traffic, x: number, y: number, w: number, amb: number) {
+  // viatura atravessada do bloqueio (Fase 6, E10): o giroflex aparece mesmo longe
+  if (t.kind === "roadblock") { drawViaturaAtravessada(eng.ctx, x, y, w, w * KINDS.roadblock.h, amb); return }
   if (w < 2) return
   const ctx = eng.ctx
   const k = KINDS[t.kind]
@@ -295,6 +333,42 @@ export function drawTraffic(eng: AutoDashEngine, t: Traffic, x: number, y: numbe
       ctx.fillText(t.label, x, by - fs * 0.72)
       ctx.textAlign = "left"
     }
+  }
+  // luz de freio (o rival "olhando" antes de fechar): lanternas fortes
+  if (t.freioT && t.freioT > 0) {
+    ctx.fillStyle = "#ff1a1a"
+    const fh = Math.max(2, h * 0.1)
+    rr(ctx, bx + w * 0.04, y - fh * 2, w * 0.26, fh, fh / 2)
+    rr(ctx, bx + w * 0.70, y - fh * 2, w * 0.26, fh, fh / 2)
+  }
+  // giroflex âmbar no teto (batedor do comboio, guincho) e a faixa escrita na traseira
+  if (t.giroflexAmbar) {
+    const aceso = Math.floor(performance.now() / 180) % 2 === 0
+    ctx.fillStyle = aceso ? "#fbbf24" : "#92400e"
+    rr(ctx, x - w * 0.16, by - h * 0.1, w * 0.32, h * 0.1, h * 0.03)
+    if (aceso && amb < 0.8 && w > 6) {
+      ctx.fillStyle = "rgba(251,191,36,0.25)"
+      ctx.beginPath(); ctx.ellipse(x, by - h * 0.05, w * 0.7, h * 0.35, 0, 0, Math.PI * 2); ctx.fill()
+    }
+  }
+  if (t.placa && w > 10) {
+    const ph = h * 0.16
+    ctx.fillStyle = "#facc15"
+    ctx.fillRect(x - w * 0.42, y - h * 0.5, w * 0.84, ph)
+    ctx.fillStyle = "#0f172a"
+    // a letra cabe na faixa: o tamanho sai da largura do texto, não só da altura
+    let fs = Math.max(6, Math.round(ph * 0.72))
+    ctx.font = `bold ${fs}px 'Space Grotesk', 'Segoe UI', sans-serif`
+    const tw = ctx.measureText(t.placa).width
+    if (tw > w * 0.78) { fs = Math.max(5, Math.floor(fs * (w * 0.78) / tw)); ctx.font = `bold ${fs}px 'Space Grotesk', 'Segoe UI', sans-serif` }
+    ctx.textAlign = "center"; ctx.fillText(t.placa, x, y - h * 0.5 + ph * 0.5 + fs * 0.36); ctx.textAlign = "left"
+  }
+  // pisca-alerta: as duas setas juntas
+  if (t.alerta && Math.floor(performance.now() / 250) % 2 === 0) {
+    ctx.fillStyle = "#FFC23D"
+    const rs = Math.max(2, w * 0.07)
+    ctx.beginPath(); ctx.arc(x - w * 0.52, y - h * 0.28, rs, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x + w * 0.52, y - h * 0.28, rs, 0, Math.PI * 2); ctx.fill()
   }
   // seta
   if (t.blinkT > 0 && Math.floor(t.blinkT * 6) % 2 === 0) {

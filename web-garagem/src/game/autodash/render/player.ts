@@ -6,6 +6,7 @@ import { clamp, shade } from "../math"
 import { drawPlayerCar, rr } from "./primitives"
 import { type Traffic, KINDS } from "../traffic/types"
 import { wrapDz } from "../traffic/spawner"
+import { renderTougeMundo, renderTougeFumaca } from "./tougeFx"
 
 export function renderPlayer(eng: AutoDashEngine, amb: number) {
   if (eng.state === "menu" || eng.state === "garage") return
@@ -35,11 +36,19 @@ export function renderPlayer(eng: AutoDashEngine, amb: number) {
     ctx.ellipse(W / 2, H - 68 + bounce, pw * 0.75, 62, 0, 0, Math.PI * 2)
     ctx.fill(); ctx.stroke()
   }
+  // duelo de touge: marcas de pneu e fumaça do rival por baixo do seu carro (render/tougeFx.ts)
+  if (eng.touge) renderTougeMundo(eng)
   const blinkT = Math.max(eng.immuneT, eng.policeHitT)
   const immuneBlink = blinkT > 0 && Math.floor(blinkT * 8) % 2 === 0
   if (immuneBlink) ctx.globalAlpha = 0.35
-  drawPlayerCar(ctx, W / 2, H - 34 + bounce, spec, custom, steer, braking, amb, eng.nitroOn && eng.nitroMeter > 1)
+  // drift: a traseira abre (gira em volta da frente do carro) e o volante vai todo para o lado
+  const giro = eng.driftAng
+  if (giro !== 0) { ctx.save(); ctx.translate(W / 2, H - 90 + bounce); ctx.rotate(-giro * 0.5); ctx.translate(-W / 2, -(H - 90 + bounce)) }
+  drawPlayerCar(ctx, W / 2 - giro * 70, H - 34 + bounce, spec, custom, giro !== 0 ? clamp(steer + giro * 2, -1, 1) : steer, braking, amb, eng.nitroOn && eng.nitroMeter > 1)
+  if (giro !== 0) ctx.restore()
   if (immuneBlink) ctx.globalAlpha = 1
+  // ... e a fumaça das rodas, a borracha e as faíscas por cima dele
+  if (eng.touge) renderTougeFumaca(eng)
 
   // sensação de velocidade: streaks varrendo as bordas. No nitro viram ciano
   // e muito mais densos — o "túnel de velocidade" dos filmes.

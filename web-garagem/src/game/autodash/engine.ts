@@ -2,24 +2,42 @@ import { CANVAS_W, CANVAS_H, CAM_HEIGHT, CAM_DEPTH, type GameConfig, loadConfig,
 import { type DuelTelemetry } from "./net"
 import { AudioBus } from "./audio"
 import { type Traffic } from "./traffic/types"
+import { type Procurado, novoProcurado } from "./world/policia"
 import { RaceSession } from "./race/session"
 import { noCallout, buildTouchControls, onTouchStart, onTouchMove } from "./input/touch"
 import { buildTrack } from "./world/track"
 import { seedTraffic } from "./traffic/spawner"
-import { clamp, mix } from "./math"
+import { clamp, mix, mulberry32 } from "./math"
+import { type Racha } from "./modes/racha"
+import { type Comboio } from "./world/comboio"
+import { type Aviso } from "./world/avisos"
+import { type EventoMapa } from "./world/events"
 import { update } from "./sim/update"
 import { skyNow, renderBackdrop } from "./render/backdrop"
+import { type BiomeDef, biomeById } from "./world/biomes"
+import { type Clock, type HoraModo, newClock } from "./world/clock"
+import { type ClimaId, type ClimaModo, CLIMAS } from "./world/weather"
+import { climaAtual, type ClimaVisto } from "./sim/clima"
+import type { Touge } from "./world/touge"
+import type { Montanha } from "./world/montanha"
+import { drawRespingos } from "./render/serra"
+import { type Ramal } from "./world/ramais"
+import { type TrechoInfo } from "./world/circuits"
 import { renderRoad } from "./render/road"
 import { renderPlayer, renderRearThreat } from "./render/player"
 import { renderParticles } from "./render/particles"
+import { aplicarCamera } from "./render/camera"
 import { vignetteTex } from "./render/textures"
 import { renderMenu, renderGarage, renderPause, renderGameOver, renderNameEntry } from "./render/menus/main"
 import { renderHud, renderSemaphore } from "./render/hud"
-import { renderTrackPreview, renderRaceLobby, renderRaceCode, renderRaceWait, renderRaceResult } from "./render/menus/race"
+import { renderTorqueHud } from "./render/hud-torque"
+import { renderTrackPreview, renderRaceLobby, renderRaceCode, renderRaceWait, renderRaceResult, renderRaceRecon } from "./render/menus/race"
 import { renderRaceHud } from "./render/race-hud"
 import { renderDuelLobby, renderDuelCode, renderDuelWaiting, renderDuelSpectate, renderDuelResult } from "./render/menus/duel"
 import { onKeyDown, onKeyUp } from "./input/keyboard"
+import { type AbaGaragem } from "./render/menus/estetica"
 import { onMouseDown, onMouseUp, onMouseMove, onWheel, onCtx } from "./input/pointer"
+import { type Trecho } from "./world/cenario"
 
 // AutoDash — engine pseudo-3D (estilo NFS de PSP) em Canvas 2D puro.
 // Estrada por segmentos projetados, tráfego, clima, câmbio com RPM e ranking local.
@@ -39,7 +57,7 @@ export const FADE_IN_LEN = 90
 type GameState =
     | "menu" | "garage" | "countdown" | "racing" | "paused" | "gameover" | "nameentry"
     | "duellobby" | "duelcode" | "duelwaiting" | "duelspectate" | "duelresult"
-    | "racelobby" | "racecode" | "racewait" | "raceresult"
+    | "racelobby" | "racecode" | "racewait" | "raceresult" | "racerecon"
 
 export interface DuelSession {
   code: string
@@ -67,7 +85,15 @@ export interface Seg { curve: number; y1: number; y2: number; sign?: number }
 
 // Obstáculo físico na pista (cones, barreiras). Cone é perdoável (tranco);
 // barreira é parede. Base do futuro modo corrida.
-export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier"; w: number; len: number; prevD?: number; dead?: boolean }
+// `fixo`: faz parte do circuito (não some quando fica para trás; vale a corrida toda).
+// Fase 5: `seta` = painel de seta luminosa da obra (sólido, como barreira);
+// `oleo` = mancha de óleo (não é sólida: escorrega, world/oleo.ts). `lado` = lado
+// fechado da obra ou lado do acidente. `pisado`: o jogador já passou na mancha.
+// Fase 6: `pregos` = tapete de pregos da polícia (world/policia.ts).
+// "cena": cenografia de evento sem colisão (Fase 8.3); `visual` diz o desenho
+// (render/cena.ts). Um "barrier" com `visual` bate como cavalete e desenha outra coisa.
+export type VisualCena = "maquina" | "trabalhador" | "triangulo" | "detritos" | "guarda" | "radar" | "frentista" | "pedra"
+export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" | "seta" | "oleo" | "pregos" | "cena"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean; lado?: number; pisado?: boolean; visual?: VisualCena }
 // Zona de evento no traçado:
 //  bridge    — ponte suspensa (estilo Golden Gate): você dirige EM CIMA, com
 //              guarda-corpo, torres e água dos dois lados
@@ -77,23 +103,17 @@ export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier";
 //  blitz     — bloqueio policial: TODO MUNDO desce pra ~60; furar = perseguição
 //  speedtrap — radar (placa 90): trânsito reduz, polícia observando; passar
 //              rápido demais = perseguição (o evento da conversa original)
-interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap"; z: number; end: number; spawnT: number; checked?: boolean }
-export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge"; label?: string }
+//  posto     — reta com posto de combustível (Fase 5, world/posto.ts)
+//  obra      — obra com estreitamento: `lado` fecha duas faixas (world/obra.ts)
+export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto" | "obra" | "tunnel" | "touge"; z: number; end: number; spawnT: number; checked?: boolean; lado?: number; somFeito?: boolean }
+export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto" | "chegada" | "acidente" | "policia" | "tunel" | "drift" | "serra"; label?: string; lado?: number }
 
 export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 export interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
 
 interface Particle { x: number; y: number; vx: number; vy: number; size: number; life: number; maxLife: number; color: string }
-interface Floater { text: string; color: string; y: number; life: number; big: boolean }
+interface Floater { text: string; color: string; y: number; life: number; big: boolean; posto?: boolean }
 interface Drop { x: number; y: number; len: number; spd: number }
-
-// paletas de céu por hora do dia (t = fração do ciclo)
-export const SKY_KEYS = [
-  { t: 0.125, top: "#2b8fd6", bot: "#bfe6f7", amb: 1.0 },
-  { t: 0.375, top: "#3b2a63", bot: "#fb923c", amb: 0.8 },
-  { t: 0.625, top: "#050816", bot: "#16233f", amb: 0.42 },
-  { t: 0.875, top: "#33507c", bot: "#fcd9a0", amb: 0.78 },
-]
 
 
 export class AutoDashEngine {
@@ -118,8 +138,16 @@ export class AutoDashEngine {
   playerX = 0          // -1..1 (fração da meia-pista)
   gear = 1             // 0 = neutro
   rpm = RPM_IDLE
+  somT = 0 // tempo do som do motor (s): limitador e lenta irregular
+  boost = 0 // pressão do turbo, 0..1 (physics/motores.ts); motor aspirado fica em 0
+  eixo = 0  // giro do eixo do turbo, 0..1: memória do boost num alívio curto (passoEixo)
   shiftT = 0
+  giroSom = 900 // giro do conta-giros e do som: segue eng.rpm sem saltar (physics/motores.ts suavizarGiro)
+  gasF = 0 // pé efetivo 0..1: segue o acelerador com o atraso do motor (physics/motores.ts, rampaGas)
+  marchaDoGiro = 1 // marcha do giro do último quadro (sim/longitudinal.ts: detecta a redução)
+  reduzindo = false // a troca em andamento é uma redução (blip no giro)
   wheelspinT = 0
+  patina = 0 // patinada visível, 0..0,6 (R3): fumaça, giro solto e chiado; não muda a força
   bogT = 0
   nitroMeter = 0
   nitroOn = false
@@ -135,11 +163,15 @@ export class AutoDashEngine {
   km = 0
   combo = 0
   comboT = 0
+  partidaT = 0  // s que faltam da partida do motor (antes do semáforo); countT só anda em 0
   countT = 0
   greenAt = 0
   greenFired = false
   goFlashT = 0
   shakeT = 0
+  trauma = 0    // tremor de câmera, 0..1 (render/camera.ts): decai sozinho
+  camT = 0      // relógio do ruído da câmera (s)
+  nitroZoom = 0 // rampa do zoom do nitro, 0..1
   crashed = false
   crashByPolice = false // a batida foi contra uma viatura? (muda o texto do game over)
 
@@ -147,10 +179,15 @@ export class AutoDashEngine {
   traffic: Traffic[] = []
   obstacles: Obstacle[] = []
   zones: Zone[] = []
+  sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto
+  testeMotor = false   // pista vazia para ouvir os motores (garagem → Z)
+  testeFase5 = false   // atalho de teste da Fase 5: racha e posto logo de cara (garagem → J)
+  testePolicia = false // perseguição direta, estrelas nas teclas 0–5 (garagem → L)
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6
-  eventTimer = 12 // s até o próximo evento de mapa sorteado
+  eventTimer = 12 // s até o próximo evento de mapa sorteado (conta só sem evento rolando)
+  ultimosEventos: EventoMapa[] = [] // os últimos sorteados (não repete; world/events.ts)
   bgShift = 0
   curveWarn = 0
   curveWarnDist = 0
@@ -161,8 +198,10 @@ export class AutoDashEngine {
   policeHitT = 0 // cooldown pós-encostão — vale SÓ contra viatura
   policeEscapeT = 0 // tempo mantendo distância da polícia (protótipo do "despiste")
   policeChaseT = 0 // duração da perseguição atual — despiste só vale após o aquecimento
+  policia: Procurado = novoProcurado() // nível de procurado (world/policia.ts, Fase 6)
   particles: Particle[] = []
   floaters: Floater[] = []
+  avisos: Aviso[] = [] // cartões de aviso dos eventos (world/avisos.ts)
   drops: Drop[] = []
   clouds = Array.from({ length: 6 }, (_, i) => ({
     x: (i * 173) % W, y: 26 + (i * 61) % 130, s: 34 + (i * 37) % 44,
@@ -177,10 +216,62 @@ export class AutoDashEngine {
   // mais barato.
   glowCache = new Map<string, HTMLCanvasElement>()
   glowSprite: HTMLCanvasElement | null = null
-  raining = false
-  rainT = 0
-  rainRollT = 0
+  // relógio em ticks e clima (ADR 0013). `raining` deriva do clima.
+  clock: Clock = newClock("ciclo")
+  horaModo: HoraModo = "ciclo"
+  clima: ClimaId = "limpo"
+  climaModo: ClimaModo = "sorteio"
+  climaSeed = 0
+  climaAnt: ClimaVisto | null = null // como o clima estava na tela quando começou a transição (sim/clima.ts)
+  climaMix = 1                    // 0..1: quanto do clima novo já entrou
+  biomaAnt: BiomeDef | null = null // região de antes, durante a transição (world/regiao.ts)
+  biomaMix = 1
+  kmRegiao = 0 // km rodados na região atual (world/regiao.ts)
+  estagioTransito = 0 // estágio da intensidade do trânsito já anunciado (traffic/intensidade.ts)
+  climaS = 0 // segundos de simulação desde a largada: as janelas de clima contam daqui
+  get raining() { return CLIMAS[this.clima].chuva || (this.climaMix < 1 && !!this.climaAnt && this.climaAnt.chuvaK > 0) }
+  // bioma da pista atual (ADR 0011). Definido em buildTrack, lido pelo render.
+  bioma: BiomeDef = biomeById(undefined)
+  // circuito fixo da corrida (ADR 0014). Vazios na pista procedural.
+  pistaId: string | null = null
+  noRamal = false // o jogador está no miolo de um ramal (para anunciar a entrada uma vez)
+  ramais: Ramal[] = []
+  trechos: TrechoInfo[] = []
+  cenario: Trecho[] = [] // trechos de cenário de beira (world/cenario.ts, Fase 8.4)
+  pistaSeed = 0          // seed da pista procedural (a troca de região refaz o cenário com ela)
   demoT = 0
+  revAmostraT = 0 // acelerada de amostra na garagem ao trocar o motor
+
+  // Fase 5 (eventos novos). A lógica mora em world/ e sim/; aqui só o estado.
+  rngEv: () => number = mulberry32(1) // sorteio dos eventos novos (semeado na largada)
+  combustivel = 1   // tanque, 0..1 (world/combustivel.ts; só no solo)
+  postoLimite = 0.45 // abaixo disso abre o próximo posto (world/posto.ts)
+  abastecendo = false
+  juntoDaBomba = false // no pátio do posto, ao lado da ilha (world/posto.ts)
+  elevJogador = 0      // altura do chão sob o jogador (elevado do viaduto, Fase 8.6)
+  dentroTunel = false  // dentro do túnel (world/tunel.ts, Fase 8.7)
+  claraoT = 0          // s restantes do clarão ao sair do túnel
+  // drift com freio de mão (world/drift.ts)
+  driftAng = 0         // ângulo da traseira (rad, com sinal): só desenho
+  driftPts = 0         // pontos do drift em andamento
+  driftRetoT = 0       // s reto depois de soltar o Shift
+  touge: Touge | null = null // duelo de touge em andamento (world/touge.ts)
+  escalaTempo = 1 // câmera lenta do duelo (1 = normal)
+  montanha: Montanha | null = null // a montanha da serra na pista (world/montanha.ts)
+  climaForcado: ClimaId | null = null // clima imposto pelo lugar (neblina no meio da serra)
+  racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
+  rachaT = 45 // s de solo até o próximo convite
+  comboio: Comboio | null = null // comboio com fresta em andamento (world/comboio.ts)
+  oleoT = 0 // s restantes escorregando no óleo (world/oleo.ts)
+  respingoT = 0 // s restantes do respingo da cachoeira na tela (world/montanha.ts, render/serra.ts)
+  vacuo = 0       // força do vácuo, 0..1 (sim/vacuo.ts)
+  vacuoS = 0      // s seguidos no vácuo (o estilingue só vale depois de um tempo)
+  estilingueT = 0 // s restantes do estilingue ao sair do vácuo
+
+  // garagem da Fase 7 (render/menus/estetica.ts)
+  abaGaragem: AbaGaragem = "carro"
+  previaPista = false // carro na pista do bioma escolhido, sem o painel
+  fovF = 0 // abertura do FOV dinâmico, 0..1 (render/fov.ts); só desenho
 
   // input
   keys = new Set<string>()
@@ -195,6 +286,7 @@ export class AutoDashEngine {
   race: RaceSession | null = null
   raceVoltas = 3
   raceBots = 3
+  racePista = 1 // 0 = procedural, 1..N = circuito fixo (world/circuits.ts, ADR 0014)
   raceFinished = false // já cruzei a linha (coast + espectador)
   raceSpectT = 0       // tempo assistindo os rivais terminarem
   raceErro: string | null = null
@@ -338,23 +430,12 @@ export class AutoDashEngine {
     const amb = sky.amb
 
     ctx.save()
-    if (this.shakeT > 0) ctx.translate((Math.random() - 0.5) * 14, (Math.random() - 0.5) * 10)
-    // trepidação de motor no grid da corrida: quanto mais giro, mais treme —
-    // o carro "pedindo pra sair"
-    if (this.mode === "race" && this.state === "countdown") {
-      const rev = clamp((this.rpm - 3000) / 5000, 0, 1)
-      ctx.translate((Math.random() - 0.5) * 3 * rev, (Math.random() - 0.5) * 2.4 * rev)
-    }
-    // "FOV pump" no nitro — a câmera aperta levemente
-    if (this.nitroOn && this.nitroMeter > 1 && this.state === "racing") {
-      ctx.translate(W / 2, H / 2)
-      ctx.scale(1.025, 1.025)
-      ctx.translate(-W / 2, -H / 2)
-    }
+    // tremor por trauma, trepidação do grid e zoom por velocidade e nitro
+    aplicarCamera(this, ctx)
     // a câmera deita junto com o volante
-    if (this.state === "racing" && Math.abs(this.steerVel) > 0.04) {
+    if (this.state === "racing" && (Math.abs(this.steerVel) > 0.04 || this.driftAng !== 0)) {
       ctx.translate(W / 2, H)
-      ctx.rotate(-this.steerVel * 0.011)
+      ctx.rotate(-this.steerVel * 0.011 - this.driftAng * 0.05) // no drift a câmera inclina junto
       ctx.translate(-W / 2, -H)
     }
 
@@ -379,8 +460,8 @@ export class AutoDashEngine {
     renderRearThreat(this)
     renderParticles(this)
 
-    if (this.raining) {
-      ctx.strokeStyle = "rgba(190,215,240,0.35)"
+    if (this.raining && !this.dentroTunel) {
+      ctx.strokeStyle = `rgba(190,215,240,${(0.35 * climaAtual(this).chuvaK).toFixed(3)})` // a chuva engrossa e afina na transição
       ctx.lineWidth = 1.5
       ctx.beginPath()
       for (const d of this.drops) {
@@ -393,6 +474,7 @@ export class AutoDashEngine {
 
     // vinheta — dá peso à imagem (sprite cacheado)
     ctx.drawImage(vignetteTex(this), 0, 0)
+    drawRespingos(this) // respingo da cachoeira da serra na tela (render/serra.ts)
 
     switch (this.state) {
       case "menu": renderMenu(this); break
@@ -416,7 +498,10 @@ export class AutoDashEngine {
       case "racecode": renderRaceCode(this); break
       case "racewait": renderRaceWait(this); break
       case "raceresult": renderRaceResult(this); break
+      case "racerecon": renderRaceRecon(this); break
     }
+    // torque ao lado do conta-giros (Fase 7, render/hud-torque.ts)
+    renderTorqueHud(this)
 
     // floaters por cima de tudo
     const ctx2 = this.ctx
@@ -540,6 +625,7 @@ export class AutoDashEngine {
       const spec = CARS[this.cfg.carIdx]
       this.race = await RaceSession.hospedar(
           this.cfg.pilotName || "PILOTO", this.raceVoltas, this.cfg.carIdx, this.cfg.customs[this.cfg.carIdx].paint,
+          this.racePista,
       )
       void spec
       this.mode = "race"

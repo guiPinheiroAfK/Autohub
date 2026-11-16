@@ -233,7 +233,9 @@ autodashRoutes.post("/autodash/race", async (c) => {
 
   await sql`DELETE FROM autodash_race_rooms WHERE criado_em < now() - interval '2 hours'`
 
-  const seed = Math.floor(Math.random() * 2 ** 31)
+  // a pista viaja na seed (ver web-garagem/src/game/autodash/world/circuits.ts):
+  // o dono escolhe e manda a seed pronta. Sem seed (cliente antigo), sorteia aqui.
+  const seed = cleanInt(body?.seed, 0, 2 ** 31 - 1, Math.floor(Math.random() * 2 ** 31))
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = newCode()
     try {

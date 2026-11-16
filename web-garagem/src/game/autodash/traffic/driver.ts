@@ -7,8 +7,29 @@
 // O engine cuida do que é interação com o jogador (colisão, pontuação, render,
 // reciclagem); o Driver cuida só de dirigir: seguir, ceder, ultrapassar, perseguir.
 
-import { KMH2UPS } from "../data"
+import { KMH2UPS, DRAW_DIST, SEG_LEN } from "../data"
 import { KINDS, type Traffic, type TrafficRole, type WorldView } from "./types"
+import { RACHA } from "../world/racha"
+import { fatorTroca, INTENSIDADE } from "./intensidade"
+
+// E1 — caminhão trocando de faixa (Fase 5)
+export const CAMINHAO = {
+  chance: 0.0015,  // por quadro, por caminhão (~1 troca a cada 11 s a 60 fps)
+  setaS: 1.6,      // seta antes de sair (sai com 0,3 restante: 1,3 s de leitura)
+  leituraS: 1.2,   // janela mínima até o jogador chegar na traseira
+  ensaio: 0.05,    // quanto puxa pro lado antes de ir
+}
+
+// Civil e o jogador (Fase 8.1): antes o civil só via os outros carros e chegava na
+// sua traseira com você parado ou lento na faixa dele.
+export const CIVIL = {
+  olhaJogador: 12000, // u: até onde o civil enxerga o jogador na faixa (a 110 km/h contra você parado precisa de ~11 mil)
+  freio: 75,          // km/h por s: freio planejado atrás do jogador
+  folga: 160,         // u: além dos corpos, para onde ele para atrás de você
+  presoFolga: 900,    // u: perto assim e bem abaixo do cruzeiro = preso atrás de você
+  buzinaS: 1.5,       // s preso antes de buzinar e tentar passar
+  luzFreio: 8,        // km/h abaixo do cruzeiro: acende a luz de freio
+}
 
 function clamp(v: number, lo: number, hi: number) { return v < lo ? lo : v > hi ? hi : v }
 
@@ -19,6 +40,36 @@ export abstract class Driver {
    * pra pontuar o "quase" (near-miss).
    */
   abstract drive(self: Traffic, world: WorldView, dt: number): number
+
+  /**
+   * O jogador como "carro da frente" na faixa de `self` (ou na faixa para onde ele
+   * vai), até `range` u à frente. Nunca na tela de atração. É um Traffic de mentira
+   * só para as contas de distância e velocidade.
+   */
+  protected jogadorNaFrente(self: Traffic, world: WorldView, range: number): Traffic | null {
+    if (world.demo) return null
+    if (Math.abs(world.playerX - self.offset) >= 0.32 && Math.abs(world.playerX - self.targetOffset) >= 0.32) return null
+    const d = world.wrapDz(world.playerZ, self.z)
+    if (d <= 0 || d >= range) return null
+    return {
+      z: world.playerZ, offset: world.playerX, targetOffset: world.playerX, speed: world.playerSpeed,
+      vReal: world.playerSpeed, kind: "car", role: "civilian", color: "", blinkT: 0, prevD: 0,
+    }
+  }
+
+  /**
+   * Com `self` em `lane`, as 4 faixas ficariam ocupadas num raio de 900 u? (conta
+   * a faixa atual e a de destino dos outros). Usado para não fechar a pista.
+   */
+  protected fechariaTudo(self: Traffic, world: WorldView, lane: number): boolean {
+    const ocupadas = new Set<number>([Math.round((lane + 0.75) / 0.5)])
+    for (const o of world.traffic) {
+      if (o === self || o.parked || o.role === "police" || Math.abs(world.wrapDz(o.z, self.z)) > 900) continue
+      ocupadas.add(Math.round((o.offset + 0.75) / 0.5))
+      ocupadas.add(Math.round((o.targetOffset + 0.75) / 0.5))
+    }
+    return [0, 1, 2, 3].every(f => ocupadas.has(f))
+  }
 
   /** Verdadeiro se `lane` está livre num raio Z de `clearZ` (olha faixa atual E destino dos outros). */
   protected laneFree(self: Traffic, world: WorldView, lane: number, clearZ: number): boolean {
@@ -43,6 +94,8 @@ export abstract class Driver {
       const lane = self.offset + side
       if (lane < -0.9 || lane > 0.9) continue
       if (!this.laneFree(self, world, lane, clearZ)) continue
+      // nunca entrar na última faixa livre: o trânsito não vira parede
+      if (this.fechariaTudo(self, world, lane)) continue
       // não entrar na faixa do jogador se isso significa cortar na frente dele
       // (janela grande à frente = playerClearZ) ou raspar logo atrás (curta)
       if (checkPlayer && !world.demo && Math.abs(world.playerX - lane) < 0.3) {
@@ -158,12 +211,27 @@ export class CivilianDriver extends Driver {
       const urgency = brakeGap < 400 ? 0.7 : 1.0
       spd = Math.max(ahead.speed * urgency, self.speed - 40)
       const moto = self.kind === "moto"
-      const changeProb = moto ? 0.04 : 0.02 // moto puxa ultrapassagem mais cedo
+      // moto puxa ultrapassagem mais cedo; o trânsito bravo troca mais de faixa
+      const changeProb = (moto ? 0.04 : 0.02) * fatorTroca(world.intensidade ?? 0)
       if (self.blinkT <= 0 && self.targetOffset === self.offset && (self.kind === "car" || moto) && Math.random() < changeProb) {
         const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
         // clearZ menor = moto costura mais entre carros; player clearance alto = não corta na sua frente
         this.tryLaneChange(self, world, sides, moto ? 700 : 1100, 0.8, true, moto ? 3000 : 2500)
       }
+    }
+    // E1 (Fase 5): caminhão às vezes troca de faixa sozinho, com seta longa
+    // (≥ 1,2 s de leitura antes de sair) e sem entrar na faixa do jogador se ele
+    // chegaria na traseira em menos de 1,2 s. Só fora da tela de atração.
+    if (self.kind === "truck" && !world.demo && self.blinkT <= 0 && self.targetOffset === self.offset
+        && Math.random() < CAMINHAO.chance) {
+      const fecha = Math.max(0, world.playerSpeed - self.speed) * KMH2UPS
+      const janela = Math.max(1500, fecha * CAMINHAO.leituraS)
+      const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
+      this.tryLaneChange(self, world, sides, 1300, CAMINHAO.setaS, true, janela)
+    }
+    // "ensaio": nos 0,4 s antes de sair, o caminhão já puxa 0,05 pro lado
+    if (self.kind === "truck" && self.targetOffset !== self.offset && self.blinkT > 0.3 && self.blinkT <= 0.7) {
+      self.offset += Math.sign(self.targetOffset - self.offset) * (CAMINHAO.ensaio / 0.4) * dt
     }
     // alguém colado atrás e mais rápido na mesma faixa: tenta liberar (sem cortar o jogador)
     if (beside && self.blinkT <= 0 && self.targetOffset === self.offset && Math.random() < 0.015) {
@@ -171,7 +239,49 @@ export class CivilianDriver extends Driver {
       this.tryLaneChange(self, world, sides, 900, 0.6, true, 2500)
     }
 
+    // o jogador na faixa, à frente: freia a tempo (v² = v_jogador² + 2·a·folga) e
+    // para atrás dele. Preso atrás de você: buzina e tenta passar pela faixa livre.
+    const eu = this.jogadorNaFrente(self, world, CIVIL.olhaJogador)
+    if (eu) {
+      const folga = world.wrapDz(eu.z, self.z) - (KINDS[self.kind].len + KINDS.car.len) / 2 - CIVIL.folga
+      spd = Math.min(spd, Math.max(0, eu.speed) + Math.sqrt(2 * CIVIL.freio * Math.max(0, folga) / KMH2UPS))
+      if (folga < CIVIL.presoFolga && spd < self.speed * 0.6) self.presoT = (self.presoT ?? 0) + dt
+      else self.presoT = 0
+      if ((self.presoT ?? 0) > CIVIL.buzinaS) {
+        world.buzinar?.(self)
+        self.presoT = -2 // espera 2 s antes de buzinar de novo
+        if (self.blinkT <= 0 && self.targetOffset === self.offset) {
+          const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
+          this.tryLaneChange(self, world, sides, 900, 0.6, true, 0)
+        }
+      }
+      if (!ahead || world.wrapDz(eu.z, self.z) < world.wrapDz(ahead.z, self.z)) ahead = eu
+    } else self.presoT = 0
+
+    // chegando ao lado de um grupo que, com ele, fecharia as 4 faixas: segura
+    // atrás do mais lento do grupo (o trânsito não vira parede)
+    if (!world.demo && this.fechariaTudo(self, world, self.offset)) {
+      let lento = Infinity, atras = false
+      for (const o of world.traffic) {
+        if (o === self || o.parked) continue
+        const d = world.wrapDz(o.z, self.z)
+        if (d > 0 && d < 900) { atras = true; lento = Math.min(lento, o.vReal ?? o.speed) }
+      }
+      if (atras && lento < Infinity) spd = Math.min(spd, lento - 12)
+    }
+    // trânsito pesado: freada brusca de vez em quando, com luz de freio. Nunca
+    // colado na sua frente (dá para ler e desviar).
+    const k = world.intensidade ?? 0
+    if (k > 0.5 && self.kind === "car" && !world.demo && !(self.sustoT && self.sustoT > 0)
+        && Math.random() < INTENSIDADE.freadaPorS * (k - 0.5) * 2 * dt) {
+      const dJog = world.wrapDz(self.z, world.playerZ)
+      if (dJog > 3000 || dJog < 0 || Math.abs(world.playerX - self.offset) > 0.4) self.sustoT = 1
+    }
+    if (self.sustoT && self.sustoT > 0) { self.sustoT -= dt; spd = Math.min(spd, self.speed * 0.55); self.freioT = Math.max(self.freioT ?? 0, 0.3) }
     spd = this.antiOverlap(self, world, ahead, spd)
+    // luz de freio: andando bem abaixo do cruzeiro (trânsito ou você na frente)
+    if (self.freioT && self.freioT > 0) self.freioT -= dt
+    if (spd < self.speed - CIVIL.luzFreio) self.freioT = Math.max(self.freioT ?? 0, 0.15)
     this.applyMovement(self, world, spd, dt)
     return spd
   }
@@ -197,10 +307,47 @@ export class PoliceDriver extends Driver {
   private static readonly DECEL = 170
   // distância em Z abaixo da qual a viatura NÃO entra na faixa do jogador
   private static readonly CLOSE = 1500
+  // freio planejado atrás do trânsito (km/h por segundo, abaixo do DECEL: folga)
+  private static readonly FREIO_TRANSITO = 120
+  // até onde ela olha o trânsito à frente (u): a 205 contra 60 km/h ela precisa
+  // de ~11500 u para frear; olhando só 1500 ela atravessava os carros (playtest 15/11).
+  // Precisa ver ANTES de passar da curva de freio: acima dela o freio não alcança.
+  private static readonly OLHA = 13000
+
+  /** Mais próximo à frente na faixa dela OU na faixa para onde está indo. */
+  private frente(self: Traffic, world: WorldView): Traffic | null {
+    let best: Traffic | null = null, bd = Infinity
+    for (const o of world.traffic) {
+      if (o === self || o.parked) continue
+      const d = world.wrapDz(o.z, self.z)
+      if (d <= 0 || d >= PoliceDriver.OLHA || d >= bd) continue
+      if (Math.abs(o.offset - self.offset) < 0.32 || Math.abs(o.offset - self.targetOffset) < 0.32) { best = o; bd = d }
+    }
+    return best
+  }
+
+  /** Mais rápido que ela pode andar em `lane` e ainda frear atrás de quem está lá (−1: ocupada do lado). */
+  private vNaFaixa(self: Traffic, world: WorldView, lane: number): number {
+    let v = Infinity
+    for (const o of world.traffic) {
+      if (o === self) continue
+      if (Math.abs(o.offset - lane) >= 0.32 && Math.abs(o.targetOffset - lane) >= 0.32) continue
+      const d = world.wrapDz(o.z, self.z)
+      if (Math.abs(d) < 700) return -1
+      if (d > 0 && d < PoliceDriver.OLHA) v = Math.min(v, this.vAtras(self, o, d))
+    }
+    return v
+  }
+
+  /** v² = va² folga + 2·a·d: a mais rápida que ainda para na traseira de `o` a `d` u. */
+  private vAtras(self: Traffic, o: Traffic, d: number): number {
+    const folga = d - (KINDS[self.kind].len + KINDS[o.kind].len) / 2 - 320 // para a ~1 carro de distância
+    return Math.max(0, o.speed) + Math.sqrt(2 * PoliceDriver.FREIO_TRANSITO * Math.max(0, folga) / KMH2UPS)
+  }
 
   drive(self: Traffic, world: WorldView, dt: number): number {
     const gap = world.wrapDz(self.z, world.playerZ) // >0: viatura à frente do jogador
-    const ahead = this.nearestAhead(self, world)
+    const ahead = this.frente(self, world)
 
     // REGRA DE OURO: a viatura só entra na faixa do jogador quando está LONGE em
     // Z. Colada, ela segura a linha — senão o movimento lateral vira um "pulo"
@@ -212,10 +359,14 @@ export class PoliceDriver extends Driver {
       let want: number | null = null
       if (ahead && ahead.speed < self.speed - 10) {
         // trânsito travando ELA (não o jogador): contorna pro lado livre
+        // só vai para a faixa que deixa andar mais rápido COM folga para frear
+        // (antes: livre por 800 u, e a 200 contra 90 km/h ela entrava na traseira)
+        const aqui = this.vAtras(self, ahead, world.wrapDz(ahead.z, self.z))
         for (const side of Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]) {
           const lane = self.offset + side
           if (lane < -0.9 || lane > 0.9) continue
-          if (!this.laneFree(self, world, lane, 800)) continue
+          const v = this.vNaFaixa(self, world, lane)
+          if (v < 0 || v < Math.min(self.speed, aqui + 15)) continue
           if (!canEnterPlayerLane && Math.abs(world.playerX - lane) < 0.3) continue
           want = lane; break
         }
@@ -234,6 +385,9 @@ export class PoliceDriver extends Driver {
     // garante que quem corre mais que 215 simplesmente vai embora — sem isso
     // vira rubber-band e a fuga fica impossível.
     const atras = -gap // >0 quando a viatura está atrás de você
+    // teto e arrancada vêm da estrela (world/policia.ts); sem eles, os de sempre
+    const TOP = self.top ?? PoliceDriver.TOP
+    const ACCEL = self.accel ?? PoliceDriver.ACCEL
     // marcos da perseguição, por entidade:
     // engaged = já te ACERTOU um encostão · wasAhead/beaten = você a ultrapassou
     // (limiares folgados: durante o encostão o gap oscila em ±150 e disparava
@@ -248,21 +402,25 @@ export class PoliceDriver extends Driver {
     let target: number
     if (self.beaten) {
       // JÁ FOI ULTRAPASSADA: desiste de vez e recua até o despiste limpar.
-      target = Math.min(PoliceDriver.TOP, Math.max(0, world.playerSpeed - 40))
+      target = Math.min(TOP, Math.max(0, world.playerSpeed - 40))
     } else if (gap > 300) {
       // bem à FRENTE de você: alivia e deixa você passar — o lugar dela é
       // atrás/do lado, nunca de parede na frente
-      target = Math.min(PoliceDriver.TOP, Math.max(0, world.playerSpeed - 25))
+      target = Math.min(TOP, Math.max(0, world.playerSpeed - 25))
     } else if (self.engaged) {
       // JÁ COLOU UMA VEZ: daqui em diante é a REGRA DA VELOCIDADE, sem mola.
       // Ela corre no próprio limite, constante. Você mais rápido = vai deixando
       // pra trás, linear. A folga proporcional que existia aqui era uma mola
       // (longe acelera, perto afrouxa, contato recua) — a "gangorra" relatada.
-      target = PoliceDriver.TOP
+      target = TOP
+    } else if (gap > 0) {
+      // passou do seu lado sem encostar: deixa você voltar à frente. Antes mirava
+      // a sua velocidade + 4 e ficava parada um pouco à sua frente (playtest 15/11)
+      target = Math.min(TOP, Math.max(0, world.playerSpeed - 15))
     } else {
       // primeira aproximação por trás: vem com tudo, folga encolhendo com a
       // distância pra chegar desacelerando e encostar em vez de passar reto
-      target = Math.min(PoliceDriver.TOP, world.playerSpeed + clamp(atras / 60, 4, 85))
+      target = Math.min(TOP, world.playerSpeed + clamp(atras / 60, 4, 85))
     }
     // acabou de dar um encostão: RECUA e abre distância antes de voltar pra cima.
     // Sem isso ela fica moendo o jogador em loop assim que o cooldown expira.
@@ -274,10 +432,14 @@ export class PoliceDriver extends Driver {
     }
     // respeita o trânsito: não mira acelerar pra dentro de um carro
     target = this.antiOverlap(self, world, ahead, target)
+    // e freia A TEMPO: a mais rápida que dá para ainda parar na traseira do
+    // carro da frente com FREIO_TRANSITO (v² = va² folga + 2·a·d). Sem isso ela
+    // chegava a 100 km/h de diferença e só via o carro a 300 u: passava por dentro.
+    if (ahead) target = Math.min(target, this.vAtras(self, ahead, world.wrapDz(ahead.z, self.z)))
     // ACELERAÇÃO LIMITADA: rampa self.speed até o alvo — é isso que faz ela não
     // grudar. Ela persegue o alvo, mas a arrancada fraca deixa o jogador abrir gap.
     const dv = target - self.speed
-    self.speed += clamp(dv, -PoliceDriver.DECEL * dt, PoliceDriver.ACCEL * dt)
+    self.speed += clamp(dv, -PoliceDriver.DECEL * dt, ACCEL * dt)
     this.applyMovement(self, world, self.speed, dt)
     return self.speed
   }
@@ -295,9 +457,180 @@ export class OncomingDriver extends Driver {
   }
 }
 
+/**
+ * Desafiante do racha (Fase 5). No convite encosta do seu lado e acompanha;
+ * valendo, corre no ritmo dele, ultrapassa o trânsito e FECHA A PORTA (E7):
+ * com você até ~8 carros atrás numa faixa vizinha, ele "olha" (luz de freio e
+ * balanço) e 0,5 s depois vai para a faixa onde você ESTAVA. A reação atrasada
+ * é de propósito: a finta funciona. Nunca entra em cima de você — a trava de
+ * `applyMovement` aborta a troca com você colado na faixa destino.
+ */
+export class RachaDriver extends Driver {
+  // números do E7 na tabela do racha (world/racha.ts)
+  private static readonly PERTO = RACHA.pertoZ
+  private static readonly OLHAR = RACHA.olharS
+  private static readonly FECHA_CADA = RACHA.fechaCadaS
+  private static readonly BALANCO = RACHA.balanco
+
+  static centro(x: number): number {
+    return clamp(Math.round((x - 0.25) / 0.5) * 0.5 + 0.25, -0.75, 0.75)
+  }
+
+  /**
+   * Carro mais perto à frente na faixa dele OU na faixa para onde está indo
+   * (no meio da troca ele já ocupa as duas). Enxerga longe: a 300 km/h contra
+   * um carro a 100, frear a tempo pede uns 9000 de pista.
+   */
+  private frente(self: Traffic, world: WorldView): Traffic | null {
+    let best: Traffic | null = null, bd = Infinity
+    for (const o of world.traffic) {
+      if (o === self) continue
+      const d = world.wrapDz(o.z, self.z)
+      if (d <= 0 || d >= RACHA.olhaFrente || d >= bd) continue
+      if (Math.abs(o.offset - self.offset) < 0.32 || Math.abs(o.offset - self.targetOffset) < 0.32) { best = o; bd = d }
+    }
+    return best
+  }
+
+  /** Velocidade máxima para ainda conseguir frear até o carro da frente (freio planejado). */
+  static freiaAte(gap: number, seguro: number, vFrente: number): number {
+    const s = Math.max(0, gap - seguro)
+    return vFrente + Math.sqrt(2 * RACHA.freioPlano * s / KMH2UPS)
+  }
+
+  /** Máxima numa curva: as fechadas pedem alívio (como pedem pro jogador). */
+  static naCurva(vMax: number, curva: number): number {
+    const k = 1 - RACHA.curvaPorUnid * Math.max(0, Math.abs(curva) - RACHA.curvaLivre)
+    return vMax * Math.max(RACHA.curvaPiso, k)
+  }
+
+  /** Arrancada que perde fôlego perto da máxima. */
+  static arrancada(acel: number, v: number, vMax: number): number {
+    return acel * clamp((vMax - v) / (RACHA.folegoFrac * vMax), RACHA.folegoMin, 1)
+  }
+
+  /**
+   * Fora de vista o jogo não tem trânsito em volta dele (a pista dele fica
+   * vazia): ali ele anda no ritmo de quem costura, não na máxima. Antes andava
+   * na máxima o tempo todo e abria mais de 1 km.
+   */
+  static foraDeVista(rel: number): boolean {
+    return rel > RACHA.foraFrente * DRAW_DIST * SEG_LEN || rel < -RACHA.foraAtras * SEG_LEN
+  }
+
+  drive(self: Traffic, world: WorldView, dt: number): number {
+    const r = self.racha
+    if (!r) { this.applyMovement(self, world, self.speed, dt); return self.speed }
+    if (self.freioT && self.freioT > 0) self.freioT -= dt
+    if (r.fechaT > 0) r.fechaT -= dt
+    const gap = world.wrapDz(self.z, world.playerZ) // >0: rival à frente do jogador
+    const ahead = this.frente(self, world)
+
+    let alvo: number
+    if (r.fase === "convite") {
+      // encosta do lado, um tico à frente (o jogador vê o pisca-alerta)
+      alvo = world.playerSpeed + clamp((300 - gap) / 30, -45, 45)
+    } else {
+      // curva fechada logo à frente: alivia (olha onde ele está e um pouco adiante)
+      const c = world.curvaEm ? Math.max(Math.abs(world.curvaEm(self.z)), Math.abs(world.curvaEm(self.z + 8 * SEG_LEN))) : 0
+      alvo = RachaDriver.naCurva(r.vMax, c)
+      if (RachaDriver.foraDeVista(gap)) alvo = Math.min(alvo, r.vMax * RACHA.ritmoForaDeVista)
+    }
+
+    if (r.fase === "corrida" && r.olharT > 0) {
+      // olhando: balança na direção do jogador e volta; depois fecha
+      r.olharT -= dt
+      const p = 1 - Math.max(0, r.olharT) / RachaDriver.OLHAR
+      const dir = Math.sign(world.playerX - r.base) || 1
+      self.offset = r.base + dir * RachaDriver.BALANCO * Math.sin(Math.PI * p)
+      self.targetOffset = self.offset
+      if (r.olharT <= 0) {
+        self.offset = r.base; self.targetOffset = r.base
+        if (r.alvoFaixa !== null && this.laneFree(self, world, r.alvoFaixa, 700)) {
+          self.targetOffset = r.alvoFaixa
+          self.blinkT = 0.32 // quase sem seta: é uma fechada
+        }
+        r.alvoFaixa = null
+      }
+    } else if (self.blinkT <= 0 && self.targetOffset === self.offset) {
+      const dx = Math.abs(world.playerX - self.offset)
+      const c = RachaDriver.centro(self.offset)
+      if (Math.abs(c - self.offset) > 0.02) {
+        // troca abortada no meio deixa o carro entre faixas: antes de qualquer
+        // outra coisa volta pro centro da mais perto ou, ocupada, da outra
+        // (antes ficava montado na divisa e o trânsito passava raspando nele)
+        const outra = RachaDriver.centro(c + (self.offset > c ? 0.5 : -0.5))
+        if (this.laneFree(self, world, c, 500)) self.targetOffset = c
+        else if (outra !== c && this.laneFree(self, world, outra, 500)) self.targetOffset = outra
+      } else if (r.fase === "corrida" && r.fechaT <= 0 && gap > 300 && gap < RachaDriver.PERTO && dx > 0.3 && dx < 0.8
+          && Math.random() < r.fecha * dt * 2) {
+        // E7: olha antes de fechar
+        r.olharT = RachaDriver.OLHAR
+        r.fechaT = RachaDriver.FECHA_CADA
+        r.base = self.offset
+        r.alvoFaixa = RachaDriver.centro(world.playerX)
+        self.freioT = 0.3
+      } else if (ahead && ahead.speed < alvo - 10
+          && world.wrapDz(ahead.z, self.z) < Math.max(1500, (self.speed - ahead.speed) * KMH2UPS * RACHA.ultrapassaS)) {
+        // trânsito lento na frente: contorna cedo (sem cortar o jogador de perto);
+        // sem faixa livre, segue atrás freando (freiaAte e antiOverlap, abaixo)
+        const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
+        this.tryLaneChange(self, world, sides, 900, 0.5, true, 700)
+      }
+      // a troca sempre mira o centro de uma faixa (nunca "offset + 0,5" a partir do meio)
+      if (self.targetOffset !== self.offset) self.targetOffset = RachaDriver.centro(self.targetOffset)
+    }
+
+    let freio: number = RACHA.freio
+    if (ahead) {
+      // freia a tempo: antes só freava já colado, a 170 km/h/s, e vindo 150 km/h
+      // mais rápido que o trânsito atravessava o carro da frente
+      // (o carro da frente já pode ter andado neste quadro e ele ainda não: a
+      // 250 km/h o passo do quadro é quase um carro inteiro, então desconta)
+      // A velocidade do da frente é a que ele ANDOU (vReal): o civil que freia
+      // atrás de alguém anda abaixo do `speed` dele (o cruzeiro)
+      const seguro = (KINDS[self.kind].len + KINDS[ahead.kind].len) / 2 + 80
+      const passo = self.speed * KMH2UPS * dt
+      const folga = world.wrapDz(ahead.z, self.z) - passo
+      const vFrente = Math.min(ahead.speed, ahead.vReal ?? ahead.speed)
+      alvo = Math.min(alvo, RachaDriver.freiaAte(folga, seguro, vFrente))
+      // alguém entrou colado na frente (civil trocando de faixa): freio de pânico
+      if (folga < seguro && self.speed > vFrente) freio = RACHA.freioPanico
+    }
+    alvo = this.antiOverlap(self, world, ahead, alvo)
+    const dv = alvo - self.speed
+    // freando forte: acende a luz de freio (dá pra ler que ele pegou trânsito)
+    if (dv < -RACHA.freioLuz * dt) self.freioT = Math.max(self.freioT ?? 0, 0.25)
+    self.speed += clamp(dv, -freio * dt, RachaDriver.arrancada(r.acel, self.speed, r.vMax) * dt)
+    this.applyMovement(self, world, self.speed, dt)
+    return self.speed
+  }
+}
+
+/**
+ * Comboio (E6): segue reto no ritmo do grupo. Quem decide a troca de faixa (a
+ * fresta andando) é world/comboio.ts; aqui só a trava de não entrar em ninguém.
+ */
+export class ComboioDriver extends Driver {
+  drive(self: Traffic, world: WorldView, dt: number): number {
+    const frente = this.nearestAhead(self, world)
+    const eu = this.jogadorNaFrente(self, world, CIVIL.olhaJogador)
+    let spd = self.speed
+    if (eu) {
+      const folga = world.wrapDz(eu.z, self.z) - (KINDS[self.kind].len + KINDS.car.len) / 2 - CIVIL.folga
+      spd = Math.min(spd, Math.max(0, eu.speed) + Math.sqrt(2 * CIVIL.freio * Math.max(0, folga) / KMH2UPS))
+    }
+    spd = this.antiOverlap(self, world, eu && (!frente || world.wrapDz(eu.z, self.z) < world.wrapDz(frente.z, self.z)) ? eu : frente, spd)
+    this.applyMovement(self, world, spd, dt)
+    return spd
+  }
+}
+
 // Registro papel -> IA. Instâncias únicas compartilhadas (drivers são stateless).
 export const DRIVERS: Record<TrafficRole, Driver> = {
   civilian: new CivilianDriver(),
   police: new PoliceDriver(),
   oncoming: new OncomingDriver(),
+  racha: new RachaDriver(),
+  comboio: new ComboioDriver(),
 }

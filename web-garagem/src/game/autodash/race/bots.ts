@@ -5,7 +5,7 @@
 // segue um ritmo alvo com variação, o que é barato e já convence, porque o que
 // o jogador vê do rival é posição, velocidade e faixa.
 
-import { KMH2UPS } from "../data"
+import { KMH2UPS, ESCALA_ACEL } from "../data"
 import { corPorIndice, type Rival } from "./types"
 
 const NOMES = ["KAMI", "L4BT", "TURBO", "DIESEL", "NITRO", "GHOST", "V8", "ZERO"]
@@ -20,6 +20,16 @@ export interface PistaInfo {
   aFrente(z: number, x: number, alcance: number): { dz: number; v: number } | null
   /** A faixa está livre num raio de `alcance` em Z? */
   faixaLivre(z: number, x: number, alcance: number): boolean
+  /** Ramal (atalho) que passa por `z`, se a pista tiver um ali (ADR 0014). */
+  ramal?(z: number): RamalInfo | null
+}
+
+/** O que o bot precisa saber do ramal no ponto em que está. */
+export interface RamalInfo {
+  centro: number    // x do meio do ramal (com sinal)
+  ganho: number     // multiplicador de avanço no miolo
+  miolo: boolean    // já descolou da pista (é onde o ganho vale)
+  voltar: boolean   // trecho final colado: hora de voltar para a pista
 }
 
 /** Perfil de pilotagem — dá personalidade e evita que todos andem colados. */
@@ -35,6 +45,8 @@ export class BotRacer {
   private trocaT = 0
   private alvoX: number
   private penalidadeT = 0
+  /** Decisão desta passagem pelo ramal: null = ainda não decidiu. */
+  private pegaRamal: boolean | null = null
 
   constructor(id: string, nome: string, car: number, paint: number, dificuldade: number, cor: string) {
     // dificuldade 0..1 → ritmo entre ~150 e ~205 km/h. É o TETO dele em pista
@@ -97,7 +109,7 @@ export class BotRacer {
           }
         }
       }
-      r.v += Math.max(-150 * dt, Math.min(48 * dt, alvo - r.v))
+      r.v += Math.max(-150 * dt, Math.min(48 * ESCALA_ACEL * dt, alvo - r.v)) // mesma escala do jogador
     }
 
     // troca de faixa de vez em quando (só pra faixa livre)
@@ -107,11 +119,31 @@ export class BotRacer {
       const cand = [-0.75, -0.25, 0.25, 0.75][Math.floor(Math.random() * 4)]
       if (!pista || pista.faixaLivre(r.z, cand, 1400)) this.alvoX = cand
     }
-    const passo = 0.9 * dt
+    // ramal (atalho): decide UMA vez na entrada. Só entra quem já está do lado
+    // dele e tem perfil agressivo; quem entra segue o centro do ramal e volta
+    // para a pista no fim. No miolo o risco de erro é maior, como para o jogador.
+    const rm = pista?.ramal?.(r.z) ?? null
+    let ganho = 1
+    if (!rm) this.pegaRamal = null
+    else {
+      const lado = Math.sign(rm.centro)
+      if (this.pegaRamal === null) {
+        this.pegaRamal = r.x * lado > 0 && Math.random() < 0.15 + this.perfil.agressao * 0.6
+      }
+      if (this.pegaRamal) {
+        this.alvoX = rm.voltar ? 0.75 * lado : rm.centro
+        this.trocaT = Math.max(this.trocaT, 0.5) // não troca de faixa por conta própria aqui
+        if (rm.miolo && Math.abs(r.x - rm.centro) < 0.35) {
+          ganho = rm.ganho
+          if (this.penalidadeT <= 0 && Math.random() < this.perfil.erro * 0.004) this.penalidadeT = 1.2 + Math.random() * 1.2
+        }
+      }
+    }
+    const passo = (rm && this.pegaRamal ? 1.6 : 0.9) * dt
     r.x += Math.max(-passo, Math.min(passo, this.alvoX - r.x))
 
     // avança e fecha volta
-    const avanco = r.v * KMH2UPS * dt
+    const avanco = r.v * KMH2UPS * dt * ganho
     r.d += avanco
     r.z += avanco
     if (r.z >= trackLen) { r.z -= trackLen; r.lap++ }

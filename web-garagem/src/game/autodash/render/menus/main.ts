@@ -1,12 +1,20 @@
 // AutoDash — render/menus/main.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { enterFromMenu } from "../../flow"
-import { confirmName } from "../../flow"
+import { iniciarTesteFase5 } from "../../world/debug-eventos"
+import { confirmName, trocarMotor, limparTestes } from "../../flow"
+import { perfilDoCarro, GRAVACAO_DO_PERFIL, CREDITO_GRAVACAO } from "../../sound/profiles"
+import { relacoes } from "../../physics/cambio"
 import { AutoDashEngine, W, H } from "../../engine"
 import { pill, arrowBtn, glass } from "../../ui/widgets"
 import { abrirRaceLobby, startRace } from "../../modes/race"
 import { CARS, saveConfig, NEONS, PAINTS, WHEELS, STRIPES, WINGS, NEON_NAMES } from "../../data"
 import { drawPlayerCar, rr } from "../primitives"
 import { clamp } from "../../math"
+import { biomeById, proximoBioma } from "../../world/biomes"
+import { HORA_NOME, proximaHora } from "../../world/clock"
+import { proximoClima } from "../../world/weather"
+import { driveLabel } from "../../physics/traction"
+import { abasGaragem, renderAbaEstetica, renderPreviaPista } from "./estetica"
 
 export function renderMenu(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -56,6 +64,8 @@ export function renderMenu(eng: AutoDashEngine) {
 
 export function renderGarage(eng: AutoDashEngine) {
   const ctx = eng.ctx
+  // prévia na pista (Fase 7): só o carro na cena, sem painel
+  if (eng.previaPista) { renderPreviaPista(eng); return }
   dim(eng, 0.72)
   const spec = CARS[eng.cfg.carIdx]
   const custom = eng.cfg.customs[eng.cfg.carIdx]
@@ -68,9 +78,23 @@ export function renderGarage(eng: AutoDashEngine) {
   ctx.fillStyle = "rgba(248,250,252,0.55)"
   ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillText(`${eng.cfg.carIdx + 1} / ${CARS.length}`, 240, 78)
+  ctx.font = "12px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText(`${driveLabel(spec)} · ${relacoes(spec).length} marchas`, 240, 98)
   ctx.textAlign = "left"
 
   pill(eng, "← menu", 16, 16, 92, () => { eng.state = "menu" }, { h: 26, font: 12 })
+  // som do motor: o original do carro ou qualquer outro perfil (salvo por carro)
+  const motorNome = perfilDoCarro(spec.body, custom.motor).nome
+  pill(eng, `motor: ${motorNome}${custom.motor ? "" : " (original)"} [E]`, 70, 108, 340, () => trocarMotor(eng), { h: 24, font: 11 })
+  // motor com gravação real: crédito de quem gravou (CC BY exige atribuição)
+  const gravacao = GRAVACAO_DO_PERFIL[perfilDoCarro(spec.body, custom.motor).id]
+  if (gravacao) {
+    ctx.textAlign = "center"
+    ctx.fillStyle = "rgba(248,250,252,0.45)"
+    ctx.font = "10px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`gravação real: ${CREDITO_GRAVACAO[gravacao.banco] ?? gravacao.banco}`, 240, 146)
+    ctx.textAlign = "left"
+  }
   arrowBtn(eng, 38, 206, -1, () => { eng.cfg.carIdx = (eng.cfg.carIdx + CARS.length - 1) % CARS.length; save(); eng.audio.ui() })
   arrowBtn(eng, 396, 206, 1, () => { eng.cfg.carIdx = (eng.cfg.carIdx + 1) % CARS.length; save(); eng.audio.ui() })
 
@@ -99,11 +123,18 @@ export function renderGarage(eng: AutoDashEngine) {
     eng.state = "nameentry"
     eng.audio.ui()
   })
-  pill(eng, "ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); startRace(eng) }, { primary: true, h: 42, font: 17 })
+  pill(eng, "ACELERAR!  [ENTER]", 120, 470, 240, () => { save(); limparTestes(eng); startRace(eng) }, { primary: true, h: 42, font: 17 })
+  // atalhos de teste (playtest): pista vazia para o motor, racha + posto (Fase 5)
+  // e perseguição direta com estrelas nas teclas 0–5 (Fase 6)
+  pill(eng, "motor [Z]", 120, 516, 76, () => { save(); limparTestes(eng); eng.testeMotor = true; startRace(eng) }, { h: 20, font: 10 })
+  pill(eng, "racha [J]", 202, 516, 76, () => { limparTestes(eng); iniciarTesteFase5(eng) }, { h: 20, font: 10 })
+  pill(eng, "polícia [L]", 284, 516, 76, () => { save(); limparTestes(eng); eng.testePolicia = true; startRace(eng) }, { h: 20, font: 10 })
 
   // painel de specs e customização
   glass(eng, 486, 66, 456, 460, 18)
   const sx = 510
+  abasGaragem(eng)
+  if (eng.abaGaragem === "estetica") { renderAbaEstetica(eng, sx); return }
   const stat = (label: string, frac: number, x: number, y: number, invert = false) => {
     ctx.fillStyle = "rgba(248,250,252,0.75)"
     ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
@@ -152,18 +183,21 @@ export function renderGarage(eng: AutoDashEngine) {
   pill(eng, `aerofólio: ${WINGS[custom.wing]} [G]`, sx + 216, 222, 200, () => { custom.wing = (custom.wing + 1) % WINGS.length; save(); eng.audio.ui() })
   pill(eng, `neon: ${NEON_NAMES[custom.neon]} [B]`, sx, 258, 200, () => { custom.neon = (custom.neon + 1) % NEONS.length; save(); eng.audio.ui() })
   pill(eng, `direção: ${eng.cfg.steering === "mouse" ? "mouse" : "teclado"} [Y]`, sx + 216, 258, 200, () => { eng.cfg.steering = eng.cfg.steering === "mouse" ? "keyboard" : "mouse"; save(); eng.audio.ui() })
-  pill(eng, `câmbio: ${eng.cfg.transmission === "auto" ? "automático" : "sequencial (scroll)"} [T]`, sx, 294, 416, () => { eng.cfg.transmission = eng.cfg.transmission === "auto" ? "manual" : "auto"; save(); eng.audio.ui() })
+  pill(eng, `câmbio: ${eng.cfg.transmission === "auto" ? "automático" : "sequencial (scroll)"} [T]`, sx, 294, 200, () => { eng.cfg.transmission = eng.cfg.transmission === "auto" ? "manual" : "auto"; save(); eng.audio.ui() })
+  pill(eng, `bioma: ${biomeById(eng.cfg.biome).nome} [X]`, sx + 216, 294, 200, () => { eng.cfg.biome = proximoBioma(eng.cfg.biome); eng.bioma = biomeById(eng.cfg.biome); save(); eng.audio.ui() })
+  pill(eng, `horário: ${HORA_NOME[eng.cfg.hora]} [O]`, sx, 330, 200, () => { eng.cfg.hora = proximaHora(eng.cfg.hora); save(); eng.audio.ui() }, { h: 26 })
+  pill(eng, `clima: ${eng.cfg.clima} [K]`, sx + 216, 330, 200, () => { eng.cfg.clima = proximoClima(eng.cfg.clima); save(); eng.audio.ui() }, { h: 26 })
 
   // leaderboard global
   ctx.fillStyle = "rgba(253,224,71,0.9)"
   ctx.font = "bold 12px 'Space Grotesk', 'Segoe UI', sans-serif"
-  ctx.fillText("🌐 TOP 10 GLOBAL", sx, 348)
+  ctx.fillText("🌐 TOP 10 GLOBAL", sx, 374)
   ctx.font = "11px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillStyle = "rgba(248,250,252,0.7)"
-  if (eng.scores.length === 0) ctx.fillText("— ainda sem recordes, seja o primeiro —", sx, 368)
+  if (eng.scores.length === 0) ctx.fillText("— ainda sem recordes, seja o primeiro —", sx, 392)
   eng.scores.slice(0, 10).forEach((s, i) => {
     ctx.fillStyle = s.name === eng.cfg.pilotName ? "rgba(253,224,71,0.95)" : "rgba(248,250,252,0.7)"
-    ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, sx, 368 + i * 15)
+    ctx.fillText(`${i + 1}. ${s.name || "???"} — ${s.score.toLocaleString("pt-BR")} (${s.km} km)`, sx, 392 + i * 13.5)
   })
 }
 

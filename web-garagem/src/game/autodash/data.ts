@@ -1,4 +1,6 @@
 // AutoDash — constantes, specs dos carros e persistência local.
+import type { HoraModo } from "./world/clock"
+import type { ClimaModo } from "./world/weather"
 
 export const CANVAS_W = 960
 export const CANVAS_H = 540
@@ -6,16 +8,20 @@ export const CANVAS_H = 540
 // Pseudo-3D
 export const SEG_LEN = 200            // comprimento de um segmento de pista (unidades de mundo)
 export const ROAD_WIDTH = 2200        // meia-largura da pista
-export const LANES = 4
 export const CAM_HEIGHT = 1000
 export const FOV = 100
 export const CAM_DEPTH = 1 / Math.tan(((FOV / 2) * Math.PI) / 180)
 export const DRAW_DIST = 300          // segmentos desenhados à frente
 export const KMH2UPS = 132            // 1 km/h → unidades de mundo por segundo
+// Escala de tempo da aceleração (decisão do usuário, 14/11: "mais real"). Força,
+// nitro e arrasto do jogador são multiplicados juntos, então a máxima de cada
+// carro não muda e só o tempo estica (÷0,65 ≈ +54%): o ÁPEX vai de 0 a 100 em
+// ~5 s, perto do Supra real (4,9 s). Antes era ~3,3 s. Os bots usam a mesma
+// escala no teto de aceleração deles (race/bots.ts).
+export const ESCALA_ACEL = 0.65
 
 // Motor / câmbio
 export const RPM_IDLE = 900
-export const RPM_REDLINE = 7600
 export const RPM_LIMITER = 7900
 export const GEAR_RATIOS = [3.4, 2.35, 1.75, 1.38, 1.12, 0.88] // 6ª mais longa: cap ~265 km/h
 export const RPM_PER_KMH = 30         // rpm = idle + kmh * ratio * RPM_PER_KMH
@@ -25,6 +31,22 @@ export type BodyKind =
   // roster JDM — nomes próprios de propósito (as silhuetas são inspiradas,
   // não cópias, e os nomes não remetem a marca nenhuma)
   | "zcoupe" | "rotor" | "apex" | "kaiju" | "sylva" | "roadster" | "alta" | "flat6"
+
+// Tração e pneus (ADR 0012). Campos opcionais: sem eles, o carro é RWD com pneu padrão,
+// que é a referência do modelo (multiplicador de tração exatamente 1).
+export type Drive = "FWD" | "RWD" | "AWD"
+export type TyreId = "padrao" | "esportivo" | "macio" | "misto"
+// Tipo de câmbio: por enquanto só muda a SENSAÇÃO da troca (giro livre e chute
+// da câmera, physics/troca.ts). Torque e boost durante a troca são iguais para
+// todos (P3 em docs/pesquisa/fisica-carro.md fica para o playtest).
+export type CambioTipo = "H" | "seq" | "dct" | "conv"
+
+export const TYRES: Record<TyreId, { name: string; grip: number; traction: number }> = {
+  padrao: { name: "padrão", grip: 1, traction: 1 },
+  esportivo: { name: "esportivo", grip: 1.08, traction: 1.12 },
+  macio: { name: "macio (semi-slick)", grip: 1.18, traction: 1.25 },
+  misto: { name: "misto (chuva)", grip: 0.95, traction: 0.7 },
+}
 
 export interface CarSpec {
   id: string
@@ -36,16 +58,22 @@ export interface CarSpec {
   topSpeed: number   // km/h
   width: number      // meia-largura normalizada (fração da meia-pista) — carro largo sofre no tráfego
   shiftMs: number    // tempo de troca de marcha
+  drive?: Drive      // tração (padrão RWD)
+  frontBias?: number // só AWD: fração do torque na dianteira (0.5 = 50/50, 0.3 = 30/70)
+  tyre?: TyreId      // pneu (padrão "padrao")
+  finalDrive?: number // relação final (1 = padrão; maior = mais torque e menos velocidade final)
+  marchas?: number   // número de marchas (padrão 6); 1ª e última iguais para todos (physics/cambio.ts)
+  cambio?: CambioTipo // tipo de câmbio (padrão "H", manual); só cosmético por enquanto
 }
 
 export const CARS: CarSpec[] = [
   {
-    id: "gt", name: "AUTOHUB GT", body: "gt",
+    id: "gt", name: "AUTOHUB GT", body: "gt", cambio: "seq",
     power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220,
     desc: "Equilibrado. O clássico da casa.",
   },
   {
-    id: "muscle", name: "MUSCLE 71", body: "muscle",
+    id: "muscle", marchas: 4, name: "MUSCLE 71", body: "muscle",
     power: 58, grip: 0.55, topSpeed: 260, width: 0.31, shiftMs: 300,
     desc: "Torque bruto e traseira solta. Largo demais pro corredor.",
   },
@@ -55,7 +83,7 @@ export const CARS: CarSpec[] = [
     desc: "Estreito e grudado no chão. Costura qualquer comboio.",
   },
   {
-    id: "ghost", name: "FANTASMA X", body: "ghost",
+    id: "ghost", marchas: 9, cambio: "dct", name: "FANTASMA X", body: "ghost",
     power: 50, grip: 0.78, topSpeed: 256, width: 0.25, shiftMs: 240,
     desc: "Final de reta assustador. Exige mão calma.",
   },
@@ -69,7 +97,7 @@ export const CARS: CarSpec[] = [
     desc: "O meio-termo honesto. Bom em tudo, imbatível em nada.",
   },
   {
-    id: "rotor", name: "ROTOR FD", body: "rotor",
+    id: "rotor", marchas: 5, name: "ROTOR FD", body: "rotor",
     power: 47, grip: 0.88, topSpeed: 244, width: 0.24, shiftMs: 170,
     desc: "Leve e de giro solto. Troca marcha antes de todo mundo.",
   },
@@ -79,17 +107,17 @@ export const CARS: CarSpec[] = [
     desc: "Dono das retas. Pesado nas curvas, largo no trânsito.",
   },
   {
-    id: "kaiju", name: "KAIJU R32", body: "kaiju",
+    id: "kaiju", marchas: 5, name: "KAIJU R32", body: "kaiju",
     power: 52, grip: 0.92, topSpeed: 240, width: 0.28, shiftMs: 200,
     desc: "Grudado no chão. Perde na reta, devolve na curva.",
   },
   {
     id: "sylva", name: "SYLVA S15", body: "sylva",
-    power: 45, grip: 0.80, topSpeed: 238, width: 0.23, shiftMs: 185,
+    power: 50, grip: 0.80, topSpeed: 238, width: 0.23, shiftMs: 185,
     desc: "Estreito e ágil. Costura onde os outros não cabem.",
   },
   {
-    id: "roadster", name: "ROADSTER MK1", body: "roadster",
+    id: "roadster", marchas: 5, name: "ROADSTER MK1", body: "roadster",
     power: 38, grip: 0.95, topSpeed: 220, width: 0.19, shiftMs: 160,
     desc: "O menor e mais leve. Carrega velocidade em curva como ninguém.",
   },
@@ -99,9 +127,33 @@ export const CARS: CarSpec[] = [
     desc: "Sedã de faróis retráteis. Equilibrado e previsível.",
   },
   {
-    id: "flat6", name: "TARGA 992", body: "flat6",
+    id: "flat6", marchas: 8, cambio: "dct", name: "TARGA 992", body: "flat6",
     power: 54, grip: 0.90, topSpeed: 258, width: 0.26, shiftMs: 150,
     desc: "Motor traseiro boxer. Câmbio relâmpago e aderência de trilho.",
+  },
+
+  // ── carros de teste da Fase 2 (tração) ────────────────────────────────────
+  // Mesmos números do AUTOHUB GT; só a tração muda. Ficam no FIM da lista para
+  // não mudar os índices salvos em cfg.carIdx.
+  {
+    id: "test-fwd", name: "TESTE FWD", body: "gt",
+    power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220, drive: "FWD",
+    desc: "Teste: tração dianteira. Perde na arrancada em marcha baixa.",
+  },
+  {
+    id: "test-rwd", name: "TESTE RWD", body: "gt",
+    power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220, drive: "RWD",
+    desc: "Teste: tração traseira (referência). Forte na reta, sem perda.",
+  },
+  {
+    id: "test-awd5050", name: "TESTE AWD 50/50", body: "gt",
+    power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220, drive: "AWD", frontBias: 0.5,
+    desc: "Teste: integral 50/50. Puxa em tudo, perde um pouco de potência.",
+  },
+  {
+    id: "test-awd3070", name: "TESTE AWD 30/70", body: "gt",
+    power: 46, grip: 0.72, topSpeed: 244, width: 0.26, shiftMs: 220, drive: "AWD", frontBias: 0.3,
+    desc: "Teste: integral 30/70. Mais peso atrás: segura melhor na chuva.",
   },
 ]
 
@@ -116,9 +168,9 @@ export const NEONS = ["#00000000", "#38bdf8", "#a78bfa", "#4ade80", "#fb7185", "
 export const NEON_NAMES = ["desligado", "azul", "roxo", "verde", "rosa", "amarelo"]
 
 export const WHEELS = ["#1f2937", "#cbd5e1", "#eab308", "#f8fafc"]
-export const WHEEL_NAMES = ["preta", "prata", "dourada", "branca"]
+export const WHEEL_NAMES = ["preta", "prata", "dourada", "branca"] // nomes das cores de roda (aba estética da Fase 7)
 
-export const WINGS = ["sem aerofólio", "ducktail", "asa GT"]
+export const WINGS = ["sem aerofólio", "ducktail", "asa GT", "asa alta"]
 
 export interface CarCustom {
   paint: number
@@ -126,6 +178,14 @@ export interface CarCustom {
   neon: number
   wheel: number
   wing: number
+  motor: string // som do motor (sound/profiles.ts); "" = o original do carro
+  // Fase 7 — estética (cosmetic/bodykit.ts). Opcionais: ausente = 0 = desenho de antes.
+  // Só visual: nenhum desses campos é lido pela física nem pela colisão.
+  kit?: number    // kit de carroceria (KITS)
+  aro?: number    // estilo do aro (AROS)
+  altura?: number // rebaixamento (ALTURAS)
+  fumaca?: number // cor da fumaça do escape (FUMACAS)
+  chama?: number  // cor da chama do nitro (CHAMAS)
 }
 
 function defaultCustom(i: number): CarCustom {
@@ -136,6 +196,8 @@ function defaultCustom(i: number): CarCustom {
     neon: 0,
     wheel: 0,
     wing: body === "muscle" || body === "ninja" ? 1 : 2,
+    motor: "",
+    kit: 0, aro: 0, altura: 0, fumaca: 0, chama: 0,
   }
 }
 
@@ -144,8 +206,15 @@ export interface GameConfig {
   customs: CarCustom[]
   transmission: "auto" | "manual"
   steering: "keyboard" | "mouse"
+  biome: string        // id do bioma do modo solo (world/biomes.ts)
+  hora: HoraModo       // horário do solo (ADR 0013): ciclo ou fixo
+  clima: ClimaModo     // clima do solo: sorteio ou fixo
+  horaCorrida: HoraModo   // horário da corrida com bots (padrão: noite neon)
+  climaCorrida: ClimaModo // clima da corrida com bots
   sound: boolean
   pilotName: string
+  reputacao: number    // vitórias de racha (Fase 5): reputação, não moeda
+  camera: "dinamica" | "fixa" // FOV dinâmico com a velocidade (Fase 7, render/fov.ts); só desenho
 }
 
 export interface ScoreEntry {
@@ -163,8 +232,15 @@ export function defaultConfig(): GameConfig {
     customs: CARS.map((_, i) => defaultCustom(i)),
     transmission: "auto",
     steering: "keyboard",
+    biome: "cidade",
+    hora: "ciclo",
+    clima: "sorteio",
+    horaCorrida: "noite",
+    climaCorrida: "sorteio",
     sound: true,
     pilotName: "",
+    reputacao: 0,
+    camera: "dinamica",
   }
 }
 

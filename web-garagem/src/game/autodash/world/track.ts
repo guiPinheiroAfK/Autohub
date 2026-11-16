@@ -2,14 +2,28 @@
 import { AutoDashEngine, type Seg } from "../engine"
 import { mulberry32 } from "../math"
 import { SEG_LEN } from "../data"
+import { biomeById, biomeDaCorrida } from "./biomes"
+import { gerarTrechos } from "./cenario"
 
 export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() * 2 ** 31), corrida = false) {
   const rnd = mulberry32(seed)
+  // bioma: a corrida usa o bioma fixo do lobby; o solo usa a escolha do jogador
+  eng.bioma = corrida ? biomeDaCorrida() : biomeById(eng.cfg.biome)
+  // pista procedural não tem circuito fixo, ramais nem trechos com nome
+  eng.pistaId = null; eng.ramais = []; eng.trechos = []
   eng.segments = []
   let lastY = 0
   const seg = (curve: number, y: number) => { eng.segments.push({ curve, y1: lastY, y2: y }); lastY = y }
   const easeIO = (a: number, b: number, p: number) => a + (b - a) * (-Math.cos(p * Math.PI) / 2 + 0.5)
+  // traçado do bioma (Fase 8.5): só no corpo da pista procedural do solo, nunca na
+  // reta de largada nem no fechamento do loop. Sem `tracado`, nada muda.
+  const tr = corrida ? undefined : eng.bioma.tracado
+  let comTracado = false
   const addRoad = (enter: number, hold: number, leave: number, curve: number, dy: number) => {
+    if (comTracado && tr) {
+      curve *= tr.curva; dy *= tr.morro
+      if (curve === 0) hold = Math.round(hold * tr.reta)
+    }
     const y0 = lastY, total = enter + hold + leave
     let i = 0
     for (let n = 0; n < enter; n++, i++) seg(curve * (n / enter), easeIO(y0, y0 + dy, i / total))
@@ -24,6 +38,7 @@ export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() 
   // e o jogador nem percebia que tinha fechado uma — parecia que a corrida
   // acabava sozinha.
   const alvoSegs = corrida ? 3200 : 4000
+  comTracado = true
   while (eng.segments.length < alvoSegs) {
     const roll = rnd()
     const hill = r(-1, 1) * r(600, 2600)
@@ -55,12 +70,21 @@ export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() 
       addRoad(25, 40, 25, -c, -hill * 0.4)
     } else addRoad(ri(15, 25), ri(20, 40), ri(15, 25), (rnd() < 0.5 ? -1 : 1) * r(4.5, 6), 0)
   }
+  comTracado = false
   addRoad(40, 40, 40, 0, -lastY) // fecha o loop plano
   eng.trackLen = eng.segments.length * SEG_LEN
+  // cenário de beira por trechos (Fase 8.4): hash da seed, não mexe no sorteio da pista
+  eng.cenario = gerarTrechos(eng.segments.length, seed, eng.bioma.id)
+  eng.pistaSeed = seed
 
-  // placas de chevron antes de curvas fechadas. No circuito o limiar é mais
-  // baixo e a fila de placas é mais longa: como as curvas são bem mais bravas,
-  // o jogador precisa ler a curva de longe pra escolher onde frear.
+  sinalizarCurvas(eng, corrida)
+  if (corrida) conesDeCurva(eng)
+}
+
+// Placas de chevron antes de curvas fechadas. No circuito o limiar é mais
+// baixo e a fila de placas é mais longa: como as curvas são bem mais bravas,
+// o jogador precisa ler a curva de longe pra escolher onde frear.
+export function sinalizarCurvas(eng: AutoDashEngine, corrida: boolean) {
   const limiar = corrida ? 2.5 : 4
   const inicioPlacas = corrida ? 70 : 46
   for (let i = inicioPlacas; i < eng.segments.length; i++) {
@@ -72,21 +96,21 @@ export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() 
       }
     }
   }
+}
 
-  // No circuito, cones marcam a parte interna das curvas bravas: viram
-  // referência de traçado (dá pra "raspar" a curva) e punem quem entra torto.
-  if (corrida) {
-    eng.obstacles = []
-    for (let i = 60; i < eng.segments.length - 30; i++) {
-      const c = eng.segments[i].curve
-      if (Math.abs(c) < 5 || Math.abs(eng.segments[i - 1].curve) >= 5) continue
-      const lado = c > 0 ? 1 : -1 // interno da curva
-      for (let k = 0; k < 5; k++) {
-        eng.obstacles.push({
-          z: ((i + k * 6) * SEG_LEN) % eng.trackLen,
-          offset: lado * 0.92, kind: "cone", w: 0.10, len: 90,
-        })
-      }
+// No circuito, cones marcam a parte interna das curvas bravas: viram
+// referência de traçado (dá pra "raspar" a curva) e punem quem entra torto.
+export function conesDeCurva(eng: AutoDashEngine) {
+  eng.obstacles = []
+  for (let i = 60; i < eng.segments.length - 30; i++) {
+    const c = eng.segments[i].curve
+    if (Math.abs(c) < 5 || Math.abs(eng.segments[i - 1].curve) >= 5) continue
+    const lado = c > 0 ? 1 : -1 // interno da curva
+    for (let k = 0; k < 5; k++) {
+      eng.obstacles.push({
+        z: ((i + k * 6) * SEG_LEN) % eng.trackLen,
+        offset: lado * 0.92, kind: "cone", w: 0.10, len: 90,
+      })
     }
   }
 }

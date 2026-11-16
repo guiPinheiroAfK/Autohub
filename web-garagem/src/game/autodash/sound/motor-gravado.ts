@@ -1,0 +1,289 @@
+// AutoDash — sound/motor-gravado.ts. Motor a partir de GRAVAÇÃO REAL (síntese
+// granular síncrona ao giro, a técnica dos simuladores comerciais).
+//
+// Uma gravação de motor subindo e descendo de giro é cortada, explosão por
+// explosão, em grãos (tools/som/: cada grão vai de uma explosão à outra, com a
+// frequência de explosão medida e a classe: carga, alívio ou estável). Para
+// tocar num giro qualquer:
+//   1. a cada período de explosão do giro ALVO nasce um grão novo;
+//   2. o grão escolhido é o da gravação com giro mais próximo (de preferência o
+//      seguinte ao anterior, para manter a variação real entre cilindros);
+//   3. os grãos se sobrepõem pela metade com janela de Hann (soma constante).
+//      Cada metade da janela tem o comprimento do espaço até o grão vizinho:
+//      se o giro muda entre um grão e outro, a descida de um e a subida do
+//      seguinte continuam do mesmo tamanho e a soma segue 1 (sem tremor).
+// Como o espaçamento dos grãos segue o giro alvo e o conteúdo de cada grão não é
+// esticado (TD-PSOLA), as ressonâncias do escape e do cofre ficam no lugar —
+// som de motor de verdade, não uma fita acelerada. Só fora da faixa gravada o
+// grão é reamostrado (pouco) para alcançar o giro.
+//
+// DSP puro (sem WebAudio): roda no AudioWorklet e nos testes.
+
+import { type EngineSynthState, ignicaoCortada } from "./engine-synth"
+import { Sorteio } from "./sorteio"
+
+/** Banco de grãos já decodificado na taxa de saída. */
+export interface BancoGraos {
+  nome: string
+  sr: number                 // taxa dos dados (a mesma da saída)
+  dados: Float32Array
+  /** 6 números por grão: centro (s), período à esquerda (s), à direita (s), Hz de explosão, classe, ganho */
+  graos: Float32Array
+  /** Voltas do virabrequim por grão: 0,5 = uma explosão de 4 em linha; 1 = uma
+   *  volta; 2 = o ciclo inteiro de 720° (guarda o padrão desigual de V8 cruzado
+   *  e boxer). A frequência do grão no giro r é r/60/voltasPorGrao. */
+  voltasPorGrao: number
+}
+
+/** Classe do grão: 0 = alívio (giro caindo, pé fora), 1 = carga (subindo), 2 = estável (meia carga). */
+export const ALIVIO = 0, CARGA = 1, ESTAVEL = 2
+const CAMPOS = 6
+
+// Grãos tocando: anel fixo (nada é alocado na thread de áudio). Na prática há
+// no máximo 3 ao mesmo tempo; acima de LIMITE_GRAOS o mais antigo sai.
+const ANEL = 8, LIMITE_GRAOS = 6
+
+// suavização (constante de tempo, s): giro, carga e liga/desliga
+const SUAVE_GIRO_S = 0.012, SUAVE_CARGA_S = 0.04, SUAVE_AMP_S = 0.03
+// frequência de explosão mínima (giro quase parado): limita o tamanho do grão
+const HZ_MIN = 3
+
+// o alívio da gravação é giro caindo em ponto morto, ainda alto no cofre; no
+// carro andando, tirar o pé derruba bem mais o volume
+const NIVEL_CLASSE = [0.55, 1, 0.8]
+
+// fração de giro que o PSOLA cobre sem reamostrar (≈ ±6%)
+const FOLGA = 0.06
+// sorteio de grão: no mínimo tantos candidatos, e os últimos tocados ficam de fora
+const CANDIDATOS = 12, RECENTES = 4
+
+export class MotorGravado {
+  st: EngineSynthState = { rpm: 900, carga: 0, ligado: true, corte: false }
+  private sr: number
+  private b: BancoGraos | null = null
+  private n = 0                   // amostra de saída atual
+  private proxCentro = 0
+  private passo = 0               // distância do último centro ao próximo (0 = ainda sem grão)
+  // anel de grãos ativos, do mais antigo (ini) ao mais novo; esq/dir = meia
+  // janela antes e depois do centro (amostras de saída)
+  private gCentro = new Float64Array(ANEL)
+  private gEsq = new Float64Array(ANEL)
+  private gDir = new Float64Array(ANEL)
+  private gRho = new Float64Array(ANEL)
+  private gGanho = new Float64Array(ANEL)
+  private gFonte = new Float64Array(ANEL)
+  private gIni = 0
+  private gN = 0
+  private ultimo = -1             // índice do último grão usado
+  private falhou = false          // o grão escolhido agora é uma falha de ignição (limitador)
+  private recentes = new Int32Array(RECENTES).fill(-1)
+  private nRecente = 0
+  private classeAtual = CARGA
+  private porClasse: Int32Array[] = []
+  private hzClasse: Float32Array[] = []
+  private todos: Int32Array = new Int32Array(0)
+  private hzTodos: Float32Array = new Float32Array(0)
+  private rpm = 900
+  private carga = 0
+  private aleatorio: Sorteio
+  private amp = 0
+  private prob = [0, 1, 0]        // probabilidade atual de cada classe
+  private voltas = 0.5
+  private hzMin = 0
+  private hzMax = 0
+
+  constructor(sr: number, seed = 7) {
+    this.sr = sr
+    this.aleatorio = new Sorteio(seed, 7)
+  }
+
+  get pronto(): boolean { return this.b !== null }
+
+  /** Faixa de giro que a gravação cobre (rpm). Fora dela o grão é reamostrado
+   *  e soa "acelerado": quem mistura (audio.ts) devolve o motor à síntese. */
+  get faixaRpm(): [number, number] { return [this.hzMin * 60 * this.voltas, this.hzMax * 60 * this.voltas] }
+  get banco(): string { return this.b?.nome ?? "" }
+
+  private rnd(): number { return this.aleatorio.proximo() }
+
+  setBanco(b: BancoGraos) {
+    this.b = b
+    const g = b.graos, N = g.length / CAMPOS
+    const ordenar = (idx: number[]) => {
+      idx.sort((a, c) => g[a * CAMPOS + 3] - g[c * CAMPOS + 3])
+      return [Int32Array.from(idx), Float32Array.from(idx.map(i => g[i * CAMPOS + 3]))] as const
+    }
+    this.porClasse = []; this.hzClasse = []
+    for (const k of [ALIVIO, CARGA, ESTAVEL]) {
+      const idx: number[] = []
+      for (let i = 0; i < N; i++) if (g[i * CAMPOS + 4] === k) idx.push(i)
+      const [a, h] = ordenar(idx)
+      this.porClasse[k] = a; this.hzClasse[k] = h
+    }
+    const [a, h] = ordenar(Array.from({ length: N }, (_, i) => i))
+    this.todos = a; this.hzTodos = h
+    this.voltas = b.voltasPorGrao > 0 ? b.voltasPorGrao : 0.5
+    // faixa gravada (2% e 98% dos grãos: ignora os poucos fora da curva)
+    this.hzMin = h[Math.floor(h.length * 0.02)] ?? 0
+    this.hzMax = h[Math.floor(h.length * 0.98)] ?? 0
+    this.gN = 0; this.ultimo = -1; this.passo = 0
+  }
+
+  /** Pula a suavização (testes e medição). */
+  fixar(rpm: number, carga: number) {
+    this.st.rpm = rpm; this.st.carga = carga
+    this.rpm = rpm; this.carga = carga
+  }
+
+  /** Probabilidade de cada classe pela carga: pé no fundo = carga, fora = alívio, meio = estável. */
+  private sortearClasse(): number {
+    const L = this.carga
+    const s = (a: number, b: number, x: number) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u) }
+    const p1 = s(0.35, 0.85, L), p0 = 1 - s(0.05, 0.4, L), p2 = Math.max(0, 1 - p1 - p0)
+    const soma = p0 + p1 + p2
+    this.prob[ALIVIO] = p0 / soma; this.prob[CARGA] = p1 / soma; this.prob[ESTAVEL] = p2 / soma
+    const pAtual = this.prob[this.classeAtual]
+    // fica na classe atual enquanto ela ainda faz sentido (continuidade do som)
+    if (pAtual > 0.3) return this.classeAtual
+    let r = this.rnd() * soma
+    if ((r -= p1) < 0) return CARGA
+    if ((r -= p0) < 0) return ALIVIO
+    return ESTAVEL
+  }
+
+  /** Índice (no banco) de um grão próximo de `hz` dentro da lista ordenada. */
+  private perto(lista: Int32Array, hz: Float32Array, alvo: number): number {
+    if (lista.length === 0) return -1
+    let lo = 0, hi = lista.length - 1
+    while (lo < hi) { const m = (lo + hi) >> 1; if (hz[m] < alvo) lo = m + 1; else hi = m }
+    // Sorteio uniforme entre os grãos a ±2% do giro. Escolher sempre o mais
+    // próximo faz o motor voltar ao mesmo trecho a cada salto, e o laço curto
+    // vira um pente (zumbido periódico, o "glitch robótico"). Onde o banco é
+    // ralo (buraco entre gravações, acima ou abaixo da faixa gravada) a janela
+    // cresce até juntar CANDIDATOS grãos, pegando sempre o vizinho mais perto
+    // (em log) de cada lado: o grão sai reamostrado um pouco mais, mas não
+    // repete. Os últimos grãos tocados ficam de fora do sorteio.
+    const TOL = 0.02
+    let a = lo, b = lo
+    while (a > 0 && Math.log(alvo / hz[a - 1]) < TOL) a--
+    while (b < lista.length - 1 && Math.log(hz[b + 1] / alvo) < TOL) b++
+    const quer = Math.min(CANDIDATOS, lista.length)
+    while (b - a + 1 < quer) {
+      const dA = a > 0 ? Math.abs(Math.log(alvo / hz[a - 1])) : Infinity
+      const dB = b < lista.length - 1 ? Math.abs(Math.log(hz[b + 1] / alvo)) : Infinity
+      if (dA <= dB) a--; else b++
+    }
+    let i = lista[a + Math.floor(this.rnd() * (b - a + 1))]
+    for (let t = 0; t < 3 && this.recente(i); t++) i = lista[a + Math.floor(this.rnd() * (b - a + 1))]
+    return i
+  }
+
+  /** O grão `i` tocou há pouco? (anel dos últimos RECENTES) */
+  private recente(i: number): boolean {
+    for (let k = 0; k < RECENTES; k++) if (this.recentes[k] === i) return true
+    return false
+  }
+
+  private escolher(hz: number): number {
+    const g = this.b!.graos
+    let classe = this.sortearClasse()
+    // no limitador, as explosões falham na batida do corte (a mesma da física e
+    // da síntese): grão de alívio, baixo, no lugar. A falha vale mesmo quando
+    // daria para seguir a gravação
+    const falha = this.st.corte && ignicaoCortada(Math.round(this.proxCentro), this.sr)
+    this.falhou = falha
+    if (falha) classe = ALIVIO
+    const j = this.ultimo + 1
+    if (!falha && this.ultimo >= 0 && j < g.length / CAMPOS) {
+      const o = this.ultimo * CAMPOS, p = j * CAMPOS
+      const seguido = Math.abs(g[p] - g[o] - g[o + 2]) < 0.15 * g[o + 2]
+      // segue a gravação enquanto o giro bate e a classe do próximo ainda serve
+      const serve = g[p + 4] === classe || this.prob[g[p + 4]] >= 0.2
+      if (seguido && serve && Math.abs(Math.log(g[p + 3] / hz)) < 0.035) return j
+    }
+    this.classeAtual = classe
+    let i = this.perto(this.porClasse[classe], this.hzClasse[classe], hz)
+    // a classe não tem grão nesse giro (ex.: lenta só existe "estável"): usa
+    // qualquer classe, senão o mesmo punhado de grãos se repete e vira um pente
+    const di = i < 0 ? Infinity : Math.abs(Math.log(g[i * CAMPOS + 3] / hz))
+    if (di > 0.03) {
+      const t = this.perto(this.todos, this.hzTodos, hz)
+      if (Math.abs(Math.log(g[t * CAMPOS + 3] / hz)) < di - 0.01) i = t
+    }
+    return i
+  }
+
+  private novoGrao(esq: number, dir: number, hz: number) {
+    const b = this.b!, g = b.graos
+    const i = this.escolher(hz)
+    if (i < 0) return
+    this.ultimo = i
+    this.recentes[this.nRecente++ % RECENTES] = i
+    const o = i * CAMPOS
+    const lr = Math.log(hz / g[o + 3])
+    const rho = Math.exp(lr - Math.max(-FOLGA, Math.min(FOLGA, lr)))
+    // ignição cortada no limitador: o grão entra bem mais baixo (sobra o ruído
+    // mecânico e o ar passando, sem a explosão). Vale qualquer que seja a classe
+    // do grão: muitos bancos não têm grão de alívio no giro do corte (o V8 só
+    // tem entre 2000 e 2800 rpm) e antes a falha simplesmente não acontecia
+    const falha = this.falhou ? 0.22 : 1
+    const k = (this.gIni + this.gN) % ANEL
+    this.gCentro[k] = this.proxCentro; this.gEsq[k] = esq; this.gDir[k] = dir; this.gRho[k] = rho
+    this.gGanho[k] = g[o + 5] * falha * NIVEL_CLASSE[g[o + 4]]; this.gFonte[k] = g[o] * b.sr
+    this.gN++
+  }
+
+  /** Tira o grão mais antigo do anel. */
+  private soltarAntigo() { this.gIni = (this.gIni + 1) % ANEL; this.gN-- }
+
+  render(out: Float32Array, len: number) {
+    const b = this.b
+    if (!b) { out.fill(0, 0, len); return }
+    const dados = b.dados, nd = dados.length
+    const kr = 1 - Math.exp(-1 / (SUAVE_GIRO_S * this.sr)), kc = 1 - Math.exp(-1 / (SUAVE_CARGA_S * this.sr))
+    const ka = 1 - Math.exp(-1 / (SUAVE_AMP_S * this.sr))
+    const gCentro = this.gCentro, gEsq = this.gEsq, gDir = this.gDir, gRho = this.gRho, gGanho = this.gGanho, gFonte = this.gFonte
+    for (let s = 0; s < len; s++) {
+      this.rpm += (this.st.rpm - this.rpm) * kr
+      this.carga += (this.st.carga - this.carga) * kc
+      this.amp += ((this.st.ligado ? 1 : 0) - this.amp) * ka
+      const hz = Math.max(HZ_MIN, this.rpm / 60 / this.voltas)
+      const T = this.sr / hz
+      // primeiro grão: entra suave, um período à frente
+      if (this.passo <= 0) { this.passo = T; this.proxCentro = this.n + T }
+      // o grão seguinte nasce quando o atual chega ao centro: sobe enquanto o
+      // atual desce, no mesmo trecho (`passo`); o período de agora define o
+      // espaço até o próximo
+      while (this.n >= this.proxCentro - this.passo) {
+        this.novoGrao(this.passo, T, hz)
+        this.passo = T
+        this.proxCentro += T
+        if (this.gN > LIMITE_GRAOS) this.soltarAntigo()
+      }
+      let y = 0
+      for (let j = 0; j < this.gN; j++) {
+        const k = (this.gIni + j) % ANEL
+        const u = this.n - gCentro[k]
+        if (u >= gDir[k]) continue
+        const w = 0.5 * (1 + Math.cos(Math.PI * u / (u < 0 ? gEsq[k] : gDir[k])))
+        const x = gFonte[k] + u * gRho[k]
+        const xi = Math.floor(x)
+        if (xi < 0 || xi + 1 >= nd) continue
+        const fr = x - xi
+        y += (dados[xi] + (dados[xi + 1] - dados[xi]) * fr) * w * gGanho[k]
+      }
+      out[s] = y * this.amp
+      this.n++
+      // descarta os grãos que já terminaram (terminam na ordem em que nasceram:
+      // o fim de cada um é o centro do seguinte)
+      if (this.gN && this.n - gCentro[this.gIni] >= gDir[this.gIni]) this.soltarAntigo()
+    }
+  }
+}
+
+/** Converte o JSON do banco (tools/som) para o formato compacto do worklet. */
+export function graosDoJson(graos: number[][]): Float32Array {
+  const f = new Float32Array(graos.length * CAMPOS)
+  graos.forEach((g, i) => f.set(g.slice(0, CAMPOS), i * CAMPOS))
+  return f
+}

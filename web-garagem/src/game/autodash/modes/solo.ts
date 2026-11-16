@@ -1,23 +1,28 @@
 // AutoDash — modes/solo.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine, H, W } from "../engine"
 import { burst } from "../fx/particles"
-import { type ScoreEntry, submitScore } from "../data"
+import { CARS, type ScoreEntry, submitScore } from "../data"
+import { wheelspinK } from "../physics/traction"
+import { motorDe, fracGiro } from "../physics/motores"
 import { postState } from "../net"
 import { myTelemetry, duelFinish } from "./duel"
+import { perderDrift } from "../world/drift"
 
 export function launch(eng: AutoDashEngine) {
   // qualidade da largada pela zona de RPM segurada no verde
   eng.gear = 1
-  if (eng.rpm >= 3600 && eng.rpm <= 6300) {
+  // janela pela fração da faixa do motor (antes 3600–6300 de um motor 900–7900)
+  const f = fracGiro(motorDe(eng), eng.rpm)
+  if (f >= 0.386 && f <= 0.771) {
     eng.speed = 52
     eng.nitroMeter = Math.min(100, eng.nitroMeter + 30)
     eng.floaters.push({ text: "LARGADA PERFEITA!", color: "#fde047", y: H * 0.35, life: 1.6, big: true })
     eng.audio.perfectLaunch()
-  } else if (eng.rpm > 6800) {
+  } else if (f > 0.843) {
     eng.speed = 18
-    eng.wheelspinT = 1.3
+    eng.wheelspinT = 1.3 * wheelspinK(CARS[eng.cfg.carIdx])
     eng.floaters.push({ text: "PATINOU!", color: "#fb923c", y: H * 0.35, life: 1.4, big: true })
-  } else if (eng.rpm < 2200) {
+  } else if (f < 0.186) {
     eng.speed = 10
     eng.bogT = 1.1
     eng.floaters.push({ text: "ENGASGOU...", color: "#94a3b8", y: H * 0.35, life: 1.4, big: true })
@@ -28,13 +33,14 @@ export function launch(eng: AutoDashEngine) {
 }
 
 export function crash(eng: AutoDashEngine, byPolice = false) {
+  perderDrift(eng)
   // NA CORRIDA NÃO SE MORRE: bater custa quase toda a velocidade e o tempo
   // de retomar — que numa disputa por voltas já é punição suficiente. Encerrar
   // a prova por uma batida tirava o jogador da corrida inteira.
   if (eng.mode === "race" && eng.race && !eng.race.finished) {
     eng.speed *= 0.1
     eng.steerVel = 0
-    eng.wheelspinT = 0.5
+    eng.wheelspinT = 0.5 * wheelspinK(CARS[eng.cfg.carIdx])
     eng.combo = 0
     eng.shakeT = 0.55
     eng.immuneT = Math.max(eng.immuneT, 1.3) // respiro pra não bater em cadeia

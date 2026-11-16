@@ -1,12 +1,18 @@
 // AutoDash — render/menus/race.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { toMenu } from "../../flow"
-import { AutoDashEngine, W, H } from "../../engine"
+import { AutoDashEngine, W, H, type Seg } from "../../engine"
 import { dim } from "./main"
 import { arrowBtn, pill, glass } from "../../ui/widgets"
 import { CARS, saveConfig } from "../../data"
 import { rr, drawPlayerCar } from "../primitives"
 import { clamp } from "../../math"
-import { correrComBots, abrirCodigoSala } from "../../modes/race"
+import { correrComBots, abrirCodigoSala, reconhecerPista, sairReconhecimento } from "../../modes/race"
+import { ramalNoSeg, type Ramal } from "../../world/ramais"
+import { CIRCUITS, montarCircuito, type CircuitoMontado } from "../../world/circuits"
+import { biomeById } from "../../world/biomes"
+import { HORA_NOME, proximaHora } from "../../world/clock"
+import { proximoClima } from "../../world/weather"
+import { SEG_LEN, KMH2UPS } from "../../data"
 
 export function renderRaceLobby(eng: AutoDashEngine) {
   const ctx = eng.ctx
@@ -71,13 +77,117 @@ export function renderRaceLobby(eng: AutoDashEngine) {
   pill(eng, "🏁 CORRER COM BOTS  [ENTER]", W / 2 - 160, 366, 320, () => correrComBots(eng), { primary: true, h: 44, font: 16 })
   pill(eng, "CRIAR SALA  [H]", W / 2 - 160, 416, 155, () => void eng.criarSalaOnline(), { h: 36, font: 13 })
   pill(eng, "ENTRAR  [J]", W / 2 + 5, 416, 155, () => abrirCodigoSala(eng), { h: 36, font: 13 })
+  // horário e clima da corrida com bots (ADR 0013). Sala online usa noite + sorteio.
+  pill(eng, `horário: ${HORA_NOME[eng.cfg.horaCorrida]} [O]`, W / 2 - 160, 486, 155, () => { eng.cfg.horaCorrida = proximaHora(eng.cfg.horaCorrida); saveConfig(eng.cfg); eng.audio.ui() }, { h: 26, font: 12 })
+  pill(eng, `clima: ${eng.cfg.climaCorrida} [K]`, W / 2 + 5, 486, 155, () => { eng.cfg.climaCorrida = proximoClima(eng.cfg.climaCorrida); saveConfig(eng.cfg); eng.audio.ui() }, { h: 26, font: 12 })
 
   ctx.textAlign = "center"
   ctx.fillStyle = "rgba(248,250,252,0.5)"
   ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
   if (eng.raceErro) { ctx.fillStyle = "#f87171"; ctx.fillText(eng.raceErro, W / 2, 470) }
-  else ctx.fillText("← → trocam o carro · ESC volta pro menu", W / 2, 470)
+  else ctx.fillText("← → carro · P pista · R reconhecer · ESC menu", W / 2, 470)
   ctx.textAlign = "left"
+  renderPainelPista(eng)
+}
+
+// montagem do circuito para a prévia do lobby, em cache (é pura e determinística)
+const cacheCircuito = new Map<string, CircuitoMontado>()
+function circuitoMontado(i: number): CircuitoMontado {
+  const def = CIRCUITS[i]
+  let m = cacheCircuito.get(def.id)
+  if (!m) { m = montarCircuito(def); cacheCircuito.set(def.id, m) }
+  return m
+}
+
+export function mudarPista(eng: AutoDashEngine, dir: -1 | 1) {
+  const n = CIRCUITS.length + 1 // 0 = procedural
+  eng.racePista = (eng.racePista + n + dir) % n
+  eng.audio.ui()
+}
+
+/** Painel da pista escolhida: traçado, extensão, curvas, atalhos e bioma. */
+function renderPainelPista(eng: AutoDashEngine) {
+  const ctx = eng.ctx
+  const px = 690, py = 96, pw = 244, ph = 380
+  glass(eng, px, py, pw, ph, 14)
+  ctx.textAlign = "center"
+  ctx.fillStyle = "rgba(248,250,252,0.5)"
+  ctx.font = "bold 10px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText("PISTA  [P]", px + pw / 2, py + 22)
+  arrowBtn(eng, px + 8, py + 30, -1, () => mudarPista(eng, -1))
+  arrowBtn(eng, px + pw - 54, py + 30, 1, () => mudarPista(eng, 1))
+  ctx.textAlign = "center" // arrowBtn deixa o alinhamento em "left"
+  const def = eng.racePista > 0 ? CIRCUITS[eng.racePista - 1] : null
+  ctx.fillStyle = "#f8fafc"
+  ctx.font = "bold 16px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText(def ? def.nome : "Aleatória", px + pw / 2, py + 58)
+  if (!def) {
+    ctx.fillStyle = "rgba(248,250,252,0.6)"
+    ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText("Um traçado novo a cada corrida.", px + pw / 2, py + 160)
+    ctx.fillText("Sem atalhos. Cidade à noite.", px + pw / 2, py + 182)
+    ctx.textAlign = "left"
+    return
+  }
+  const m = circuitoMontado(eng.racePista - 1)
+  const pts = tracadoCompleto(eng, px + pw / 2, py + 148, pw - 56, 150, m.segments)
+  desenharTracado(eng, pts, 4, m.ramais)
+  // estatísticas
+  let curvas = 0
+  for (let i = 1; i < m.segments.length; i++) {
+    if (Math.abs(m.segments[i].curve) >= 4.5 && Math.abs(m.segments[i - 1].curve) < 4.5) curvas++
+  }
+  const km = (m.segments.length * SEG_LEN) / KMH2UPS / 3600
+  ctx.fillStyle = "rgba(248,250,252,0.75)"
+  ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText(`${km.toFixed(2).replace(".", ",")} km · ${curvas} curvas fechadas`, px + pw / 2, py + 252)
+  ctx.fillText(`${m.ramais.length} ${m.ramais.length === 1 ? "atalho" : "atalhos"} · ${biomeById(def.bioma).nome}`, px + pw / 2, py + 272)
+  ctx.fillStyle = "rgba(248,250,252,0.5)"
+  ctx.font = "italic 12px 'Space Grotesk', 'Segoe UI', sans-serif"
+  // descrição quebrada em duas linhas
+  let l1 = "", l2 = ""
+  for (const w of def.descricao.split(" ")) {
+    if (!l2 && (l1 + " " + w).trim().length <= 32) l1 = (l1 + " " + w).trim()
+    else l2 = (l2 + " " + w).trim()
+  }
+  ctx.fillText(l1, px + pw / 2, py + 300)
+  if (l2) ctx.fillText(l2, px + pw / 2, py + 318)
+  ctx.textAlign = "left"
+  pill(eng, "RECONHECER  [R]", px + 28, py + 332, pw - 56, () => reconhecerPista(eng), { h: 34, font: 13 })
+}
+
+/** Sobrevoo de reconhecimento: nome do trecho, atalho e posição no traçado. */
+export function renderRaceRecon(eng: AutoDashEngine) {
+  const ctx = eng.ctx
+  const N = eng.segments.length
+  const idx = Math.floor(eng.position / SEG_LEN) % N
+  let trecho = ""
+  for (const t of eng.trechos) { if (t.ini <= idx + 40) trecho = t.nome }
+  const q = ramalNoSeg(eng.ramais, idx)
+  const def = CIRCUITS[eng.racePista - 1]
+  glass(eng, W / 2 - 220, 14, 440, 74, 12)
+  ctx.textAlign = "center"
+  ctx.fillStyle = "rgba(248,250,252,0.5)"
+  ctx.font = "bold 11px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText(`RECONHECIMENTO · ${(def?.nome ?? "").toUpperCase()}`, W / 2, 34)
+  ctx.fillStyle = "#f8fafc"
+  ctx.font = "bold 24px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText(trecho || "Reta dos Boxes", W / 2, 62)
+  if (q) {
+    ctx.fillStyle = "#22d3ee"
+    ctx.font = "bold 13px 'Space Grotesk', 'Segoe UI', sans-serif"
+    ctx.fillText(`ATALHO À ${q.r.lado > 0 ? "DIREITA" : "ESQUERDA"}: ${q.r.nome} (+${Math.round((q.r.ganho - 1) * 100)}%)`, W / 2, 82)
+  }
+  // minimapa com a posição do sobrevoo
+  glass(eng, 16, H - 206, 210, 190, 12)
+  const pts = tracadoCompleto(eng, 121, H - 110, 168, 140)
+  desenharTracado(eng, pts, 4)
+  const alvo = pts.reduce((a, p) => Math.abs(p.i - idx) < Math.abs(a.i - idx) ? p : a, pts[0])
+  ctx.fillStyle = "#38bdf8"
+  ctx.beginPath(); ctx.arc(alvo.x, alvo.y, 5, 0, Math.PI * 2); ctx.fill()
+  ctx.strokeStyle = "#f8fafc"; ctx.lineWidth = 1.5; ctx.stroke()
+  ctx.textAlign = "left"
+  pill(eng, "VOLTAR  [ESC]", W - 176, H - 56, 160, () => sairReconhecimento(eng), { primary: true, h: 38, font: 14 })
 }
 
 export function renderRaceCode(eng: AutoDashEngine) {
@@ -211,15 +321,16 @@ export function renderRaceResult(eng: AutoDashEngine) {
   pill(eng, "MENU  [M]", W / 2 + 10, H - 56, 220, () => toMenu(eng), { h: 42, font: 16 })
 }
 
-export function tracadoCompleto(eng: AutoDashEngine, cx: number, cy: number, cw: number, ch: number) {
-  const pts: { x: number; y: number; c: number }[] = []
+export function tracadoCompleto(eng: AutoDashEngine, cx: number, cy: number, cw: number, ch: number, segs: Seg[] = eng.segments) {
+  // `i` (segmento) e `h` (rumo) servem para desenhar ramais e marcar a posição
+  const pts: { x: number; y: number; c: number; i: number; h: number }[] = []
   let x = 0, y = 0, h = 0
   const passo = 3
-  for (let i = 0; i < eng.segments.length; i += passo) {
-    const s = eng.segments[i]
+  for (let i = 0; i < segs.length; i += passo) {
+    const s = segs[i]
     h += s.curve * 0.0125 * passo
     x += Math.sin(h); y -= Math.cos(h)
-    pts.push({ x, y, c: Math.abs(s.curve) })
+    pts.push({ x, y, c: Math.abs(s.curve), i, h })
   }
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
   for (const p of pts) {
@@ -229,7 +340,53 @@ export function tracadoCompleto(eng: AutoDashEngine, cx: number, cy: number, cw:
   const esc = Math.min(cw / Math.max(1, maxX - minX), ch / Math.max(1, maxY - minY))
   const offX = cx - ((minX + maxX) / 2) * esc
   const offY = cy - ((minY + maxY) / 2) * esc
-  return pts.map(p => ({ x: offX + p.x * esc, y: offY + p.y * esc, c: p.c }))
+  return pts.map(p => ({ x: offX + p.x * esc, y: offY + p.y * esc, c: p.c, i: p.i, h: p.h }))
+}
+
+type PontoTracado = ReturnType<typeof tracadoCompleto>[number]
+
+/**
+ * Desenha o traçado (colorido por severidade da curva), os ramais em ciano
+ * tracejado e a largada. Usado na contagem, no lobby e no reconhecimento.
+ */
+export function desenharTracado(eng: AutoDashEngine, pts: PontoTracado[], grosso = 6, ramais: Ramal[] = eng.ramais) {
+  const ctx = eng.ctx
+  // traço grosso escuro por baixo dá contorno e legibilidade
+  ctx.strokeStyle = "rgba(2,6,23,0.75)"
+  ctx.lineWidth = grosso + 5; ctx.lineJoin = "round"; ctx.lineCap = "round"
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y)
+  for (const p of pts) ctx.lineTo(p.x, p.y)
+  ctx.closePath(); ctx.stroke()
+  // por cima, colorido por severidade: onde dá pra ir com tudo x onde freia
+  ctx.lineWidth = grosso
+  for (let i = 1; i < pts.length; i++) {
+    const sev = clamp(pts[i].c / 8, 0, 1)
+    ctx.strokeStyle = sev > 0.62 ? "#ef4444" : sev > 0.3 ? "#fbbf24" : "#4ade80"
+    ctx.beginPath(); ctx.moveTo(pts[i - 1].x, pts[i - 1].y); ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke()
+  }
+  // ramais (atalhos): linha ciano tracejada ao lado da pista, do lado do ramal
+  if (ramais.length) {
+    ctx.strokeStyle = "#22d3ee"
+    ctx.lineWidth = Math.max(2, grosso * 0.5)
+    ctx.setLineDash([5, 4])
+    ctx.beginPath()
+    let aberto = false
+    for (const p of pts) {
+      const q = ramalNoSeg(ramais, p.i)
+      if (!q || q.p.w <= 0) { aberto = false; continue }
+      const off = (grosso * 0.4 + grosso * 1.1 * q.p.f) * q.r.lado
+      const px = p.x + Math.cos(p.h) * off, py = p.y + Math.sin(p.h) * off
+      if (aberto) ctx.lineTo(px, py); else { ctx.moveTo(px, py); aberto = true }
+    }
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
+  // largada (quem chama já deixou o textAlign em "center")
+  ctx.fillStyle = "#f8fafc"
+  ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, grosso, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = "#0f172a"
+  ctx.font = "bold 10px 'Space Grotesk', 'Segoe UI', sans-serif"
+  ctx.fillText("S", pts[0].x, pts[0].y + 3.5)
 }
 
 export function renderTrackPreview(eng: AutoDashEngine) {
@@ -243,30 +400,13 @@ export function renderTrackPreview(eng: AutoDashEngine) {
   ctx.fillText("CONHEÇA O CIRCUITO", W / 2, by + 6)
 
   const pts = tracadoCompleto(eng, W / 2, by + 26 + bh / 2 - 14, bw - 40, bh - 60)
-  // traço grosso escuro por baixo dá contorno e legibilidade
-  ctx.strokeStyle = "rgba(2,6,23,0.75)"
-  ctx.lineWidth = 11; ctx.lineJoin = "round"; ctx.lineCap = "round"
-  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y)
-  for (const p of pts) ctx.lineTo(p.x, p.y)
-  ctx.closePath(); ctx.stroke()
-  // por cima, colorido por severidade: onde dá pra ir com tudo x onde freia
-  ctx.lineWidth = 6
-  for (let i = 1; i < pts.length; i++) {
-    const sev = clamp(pts[i].c / 8, 0, 1)
-    ctx.strokeStyle = sev > 0.62 ? "#ef4444" : sev > 0.3 ? "#fbbf24" : "#4ade80"
-    ctx.beginPath(); ctx.moveTo(pts[i - 1].x, pts[i - 1].y); ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke()
-  }
-  // largada
-  ctx.fillStyle = "#f8fafc"
-  ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, 6, 0, Math.PI * 2); ctx.fill()
-  ctx.fillStyle = "#0f172a"
-  ctx.font = "bold 10px 'Space Grotesk', 'Segoe UI', sans-serif"
-  ctx.fillText("S", pts[0].x, pts[0].y + 3.5)
+  desenharTracado(eng, pts)
 
   // legenda
   const ly = by + bh + 22
   const itens: [string, string][] = [["#4ade80", "acelera"], ["#fbbf24", "atenção"], ["#ef4444", "freia"]]
-  let lx = W / 2 - 150
+  if (eng.ramais.length) itens.push(["#22d3ee", "atalho"])
+  let lx = W / 2 - (eng.ramais.length ? 200 : 150)
   ctx.textAlign = "left"
   ctx.font = "13px 'Space Grotesk', 'Segoe UI', sans-serif"
   for (const [cor, txt] of itens) {

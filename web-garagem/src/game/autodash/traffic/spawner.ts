@@ -5,19 +5,45 @@ import { AutoDashEngine, PLAYER_Z, W, H } from "../engine"
 import { DRAW_DIST, SEG_LEN, CARS } from "../data"
 import { type TrafficKind, KINDS, TRAFFIC_COLORS, type WorldView } from "./types"
 import { DRIVERS } from "./driver"
+import { segAt } from "../world/track"
+import { RACHA } from "../world/racha"
+import { infracao } from "../world/policia"
+import { perderDrift } from "../world/drift"
+import { emDuelo } from "../world/touge"
+import { intensidade, carrosAlvo, chanceOnda, tipoPorIntensidade, estagio, INTENSIDADE } from "./intensidade"
 
 export function seedTraffic(eng: AutoDashEngine, count: number) {
   eng.traffic = []
   for (let i = 0; i < count; i++) spawnTraffic(eng, (i + 1) * (DRAW_DIST * SEG_LEN / count) + 6000)
 }
 
+/**
+ * O desafiante do racha anda na beirada da janela onde o trânsito nasce. Um
+ * carro que nasce (ou é reciclado) logo à frente dele na mesma faixa não dá
+ * tempo de frear e ele entra no carro. Fica livre a distância de freio dele.
+ */
+export function naFrenteDoRacha(eng: AutoDashEngine, z: number, lane: number): boolean {
+  for (const t of eng.traffic) {
+    if (t.role !== "racha") continue
+    if (Math.abs(t.offset - lane) > 0.55 && Math.abs(t.targetOffset - lane) > 0.55) continue
+    const d = wrapDz(eng, z, t.z)
+    if (d > -600 && d < RACHA.livreNaFrente) return true
+  }
+  return false
+}
+
 export function spawnTraffic(eng: AutoDashEngine, relAhead: number) {
-  const roll = Math.random()
-  const kind: TrafficKind = roll < 0.52 ? "car" : roll < 0.68 ? "moto" : roll < 0.87 ? "truck" : "bus"
+  const ki = intensidade(eng)
+  // onda: 2 ou 3 veículos lado a lado, sobrando uma faixa (fica mais comum com os pontos)
+  if (eng.mode !== "race" && Math.random() < chanceOnda(ki)) { spawnOnda(eng, relAhead, ki); return }
+  const kind: TrafficKind = eng.mode === "race"
+    ? (Math.random() < 0.7 ? "car" : "truck")
+    : tipoPorIntensidade(ki, Math.random())
   const k = KINDS[kind]
   const lane = eng.laneCenters[Math.floor(Math.random() * 4)]
   const z = ((eng.position + relAhead) % eng.trackLen + eng.trackLen) % eng.trackLen
-  // não nasce em cima de outro
+  // não nasce em cima de outro nem na cara do desafiante do racha
+  if (naFrenteDoRacha(eng, z, lane) || fechariaTudo(eng, z, lane)) return
   for (const t of eng.traffic) {
     if (Math.abs(t.offset - lane) < 0.3 && Math.abs(wrapDz(eng, t.z, z)) < k.len + KINDS[t.kind].len) return
   }
@@ -33,6 +59,42 @@ export function spawnTraffic(eng: AutoDashEngine, relAhead: number) {
   })
 }
 
+/**
+ * Nascer em `lane` no ponto `z` fecharia as 4 faixas? (as outras 3 já têm alguém
+ * a menos de FECHA_Z): o trânsito bravo nunca vira parede, sempre sobra uma.
+ */
+const FECHA_Z = 900
+function fechariaTudo(eng: AutoDashEngine, z: number, lane: number): boolean {
+  const ocupadas = new Set<number>([Math.round(lane * 4)])
+  for (const t of eng.traffic) {
+    if (t.parked || Math.abs(wrapDz(eng, t.z, z)) > FECHA_Z) continue
+    ocupadas.add(Math.round(t.offset * 4))
+    ocupadas.add(Math.round(t.targetOffset * 4))
+  }
+  return [-3, -1, 1, 3].every(f => ocupadas.has(f))
+}
+
+/** Onda (bíblia de cenários 1.5): um pelotão lado a lado no mesmo ritmo, com uma faixa livre. */
+function spawnOnda(eng: AutoDashEngine, relAhead: number, ki: number) {
+  const n = ki > 0.5 && Math.random() < 0.6 ? 3 : 2
+  const livre = Math.floor(Math.random() * 4)
+  const faixas = [0, 1, 2, 3].filter(i => i !== livre).sort(() => Math.random() - 0.5).slice(0, n)
+  const z0 = ((eng.position + relAhead) % eng.trackLen + eng.trackLen) % eng.trackLen
+  const vel = 82 + Math.random() * 22
+  for (const f of faixas) {
+    const lane = eng.laneCenters[f]
+    const kind = tipoPorIntensidade(ki, Math.random())
+    const z = ((z0 + Math.random() * 500) % eng.trackLen + eng.trackLen) % eng.trackLen
+    if (naFrenteDoRacha(eng, z, lane) || fechariaTudo(eng, z, lane)) continue
+    if (eng.traffic.some(t => Math.abs(t.offset - lane) < 0.3 && Math.abs(wrapDz(eng, t.z, z)) < KINDS[kind].len + KINDS[t.kind].len)) continue
+    eng.traffic.push({
+      z, offset: lane, targetOffset: lane, speed: kind === "truck" ? Math.min(vel, 86) : vel, kind, role: "civilian",
+      color: TRAFFIC_COLORS[Math.floor(Math.random() * TRAFFIC_COLORS.length)],
+      blinkT: 0, prevD: wrapDz(eng, z, eng.position + PLAYER_Z),
+    })
+  }
+}
+
 export function wrapDz(eng: AutoDashEngine, a: number, b: number) : number {
   let d = a - b
   if (d > eng.trackLen / 2) d -= eng.trackLen
@@ -40,13 +102,25 @@ export function wrapDz(eng: AutoDashEngine, a: number, b: number) : number {
   return d
 }
 
+const ultimaBuzina = new WeakMap<AutoDashEngine, number>()
+
 export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, demo: boolean) {
   // no circuito o desafio é o traçado, não a quantidade de carro: bem menos
   // trânsito, e sem escalar com nível (a corrida tem duração fixa em voltas)
-  const target = eng.mode === "race"
+  // solo: a quantidade (e o jeito) segue a intensidade pelos pontos (traffic/intensidade.ts)
+  const ki = intensidade(eng)
+  const target = eng.testeMotor ? 0 : eng.mode === "race"
       ? 5
-      : 14 + Math.min(14, Math.floor(eng.km * 1.3)) + eng.level * 3
-  if (eng.traffic.length < target) spawnTraffic(eng, DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))
+      : carrosAlvo(ki) + Math.min(4, Math.floor(eng.km * 0.4))
+  if (eng.mode === "solo" && !demo) {
+    const e = estagio(ki)
+    if (e > eng.estagioTransito) {
+      const s = INTENSIDADE.estagios[e]
+      eng.floaters.push({ text: `TRÂNSITO ${s.nome}`, color: s.cor, y: H * 0.4, life: 2, big: true })
+    }
+    eng.estagioTransito = e
+  }
+  if (eng.traffic.length < target && !emDuelo(eng)) spawnTraffic(eng, DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))
   if (eng.immuneT > 0) eng.immuneT -= dt
   if (eng.policeHitT > 0) eng.policeHitT -= dt
 
@@ -60,12 +134,21 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
     trackLen: eng.trackLen,
     demo,
     wrapDz: (a, b) => wrapDz(eng, a, b),
+    curvaEm: z => segAt(eng, z).curve,
+    intensidade: ki,
+    // civil preso atrás de você: uma buzina por vez, no máximo a cada 1,2 s
+    buzinar: () => {
+      if (eng.somT - (ultimaBuzina.get(eng) ?? -9) < 1.2) return
+      ultimaBuzina.set(eng, eng.somT)
+      eng.audio.buzinaCivil()
+    },
   }
   for (const t of eng.traffic) {
     const k = KINDS[t.kind]
     // a IA do papel do veículo decide faixa/velocidade e o move
     // (estacionado não tem IA — cenografia de blitz)
     const spd = t.parked ? 0 : DRIVERS[t.role].drive(t, world, dt)
+    t.vReal = spd
 
     const d = wrapDz(eng, t.z, playerZ)
     if (!demo) {
@@ -94,7 +177,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           eng.steerVel += dir * 1.4
           eng.speed *= 0.9
           eng.shakeT = Math.max(eng.shakeT, 0.4)
-          eng.combo = 0
+          eng.combo = 0; perderDrift(eng) // encostão ou cone no meio do drift perde os pontos
           // janela de recuperação: sem isso vira pinball, um encostão atrás do
           // outro sem o jogador conseguir voltar pra pista
           eng.policeHitT = 1.2
@@ -103,10 +186,26 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           for (const o of eng.traffic) if (o.role === "police") o.backoffT = 1.3
           // acabou de levar encostão: obviamente não despistou ninguém
           eng.policeEscapeT = 0
+          infracao(eng, "encostao") // resistir esquenta (Fase 6)
           eng.audio.crash()
           burst(eng, W / 2 + dir * 60, H - 110, 14, ["#60a5fa", "#e2e8f0"])
           eng.floaters.push({ text: "ENCOSTÃO! 🚔", color: "#60a5fa", y: H * 0.42, life: 1, big: false })
           if (Math.abs(eng.playerX) > 1.05) crash(eng, true) // te jogaram pra fora = preso
+        }
+      } else if (hit && t.role === "racha") {
+        // desafiante do racha: encostar empurra e custa velocidade, não mata
+        // (é disputa lado a lado, e ele fecha a porta de propósito — E7)
+        if (eng.immuneT <= 0) {
+          const dir = Math.sign(eng.playerX - t.offset) || 1
+          eng.playerX += dir * 0.12
+          eng.steerVel += dir * 1.0
+          eng.speed *= 0.93
+          t.speed *= 0.97
+          eng.shakeT = Math.max(eng.shakeT, 0.3)
+          eng.immuneT = 0.5
+          eng.combo = 0; perderDrift(eng) // encostão ou cone no meio do drift perde os pontos
+          eng.audio.crash()
+          burst(eng, W / 2 + dir * 60, H - 110, 12, ["#fde047", "#e2e8f0"])
         }
       } else if (hit && eng.immuneT <= 0) {
         if (eng.shield) {
@@ -117,7 +216,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
           burst(eng, W / 2, H - 110, 20, ["#60a5fa", "#bfdbfe"])
           eng.floaters.push({ text: "ESCUDO QUEBROU!", color: "#60a5fa", y: H * 0.4, life: 1.3, big: false })
         } else {
-          crash(eng)
+          crash(eng, t.role === "police") // viatura parada (blitz, bloqueio) = preso
         }
       }
       // near miss: acabou de passar por ele
@@ -147,55 +246,30 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
     // ultrapassar. Quem perde a perseguição some pelo despiste, ali embaixo.
     // Estacionados (blitz) e contramão também não reciclam: cenografia que
     // ficou pra trás simplesmente some.
-    if (t.parked || t.role === "oncoming") {
+    if (t.parked || t.role === "oncoming" || t.role === "comboio") {
       const rel = wrapDz(eng, t.z, eng.position)
-      if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 140) * SEG_LEN) t.dead = true
-    } else if (t.role !== "police") {
+      // o limite à frente passa do ponto em que os eventos nascem (1,7 × a
+      // distância de desenho, world/events.ts): com DRAW_DIST + 140 as viaturas
+      // da blitz e do radar morriam no quadro em que nasciam. +300: os carros do
+      // posto ficam no meio dele, ~250 segmentos depois do começo (Fase 8.2)
+      if (rel < -40 * SEG_LEN || rel > (DRAW_DIST * 2 + 300) * SEG_LEN) t.dead = true
+    } else if (t.role !== "police" && t.role !== "racha") {
       const rel = wrapDz(eng, t.z, eng.position)
       if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 80) * SEG_LEN) {
         t.z = ((eng.position + (DRAW_DIST * 0.55 + Math.random() * DRAW_DIST * 0.4) * SEG_LEN) % eng.trackLen + eng.trackLen) % eng.trackLen
-        const lane = eng.laneCenters[Math.floor(Math.random() * 4)]
+        let lane = eng.laneCenters[Math.floor(Math.random() * 4)]
+        // na cara do desafiante: outra faixa (só sorteia de novo se houver racha)
+        for (let k = 0; k < 4 && naFrenteDoRacha(eng, t.z, lane); k++) lane = eng.laneCenters[(eng.laneCenters.indexOf(lane) + 1) % 4]
+        if (naFrenteDoRacha(eng, t.z, lane)) t.z = ((t.z - RACHA.livreNaFrente * 2) % eng.trackLen + eng.trackLen) % eng.trackLen
         t.offset = lane; t.targetOffset = lane
+        t.viaduto = undefined; t.presoT = 0 // reciclado não leva o estado de antes
         const kk = KINDS[t.kind]
         t.speed = kk.spd[0] + Math.random() * (kk.spd[1] - kk.spd[0])
         t.prevD = wrapDz(eng, t.z, playerZ)
       }
     }
   }
-  // despiste da polícia (protótipo do sistema tipo "estrelas" do GTA): se o
-  // jogador mantém distância grande de TODAS as viaturas por alguns segundos,
-  // elas desistem. Fugir = abrir gap em reta limpa ou perder eles no trânsito.
-  if (!demo) {
-    let nearestPolice = Infinity
-    let hasPolice = false
-    let anyBackoff = false
-    for (const t of eng.traffic) {
-      if (t.role !== "police" || t.parked) continue // estacionada não é perseguição
-      hasPolice = true
-      if (t.backoffT && t.backoffT > 0) anyBackoff = true
-      nearestPolice = Math.min(nearestPolice, Math.abs(wrapDz(eng, t.z, playerZ)))
-    }
-    if (hasPolice) {
-      eng.policeChaseT += dt
-      // aquecimento: nos primeiros segundos a caçada não pode ser despistada —
-      // elas acabaram de chegar, insistem. Recuo pós-encostão também não conta
-      // como fuga: elas aliviaram, você não escapou.
-      if (nearestPolice > 10000 && !anyBackoff && eng.policeChaseT > 6) {
-        eng.policeEscapeT += dt
-        if (eng.policeEscapeT >= 3) {
-          for (const t of eng.traffic) if (t.role === "police") t.dead = true
-          eng.floaters.push({ text: "DESPISTOU A POLÍCIA! 🚔💨", color: "#4ade80", y: H * 0.34, life: 2.4, big: true })
-          eng.audio.levelUp()
-          eng.policeEscapeT = 0
-        }
-      } else {
-        eng.policeEscapeT = Math.max(0, eng.policeEscapeT - dt * 0.5)
-      }
-    } else {
-      eng.policeEscapeT = 0
-      eng.policeChaseT = 0
-    }
-  }
+  // despiste, calor e estrelas da polícia: world/policia.ts (atualizarPolicia)
 
   if (eng.traffic.some(t => t.dead)) eng.traffic = eng.traffic.filter(t => !t.dead)
 }
