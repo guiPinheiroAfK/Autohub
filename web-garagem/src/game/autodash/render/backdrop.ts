@@ -1,10 +1,12 @@
 // AutoDash — render/backdrop.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { neonGlow } from "./textures"
 import { drawTraffic } from "./objects"
-import { AutoDashEngine, H, W } from "../engine"
+import { AutoDashEngine, H, W, PLAYER_Z } from "../engine"
+import { SEG_LEN } from "../data"
 import { type LayerKind } from "../world/biomes"
 import { dayFrac } from "../world/clock"
 import { climaAtual } from "../sim/clima"
+import { faseNoSeg } from "../world/montanha"
 import { shade, mix, mixHex } from "../math"
 import { rr } from "./primitives"
 import { type Traffic } from "../traffic/types"
@@ -26,6 +28,11 @@ const CAMADAS: Record<LayerKind, (eng: AutoDashEngine, amb: number) => void> = {
 export function renderBackdrop(eng: AutoDashEngine, amb: number) {
   const c = eng.bioma.camadas
   for (const k of c.longe) CAMADAS[k](eng, amb)
+  // montanha: do mirante para baixo o mar aparece no fundo (o "reveal" do doc)
+  if (eng.montanha) {
+    const f = faseNoSeg(eng, Math.floor((eng.position + PLAYER_Z) / SEG_LEN) % eng.segments.length)
+    if (f === "mirante" || f === "serraDescida" || f === "serraBase") camadaMar(eng, amb)
+  }
   for (const k of c.meio) CAMADAS[k](eng, amb)
   for (const k of c.perto) CAMADAS[k](eng, amb)
   // troca de região: o fundo de antes some aos poucos por cima do novo

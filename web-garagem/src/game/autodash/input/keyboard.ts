@@ -20,7 +20,7 @@ import { saveConfig, CARS, PAINTS, STRIPES, NEONS, WHEELS, WINGS } from "../data
 import { shiftUp, shiftDown } from "../physics/gearbox"
 import { teclaDebugEvento, iniciarTesteFase5 } from "../world/debug-eventos"
 import { teclaEstetica } from "../render/menus/estetica"
-import { apertouShift } from "../world/touge"
+import { apertouShift, comandoTouge } from "../world/touge"
 
 export function toggleMute(eng: AutoDashEngine) {
   eng.cfg.sound = !eng.cfg.sound
@@ -66,7 +66,12 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
 
   eng.keys.add(k)
   if (k === " ") eng.nitroOn = true
-  if (k === "shift" && !e.repeat) apertouShift(eng) // duelo de touge: o tempo do freio de mão
+  // duelo de touge: S (freio), Shift (freio de mão) e Espaço (nitro) na hora certa
+  if (!e.repeat && eng.touge) {
+    if (k === "shift") apertouShift(eng)
+    else if (k === "s" || k === "arrowdown") comandoTouge(eng, "freio")
+    else if (k === " ") comandoTouge(eng, "nitro")
+  }
   // [M] alterna o som (menos em pause/game over, onde M = menu)
   if (k === "m" && ["racing", "countdown", "menu", "garage", "duellobby"].includes(eng.state)) {
     toggleMute(eng)

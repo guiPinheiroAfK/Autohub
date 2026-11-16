@@ -18,8 +18,9 @@ import { poly } from "./primitives"
 import { drawRamalSeg, drawElevadoSeg, type ElevadoSeg } from "./ramal"
 import { drawTunelSeg, drawClarao, type TunelSeg } from "./tunel"
 import { TUNEL } from "../world/tunel"
-import { drawEnfeite, drawGuardRail, type RailSeg } from "./cenario"
-import { enfeitesDoSegmento, ENF, tipoNoSeg, GUARD_RAIL } from "../world/cenario"
+import { drawEnfeite, drawGuardRail, drawParedao, PAREDAO, type RailSeg } from "./cenario"
+import { enfeitesDoSegmento, ENF, tipoNoSeg, GUARD_RAIL, COM_GUARD_RAIL, COM_PAREDAO } from "../world/cenario"
+import { ladoParedao } from "../world/montanha"
 import { elevacao, elevacaoEm, ramalBordas, ramalPerfilOuZero, ramalNoSeg, RAMAL_ABRE, RAMAL_COLADO } from "../world/ramais"
 import { drawPosto, drawPostoLoja, drawPostoTotem } from "./eventos"
 import { postoMeio, postoLoja, postoTotem, postoPatio, naFaixaDoPosto } from "../world/posto"
@@ -68,7 +69,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   let roadStarted = false
   let cobriuTunel = false // dentro do túnel: o primeiro segmento já cobriu a tela
 
-  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem" | "elevado" | "tunel" | "rail"; el?: ElevadoSeg; tn?: TunelSeg; rl?: RailSeg; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
+  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem" | "elevado" | "tunel" | "rail" | "paredao"; el?: ElevadoSeg; tn?: TunelSeg; rl?: RailSeg; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
   const sprites: SpriteDraw[] = []
   // buckets de tráfego, obstáculos, placas e powerups por segmento
   const obsBySeg = new Map<number, Obstacle[]>()
@@ -447,10 +448,19 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     // gigantes e sem leitura, e não é informação que o jogador precise
     if (pertoDaCamera) continue
 
-    // guard-rail contínuo nos trechos de mata (só no solo; nada na ponte e no túnel)
-    if (eng.mode !== "race" && !onBridge && !tunelSpan.has(idx) && tipoNoSeg(eng.cenario, idx) === "mata") {
-      const g = GUARD_RAIL.dist
-      sprites.push({ kind: "rail", x: 0, y: 0, w: 0, rl: { idx, xl1: sx1 - sw1 * g, xl2: sx2 - sw2 * g, xr1: sx1 + sw1 * g, xr2: sx2 + sw2 * g, y1: sy1, y2: sy2, s1, s2 } })
+    // guard-rail contínuo e paredão de pedra (mata e montanha; só no solo; nada na
+    // ponte e no túnel). Com paredão, o guard-rail fica só do lado do barranco.
+    if (eng.mode !== "race" && !onBridge && !tunelSpan.has(idx)) {
+      const tipo = tipoNoSeg(eng.cenario, idx)
+      const paredao = COM_PAREDAO.has(tipo) ? ladoParedao(eng) : 0
+      if (COM_GUARD_RAIL.has(tipo)) {
+        const g = GUARD_RAIL.dist
+        sprites.push({ kind: "rail", x: 0, y: 0, w: 0, rl: { idx, xl1: sx1 - sw1 * g, xl2: sx2 - sw2 * g, xr1: sx1 + sw1 * g, xr2: sx2 + sw2 * g, y1: sy1, y2: sy2, s1, s2, so: paredao ? (-paredao as -1 | 1) : 0 } })
+      }
+      if (paredao) {
+        const p = PAREDAO.dist
+        sprites.push({ kind: "paredao", x: 0, y: 0, w: 0, rl: { idx, xl1: sx1 + paredao * sw1 * p, xl2: sx2 + paredao * sw2 * p, xr1: 0, xr2: 0, y1: sy1, y2: sy2, s1, s2, so: paredao } })
+      }
     }
 
     if (idx === ghostIdx) {
@@ -606,6 +616,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     else if (s.kind === "elevado") drawElevadoSeg(eng, s.el!, amb, roadL, roadD, laneC)
     else if (s.kind === "tunel") drawTunelSeg(eng, s.tn!, amb)
     else if (s.kind === "rail") drawGuardRail(eng, s.rl!, amb)
+    else if (s.kind === "paredao") drawParedao(eng, s.rl!, amb)
     else if (!drawEnfeite(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)) drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
   }
 

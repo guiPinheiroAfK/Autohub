@@ -9,6 +9,7 @@ import { type AutoDashEngine, H } from "../engine"
 import { DRAW_DIST, SEG_LEN } from "../data"
 import { biomeById, proximoBioma } from "./biomes"
 import { gerarTrechos, tipoNoSeg } from "./cenario"
+import { spawnMontanha } from "./montanha"
 
 export const REGIAO = {
   cadaNiveis: 3, // troca de região a cada 3 níveis (nível 4, 7, 10...)
@@ -16,7 +17,7 @@ export const REGIAO = {
 }
 
 /** Troca para a próxima região (ou `id`). Só faz sentido no solo. */
-export function trocarRegiao(eng: AutoDashEngine, id?: string) {
+export function trocarRegiao(eng: AutoDashEngine, id?: string, comMontanha = true) {
   const atual = eng.bioma
   const nova = biomeById(id ?? proximoBioma(atual.id))
   if (nova.id === atual.id) return
@@ -33,6 +34,10 @@ export function trocarRegiao(eng: AutoDashEngine, id?: string) {
   eng.cenario = gerarTrechos(N, eng.pistaSeed, nova.id)
   const fim = Math.min(N, base + DRAW_DIST + REGIAO.manterSegs)
   if (base < fim) eng.cenario.unshift({ a: base, b: fim, tipo: tipoAqui })
+  // a montanha é da serra: saindo dela, acaba a neblina imposta; chegando, ela abre à frente
+  eng.montanha = null
+  eng.climaForcado = null
+  if (nova.id === "serra" && comMontanha) spawnMontanha(eng)
   eng.floaters.push({ text: `NOVA REGIÃO: ${nova.nome.toUpperCase()}`, color: "#38bdf8", y: H * 0.26, life: 2.4, big: true })
   eng.audio.ui()
 }

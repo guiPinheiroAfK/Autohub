@@ -35,7 +35,7 @@ describe("biomas e regiões", () => {
       const N = eng.segments.length, base = Math.floor(eng.position / SEG_LEN)
       const antes = eng.segments.map((s: { curve: number }) => s.curve)
       expect(eng.bioma.id).toBe("cidade")
-      trocarRegiao(eng, "serra")
+      trocarRegiao(eng, "serra", false) // sem a montanha: aqui é só a troca de região
       expect(eng.bioma.id).toBe("serra")
       // o primeiro trecho é o cenário que estava na tela, mantido até depois do horizonte
       const [mantido, ...resto] = eng.cenario

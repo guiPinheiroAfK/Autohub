@@ -10,7 +10,8 @@ import { spawnComboio } from "./comboio"
 import { spawnOleo } from "./oleo"
 import { avisar } from "./avisos"
 import { spawnTunel, TUNEL } from "./tunel"
-import { spawnTouge, TOUGE } from "./touge"
+import { spawnTouge } from "./touge"
+import { pertoDaMontanha } from "./montanha"
 import { viaturaDeTocaia } from "./policia"
 import { RAMAL_ABRE, RAMAL_COLADO } from "./ramais"
 
@@ -50,6 +51,9 @@ export function intervaloEventos(level: number, u: number): number {
 }
 
 /** Sorteia o próximo evento do pool sem repetir os últimos. */
+/** Eventos que reescrevem curva, relevo ou largura da pista além do horizonte. */
+const MEXEM_NA_PISTA = new Set<EventoMapa>(["viaduct", "bridge", "tunnel", "wrongway"])
+
 export function sortearEvento(pool: readonly EventoMapa[], ultimos: readonly EventoMapa[], u: number): EventoMapa {
   const livres = pool.filter(k => !ultimos.includes(k))
   const de = livres.length > 0 ? livres : pool
@@ -266,8 +270,11 @@ export function updateEventSpawner(eng: AutoDashEngine, dt: number, playerZ: num
       : ["obstacles", "viaduct", "wrongway", "bridge", "obra", "comboio", "oleo"]
   // túnel raro (Fase 8.7): só entra no sorteio de vez em quando
   const comTunel: EventoMapa[] = eng.rngEv() < TUNEL.chance ? [...base, "tunnel"] : base
-  // duelo de touge (16/11): só na serra (montanha), como o túnel, de vez em quando
-  const pool: readonly EventoMapa[] = TOUGE.biomas.includes(eng.bioma.id) && !eng.touge && eng.rngEv() < TOUGE.chance ? [...comTunel, "touge"] : comTunel
+  // o duelo de touge não entra no sorteio: o rival chama no mirante da montanha (world/montanha.ts).
+  // Na montanha (e logo antes dela) só os eventos que não reescrevem a pista:
+  // viaduto, ponte, túnel e mão dupla mexeriam no relevo e nas curvas da serra.
+  const naSerra = pertoDaMontanha(eng, Math.floor(playerZ / SEG_LEN))
+  const pool: readonly EventoMapa[] = naSerra ? comTunel.filter(k => !MEXEM_NA_PISTA.has(k)) : comTunel
   const kind = sortearEvento(pool, eng.ultimosEventos, eng.rngEv())
   eng.ultimosEventos = [kind, ...eng.ultimosEventos].slice(0, RITMO.semRepetir)
   spawnEvent(eng, kind)

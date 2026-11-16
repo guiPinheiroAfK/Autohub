@@ -16,7 +16,7 @@ Preencha a linha **Feedback** de cada item (ok / estranho / quebrado + o que viu
 | **7** | viaduto com elevado |
 | **8** | túnel |
 | **9** | próxima região (bioma) |
-| **0** | duelo de touge |
+| **0** | serra curta com o duelo de touge na descida |
 
 ---
 
@@ -125,12 +125,14 @@ Na placa "SAÍDA", entre na faixa da direita e siga o elevado.
   corte, o ponteiro do conta-giros bate e volta junto com o som.
 - **Posto:** pátio de concreto com setas, carros na loja, frentista, calibrador,
   lava-rápido e placa SAÍDA. **Viaduto:** ruas da cidade cruzando embaixo do elevado.
-- **Duelo de touge (tecla 0):** um rival te desafia; vêm 6 curvas fechadas. Em
-  cada uma, um anel fecha no meio da tela: aperte **Shift** quando ele encostar no
-  círculo (verde = PERFEITO, amarelo = BOM). Acertou: o carro escorrega redondo e
-  o rival perde vida. Errou (cedo, tarde ou sem apertar): sai de frente e você
-  perde vida. Barras dos dois no alto; zerou, acabou. Fora do duelo, Shift segue
-  sendo freio de mão livre.
+- **Montanha e duelo de touge (tecla 0, ou chegando na serra pela tecla 9):** a
+  pista sobe a serra (paredão de pedra com cachoeira de um lado, guard-rail do
+  outro, neblina no meio), chega no mirante (o mar aparece no fundo) e o rival
+  chama para a descida. Na descida, sem trânsito, cada curva pede na tela:
+  **S** (freia antes), **Shift** (na entrada: escorrega de lado), **W** segurado
+  durante o drift e **Espaço** (nitro na saída). O anel fecha na hora de cada um.
+  Acertou tudo: CURVA PERFEITA e o rival perde vida; errou o Shift ou quase tudo:
+  sai de frente e você perde. Barras dos dois no alto.
 
 **Feedback ladeira/viaduto:**
 

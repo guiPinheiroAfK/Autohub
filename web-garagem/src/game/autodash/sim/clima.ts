@@ -61,7 +61,7 @@ export function tickTempo(eng: AutoDashEngine, dt: number) {
   eng.climaS += dt
   if (eng.climaMix < 1) eng.climaMix = Math.min(1, eng.climaMix + dt / TRANSICAO.climaS)
   if (eng.biomaMix < 1) eng.biomaMix = Math.min(1, eng.biomaMix + dt / TRANSICAO.biomaS)
-  setClima(eng, climaNoTick(eng.climaModo, eng.bioma.climas, eng.climaSeed, Math.floor(eng.climaS / TICK_S)), true)
+  setClima(eng, eng.climaForcado ?? climaNoTick(eng.climaModo, eng.bioma.climas, eng.climaSeed, Math.floor(eng.climaS / TICK_S)), true)
 }
 
 /** Seed do clima quando a pista não tem uma (solo): hash do traçado, sem Math.random. */

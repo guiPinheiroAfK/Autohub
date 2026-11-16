@@ -9,6 +9,7 @@ import { segAt } from "../world/track"
 import { RACHA } from "../world/racha"
 import { infracao } from "../world/policia"
 import { perderDrift } from "../world/drift"
+import { emDuelo } from "../world/touge"
 
 export function seedTraffic(eng: AutoDashEngine, count: number) {
   eng.traffic = []
@@ -68,7 +69,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
   const target = eng.testeMotor ? 0 : eng.mode === "race"
       ? 5
       : 14 + Math.min(14, Math.floor(eng.km * 1.3)) + eng.level * 3
-  if (eng.traffic.length < target) spawnTraffic(eng, DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))
+  if (eng.traffic.length < target && !emDuelo(eng)) spawnTraffic(eng, DRAW_DIST * SEG_LEN * (0.6 + Math.random() * 0.4))
   if (eng.immuneT > 0) eng.immuneT -= dt
   if (eng.policeHitT > 0) eng.policeHitT -= dt
 

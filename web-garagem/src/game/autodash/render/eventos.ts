@@ -187,6 +187,18 @@ export function desenharPlacaEvento(eng: AutoDashEngine, sign: RoadSign, x: numb
     return true
   }
   if (sign.type === "tunel") { drawPlacaTunel(ctx, x, cy, r, amb); return true }
+  if (sign.type === "serra") {
+    // serra: losango amarelo com a curva sinuosa
+    ctx.fillStyle = shade("#facc15", Math.max(0.6, amb))
+    ctx.beginPath(); ctx.moveTo(x, cy - r * 1.15); ctx.lineTo(x + r * 1.15, cy); ctx.lineTo(x, cy + r * 1.15); ctx.lineTo(x - r * 1.15, cy); ctx.closePath(); ctx.fill()
+    if (r > 5) {
+      ctx.strokeStyle = "#14110f"; ctx.lineWidth = Math.max(1.5, r * 0.16)
+      ctx.beginPath(); ctx.moveTo(x - r * 0.15, cy + r * 0.6)
+      ctx.bezierCurveTo(x + r * 0.6, cy + r * 0.25, x - r * 0.6, cy - r * 0.2, x + r * 0.15, cy - r * 0.6)
+      ctx.stroke()
+    }
+    return true
+  }
   if (sign.type === "drift") {
     const s = r * 1.9
     ctx.fillStyle = shade("#ff2e88", Math.max(0.6, amb))

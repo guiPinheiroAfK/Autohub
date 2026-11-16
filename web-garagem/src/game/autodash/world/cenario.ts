@@ -13,6 +13,7 @@
 // magenta (letreiros verticais, lanternas de izakaya, vapor de bueiro);
 // oficinas: verde konbini + branco (galpões de tuning, pneus, máquinas de bebida).
 export type TipoTrecho = "centro" | "suburbio" | "campo" | "orla" | "mata" | "shibuya" | "shinjuku" | "oficinas" | "entrada"
+  | "serraPe" | "serraMeio" | "mirante" | "serraDescida" | "serraBase" // montanha (world/montanha.ts)
 
 export interface Trecho { a: number; b: number; tipo: TipoTrecho }
 
@@ -44,6 +45,10 @@ export const ENF = {
 
 /** Guard-rail contínuo dos trechos de mata: distância da borda (meias-pistas). */
 export const GUARD_RAIL = { dist: 1.16 }
+
+/** Tipos de trecho com guard-rail contínuo; os de paredão só têm do lado do barranco. */
+export const COM_GUARD_RAIL = new Set<TipoTrecho>(["mata", "serraPe", "serraMeio", "serraDescida", "serraBase"])
+export const COM_PAREDAO = new Set<TipoTrecho>(["serraMeio", "serraDescida"])
 
 /** Poste com fiação: fica sempre à esquerda nesta distância e escala; o desenho acha o par da direita por elas. */
 export const FIACAO = { dist: 1.22, escala: 0.05 }
@@ -194,6 +199,17 @@ export function enfeitesDoSegmento(trechos: Trecho[], idx: number, arvore: numbe
     if (idx % 12 === 6) add(ENF.plantacao, lado(5), 2.6, 1.4)
     if (idx % 160 === 80) add(ENF.celeiro, lado(6), 2.5, 0.7)
     if (idx % 97 === 40) add(ENF.outdoor, lado(7), 1.75, 0.55)
+  } else if (tipo === "serraPe" || tipo === "serraMeio" || tipo === "serraDescida" || tipo === "serraBase") {
+    // montanha (world/montanha.ts): mata fechada; o paredão de pedra e o
+    // guard-rail são contínuos e saem do render da pista
+    if (idx % 2 === 1) add(h(1) < 0.7 ? ENF.pinheiro : arvore, lado(2), 1.6 + h(3) * 1.2, 0.22 + h(4) * 0.08)
+    if (idx % 3 === 0 && h(5) < 0.55) add(ENF.pinheiro, lado(6), 2.3 + h(7) * 1.2, 0.24)
+    if (idx % 31 === 9) add(ENF.rocha, lado(8), 1.45, 0.3)
+  } else if (tipo === "mirante") {
+    // mirante: a mata abre; barraquinha e quiosque, poucas árvores, o mar no fundo
+    if (idx % 9 === 4 && h(1) < 0.5) add(ENF.pinheiro, lado(2), 2.2 + h(3), 0.22)
+    if (idx % 70 === 30) add(ENF.quiosque, lado(4), 1.6, 0.45)
+    if (idx % 45 === 10) add(ENF.guardaSol, lado(5), 1.9, 0.2)
   } else if (tipo === "mata") {
     // mata de serra: pinheiros fechados e pedras. O guard-rail é contínuo e
     // desenhado pelo render da pista (GUARD_RAIL, render/cenario.ts drawGuardRail)

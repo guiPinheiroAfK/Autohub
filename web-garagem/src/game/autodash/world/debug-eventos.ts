@@ -8,6 +8,7 @@ import { spawnPosto } from "./posto"
 import { convidarRacha } from "../modes/racha"
 import { spawnEvent } from "./events"
 import { trocarRegiao } from "./regiao"
+import { spawnMontanha } from "./montanha"
 
 /**
  * Atalho de teste da Fase 5 (garagem → J), como o [Z] do teste de motor: largada
@@ -44,9 +45,13 @@ export function teclaDebugEvento(eng: AutoDashEngine, k: string) {
     if (eng.zones.some(z => z.end > eng.position)) aviso("evento à frente: tente depois")
     else spawnEvent(eng, "viaduct")
   }
-  if (k === "0") { // duelo de touge (16/11)
-    if (eng.touge || eng.zones.some(z => z.end > eng.position)) aviso("evento à frente: tente depois")
-    else spawnEvent(eng, "touge")
+  if (k === "0") { // montanha curta com o duelo de touge na descida (16/11)
+    if (eng.touge) aviso("já tem um duelo")
+    else {
+      if (eng.bioma.id !== "serra") trocarRegiao(eng, "serra", false)
+      eng.montanha = null
+      if (!spawnMontanha(eng, true)) aviso("a serra não coube agora")
+    }
   }
   if (k === "9") trocarRegiao(eng) // próxima região (Fase 8.5)
   if (k === "8") { // túnel raro (Fase 8.7)

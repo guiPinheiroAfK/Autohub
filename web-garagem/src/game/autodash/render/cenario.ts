@@ -16,7 +16,7 @@ const GUARDA = ["#ef4444", "#3b82f6", "#f59e0b", "#10b981", "#ec4899"]
 const de = <T,>(lista: readonly T[], seed: number): T => lista[Math.abs(seed) % lista.length]
 
 /** Um segmento de guard-rail contínuo (os dois lados): bordas perto/longe na tela. */
-export interface RailSeg { idx: number; xl1: number; xl2: number; xr1: number; xr2: number; y1: number; y2: number; s1: number; s2: number }
+export interface RailSeg { idx: number; xl1: number; xl2: number; xr1: number; xr2: number; y1: number; y2: number; s1: number; s2: number; so?: -1 | 0 | 1 } // so: só deste lado (0: os dois)
 
 /**
  * Guard-rail da serra (playtest 16/11: "os guard-rails do começo são um monte de
@@ -29,7 +29,8 @@ export function drawGuardRail(eng: AutoDashEngine, r: RailSeg, amb: number) {
   const luz = Math.max(0.4, amb)
   const topo = 230, base = 120, poste = 250 // altura (mundo) da lâmina e do poste
   const t1 = r.y1 - topo * r.s1, b1 = r.y1 - base * r.s1, t2 = r.y2 - topo * r.s2, b2 = r.y2 - base * r.s2
-  for (const [x1, x2] of [[r.xl1, r.xl2], [r.xr1, r.xr2]]) {
+  const lados = r.so === -1 ? [[r.xl1, r.xl2]] : r.so === 1 ? [[r.xr1, r.xr2]] : [[r.xl1, r.xl2], [r.xr1, r.xr2]]
+  for (const [x1, x2] of lados) {
     if (r.idx % 2 === 0) { // poste
       ctx.fillStyle = shade("#475569", luz)
       ctx.fillRect(x1 - Math.max(0.5, 18 * r.s1), r.y1 - poste * r.s1, Math.max(1, 36 * r.s1), poste * r.s1)
@@ -39,6 +40,53 @@ export function drawGuardRail(eng: AutoDashEngine, r: RailSeg, amb: number) {
     ctx.fillStyle = shade("#e2e8f0", luz) // reflexo no meio da lâmina
     const m1 = (t1 + b1) / 2, m2 = (t2 + b2) / 2, e1 = (b1 - t1) * 0.14, e2 = (b2 - t2) * 0.14
     ctx.beginPath(); ctx.moveTo(x1, m1 - e1); ctx.lineTo(x2, m2 - e2); ctx.lineTo(x2, m2 + e2); ctx.lineTo(x1, m1 + e1); ctx.closePath(); ctx.fill()
+  }
+}
+
+/** Paredão de pedra da montanha: logo depois da zebra, alto, com cachoeira de vez em quando. */
+export const PAREDAO = { dist: 1.2, altura: 2600, cachoeiraCada: 90 }
+
+/**
+ * Paredão de pedra (world/montanha.ts, meio e descida da serra): uma face
+ * contínua do lado de dentro da serra, em faixas de rocha, com a mata no topo,
+ * água escorrendo e, a cada `cachoeiraCada` segmentos, uma cachoeira.
+ * `xl1/xl2` são o pé do paredão (perto/longe); `so` o lado.
+ */
+export function drawParedao(eng: AutoDashEngine, r: RailSeg, amb: number) {
+  const ctx = eng.ctx
+  const luz = Math.max(0.35, amb)
+  const hp = PAREDAO.altura, lado = r.so ?? 1
+  const t1 = r.y1 - hp * r.s1, t2 = r.y2 - hp * r.s2
+  // a face vai do pé até a borda da tela daquele lado (o resto da encosta)
+  const fora = lado > 0 ? 1e4 : -1e4
+  ctx.fillStyle = shade(r.idx % 2 === 0 ? "#6b6258" : "#73695e", luz)
+  ctx.beginPath(); ctx.moveTo(r.xl1, r.y1); ctx.lineTo(r.xl2, r.y2); ctx.lineTo(r.xl2, t2); ctx.lineTo(r.xl1, t1); ctx.closePath(); ctx.fill()
+  // a encosta por trás da face (mesma cor, mais escura) até a borda da tela
+  ctx.fillStyle = shade("#4d463f", luz)
+  ctx.beginPath(); ctx.moveTo(r.xl1, t1); ctx.lineTo(r.xl2, t2); ctx.lineTo(fora, t2); ctx.lineTo(fora, t1); ctx.closePath(); ctx.fill()
+  // estrato de rocha e a mata no topo
+  if (r.idx % 3 === 0) {
+    ctx.fillStyle = shade("#8c7b6b", luz)
+    const m1 = r.y1 - hp * 0.45 * r.s1, m2 = r.y2 - hp * 0.45 * r.s2
+    ctx.beginPath(); ctx.moveTo(r.xl1, m1); ctx.lineTo(r.xl2, m2); ctx.lineTo(r.xl2, m2 - 90 * r.s2); ctx.lineTo(r.xl1, m1 - 90 * r.s1); ctx.closePath(); ctx.fill()
+  }
+  ctx.fillStyle = shade("#1f5d3c", luz)
+  ctx.beginPath(); ctx.moveTo(r.xl1, t1); ctx.lineTo(r.xl2, t2); ctx.lineTo(r.xl2, t2 - 260 * r.s2); ctx.lineTo(r.xl1, t1 - 320 * r.s1); ctx.closePath(); ctx.fill()
+  // cachoeira: água branca descendo a face e a névoa no pé
+  const k = r.idx % PAREDAO.cachoeiraCada
+  if (k < 3) {
+    ctx.fillStyle = "rgba(226,240,255,0.75)"
+    ctx.beginPath(); ctx.moveTo(r.xl1, r.y1); ctx.lineTo(r.xl2, r.y2); ctx.lineTo(r.xl2, t2); ctx.lineTo(r.xl1, t1); ctx.closePath(); ctx.fill()
+    if (k === 0 && r.s1 * hp > 12) {
+      const fase = (performance.now() / 200) % 1
+      ctx.fillStyle = "rgba(255,255,255,0.5)"
+      for (let i = 0; i < 4; i++) ctx.fillRect(r.xl1 - 2, t1 + ((i / 4 + fase) % 1) * (r.y1 - t1), 4, Math.max(2, (r.y1 - t1) * 0.08))
+      ctx.fillStyle = "rgba(226,240,255,0.25)"
+      ctx.beginPath(); ctx.ellipse(r.xl1, r.y1, 400 * r.s1, 120 * r.s1, 0, 0, Math.PI * 2); ctx.fill()
+    }
+  } else if (r.idx % 11 === 0) { // água escorrendo
+    ctx.fillStyle = "rgba(186,214,230,0.35)"
+    ctx.fillRect(r.xl1 - 1, t1 + (r.y1 - t1) * 0.3, Math.max(1, 30 * r.s1), (r.y1 - t1) * 0.7)
   }
 }
 
