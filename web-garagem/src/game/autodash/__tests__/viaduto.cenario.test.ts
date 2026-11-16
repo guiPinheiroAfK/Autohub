@@ -62,3 +62,26 @@ describe("viaduto com elevado", () => {
     expect(sobeRamal).toBeGreaterThan(0)
   }, 120_000)
 })
+
+describe("viatura de tocaia no viaduto", () => {
+  it("só com você procurado; quando você passa, ela sai atrás", async () => {
+    let nasceu = false, saiu = false, semEstrela = true
+    await runScenario(60 * 12, 4, LARGADA, (i, eng) => {
+      if (i === 0) eng.render = () => {}
+      eng.immuneT = 10; eng.combustivel = 1
+      if (i === 150) { eng.eventTimer = 1e9; eng.zones = []; spawnEvent(eng, "viaduct"); semEstrela = !eng.traffic.some((t: { tocaia?: boolean }) => t.tocaia) }
+      if (i === 200) {
+        eng.eventTimer = 1e9; eng.zones = []; eng.ramais = []
+        eng.policia.calor = 1.5 // 1★
+        spawnEvent(eng, "viaduct")
+        const t = eng.traffic.find((x: { tocaia?: boolean }) => x.tocaia)
+        nasceu = !!t
+        if (t) { eng.position = t.z + 1000 - PLAYER_Z; eng.speed = 100 } // você acabou de passar
+      }
+      if (i > 210 && eng.traffic.some((t: { role: string; parked?: boolean; offset: number }) => t.role === "police" && !t.parked && t.offset < -0.5)) saiu = true
+    })
+    expect(semEstrela, "tocaia sem estrela").toBe(true)
+    expect(nasceu).toBe(true)
+    expect(saiu, "a viatura não saiu atrás").toBe(true)
+  }, 60_000)
+})

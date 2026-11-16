@@ -10,6 +10,7 @@ import { spawnComboio } from "./comboio"
 import { spawnOleo } from "./oleo"
 import { avisar } from "./avisos"
 import { spawnTunel, TUNEL } from "./tunel"
+import { viaturaDeTocaia } from "./policia"
 import { RAMAL_ABRE, RAMAL_COLADO } from "./ramais"
 
 export type EventoMapa = "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap" | "obra" | "comboio" | "oleo" | "tunnel"
@@ -141,6 +142,8 @@ export function spawnEvent(eng: AutoDashEngine, kind: EventoMapa) {
         blinkT: 0, prevD: wrapDz(eng, cz, eng.position + PLAYER_Z), viaduto: "sobe",
       })
     }
+    // com você procurado, uma viatura de tocaia embaixo do viaduto (Fase 8.6)
+    viaturaDeTocaia(eng, z + 300)
     // a recompensa de subir: nitro, pontos em dobro e nitro em fila no platô
     const centro = 0.97 + 0.14 + VIADUTO.afast + VIADUTO.larg / 2
     ;[0, 2, 0].forEach((type, i) => eng.powerups.push({ z: (topo - 14 + i * 14) * SEG_LEN, offset: centro, type, pulse: 0 }))

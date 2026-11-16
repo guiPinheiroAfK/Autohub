@@ -175,6 +175,7 @@ export function atualizarPolicia(eng: AutoDashEngine, dt: number, playerZ: numbe
   if (eng.testePolicia && !p.testeLargou) { p.testeLargou = true; definirEstrelas(eng, 1) }
   if (p.furadoT > 0) passoPneuFurado(eng, dt)
   if (p.bloqueios.length) passoBloqueios(eng, playerZ)
+  soltarTocaia(eng, playerZ)
   let nearest = Infinity
   let viaturas = 0
   let anyBackoff = false
@@ -285,6 +286,33 @@ function viaturaParada(eng: AutoDashEngine, z: number, offset: number, kind: Tra
     z, offset, targetOffset: offset, speed: 0, kind, role: "police", parked: true,
     color: "#1d4ed8", blinkT: 0, prevD: wrapDz(eng, z, eng.position + PLAYER_Z),
   })
+}
+
+/**
+ * Fase 8.6: viatura de tocaia embaixo do viaduto. Só nasce com você procurado;
+ * quando você passa por ela, liga a sirene e sai atrás com o teto da estrela.
+ */
+export function viaturaDeTocaia(eng: AutoDashEngine, z: number) {
+  if (estrelasDe(eng.policia.calor) < 1) return
+  eng.traffic.push({
+    z, offset: -1.18, targetOffset: -1.18, speed: 0, kind: "police", role: "police", parked: true, tocaia: true,
+    color: "#1d4ed8", blinkT: 0, prevD: wrapDz(eng, z, eng.position + PLAYER_Z),
+  })
+}
+
+function soltarTocaia(eng: AutoDashEngine, playerZ: number) {
+  for (const t of eng.traffic) {
+    if (!t.tocaia || !t.parked) continue
+    if (wrapDz(eng, t.z, playerZ) > -300) continue // ainda não passou por ela
+    const nivel = nivelDe(estrelasDe(eng.policia.calor))
+    t.tocaia = false
+    if (!nivel) continue // a caçada já acabou: fica parada
+    t.parked = false
+    t.top = tetoViatura(nivel, CARS[eng.cfg.carIdx].topSpeed); t.accel = nivel.arrancada
+    t.targetOffset = -0.75; t.blinkT = 0.4 // sai do acostamento para a pista
+    eng.floaters.push({ text: "VIATURA DE TOCAIA! 🚨", color: "#ef4444", y: H * 0.34, life: 1.6, big: true })
+    eng.audio.sireneCurta()
+  }
 }
 
 /**

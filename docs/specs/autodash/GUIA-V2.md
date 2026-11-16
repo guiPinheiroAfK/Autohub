@@ -401,11 +401,11 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
 - [x] Teste (unidade, `civil-jogador.test.ts`): jogador parado numa faixa por 10 s com trânsito, zero
   sobreposição de corpo com civis; civil desvia ou para atrás.
 
-**8.2 Posto de verdade** (o pedido mais citado) — feito em 16/11, exceto o carro saindo do posto
+**8.2 Posto de verdade** (o pedido mais citado) — feito em 16/11
 - [x] Cenário do posto: cobertura com teto iluminado à noite, 2–3 ilhas de bombas,
   loja de conveniência com vitrine, totem de preço na entrada, faixa pintada de
   entrada e saída, calçada. Marca genérica (nada de marca real).
-- [x] Carros no posto: 1–3 civis parados nas bombas (sprites `parked`). Falta: às vezes um
+- [x] Carros no posto: 1–3 civis parados nas bombas (sprites `parked`). Feito: um
   saindo pela faixa de aceleração e entrando na pista com seta (usa a regra do 8.1).
 - [x] Parada de verdade: parar no box da bomba (≤ 5 km/h) enche rápido (bico + barra
   de litros); passar devagar continua enchendo devagar como hoje. Som de bomba.
@@ -442,7 +442,7 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
 - [x] Bioma no solo muda ao longo da partida (a cada N níveis) com transição suave,
   em vez de ser escolhido só no menu.
 
-**8.6 Viaduto de verdade** (pedido de 16/11: "mais funcional e mais bonito") — feito em 16/11 (elevado no lugar de "subir no viaduto"; falta a viatura de tocaia e o carro parado na alça)
+**8.6 Viaduto de verdade** (pedido de 16/11: "mais funcional e mais bonito") — feito em 16/11 (elevado no lugar de "subir no viaduto"; viatura de tocaia feita; falta o carro parado na alça)
 - [x] Hoje o viaduto é um sprite que cruza por cima mais uma alça de acesso à direita
   com carros entrando. Passa a ser um trevo: alça de SAÍDA antes (carros saindo da
   pista com seta) e alça de ENTRADA depois, com carros usando as duas.
@@ -456,7 +456,7 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
 - [x] Zona `tunnel`: entrada com boca de concreto, teto e paredes com luzes em fila
   passando, escuro com faróis, saída com o clarão. Rara no sorteio (peso baixo).
 - [x] Som: eco forte do motor (reaproveita o eco do viaduto). Helicóptero te perde lá dentro.
-  Falta: o ronco de ventilação e o radar.
+  Ventilação feita; falta o radar.
 - [x] Cartão de aviso "TÚNEL" e placa de faróis; chuva para lá dentro.
 
 Como testar a Fase 8 (no solo; as teclas de número só valem correndo):
@@ -560,4 +560,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-16 | (Fase 8.4, este) | Cenário de beira por trechos (`world/cenario.ts`, `render/cenario.ts`): a pista do solo alterna trechos de 320–720 segmentos (cidade: centro, subúrbio, campo; costa: orla, subúrbio, campo), com 40 segmentos de mistura na transição; enfeites por hash do índice (sem sorteio no render), no máximo 3 por segmento. Enfeites novos: casa, muro, cerca, ponto de ônibus, árvore larga, pinheiro, plantação, celeiro, quiosque, guarda-sol, prédio médio. Nada em cima do posto nem do ramal/elevado. ~3,2 ms por quadro medido no navegador. Costa: mar, palmeiras e píer do fundo a 0,08 da curva (era 0,25, mais que as montanhas da cidade; ainda "viravam junto"). Teste em `__tests__/cenario.test.ts`. | atualizado nos 4 cenários: o solo (+20% de chamadas: o cenário novo) e a estrada de fundo do menu nos outros três. Fim das partidas igual. |
 | 2026-11-16 | (Fase 8.3 e óleo, este) | Cenografia dos eventos (`render/cena.ts`; obstáculo `cena` não bate, `barrier` com `visual` bate e desenha outra coisa): obra com retroescavadeira na faixa fechada e trabalhadores com bandeira; lâmpada piscando em todo cavalete; acidente com o segundo carro batido, guincho com giroflex âmbar, triângulo e cacos; blitz com guardas de colete e lanterna; radar com o poste e a câmera; comboio com faixa "CARGA LONGA" e batedor de giroflex âmbar no acostamento. Sons (`world/somEventos.ts`): britadeira perto da obra, buzina a ar ao encostar no comboio, sirene curta antes da blitz. Óleo (playtest: "não faz nada"): tranco lateral ao pisar, rabeada 1,1 → 3,4 por 1,2 s, roda patinando, -6% de velocidade, fumaça e câmera. Testes em `__tests__/oleo.cenario.test.ts`. | não alterado |
 | 2026-11-16 | (Fase 8.5, este) | Biomas com traçado próprio (`tracado` no bioma: curva, morro, reta; só no corpo da pista procedural do solo, a cidade fica igual). Serra (curva ×1,2, morro ×1,8, retas ×0,6; pinheiral no fundo, árvore pinheiro, neblina com peso dobrado, trecho "mata" com guard-rail, pinheiros e pedras) e rodovia (curva ×0,55, morro ×0,6, retas ×1,8; colinas no fundo, árvore larga, campo mais frequente). Costa com curva ×0,8 e morro ×0,5. Região muda a cada 3 níveis no solo (`world/regiao.ts`): bioma, fundo, árvore, trechos e climas; as curvas fora da tela são reescaladas pelo traçado novo (os morros ficam). Tecla 9 troca na hora. Teste em `__tests__/regiao.test.ts`. | não alterado |
+| 2026-11-16 | (pendências da Fase 8, este) | Posto: com você chegando (9 mil u), o carro da frente termina de abastecer, sai pelo pátio acelerando e entra na faixa da direita com seta. Viaduto: com você procurado, viatura de tocaia no acostamento embaixo dele, que liga a sirene e sai atrás quando você passa. Túnel: ronco de ventilação enquanto você está dentro. O desafiante do racha enxergando o jogador ficou de fora (quebrava o cenário calibrado do racha). Testes em `posto.cenario` e `viaduto.cenario`. | não alterado |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

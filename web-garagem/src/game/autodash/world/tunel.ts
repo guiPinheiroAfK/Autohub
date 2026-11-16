@@ -46,6 +46,7 @@ export function spawnTunel(eng: AutoDashEngine) {
 export function atualizarTunel(eng: AutoDashEngine, dt: number, playerZ: number) {
   const dentro = eng.zones.some(zn => zn.type === "tunnel" && wrapDz(eng, zn.z, playerZ) < 0 && wrapDz(eng, zn.end, playerZ) > 0)
   if (eng.dentroTunel && !dentro) eng.claraoT = TUNEL.claraoS
+  if (dentro !== eng.dentroTunel) eng.audio.ventilacao(dentro)
   eng.dentroTunel = dentro
   if (eng.claraoT > 0) eng.claraoT = Math.max(0, eng.claraoT - dt)
 }

@@ -62,6 +62,7 @@ export class AudioBus {
   private turbo: Turbo | null = null
   private gatilho = new GatilhoAlivio()
   private bombaNo: { osc: OscillatorNode; g: GainNode } | null = null
+  private ventNo: { src: AudioBufferSourceNode; g: GainNode } | null = null
   private corteMotor = 7900
   private lastT = 0
   private lastGas = 0
@@ -643,6 +644,7 @@ export class AudioBus {
   // `troca`: marcha sendo trocada (borboleta fechada para o turbo).
   engine(rpm: number, throttle: number, nitro: boolean, running: boolean, corte = false, boost = -1, troca = false) {
     if (!running && this.bombaNo) this.bomba(false) // fim de partida no meio do abastecimento
+    if (!running && this.ventNo) this.ventilacao(false)
     if (this.motor && this.ctx) { this.motorFrame(rpm, throttle, nitro, running, corte, boost, troca); return }
     if (!this.ctx || !this.engOsc1 || !this.engOsc2 || !this.engGain || !this.engFilter) return
     const t = this.ctx.currentTime
@@ -726,6 +728,28 @@ export class AudioBus {
       osc.stop(ctx.currentTime + 0.3)
       this.bombaNo = null
       this.blip(900, 30, 0.07, "square")
+    }
+  }
+
+  /** Ronco de ventilação do túnel (Fase 8.7): ruído grave e constante enquanto você está dentro. */
+  ventilacao(ligado: boolean) {
+    const ctx = this.ctx
+    if (!ctx || !this.master) return
+    if (ligado && !this.ventNo) {
+      const n = ctx.sampleRate * 2, buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0)
+      let v = 0
+      for (let i = 0; i < n; i++) { v += (Math.random() * 2 - 1 - v) * 0.02; d[i] = v * 4 }
+      const src = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), g = ctx.createGain()
+      src.buffer = buf; src.loop = true
+      lp.type = "lowpass"; lp.frequency.value = 180
+      g.gain.value = 0; g.gain.setTargetAtTime(0.09, ctx.currentTime, 0.3)
+      src.connect(lp); lp.connect(g); g.connect(this.master); src.start()
+      this.ventNo = { src, g }
+    } else if (!ligado && this.ventNo) {
+      const { src, g } = this.ventNo
+      g.gain.setTargetAtTime(0, ctx.currentTime, 0.25)
+      src.stop(ctx.currentTime + 1.2)
+      this.ventNo = null
     }
   }
 

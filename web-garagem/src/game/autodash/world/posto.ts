@@ -98,7 +98,7 @@ export function spawnPosto(eng: AutoDashEngine): boolean {
     const z = z0 + (i - (n - 1) / 2) * 520 + (eng.rngEv() - 0.5) * 120
     eng.traffic.push({
       z: ((z % eng.trackLen) + eng.trackLen) % eng.trackLen, offset: pt.outraFaixa * r.lado, targetOffset: pt.outraFaixa * r.lado,
-      speed: 0, kind: "car", role: "civilian", parked: true, blinkT: 0, prevD: 1,
+      speed: 0, kind: "car", role: "civilian", parked: true, blinkT: 0, prevD: 1, posto: r.id,
       color: TRAFFIC_COLORS[Math.floor(eng.rngEv() * TRAFFIC_COLORS.length)],
     })
   }
@@ -171,6 +171,45 @@ export function atualizarCombustivel(eng: AutoDashEngine, dt: number, pe: number
 
   // tanque abaixo do limite e nenhum posto à frente: abre um
   if (eng.combustivel < eng.postoLimite && !postoAFrente(eng)) spawnPosto(eng)
+  atualizarCarrosDoPosto(eng, dt, playerZ)
+}
+
+export const SAIDA_POSTO = {
+  quandoPerto: 9000, // u: com você a esta distância atrás, o da frente termina e sai
+  arrancada: 28,     // km/h por s saindo do pátio
+  vMax: 88,          // km/h quando entra na pista
+}
+
+/**
+ * Fase 8.2: o carro da frente do posto termina de abastecer quando você chega
+ * e sai pelo pátio, acelerando, até fundir na faixa da direita no fim do ramal.
+ */
+function atualizarCarrosDoPosto(eng: AutoDashEngine, dt: number, playerZ: number) {
+  const N = eng.segments.length
+  for (const r of eng.ramais) {
+    if (!r.posto) continue
+    const meus = eng.traffic.filter(t => t.posto === r.id && t.parked)
+    if (!meus.length || meus.some(t => t.saindoPosto)) continue
+    const frente = meus.reduce((a, b) => (wrapDz(eng, b.z, a.z) > 0 ? b : a))
+    const d = wrapDz(eng, frente.z, playerZ)
+    if (d > 0 && d < SAIDA_POSTO.quandoPerto) { frente.parked = false; frente.saindoPosto = true; frente.speed = 12 }
+  }
+  for (const t of eng.traffic) {
+    if (!t.saindoPosto) continue
+    t.speed = Math.min(SAIDA_POSTO.vMax, t.speed + SAIDA_POSTO.arrancada * dt)
+    const idx = Math.floor(t.z / SEG_LEN) % N
+    const q = ramalNoSeg(eng.ramais, idx)
+    if (!q || !q.r.posto || (q.p.f <= 0.01 && idx > postoMeio(q.r))) {
+      // fim do pátio: seta e entra na faixa da direita
+      if (t.offset > 0.95) { t.targetOffset = 0.75; t.blinkT = Math.max(t.blinkT, 0.5) }
+      else { t.saindoPosto = false; t.posto = undefined }
+      continue
+    }
+    // no pátio, na faixa de fora; quando o ramal fecha, vem para o centro dele
+    const alvo = q.p.f >= 0.999 ? postoPatio(q.r).outraFaixa * q.r.lado : ((q.inner + q.outer) / 2) * q.r.lado
+    if (Math.abs(t.offset - alvo) < 0.25) t.offset = alvo
+    t.targetOffset = alvo
+  }
 }
 
 /** O spawner de eventos deve segurar? (posto pedido e ainda não aberto) */
