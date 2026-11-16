@@ -39,4 +39,8 @@ export function teclaDebugEvento(eng: AutoDashEngine, k: string) {
   if (k === "4") spawnEvent(eng, "comboio")
   if (k === "5") spawnEvent(eng, "oleo")
   if (k === "6") { eng.combustivel = Math.min(eng.combustivel, COMBUSTIVEL.reserva + 0.01); aviso("tanque na reserva") }
+  if (k === "7") { // viaduto com elevado (Fase 8.6): não empilha com outro evento à frente
+    if (eng.zones.some(z => z.end > eng.position)) aviso("evento à frente: tente depois")
+    else spawnEvent(eng, "viaduct")
+  }
 }
