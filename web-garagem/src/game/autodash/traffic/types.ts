@@ -60,6 +60,7 @@ export interface Traffic {
   freioT?: number      // >0: luz de freio acesa (o rival "olhando" antes de fechar)
   racha?: RivalRacha   // só no desafiante do racha
   vReal?: number       // km/h que andou de fato no último quadro (o civil freando anda abaixo de `speed`)
+  presoT?: number      // civil: s parado atrás do jogador (passa de CIVIL.buzinaS: buzina e tenta passar)
   top?: number         // viatura: teto de velocidade (km/h) da estrela atual (world/policia.ts)
   accel?: number       // viatura: arrancada (km/h/s) da estrela atual
 }
@@ -76,4 +77,5 @@ export interface WorldView {
   // menor distância com sinal entre dois pontos Z (trata o loop da pista)
   wrapDz(a: number, b: number): number
   curvaEm?(z: number): number // curvatura da pista em z (o desafiante do racha alivia nas fechadas)
+  buzinar?(self: Traffic): void // civil preso atrás do jogador (o engine limita a frequência)
 }

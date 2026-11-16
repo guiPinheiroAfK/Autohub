@@ -720,6 +720,8 @@ export class AudioBus {
   // no escape. Era chiado agudo (passa-alta em 2600 Hz) e somava ao "glitch".
   limiter() { this.burst(30, 0.05, 420, "lowpass") }
   horn() { this.blip(420, 350, 0.12, "square"); this.blip(530, 350, 0.12, "square") }
+  /** Buzina de civil atrás de você: mais baixa e curta, tom de carro comum. */
+  buzinaCivil() { this.blip(392, 240, 0.06, "square"); this.blip(494, 240, 0.06, "square") }
   nearMiss() { this.burst(200, 0.3, 1600, "bandpass") }
   nitro() { this.burst(500, 0.35, 800, "lowpass"); this.blip(300, 400, 0.2, "sawtooth") }
   crash() {

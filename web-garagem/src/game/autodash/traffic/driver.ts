@@ -19,6 +19,17 @@ export const CAMINHAO = {
   ensaio: 0.05,    // quanto puxa pro lado antes de ir
 }
 
+// Civil e o jogador (Fase 8.1): antes o civil só via os outros carros e chegava na
+// sua traseira com você parado ou lento na faixa dele.
+export const CIVIL = {
+  olhaJogador: 12000, // u: até onde o civil enxerga o jogador na faixa (a 110 km/h contra você parado precisa de ~11 mil)
+  freio: 75,          // km/h por s: freio planejado atrás do jogador
+  folga: 160,         // u: além dos corpos, para onde ele para atrás de você
+  presoFolga: 900,    // u: perto assim e bem abaixo do cruzeiro = preso atrás de você
+  buzinaS: 1.5,       // s preso antes de buzinar e tentar passar
+  luzFreio: 8,        // km/h abaixo do cruzeiro: acende a luz de freio
+}
+
 function clamp(v: number, lo: number, hi: number) { return v < lo ? lo : v > hi ? hi : v }
 
 export abstract class Driver {
@@ -28,6 +39,22 @@ export abstract class Driver {
    * pra pontuar o "quase" (near-miss).
    */
   abstract drive(self: Traffic, world: WorldView, dt: number): number
+
+  /**
+   * O jogador como "carro da frente" na faixa de `self` (ou na faixa para onde ele
+   * vai), até `range` u à frente. Nunca na tela de atração. É um Traffic de mentira
+   * só para as contas de distância e velocidade.
+   */
+  protected jogadorNaFrente(self: Traffic, world: WorldView, range: number): Traffic | null {
+    if (world.demo) return null
+    if (Math.abs(world.playerX - self.offset) >= 0.32 && Math.abs(world.playerX - self.targetOffset) >= 0.32) return null
+    const d = world.wrapDz(world.playerZ, self.z)
+    if (d <= 0 || d >= range) return null
+    return {
+      z: world.playerZ, offset: world.playerX, targetOffset: world.playerX, speed: world.playerSpeed,
+      vReal: world.playerSpeed, kind: "car", role: "civilian", color: "", blinkT: 0, prevD: 0,
+    }
+  }
 
   /** Verdadeiro se `lane` está livre num raio Z de `clearZ` (olha faixa atual E destino dos outros). */
   protected laneFree(self: Traffic, world: WorldView, lane: number, clearZ: number): boolean {
@@ -194,7 +221,29 @@ export class CivilianDriver extends Driver {
       this.tryLaneChange(self, world, sides, 900, 0.6, true, 2500)
     }
 
+    // o jogador na faixa, à frente: freia a tempo (v² = v_jogador² + 2·a·folga) e
+    // para atrás dele. Preso atrás de você: buzina e tenta passar pela faixa livre.
+    const eu = this.jogadorNaFrente(self, world, CIVIL.olhaJogador)
+    if (eu) {
+      const folga = world.wrapDz(eu.z, self.z) - (KINDS[self.kind].len + KINDS.car.len) / 2 - CIVIL.folga
+      spd = Math.min(spd, Math.max(0, eu.speed) + Math.sqrt(2 * CIVIL.freio * Math.max(0, folga) / KMH2UPS))
+      if (folga < CIVIL.presoFolga && spd < self.speed * 0.6) self.presoT = (self.presoT ?? 0) + dt
+      else self.presoT = 0
+      if ((self.presoT ?? 0) > CIVIL.buzinaS) {
+        world.buzinar?.(self)
+        self.presoT = -2 // espera 2 s antes de buzinar de novo
+        if (self.blinkT <= 0 && self.targetOffset === self.offset) {
+          const sides = Math.random() < 0.5 ? [-0.5, 0.5] : [0.5, -0.5]
+          this.tryLaneChange(self, world, sides, 900, 0.6, true, 0)
+        }
+      }
+      if (!ahead || world.wrapDz(eu.z, self.z) < world.wrapDz(ahead.z, self.z)) ahead = eu
+    } else self.presoT = 0
+
     spd = this.antiOverlap(self, world, ahead, spd)
+    // luz de freio: andando bem abaixo do cruzeiro (trânsito ou você na frente)
+    if (self.freioT && self.freioT > 0) self.freioT -= dt
+    if (spd < self.speed - CIVIL.luzFreio) self.freioT = Math.max(self.freioT ?? 0, 0.15)
     this.applyMovement(self, world, spd, dt)
     return spd
   }
@@ -526,7 +575,14 @@ export class RachaDriver extends Driver {
  */
 export class ComboioDriver extends Driver {
   drive(self: Traffic, world: WorldView, dt: number): number {
-    const spd = this.antiOverlap(self, world, this.nearestAhead(self, world), self.speed)
+    const frente = this.nearestAhead(self, world)
+    const eu = this.jogadorNaFrente(self, world, CIVIL.olhaJogador)
+    let spd = self.speed
+    if (eu) {
+      const folga = world.wrapDz(eu.z, self.z) - (KINDS[self.kind].len + KINDS.car.len) / 2 - CIVIL.folga
+      spd = Math.min(spd, Math.max(0, eu.speed) + Math.sqrt(2 * CIVIL.freio * Math.max(0, folga) / KMH2UPS))
+    }
+    spd = this.antiOverlap(self, world, eu && (!frente || world.wrapDz(eu.z, self.z) < world.wrapDz(frente.z, self.z)) ? eu : frente, spd)
     this.applyMovement(self, world, spd, dt)
     return spd
   }

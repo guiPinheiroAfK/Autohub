@@ -59,6 +59,8 @@ export function wrapDz(eng: AutoDashEngine, a: number, b: number) : number {
   return d
 }
 
+const ultimaBuzina = new WeakMap<AutoDashEngine, number>()
+
 export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, demo: boolean) {
   // no circuito o desafio é o traçado, não a quantidade de carro: bem menos
   // trânsito, e sem escalar com nível (a corrida tem duração fixa em voltas)
@@ -80,6 +82,12 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
     demo,
     wrapDz: (a, b) => wrapDz(eng, a, b),
     curvaEm: z => segAt(eng, z).curve,
+    // civil preso atrás de você: uma buzina por vez, no máximo a cada 1,2 s
+    buzinar: () => {
+      if (eng.somT - (ultimaBuzina.get(eng) ?? -9) < 1.2) return
+      ultimaBuzina.set(eng, eng.somT)
+      eng.audio.buzinaCivil()
+    },
   }
   for (const t of eng.traffic) {
     const k = KINDS[t.kind]

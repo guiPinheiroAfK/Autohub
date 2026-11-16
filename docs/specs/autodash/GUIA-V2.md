@@ -391,14 +391,14 @@ Fatos do código hoje (16/11):
 
 Checklist (cada item é um commit verificável; golden muda só em commit próprio):
 
-**8.1 NPCs respeitam o jogador** (bug de jogo, pequeno)
-- [ ] Civil, caminhão, comboio e desafiante do racha veem o jogador como "carro da
+**8.1 NPCs respeitam o jogador** (bug de jogo, pequeno) — feito em 16/11, exceto o farol alto e o racha
+- [x] Civil, caminhão e comboio (o desafiante do racha ainda não) veem o jogador como "carro da
   frente" na faixa (mesma busca de `ahead`, com a velocidade real do jogador).
-- [ ] Freio com distância de parada (a regra `vAtras` da viatura, 15/11) em vez de
+- [x] Freio com distância de parada (a regra `vAtras` da viatura, 15/11) em vez de
   `ahead.speed × 0,7` quando o gap fica curto; luz de freio acesa quando freia.
-- [ ] Parado atrás de você por mais de ~1,5 s: buzina curta e tenta passar pela faixa
+- [x] Parado atrás de você por mais de ~1,5 s: buzina curta e tenta passar pela faixa
   livre (sem cortar ninguém). Lento demais na faixa da esquerda: farol alto.
-- [ ] Teste de cenário: jogador parado numa faixa por 10 s com trânsito, zero
+- [x] Teste (unidade, `civil-jogador.test.ts`): jogador parado numa faixa por 10 s com trânsito, zero
   sobreposição de corpo com civis; civil desvia ou para atrás.
 
 **8.2 Posto de verdade** (o pedido mais citado)
@@ -533,4 +533,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-15 | 931dfef, 9bda450, (volume, este) | Playtest 15/11. Turbo: na troca de marcha a pressão alivia (`aliviaNaTroca`) e o som do turbo vê carga zero (pssh e apito caindo); antes ficava cheio, como antilag. Força depois da troca igual (medidas inalteradas). Polícia: viatura olha o trânsito até 13 mil u e freia a tempo (não passa por dentro dos carros), só troca para faixa com folga, não fica parada logo à sua frente; 1★ com teto 195 e arrancada 42. Volume do motor 0,5 → 0,8 no master (+4 dB, `VOLUME_MOTOR`). | não alterado |
 | 2026-11-15 | (som: segunda sessão do simulador, este) | Bancos novos gravados no Engine Simulator: Ferrari F136 no V8 plano (era a Ferrari 360 só até 4400 rpm; banco `v8-plano` removido), Chevrolet 454 no V8 do Ford, Audi 2.3 no 5 cilindros, Subaru EJ25 no boxer 4 e um VQ35HR nosso (coletores longos de mesmo comprimento num escape só, Tomei 264, volante leve) no V6; V10 e V12 regravados (V12 da lenta a 11690 rpm). `trilha_dino.py` ganha `LENTA=` (o pente pega o dobro da lenta no boxer e no VQ35HR). Piso do ajuste de nível 0,25 → 0,2 (`NIVEL_PISO`). Janelas e arquivos `.mr` no README de `tools/som`. Não ouvido no jogo ainda. | não alterado (som não entra no golden) |
 | 2026-11-15 | (som: terceira sessão do simulador, este) | BMW M52 no 6 em linha aspirado (era o 2JZ), boxer 6 nosso (derivado do EJ25, ignição alternada como no 911) nos dois boxer 6 (era a gravação do 911 só até 3200 rpm; banco `boxer6` removido) e 3 em linha 1.0 nosso (derivado do Audi 5) no i3, que era só síntese. `marcas.py`: limiar 15/max(K,4) (no 3 cilindros a puxada virava "estável"). Não ouvido no jogo ainda. | não alterado (som não entra no golden) |
+| 2026-11-16 | (Fase 8.1, este) | Civil e comboio enxergam o jogador na faixa (até 12 mil u) e freiam a tempo (v² = v_jogador² + 2·75·folga), parando atrás; luz de freio nos civis abaixo do cruzeiro; preso atrás de você por 1,5 s buzina (baixa, no máximo a cada 1,2 s) e tenta passar pela faixa livre. Teste em `__tests__/civil-jogador.test.ts`. Desafiante do racha ainda não vê o jogador. | atualizado nos 3 cenários (luz de freio dos civis, inclusive no trânsito de fundo do menu, e a freada atrás do jogador); fim das partidas igual. |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |
