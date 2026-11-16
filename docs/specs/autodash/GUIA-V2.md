@@ -459,7 +459,7 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
   Ventilação feita; falta o radar.
 - [x] Cartão de aviso "TÚNEL" e placa de faróis; chuva para lá dentro.
 
-Como testar a Fase 8 (no solo; as teclas de número só valem correndo):
+Como testar a Fase 8 (roteiro completo com linha de feedback: [ROTEIRO-FASE8.md](ROTEIRO-FASE8.md)):
 1. NPCs (8.1): pare ou ande devagar numa faixa com trânsito vindo atrás. O carro de
    trás acende a luz de freio, para atrás de você, buzina depois de ~1,5 s e passa
    pela faixa livre. Ninguém deve entrar na sua traseira parado.
