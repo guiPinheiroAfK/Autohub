@@ -26,7 +26,7 @@
 
 ## Specs
 - [autodash/](specs/autodash/README.md) — minigame web (descrição do que o código faz hoje).
-- [autodash/GUIA-V2.md](specs/autodash/GUIA-V2.md) — guia vivo do ciclo v2 (fonte da verdade, status e log).
+- [autodash/GUIA-V2.md](specs/autodash/GUIA-V2.md) — **guia vivo da v2 (mini Most Wanted)**: decisões, fases, status e log. Quem trabalhar no AutoDash lê este arquivo primeiro.
 - [autodash/v2-mostwanted.md](specs/autodash/v2-mostwanted.md) — escopo, fases e critérios da v2.
 - [autodash-roblox/](specs/autodash-roblox/autodash-roblox-spec.md) — spec completa do port para Roblox (fonte da verdade do port).
 
