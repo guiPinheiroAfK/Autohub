@@ -5,6 +5,10 @@ import { graosDoJson } from "./sound/motor-gravado"
 import type { Turbo } from "./physics/motores"
 import { eixoDoSom, GatilhoAlivio } from "./sound/turbo-synth"
 
+// Saída do motor por pulsos no master. Era 0,5; playtest 15/11: motor baixo
+// perto dos efeitos. +4 dB; o limitador do master segura os picos.
+export const VOLUME_MOTOR = 0.8
+
 // Motor por pulsos (sound/engine-synth.ts) rodando num AudioWorklet, com a
 // cadeia de mixagem do escape: corpo → coletor → abafador → saturação →
 // compressor. Indução (turbo/compressor), estouros e alívio por cima.
@@ -540,7 +544,7 @@ export class AudioBus {
     this.ultimoRpm = rpm
     if (this.grav && running) this.misturarGravacao(rpm, 0.05)
     const ligado = running && t >= this.partidaAte
-    m.out.gain.setTargetAtTime(ligado ? 0.5 * (0.85 + 0.35 * Math.min(rpm, 8000) / 7000) : 0, t, ligado ? (this.partidaAte > t - 0.5 ? 0.12 : 0.05) : 0.15)
+    m.out.gain.setTargetAtTime(ligado ? VOLUME_MOTOR * (0.85 + 0.35 * Math.min(rpm, 8000) / 7000) : 0, t, ligado ? (this.partidaAte > t - 0.5 ? 0.12 : 0.05) : 0.15)
     if (!running) {
       this.lastGas = 0
       if (this.turbo) m.node.port.postMessage({ tb: { eixo: 0, boost: 0, carga: 0, ligado: false } })
