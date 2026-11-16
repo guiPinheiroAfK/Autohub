@@ -26,7 +26,7 @@
 import { type AutoDashEngine, H, PLAYER_Z } from "../engine"
 import { DRAW_DIST, SEG_LEN, KMH2UPS, saveConfig } from "../data"
 import { wrapDz } from "../traffic/spawner"
-import { emitSmoke } from "../fx/particles"
+import { emitSmokeRodas } from "../fx/particles"
 import { avisar } from "./avisos"
 import { hash01 } from "./cenario"
 import type { Traffic } from "../traffic/types"
@@ -98,6 +98,19 @@ export interface CurvaTouge {
   final: NotaCurva | null // nota da curva, quando fecha
 }
 
+/**
+ * Efeito visual pedido pelo duelo (render/tougeFx.ts consome a fila): o texto
+ * estilizado, o "impact frame" dos acertos, o tremor e a vinheta vermelha dos
+ * erros. Só desenho: não mexe em regra.
+ */
+export interface EfeitoTouge {
+  tipo: "impacto" | "texto" | "erro" | "acordou"
+  txt: string
+  cor: string
+  sub?: string
+  forte?: boolean // erro grande (rodou): mais tremor e vinheta mais longa
+}
+
 export interface Touge {
   fase: "batalha" | "fim"
   papel: "caca" | "lider" // ato 1: você caça; ato 2: você lidera
@@ -115,6 +128,7 @@ export interface Touge {
   introT: number         // s restantes da apresentação
   passou: boolean        // você passou pelo rival
   avisoT: number         // s até poder repetir um aviso de distância
+  fx: EfeitoTouge[]      // efeitos visuais ainda não desenhados (render/tougeFx.ts)
 }
 
 const janelas = (eng: AutoDashEngine) => eng.touge?.acordou ? TOUGE.fase2 : { perfeito: TOUGE.perfeito, bom: TOUGE.bom }
@@ -261,7 +275,7 @@ export function spawnTouge(eng: AutoDashEngine): boolean {
   eng.traffic.push(rival)
   eng.touge = {
     fase: "batalha", papel: "caca", curvas, atual: 0, porta, marcas, vidaVoce: 100, vidaRival: 100, rival,
-    nome: def.nome, cor: def.cor, z: z0, end, acordou: false, introT: TOUGE.introS, passou: false, avisoT: 0,
+    nome: def.nome, cor: def.cor, z: z0, end, acordou: false, introT: TOUGE.introS, passou: false, avisoT: 0, fx: [],
   }
   eng.roadSigns.push({ z: at(START - VIEW * 0.6), type: "drift", label: `TOUGE: ${def.nome}` })
   avisar(eng, { icone: "⛰️", titulo: `TOUGE · ${def.nome}`, dica: "cole nele; nas curvas, siga as marcas da pista", nivel: "info", z: z0, fim: end })
@@ -307,13 +321,23 @@ function marca(eng: AutoDashEngine, txt: string, ok: boolean) {
   eng.floaters.push({ text: txt, color: ok ? "#4ade80" : "#ef4444", y: H * 0.5, life: 0.7, big: false })
 }
 
+/** Pede um efeito ao render (fila curta: sem render, como nos testes, ela não cresce). */
+function efeito(eng: AutoDashEngine, e: EfeitoTouge) {
+  const tg = eng.touge
+  if (!tg) return
+  tg.fx.push(e)
+  if (tg.fx.length > 6) tg.fx.shift()
+}
+
 function julgarShift(eng: AutoDashEngine, c: CurvaTouge, nota: Nota) {
   c.nota = nota
   if (c.freio === null) c.freio = false
   const z = zonaDa(c)
   if (nota !== "erro") eng.driftAng = c.dir * (nota === "perfeito" ? (z[0] + z[1]) / 2 : z[0] - 0.03)
-  const txt = nota === "perfeito" ? "ENTRADA PERFEITA!" : nota === "bom" ? "ENTRADA BOA" : "SAIU DE FRENTE"
-  eng.floaters.push({ text: txt, color: nota === "perfeito" ? "#4ade80" : nota === "bom" ? "#facc15" : "#ef4444", y: H * 0.28, life: 0.9, big: nota !== "bom" })
+  // o texto agora é estilizado no render (render/tougeFx.ts), com impact frame no perfeito
+  if (nota === "perfeito") efeito(eng, { tipo: "impacto", txt: "ENTRADA PERFEITA!", cor: "#4ade80" })
+  else if (nota === "bom") efeito(eng, { tipo: "texto", txt: "ENTRADA BOA", cor: "#facc15" })
+  else efeito(eng, { tipo: "erro", txt: "SAIU DE FRENTE", cor: "#ef4444" })
   if (nota === "erro") { eng.shakeT = Math.max(eng.shakeT, 0.25); eng.audio.offroad() }
   else { eng.audio.ui(); eng.pitchY -= 3 }
 }
@@ -323,8 +347,8 @@ function trocar(eng: AutoDashEngine, c: CurvaTouge, ok: boolean) {
   if (ok) {
     eng.driftAng = -eng.driftAng
     eng.trauma = Math.min(1, eng.trauma + 0.25)
-    eng.floaters.push({ text: "TROCA!", color: "#4ade80", y: H * 0.3, life: 0.8, big: true })
-    emitSmoke(eng, 10, "#e5e7eb")
+    efeito(eng, { tipo: "impacto", txt: "TROCA!", cor: "#38bdf8" })
+    emitSmokeRodas(eng, 10, "#e5e7eb")
   } else {
     eng.driftAng *= 0.3
     marca(eng, "PERDEU A TROCA", false)
@@ -346,7 +370,10 @@ function fecharCurva(eng: AutoDashEngine, c: CurvaTouge) {
   if (final === "erro") { if (!c.treino) tg.vidaVoce = Math.max(0, tg.vidaVoce - TOUGE.dano.erro) }
   else tg.vidaRival = Math.max(0, tg.vidaRival - TOUGE.dano[final])
   const txt = { perfeito: "CURVA PERFEITA!", otimo: "ÓTIMO", bom: "BOM", erro: c.treino ? "TREINO: NA PRÓXIMA VALE" : "ERROU A CURVA" }[final]
-  eng.floaters.push({ text: `${txt}  ${pts}/${max}`, color: final === "erro" ? "#ef4444" : final === "bom" ? "#facc15" : "#4ade80", y: H * 0.32, life: 1.2, big: final !== "bom" })
+  const cor = final === "erro" ? "#ef4444" : final === "bom" ? "#facc15" : "#4ade80"
+  const tipo: EfeitoTouge["tipo"] = final === "perfeito" ? "impacto" : final === "erro" && !c.treino ? "erro" : "texto"
+  efeito(eng, { tipo, txt, cor, sub: `${pts}/${max}` })
+  if (tipo === "erro") eng.trauma = Math.min(1, eng.trauma + 0.35)
   tg.atual++
 }
 
@@ -411,7 +438,7 @@ export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centr
       eng.speed *= 0.6
       eng.shakeT = Math.max(eng.shakeT, 0.5)
       eng.driftAng = dir * 1.7
-      eng.floaters.push({ text: "RODOU!", color: "#ef4444", y: H * 0.3, life: 1.1, big: true })
+      efeito(eng, { tipo: "erro", txt: "RODOU!", cor: "#ef4444", forte: true })
       eng.audio.crash()
       return 1
     }
@@ -423,8 +450,9 @@ export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centr
     eng.playerX += (0 - eng.playerX) * Math.min(1, dt * (naZona ? 1 : 0.4))
     eng.speed = Math.max(0, eng.speed + (naZona ? 1.5 : -6) * dt)
     eng.driftAng = dir * ang
-    emitSmoke(eng, naZona ? 4 : 2, "#e5e7eb")
-    if (Math.random() < 0.5) emitSmoke(eng, 1, "#1f2937")
+    // fumaça das rodas traseiras (o rastro longo e a borracha ficam em render/tougeFx.ts)
+    emitSmokeRodas(eng, naZona ? 4 : 2, "#e5e7eb")
+    if (Math.random() < 0.5) emitSmokeRodas(eng, 1, "#1f2937")
     lento = Math.min(lento, TOUGE.lentoDrift)
     chiado = naZona ? 1 : 0.7
   }
@@ -474,7 +502,7 @@ export function atualizarTouge(eng: AutoDashEngine, dt: number, playerZ: number)
       if (gap < -600) {
         p!.feita = true; tg.papel = "lider"; tg.passou = true
         tg.vidaRival = Math.max(0, tg.vidaRival - 15)
-        eng.floaters.push({ text: `PASSOU O ${tg.nome}! AGORA SEGURA ELE ATRÁS`, color: "#4ade80", y: H * 0.3, life: 2, big: true })
+        efeito(eng, { tipo: "impacto", txt: `PASSOU O ${tg.nome}!`, cor: "#4ade80", sub: "AGORA SEGURA ELE ATRÁS" })
         eng.trauma = Math.min(1, eng.trauma + 0.3)
       }
     } else {
@@ -482,7 +510,7 @@ export function atualizarTouge(eng: AutoDashEngine, dt: number, playerZ: number)
         // a porta fechou sem você passar: ele segue na frente e você perde espírito
         p.feita = true
         tg.vidaVoce = Math.max(0, tg.vidaVoce - 15)
-        eng.floaters.push({ text: "NÃO PASSOU: ELE FECHOU A PORTA", color: "#ef4444", y: H * 0.3, life: 1.6, big: false })
+        efeito(eng, { tipo: "erro", txt: "NÃO PASSOU", cor: "#ef4444", sub: "ELE FECHOU A PORTA" })
       }
       // o rival anda na distância do ato (à frente na caça, atrás na liderança),
       // puxado pela diferença entre as barras; nas cenas, segue sua pilotagem
@@ -508,9 +536,16 @@ export function atualizarTouge(eng: AutoDashEngine, dt: number, playerZ: number)
     // o rival também derrapa: a traseira abre com a curva onde ele está (desenho)
     const cr = eng.segments[Math.floor(r.z / SEG_LEN) % eng.segments.length].curve
     r.ang = Math.sign(cr) * Math.min(0.6, Math.abs(cr) * 0.09)
+    // luz de freio do rival piscando na chegada de cada cena (só desenho: render/objects.ts)
+    let freia = false
+    for (let i = Math.max(0, tg.atual - 1); i <= tg.atual + 1 && i < tg.curvas.length; i++) {
+      const d = wrapDz(eng, tg.curvas[i].entradaZ, r.z)
+      if (d > -2 * SEG_LEN && d < TOUGE.freioAntes * SEG_LEN) freia = true
+    }
+    r.freioT = freia && Math.floor(eng.camT * 9) % 2 === 0 ? 1 : 0
     if (!tg.acordou && tg.vidaRival <= 50) {
       tg.acordou = true
-      eng.floaters.push({ text: `${tg.nome} ACORDOU!`, color: tg.cor, y: H * 0.3, life: 1.8, big: true })
+      efeito(eng, { tipo: "acordou", txt: `${tg.nome} ACORDOU!`, cor: tg.cor, sub: "AS JANELAS FICARAM MENORES" })
       eng.trauma = Math.min(1, eng.trauma + 0.4)
       eng.audio.horn()
     }
@@ -536,6 +571,7 @@ export function encerrarTouge(eng: AutoDashEngine, venceu: boolean) {
   if (!tg || tg.fase === "fim") return
   tg.fase = "fim"
   tg.rival.ang = 0
+  tg.rival.freioT = 0
   eng.escalaTempo = 1
   tg.rival.alerta = venceu
   eng.driftAng = 0

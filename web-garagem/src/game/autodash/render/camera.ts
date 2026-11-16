@@ -4,7 +4,7 @@
 //
 // Só desenho, depois da projeção: nada aqui toca CAM_DEPTH nem PLAYER_Z (que
 // definem a posição de colisão). Tudo sutil de propósito: zoom ≤ 1,055 e ronco
-// < 1 px.
+// < 1 px. A exceção é o soco de zoom do duelo de touge (0,3 s, só no impacto).
 import type { AutoDashEngine } from "../engine"
 import { W, H } from "../engine"
 import { CARS } from "../data"
@@ -62,11 +62,34 @@ export function passoCamera(eng: AutoDashEngine, dt: number) {
   passoFov(eng, dt) // FOV dinâmico da Fase 7 (render/fov.ts)
 }
 
+// ---------- soco de zoom ----------
+// "Impact frame" do duelo (render/tougeFx.ts): a câmera dá um tranco de zoom
+// rápido e volta. Relógio de parede (performance.now): o soco não fica em câmera
+// lenta junto com o jogo. Só desenho, nada de estado no engine.
+export const SOCO_SOBE_S = 0.05
+export const SOCO_DESCE_S = 0.28
+let socoIni = -1e9, socoForca = 0
+
+/** Dá um soco de zoom (forca ~0,04–0,08). Um soco mais fraco não corta um mais forte em andamento. */
+export function socoCamera(forca: number, agora = performance.now()) {
+  if (socoZoom(agora) > forca) return
+  socoIni = agora; socoForca = forca
+}
+
+/** Zoom extra do soco agora (0 fora dele): sobe rápido e desce suave. */
+export function socoZoom(agora = performance.now()): number {
+  const t = (agora - socoIni) / 1000
+  if (t < 0 || t > SOCO_SOBE_S + SOCO_DESCE_S) return 0
+  if (t < SOCO_SOBE_S) return socoForca * (t / SOCO_SOBE_S)
+  const k = 1 - (t - SOCO_SOBE_S) / SOCO_DESCE_S
+  return socoForca * k * k
+}
+
 /** Zoom da câmera neste quadro (1 = sem zoom). */
 export function zoomCamera(eng: AutoDashEngine): number {
   if (eng.state !== "racing") return 1
   const top = CARS[eng.cfg.carIdx].topSpeed
-  return 1 + ZOOM_VEL * smoothstep(150, top, eng.speed) + ZOOM_NITRO * eng.nitroZoom
+  return 1 + ZOOM_VEL * smoothstep(150, top, eng.speed) + ZOOM_NITRO * eng.nitroZoom + (eng.touge ? socoZoom() : 0)
 }
 
 /** Aplica tremor e zoom no contexto (dentro do save/restore do mundo). */

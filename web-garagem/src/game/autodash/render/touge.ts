@@ -3,29 +3,16 @@
 // espírito, o ato (CAÇA / LIDERANÇA) com a distância, o medidor de ângulo no
 // drift e, no treino, a dica embaixo. Os COMANDOS não ficam no meio da tela:
 // estão pintados na pista (render/road.ts) com um painel em cima de cada marca
-// (drawPainelTouge), que acende na hora.
+// (drawPainelTouge), que acende na hora. Os efeitos de luta de chefe (impacto,
+// câmera lenta, dano nas barras, a apresentação) moram em render/tougeFx.ts.
 import { type AutoDashEngine, W, H, PLAYER_Z } from "../engine"
 import { rr } from "./primitives"
 import { TOUGE, comandoAtual, anguloDrift, zonaDa, emCena, type RotuloMarca } from "../world/touge"
 import { wrapDz } from "../traffic/spawner"
+import { renderTougeTela, renderTougeTextos, renderIntroTouge, barraTouge } from "./tougeFx"
 
 const FONTE = "'Space Grotesk', 'Segoe UI', sans-serif"
 const SETA = (d: number) => (d > 0 ? "▶" : "◀")
-
-function barra(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, frac: number, cor: string, nome: string, direita: boolean) {
-  ctx.fillStyle = "rgba(15,23,42,0.75)"
-  rr(ctx, x - 3, y - 3, w + 6, 20, 6)
-  ctx.fillStyle = "rgba(148,163,184,0.25)"
-  ctx.fillRect(x, y, w, 14)
-  ctx.fillStyle = cor
-  const fw = w * Math.max(0, Math.min(1, frac))
-  ctx.fillRect(direita ? x + w - fw : x, y, fw, 14)
-  ctx.fillStyle = "#f8fafc"
-  ctx.font = `bold 13px ${FONTE}`
-  ctx.textAlign = direita ? "right" : "left"
-  ctx.fillText(nome, direita ? x + w : x, y - 8)
-  ctx.textAlign = "left"
-}
 
 /** Painel em cima de uma marca da pista: a tecla e o que ela faz; acende na hora. */
 export function drawPainelTouge(eng: AutoDashEngine, x: number, y: number, w: number, r: RotuloMarca) {
@@ -85,30 +72,18 @@ export function renderTouge(eng: AutoDashEngine) {
   const tg = eng.touge
   if (!tg || eng.state !== "racing") return
   const ctx = eng.ctx
+  // por baixo de tudo: câmera lenta, vinheta vermelha do erro, linhas e clarão do impacto
+  renderTougeTela(eng)
   if (tg.fase === "batalha") {
     ctx.fillStyle = "rgba(0,0,0,0.85)"
     ctx.fillRect(0, 0, W, H * 0.07)
     ctx.fillRect(0, H * 0.93, W, H * 0.07)
   }
-  if (tg.introT > 0) {
-    const k = Math.min(1, tg.introT / 0.4, (TOUGE.introS - tg.introT) / 0.3)
-    ctx.globalAlpha = Math.max(0, k)
-    ctx.fillStyle = "rgba(15,23,42,0.85)"
-    rr(ctx, W / 2 - 250, H * 0.3, 500, 110, 14)
-    ctx.fillStyle = tg.cor
-    ctx.fillRect(W / 2 - 250, H * 0.3, 8, 110)
-    ctx.textAlign = "center"
-    ctx.fillStyle = "#94a3b8"; ctx.font = `bold 13px ${FONTE}`
-    ctx.fillText("DESAFIO NA DESCIDA", W / 2, H * 0.3 + 26)
-    ctx.fillStyle = tg.cor; ctx.font = `bold 34px ${FONTE}`
-    ctx.fillText(tg.nome, W / 2, H * 0.3 + 64)
-    ctx.fillStyle = "#e2e8f0"; ctx.font = `13px ${FONTE}`
-    ctx.fillText("cole nele nas retas · nas curvas, siga as marcas da pista", W / 2, H * 0.3 + 92)
-    ctx.textAlign = "left"; ctx.globalAlpha = 1
-  }
+  if (tg.introT > 0) renderIntroTouge(eng, tg)
   const bw = W * 0.26, y = H * 0.07 + 28
-  barra(ctx, W / 2 - bw - 30, y, bw, tg.vidaVoce / 100, "#38bdf8", "VOCÊ", false)
-  barra(ctx, W / 2 + 30, y, bw, tg.vidaRival / 100, tg.acordou ? "#ef4444" : tg.cor, tg.acordou ? `${tg.nome} ⚡` : tg.nome, true)
+  barraTouge(eng, 0, W / 2 - bw - 30, y, bw, tg.vidaVoce, "#38bdf8", "VOCÊ", false, false)
+  barraTouge(eng, 1, W / 2 + 30, y, bw, tg.vidaRival, tg.acordou ? "#ef4444" : tg.cor, tg.acordou ? `${tg.nome} ⚡` : tg.nome, true, tg.acordou)
+  renderTougeTextos(eng)
   // ato e distância
   const gap = wrapDz(eng, tg.rival.z, eng.position + PLAYER_Z)
   const m = Math.round(Math.abs(gap) / 475) // metros (1 km/h = 132 u/s ⇒ ~475 u por metro)

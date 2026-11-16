@@ -1,6 +1,7 @@
 // AutoDash — fx/particles.ts. Extraído de engine.ts (refactor sem mudança de comportamento).
 import { AutoDashEngine, W, H } from "../engine"
 import { coresChama, corFumaca } from "../cosmetic/bodykit"
+import { CARS } from "../data"
 
 export function burst(eng: AutoDashEngine, x: number, y: number, n: number, colors: string[]) {
   for (let i = 0; i < n; i++) {
@@ -20,6 +21,49 @@ export function emitSmoke(eng: AutoDashEngine, n: number, color: string) {
       y: H - 62 + Math.random() * 8,
       vx: (Math.random() - 0.5) * 60, vy: 30 + Math.random() * 60,
       size: 6 + Math.random() * 10, life: 0.7, maxLife: 0.7, color,
+    })
+  }
+}
+
+/**
+ * Onde estão as rodas traseiras do seu carro na tela agora, com o giro do
+ * drift (render/player.ts: o carro anda -driftAng·70 px e gira -driftAng·0,5
+ * em volta de (W/2, H-90)). [esquerda, direita].
+ */
+export function rodasTraseiras(eng: AutoDashEngine): [{ x: number; y: number }, { x: number; y: number }] {
+  const largura = CARS[eng.cfg.carIdx].width * 640 // a largura do desenho (drawPlayerCar)
+  const giro = eng.driftAng
+  const bounce = Math.sin(eng.position * 0.03) * Math.min(3, eng.speed / 60) + eng.pitchY
+  const px = W / 2, py = H - 90 + bounce
+  const cx = W / 2 - giro * 70, cy = H - 38 + bounce
+  const cos = Math.cos(-giro * 0.5), sin = Math.sin(-giro * 0.5)
+  const roda = (lado: number) => {
+    const x = cx + lado * largura * 0.4 - px, y = cy - py
+    return { x: px + x * cos - y * sin, y: py + x * sin + y * cos }
+  }
+  return [roda(-1), roda(1)]
+}
+
+/** Índice da roda de fora (a traseira que escapa): o giro anti-horário leva a traseira para a direita. */
+export const rodaDeFora = (eng: AutoDashEngine): 0 | 1 => (eng.driftAng > 0 ? 1 : 0)
+
+/**
+ * Fumaça do drift saindo das rodas traseiras (a de fora solta mais). Gasta
+ * exatamente os mesmos sorteios por partícula que emitSmoke: trocar uma pela
+ * outra não mexe na sequência do Math.random semeado dos testes.
+ */
+export function emitSmokeRodas(eng: AutoDashEngine, n: number, color: string) {
+  const rodas = rodasTraseiras(eng)
+  const fora = rodaDeFora(eng)
+  const meio = W / 2 - eng.driftAng * 70
+  for (let i = 0; i < n; i++) {
+    const r = rodas[Math.random() < 0.7 ? fora : 1 - fora]
+    const lado = r.x < meio ? -1 : 1
+    eng.particles.push({
+      x: r.x + lado * Math.random() * 10,
+      y: r.y - 4 + Math.random() * 8,
+      vx: (Math.random() - 0.5) * 50 + lado * 40, vy: 40 + Math.random() * 60,
+      size: 7 + Math.random() * 11, life: 0.95, maxLife: 0.95, color,
     })
   }
 }
