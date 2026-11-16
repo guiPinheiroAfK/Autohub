@@ -129,12 +129,14 @@ Na placa "SAÍDA", entre na faixa da direita e siga o elevado.
   MAR", subida longa pela lateral da montanha (paredão de um lado, vale do outro,
   caminhões, neblina no meio), mirante com o mar, descida com o duelo, rodovia
   beira-mar e a chegada na praia (vira a costa).
-- **Duelo de touge:** a 1ª curva é treino (dica embaixo). Em cada curva: **S**
-  antes, **Shift** na entrada (câmera lenta até apertar), e de lado o ângulo é no
-  **volante** (a seta do medidor diz: ABRE ▶ ou ◀ FECHA; o verde é o certo, o
-  vermelho roda). **W** só segura a velocidade. Nas curvas em **S**, no meio,
-  aperte o lado de fora quando o anel "TROCA" fechar. **Espaço** na saída. No
-  fim, quem perdeu fica para trás.
+- **Duelo de touge (gás e câmbio automáticos):** começa na CAÇA: nos trechos
+  livres, cole no rival (colado ele perde espírito; ficando para trás, você
+  perde). Nas curvas-chave a pista mostra o que fazer: **faixa vermelha** =
+  segure S, **linha amarela** = Shift (câmera lenta até apertar), de lado o
+  ângulo é no volante (ABRE / FECHA no medidor), **linha azul** no S = vire para
+  fora, **linha verde** = Espaço. No meio, a ULTRAPASSAGEM: ele encosta de um lado
+  e as setas no chão mostram o outro. Depois você LIDERA e é ele que tenta colar.
+  A 1ª curva é treino.
 
 **Feedback ladeira/viaduto:**
 

@@ -16,6 +16,7 @@
 //   COSTEIRA     rodovia beira-mar até a praia; no fim a região vira a costa
 // Depois a pista religa no começo da volta (o relevo volta ao nível de lá).
 import { type AutoDashEngine, type Seg, H } from "../engine"
+import type { ClimaId } from "./weather"
 import { DRAW_DIST, SEG_LEN } from "../data"
 import { avisar } from "./avisos"
 import { hash01, gerarTrechos, tipoNoSeg, type TipoTrecho, type Trecho } from "./cenario"
@@ -26,9 +27,9 @@ import { trocarRegiao } from "./regiao"
 type Fases = [TipoTrecho, number][]
 export const MONTANHA = {
   // [fase, segmentos] (~79 segmentos por segundo a 120 km/h)
-  completa: [["portal", 200], ["serraPe", 400], ["serraMeio", 2800], ["mirante", 400], ["serraDescida", 1300], ["serraBase", 300], ["costeira", 1200]] as Fases,
+  completa: [["portal", 200], ["serraPe", 400], ["serraMeio", 2800], ["mirante", 400], ["serraDescida", 1900], ["serraBase", 300], ["costeira", 1200]] as Fases,
   // tecla 0: subida curta e direto para o mirante e a descida do touge
-  curta: [["portal", 120], ["serraPe", 300], ["mirante", 300], ["serraDescida", 1300], ["serraBase", 300], ["costeira", 600]] as Fases,
+  curta: [["portal", 120], ["serraPe", 300], ["mirante", 300], ["serraDescida", 1900], ["serraBase", 300], ["costeira", 600]] as Fases,
   altura: 26000,     // u no alto (a curta fica com um terço)
   religa: 300,       // segmentos para voltar ao relevo do começo da volta
   comboioCadaS: 9,   // s entre comboios de caminhão na subida
@@ -40,7 +41,7 @@ export const MONTANHA = {
 /** Lado da encosta (fixo por viagem): o vale com guard-rail fica do outro. */
 export function ladoParedao(eng: AutoDashEngine): -1 | 1 { return eng.montanha?.lado ?? -1 }
 
-export interface Montanha { a: number; lado: -1 | 1; fases: Fases; total: number; tougeFeito: boolean; comboioT: number; praia: boolean }
+export interface Montanha { a: number; lado: -1 | 1; fases: Fases; total: number; tougeFeito: boolean; comboioT: number; praia: boolean; clima: ClimaId }
 
 /** Início (em segmentos desde `a`) e fim de cada fase. */
 function limites(fases: Fases): Record<string, [number, number]> {
@@ -156,7 +157,7 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
   const tr: Trecho[] = [{ a: base, b: a, tipo: tipoAqui }]
   for (const [f] of fases) tr.push({ a: a + lim[f][0], b: a + lim[f][1], tipo: f })
   eng.cenario = [...tr, ...gerarTrechos(N, eng.pistaSeed, eng.bioma.id)]
-  eng.montanha = { a, lado, fases, total, tougeFeito: false, comboioT: 3, praia: false }
+  eng.montanha = { a, lado, fases, total, tougeFeito: false, comboioT: 3, praia: false, clima: eng.clima }
   const at = (k: number) => ((a + k) % N) * SEG_LEN
   eng.roadSigns.push(
     { z: at(lim.portal[0] + 30), type: "serra", label: "SERRA DO MAR" },
@@ -183,9 +184,10 @@ export function atualizarMontanha(eng: AutoDashEngine, playerZ: number, dt = 0) 
   const N = eng.segments.length
   const idx = Math.floor(playerZ / SEG_LEN) % N
   const f = faseNoSeg(eng, idx)
-  // clima fixo na viagem toda (playtest 16/11: "o clima muda sozinho"): céu
-  // limpo, e um banco de neblina só no miolo da subida (entra e sai devagar)
-  eng.climaForcado = f ? (MONTANHA.neblinaNoMeio && noMiolo(eng, idx) ? "neblina" : "limpo") : null
+  // clima fixo na viagem toda (playtest 16/11: "o clima muda sozinho"): o que
+  // estava valendo na entrada da serra (passando o portal, a neblina sumia: a
+  // viagem forçava céu limpo), e um banco de neblina no miolo da subida
+  eng.climaForcado = MONTANHA.neblinaNoMeio && noMiolo(eng, idx) ? "neblina" : m.clima
   // a subida é de caminhão: comboio atrás de comboio
   if (f === "serraMeio" && !eng.comboio) {
     m.comboioT -= dt

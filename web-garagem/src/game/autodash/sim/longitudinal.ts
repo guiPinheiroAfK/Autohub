@@ -78,7 +78,8 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   }
 
   // câmbio automático
-  if (eng.cfg.transmission === "auto" && eng.gear >= 1 && eng.shiftT <= 0) autoShift(eng, throttle > 0)
+  // no duelo de touge o câmbio é automático mesmo no manual (o duelo é das curvas)
+  if ((eng.cfg.transmission === "auto" || eng.touge?.fase === "batalha") && eng.gear >= 1 && eng.shiftT <= 0) autoShift(eng, throttle > 0)
 
   let accel = 0
   let patina = 0

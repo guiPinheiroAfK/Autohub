@@ -1,26 +1,28 @@
 // AutoDash — world/touge.ts. Duelo de TOUGE na descida da serra: o chefe da serra.
 //
-// Histórico do playtest de 16/11: "batalha de chefe de PS2: aperta na hora certa
-// e escorrega" → "na serra, com curvas e drift de verdade, não só o Shift" →
-// "liberdade, parecer uma mini boss fight" → "o carro tinha que fazer mais
-// manobras, e a parte de acelerar confunde no começo".
+// Histórico do playtest de 16/11: "batalha de chefe: aperta na hora certa e
+// escorrega" → "na serra, com drift de verdade" → "liberdade, mini boss fight"
+// → "o carro tinha que fazer mais manobras" → "parece só clicar em botões
+// aleatórios; os comandos têm que aparecer no lugar certo; a luta tinha que ser
+// mais luta, com momentos de correr por conta e voltar para as cenas; o carro
+// perde velocidade sem trocar de marcha".
 //
-// O rival chama no fim do mirante (world/montanha.ts) e o duelo é a descida, sem
-// trânsito. Um roteiro de curvas (grampo, "S", rápida...), cada uma pedindo:
-//   S       frear antes da curva           (anel fecha um pouco antes da entrada)
-//   SHIFT   freio de mão na entrada        (anel fecha no ponto de entrada; o
-//           jogo fica em câmera lenta até você apertar)
-//   DRIFT   o ângulo é SEU, só no volante: para dentro da curva abre, para fora
-//           fecha. O medidor mostra a faixa verde e a seta de qual lado apertar.
-//           Na faixa verde o carro segura a linha; quase reto sai de frente;
-//           passou do vermelho RODA. O W só segura a velocidade.
-//   TROCA   no "S", no meio da curva, o drift troca de lado: aperte o lado de
-//           FORA (a próxima perna) quando o anel fechar
-//   ESPAÇO  nitro na saída
-// A soma dá a nota da curva (PERFEITA / ÓTIMO / BOM tiram vida do rival; ERROU
-// tira a sua). A primeira curva é de TREINO (mais lenta, com dica, sem dano em
-// você). Com metade da vida o rival ACORDA (janelas mais curtas, fecha a sua
-// linha). No fim, quem perdeu fica para trás: você passa por ele (ou ele some).
+// Desenho (pesquisa: canyon duel do NFS Carbon, SP battle do Tokyo Xtreme Racer,
+// e boas práticas de QTE: o comando aparece NO CENÁRIO, com os controles normais
+// do jogo, poucas vezes, e errar pune de leve):
+//
+// ATO 1 — CAÇA: você atrás do rival. Nos TRECHOS LIVRES você pilota (o gás e o
+//   câmbio são automáticos no duelo): colado nele, ele perde espírito; ficando
+//   para trás, você perde.
+// CENAS: nas curvas-chave a pista mostra o que fazer, no lugar certo:
+//   faixa VERMELHA de frenagem → segure S dentro dela
+//   linha AMARELA de entrada   → SHIFT ao cruzar (câmera lenta até apertar)
+//   de lado, o ângulo é no VOLANTE (medidor: ABRE / FECHA; o vermelho roda)
+//   linha AZUL de troca ("S")  → vire para o lado de fora ao cruzar
+//   linha VERDE de saída       → ESPAÇO ao cruzar (nitro)
+// ULTRAPASSAGEM: no meio do duelo o rival abre a porta numa reta: passe por ele.
+// ATO 2 — LIDERANÇA: você na frente; agora é ele que cola. Longe dele, ele perde.
+// Fim: a barra de alguém zerou, ou acabaram as cenas.
 import { type AutoDashEngine, H, PLAYER_Z } from "../engine"
 import { DRAW_DIST, SEG_LEN, KMH2UPS, saveConfig } from "../data"
 import { wrapDz } from "../traffic/spawner"
@@ -30,36 +32,44 @@ import { hash01 } from "./cenario"
 import type { Traffic } from "../traffic/types"
 
 export type TipoCurva = "grampo" | "s" | "rapida"
+type Bloco = "livre" | "grampo" | "s" | "rapida" | "porta"
 
 export const TOUGE = {
-  roteiro: ["grampo", "s", "rapida", "grampo", "s", "grampo"] as TipoCurva[],
-  aproxSegs: 70,      // reta antes da primeira curva
-  retaSegs: 110,      // reta entre curvas (cabe o nitro de uma e o freio da outra)
-  // geometria (segmentos) e curva de cada tipo
+  // a descida: trechos livres, cenas e a ultrapassagem no meio
+  roteiro: ["livre", "grampo", "livre", "s", "porta", "livre", "grampo", "livre", "s", "grampo"] as Bloco[],
+  aproxSegs: 70,      // reta antes do primeiro bloco
+  livreSegs: 230,     // trecho livre: curvas abertas, você pilota
+  livreCurva: 3.2,
+  portaSegs: 220,     // reta da ultrapassagem
+  retaCena: 60,       // reta curta depois de cada cena (o nitro de saída)
   grampo: { entra: 10, segura: 34, sai: 12, curva: 6.8 },
   s: { entra: 8, perna: 22, troca: 10, sai: 8, curva: 6.2 },
   rapida: { entra: 12, segura: 26, sai: 12, curva: 4.2 },
-  anelS: 1.3,         // o anel de cada comando aparece este tanto antes da hora
-  freioAntesS: 0.6,   // o S é para esta antecedência da entrada
+  freioSegs: 18,      // faixa vermelha de frenagem, antes da entrada
+  freioAntes: 22,     // ... começa a este tanto de segmentos antes da entrada
   perfeito: 0.12,     // s de folga do SHIFT perfeito
-  bom: 0.3,           // s de folga do SHIFT bom, do S, da TROCA e do ESPAÇO
+  bom: 0.3,           // s de folga do SHIFT bom, da TROCA e do ESPAÇO
   // drift no volante (rad): faixa verde de cada tipo, onde roda, onde perde
   zona: [0.45, 0.85] as const,
   zonaRapida: [0.3, 0.6] as const,
   roda: 1.15,
   perde: 0.18,
   abre: 0.9, fecha: 1.3, solto: 0.15, // rad/s: volante para dentro, para fora, sem volante
-  semGas: 10,         // km/h/s perdidos no drift sem o W
-  lento: 0.4,         // escala do tempo na entrada da curva (câmera lenta)
-  lentoTreino: 0.28,  // na curva de treino, mais lento ainda
+  lento: 0.4,         // escala do tempo na linha de entrada (câmera lenta)
+  lentoTreino: 0.28,  // na cena de treino, mais lento ainda
   lentoDrift: 0.8,    // escala do tempo durante o drift
   introS: 2.6,        // s da apresentação do rival
   fase2: { perfeito: 0.09, bom: 0.22 }, // janelas com o rival acordado
   nitroSaida: 18,     // km/h de empurrão do nitro na hora certa
-  // pontos da curva (S 1, SHIFT 2/1/0, DRIFT 2/1/0, TROCA 1 no "S", ESPAÇO 1) → dano
-  dano: { perfeito: 25, otimo: 18, bom: 10, erro: 25 },
-  gapBase: 800,       // u: o rival começa a esta distância à sua frente
-  gapPorPonto: 9,     // u de distância por ponto de diferença entre as barras
+  // espírito (barras): cenas e distância
+  dano: { perfeito: 22, otimo: 15, bom: 8, erro: 18 },
+  // distâncias (u; ~475 u por metro: 1 km/h = 132 u/s)
+  colado: 2400,       // ~5 m: perto assim do rival, quem está na frente perde espírito
+  longe: 9500,        // ~20 m: longe assim, quem está atrás perde
+  drenoS: 6,          // espírito por segundo pela distância
+  gapCaca: 4800,      // ~10 m: o rival anda a esta distância na sua frente (na caça)
+  gapLider: 4500,     // e atrás de você (na liderança)
+  gapPorPonto: 40,    // u de distância por ponto de diferença entre as barras
   pontosVitoria: 3000,
   rivais: [
     { nome: "RYO", cor: "#f97316", pintura: "#f8fafc" },
@@ -71,14 +81,16 @@ export const TOUGE = {
 export type Nota = "perfeito" | "bom" | "erro"
 export type NotaCurva = "perfeito" | "otimo" | "bom" | "erro"
 export type Comando = "freio" | "shift" | "drift" | "troca" | "nitro"
+export type Marca = "freio" | "entrada" | "troca" | "saida" | "porta"
 
 export interface CurvaTouge {
   tipo: TipoCurva
+  freioZ: number; freioFimZ: number // faixa vermelha
   entradaZ: number; fimZ: number; dir: number
   trocaZ: number | null   // "S": onde o drift troca de lado
   treino: boolean
   nota: Nota | null       // o SHIFT (abre o drift)
-  freio: boolean | null   // S no tempo?
+  freio: boolean | null   // segurou o S na faixa?
   troca: boolean | null   // "S": trocou de lado no tempo?
   zonaT: number; curvaT: number // s com o ângulo na faixa verde / s dentro da curva
   rodou: boolean
@@ -88,57 +100,88 @@ export interface CurvaTouge {
 
 export interface Touge {
   fase: "batalha" | "fim"
+  papel: "caca" | "lider" // ato 1: você caça; ato 2: você lidera
   curvas: CurvaTouge[]
-  atual: number          // índice da próxima curva a fechar
+  atual: number          // índice da próxima cena a fechar
+  porta: { z: number; fim: number; lado: number; feita: boolean } | null
+  marcas: Map<number, Marca> // segmento → marca pintada na pista (render/road.ts)
   vidaVoce: number
   vidaRival: number
   rival: Traffic
   nome: string
   cor: string
   z: number; end: number // trecho do duelo
-  acordou: boolean       // segunda fase: o rival com metade da vida
+  acordou: boolean       // o rival com metade da vida
   introT: number         // s restantes da apresentação
-  passou: boolean        // no fim, você passou pelo rival
+  passou: boolean        // você passou pelo rival
+  avisoT: number         // s até poder repetir um aviso de distância
 }
 
 const janelas = (eng: AutoDashEngine) => eng.touge?.acordou ? TOUGE.fase2 : { perfeito: TOUGE.perfeito, bom: TOUGE.bom }
 const vUps = (eng: AutoDashEngine) => Math.max(20, eng.speed) * KMH2UPS
 const ate = (eng: AutoDashEngine, z: number) => wrapDz(eng, z, eng.position + PLAYER_Z) / vUps(eng)
+const freando = (eng: AutoDashEngine) => eng.mouseBrake || eng.touchBrake || eng.keys.has("s") || eng.keys.has("arrowdown")
 
-/** Segundos até o ponto de entrada da curva (negativo: já passou). */
+/** Segundos até a linha de entrada da cena (negativo: já passou). */
 export function tempoAteEntrada(eng: AutoDashEngine, c: CurvaTouge): number { return ate(eng, c.entradaZ) }
-/** Segundos até o fim da curva (a hora do nitro). */
+/** Segundos até a linha de saída (a hora do nitro). */
 export function tempoAteSaida(eng: AutoDashEngine, c: CurvaTouge): number { return ate(eng, c.fimZ) }
 
-/** Direção da curva no ponto do jogador (o "S" troca no meio). */
 function dirAgora(eng: AutoDashEngine, c: CurvaTouge): number {
   if (c.trocaZ === null) return c.dir
-  if (c.troca === true) return -c.dir // trocou (pode ser um tico antes do ponto)
+  if (c.troca === true) return -c.dir // trocou (pode ser um tico antes da linha)
   return wrapDz(eng, c.trocaZ, eng.position + PLAYER_Z) > 0 ? c.dir : -c.dir
 }
 
-/** Faixa verde do ângulo nesta curva. */
+/** Faixa verde do ângulo nesta cena. */
 export function zonaDa(c: CurvaTouge): readonly [number, number] { return c.tipo === "rapida" ? TOUGE.zonaRapida : TOUGE.zona }
 
-/** O comando que a tela pede agora e quanto falta para a hora dele (s). */
+/** A próxima coisa a fazer na cena da vez e quanto falta para a linha dela (s). */
 export function comandoAtual(eng: AutoDashEngine): { cmd: Comando; t: number; c: CurvaTouge } | null {
   const tg = eng.touge
   if (!tg || tg.fase !== "batalha") return null
   const c = tg.curvas[tg.atual]
   if (!c) return null
-  const te = tempoAteEntrada(eng, c)
-  if (c.freio === null && te > TOUGE.freioAntesS - TOUGE.bom) return { cmd: "freio", t: te - TOUGE.freioAntesS, c }
-  if (c.nota === null) return { cmd: "shift", t: te, c }
+  if (c.freio === null) return { cmd: "freio", t: ate(eng, c.freioZ), c }
+  if (c.nota === null) return { cmd: "shift", t: tempoAteEntrada(eng, c), c }
   if (c.trocaZ !== null && c.troca === null && c.nota !== "erro") return { cmd: "troca", t: ate(eng, c.trocaZ), c }
   const ts = tempoAteSaida(eng, c)
-  if (ts > 0.05 && te <= 0 && ts > TOUGE.anelS * 0.6) return { cmd: "drift", t: ts, c }
+  if (ts > 0.6 && tempoAteEntrada(eng, c) <= 0) return { cmd: "drift", t: ts, c }
   if (c.nitro === null) return { cmd: "nitro", t: ts, c }
   return null
 }
 
+/** Marca pintada na pista neste segmento (render/road.ts), ou undefined. */
+export function marcaNoSeg(eng: AutoDashEngine, idx: number): Marca | undefined {
+  return eng.touge?.fase === "batalha" ? eng.touge.marcas.get(idx) : undefined
+}
+
+export interface RotuloMarca { txt: string; dica: string; cor: string; agora: boolean; lado: number }
+
+/** O que o painel em cima da marca mostra: a tecla, a cor e se é a hora dela. */
+export function rotuloDaMarca(eng: AutoDashEngine, idx: number): RotuloMarca | null {
+  const tg = eng.touge
+  const mk = marcaNoSeg(eng, idx)
+  if (!tg || !mk) return null
+  const at = comandoAtual(eng)
+  const z = idx * SEG_LEN
+  const seta = (d: number) => (d > 0 ? "▶" : "◀")
+  if (mk === "porta") {
+    const lado = -(tg.porta?.lado ?? 1)
+    return { txt: seta(lado), dica: "ULTRAPASSE", cor: "#4ade80", agora: true, lado }
+  }
+  const c = tg.curvas.find(q => (mk === "freio" && q.freioZ === z) || (mk === "entrada" && q.entradaZ === z) || (mk === "troca" && q.trocaZ === z) || (mk === "saida" && q.fimZ === z))
+  if (!c) return null
+  const hora = !!at && at.c === c && Math.abs(at.t) < 0.35
+  if (mk === "freio") return { txt: "S", dica: "SEGURA O FREIO", cor: "#ef4444", agora: hora && at!.cmd === "freio" || (at?.c === c && at.cmd === "freio" && at.t <= 0), lado: 0 }
+  if (mk === "entrada") return { txt: "SHIFT", dica: "FREIO DE MÃO", cor: "#facc15", agora: hora && at!.cmd === "shift", lado: 0 }
+  if (mk === "troca") return { txt: seta(-c.dir), dica: "TROCA", cor: "#38bdf8", agora: hora && at!.cmd === "troca", lado: -c.dir }
+  return { txt: "ESPAÇO", dica: "NITRO", cor: "#4ade80", agora: hora && at!.cmd === "nitro", lado: 0 }
+}
+
 /**
- * Abre o duelo além do horizonte: reta de aproximação e o roteiro de curvas,
- * com placas. O rival aparece à sua frente.
+ * Abre o duelo além do horizonte: o roteiro de trechos livres, cenas e a
+ * ultrapassagem, com as marcas na pista. O rival aparece à sua frente.
  */
 export function spawnTouge(eng: AutoDashEngine): boolean {
   if (eng.touge) return false
@@ -149,70 +192,92 @@ export function spawnTouge(eng: AutoDashEngine): boolean {
   const a = Math.floor(z0 / SEG_LEN)
   const T = TOUGE
   const curvas: CurvaTouge[] = []
+  const marcas = new Map<number, Marca>()
+  let porta: Touge["porta"] = null
   let i = 0
-  const seg = (k: number) => eng.segments[(a + k) % N]
-  const poe = (c: number) => { seg(i).curve = c; seg(i).sign = undefined; i++ }
-  const zDe = (k: number) => ((a + k) % N) * SEG_LEN
+  const segIdx = (k: number) => (a + k) % N
+  const poe = (c: number) => { const s = eng.segments[segIdx(i)]; s.curve = c; s.sign = undefined; i++ }
+  const zDe = (k: number) => segIdx(k) * SEG_LEN
   for (let k = 0; k < T.aproxSegs; k++) poe(0)
   const lado0 = hash01(a, 3) < 0.5 ? -1 : 1
-  T.roteiro.forEach((tipo, n) => {
-    const dir = n % 2 === 0 ? lado0 : -lado0
+  let nCena = 0
+  T.roteiro.forEach((b, n) => {
+    const dir = n % 4 < 2 ? lado0 : -lado0
+    if (b === "livre") {
+      // curvas abertas: aqui é você pilotando, colado (ou não) no rival
+      for (let k = 0; k < T.livreSegs; k++) poe(Math.sin((k / T.livreSegs) * Math.PI * 2) * T.livreCurva * dir * Math.min(1, k / 30, (T.livreSegs - k) / 30))
+      return
+    }
+    if (b === "porta") {
+      const ini = i
+      for (let k = 0; k < T.portaSegs; k++) poe(0)
+      porta = { z: zDe(ini + 20), fim: zDe(i - 10), lado: dir, feita: false }
+      for (let k = ini + 20; k < ini + 32; k++) marcas.set(segIdx(k), "porta")
+      return
+    }
+    // cena: faixa de freio antes, linha de entrada, (troca), linha de saída
     const entra = i
     let trocaZ: number | null = null
-    if (tipo === "s") {
+    if (b === "s") {
       const g = T.s
       for (let k = 0; k < g.entra; k++) poe(dir * g.curva * ((k + 1) / g.entra))
       for (let k = 0; k < g.perna; k++) poe(dir * g.curva)
       const meio = i + Math.floor(g.troca / 2)
       for (let k = 0; k < g.troca; k++) poe(dir * g.curva * (1 - 2 * (k + 1) / g.troca))
-      trocaZ = zDe(meio)
+      trocaZ = zDe(meio); marcas.set(segIdx(meio), "troca")
       for (let k = 0; k < g.perna; k++) poe(-dir * g.curva)
       for (let k = 0; k < g.sai; k++) poe(-dir * g.curva * (1 - (k + 1) / g.sai))
     } else {
-      const g = tipo === "grampo" ? T.grampo : T.rapida
+      const g = b === "grampo" ? T.grampo : T.rapida
       for (let k = 0; k < g.entra; k++) poe(dir * g.curva * ((k + 1) / g.entra))
       for (let k = 0; k < g.segura; k++) poe(dir * g.curva)
       for (let k = 0; k < g.sai; k++) poe(dir * g.curva * (1 - (k + 1) / g.sai))
     }
     const fim = i
-    for (let k = 0; k < T.retaSegs; k++) poe(0)
-    curvas.push({ tipo, entradaZ: zDe(entra), fimZ: zDe(fim), dir, trocaZ, treino: n === 0, nota: null, freio: null, troca: null, zonaT: 0, curvaT: 0, rodou: false, nitro: null, final: null })
+    for (let k = 0; k < T.retaCena; k++) poe(0)
+    const fa = entra - T.freioAntes
+    for (let k = fa; k < fa + T.freioSegs; k++) marcas.set(segIdx(k), "freio")
+    marcas.set(segIdx(entra), "entrada")
+    marcas.set(segIdx(fim), "saida")
+    curvas.push({
+      tipo: b, freioZ: zDe(fa), freioFimZ: zDe(fa + T.freioSegs), entradaZ: zDe(entra), fimZ: zDe(fim), dir, trocaZ,
+      treino: nCena === 0, nota: null, freio: null, troca: null, zonaT: 0, curvaT: 0, rodou: false, nitro: null, final: null,
+    })
+    nCena++
   })
   const end = at(START + i * SEG_LEN)
   eng.zones.push({ type: "touge", z: z0, end, spawnT: 0 })
   // o chefe: carro de racha sem estado de racha (anda na velocidade que o duelo manda)
   const def = T.rivais[Math.floor(hash01(a, 9) * T.rivais.length)]
   const playerZ = eng.position + PLAYER_Z
-  const zr = ((playerZ + T.gapBase) % eng.trackLen + eng.trackLen) % eng.trackLen
+  const zr = ((playerZ + T.gapCaca) % eng.trackLen + eng.trackLen) % eng.trackLen // (gapCaca u à frente)
   const rival: Traffic = {
     z: zr, offset: 0.25, targetOffset: 0.25, speed: eng.speed,
-    kind: "car", role: "racha", color: def.pintura, blinkT: 0, prevD: T.gapBase,
+    kind: "car", role: "racha", color: def.pintura, blinkT: 0, prevD: T.gapCaca,
     label: def.nome, accent: def.cor,
   }
   // a descida é do duelo: tira o trânsito (e não nasce mais nenhum até acabar)
   eng.traffic = eng.traffic.filter(t => t.role === "police" || wrapDz(eng, t.z, playerZ) < -2000)
   eng.traffic.push(rival)
-  eng.touge = { fase: "batalha", curvas, atual: 0, vidaVoce: 100, vidaRival: 100, rival, nome: def.nome, cor: def.cor, z: z0, end, acordou: false, introT: TOUGE.introS, passou: false }
-  eng.roadSigns.push(
-    { z: at(START - VIEW * 0.8), type: "drift", label: `TOUGE: ${def.nome}` },
-    { z: at(START - VIEW * 0.3), type: "drift", label: "S · SHIFT · ◀ ▶ · ESPAÇO" },
-  )
-  for (const c of curvas) eng.roadSigns.push({ z: c.entradaZ, type: "drift", label: c.tipo === "s" ? "S" : c.dir > 0 ? "▶ ▶" : "◀ ◀", lado: -c.dir })
-  avisar(eng, { icone: "⛰️", titulo: `TOUGE · ${def.nome}`, dica: "siga os comandos na tela", nivel: "info", z: z0, fim: end })
+  eng.touge = {
+    fase: "batalha", papel: "caca", curvas, atual: 0, porta, marcas, vidaVoce: 100, vidaRival: 100, rival,
+    nome: def.nome, cor: def.cor, z: z0, end, acordou: false, introT: TOUGE.introS, passou: false, avisoT: 0,
+  }
+  eng.roadSigns.push({ z: at(START - VIEW * 0.6), type: "drift", label: `TOUGE: ${def.nome}` })
+  avisar(eng, { icone: "⛰️", titulo: `TOUGE · ${def.nome}`, dica: "cole nele; nas curvas, siga as marcas da pista", nivel: "info", z: z0, fim: end })
   eng.audio.horn()
   return true
 }
 
-/** Um comando do teclado no duelo. `false` se não era hora dele (não pune aperto à toa na reta). */
+/** Um comando do teclado no duelo. `false` se não era hora dele (aperto à toa não pune). */
 export function comandoTouge(eng: AutoDashEngine, cmd: "freio" | "shift" | "troca" | "nitro"): boolean {
   const atual = comandoAtual(eng)
-  if (!atual || atual.t > TOUGE.anelS) return false
+  if (!atual || atual.t > 1.3) return false
   const { c } = atual
   const j = janelas(eng)
-  if (cmd === "freio") {
-    if (atual.cmd !== "freio") return false
-    c.freio = Math.abs(atual.t) <= j.bom
-    marca(eng, c.freio ? "FREIO ✓" : "FREIO ✗", c.freio)
+  if (cmd === "freio") { // (o freio é segurar o S na faixa; isto é para o teste)
+    if (atual.cmd !== "freio" || atual.t > 0 || ate(eng, c.freioFimZ) < 0) return false
+    c.freio = true; marca(eng, "FREIO ✓", true)
     return true
   }
   if (cmd === "shift") {
@@ -227,7 +292,6 @@ export function comandoTouge(eng: AutoDashEngine, cmd: "freio" | "shift" | "troc
     trocar(eng, c, Math.abs(atual.t) <= j.bom)
     return true
   }
-  // nitro
   if (atual.cmd !== "nitro" && atual.cmd !== "drift") return false
   const ts = tempoAteSaida(eng, c)
   c.nitro = Math.abs(ts) <= j.bom
@@ -246,20 +310,18 @@ function marca(eng: AutoDashEngine, txt: string, ok: boolean) {
 function julgarShift(eng: AutoDashEngine, c: CurvaTouge, nota: Nota) {
   c.nota = nota
   if (c.freio === null) c.freio = false
-  // o drift começa com o ângulo pela nota: perfeito já no meio da faixa verde
   const z = zonaDa(c)
   if (nota !== "erro") eng.driftAng = c.dir * (nota === "perfeito" ? (z[0] + z[1]) / 2 : z[0] - 0.03)
   const txt = nota === "perfeito" ? "ENTRADA PERFEITA!" : nota === "bom" ? "ENTRADA BOA" : "SAIU DE FRENTE"
   eng.floaters.push({ text: txt, color: nota === "perfeito" ? "#4ade80" : nota === "bom" ? "#facc15" : "#ef4444", y: H * 0.28, life: 0.9, big: nota !== "bom" })
   if (nota === "erro") { eng.shakeT = Math.max(eng.shakeT, 0.25); eng.audio.offroad() }
-  else { eng.audio.ui(); eng.pitchY -= 3 } // a traseira solta: o carro mergulha um tico
+  else { eng.audio.ui(); eng.pitchY -= 3 }
 }
 
-/** "S": troca o drift de lado (no tempo) ou perde o drift (fora dele). */
 function trocar(eng: AutoDashEngine, c: CurvaTouge, ok: boolean) {
   c.troca = ok
   if (ok) {
-    eng.driftAng = -eng.driftAng // a traseira passa para o outro lado
+    eng.driftAng = -eng.driftAng
     eng.trauma = Math.min(1, eng.trauma + 0.25)
     eng.floaters.push({ text: "TROCA!", color: "#4ade80", y: H * 0.3, life: 0.8, big: true })
     emitSmoke(eng, 10, "#e5e7eb")
@@ -269,7 +331,7 @@ function trocar(eng: AutoDashEngine, c: CurvaTouge, ok: boolean) {
   }
 }
 
-/** Fecha a curva: soma os comandos e aplica o dano. */
+/** Fecha a cena: soma o que foi feito e aplica no espírito. */
 function fecharCurva(eng: AutoDashEngine, c: CurvaTouge) {
   const tg = eng.touge!
   const shift = c.nota === "perfeito" ? 2 : c.nota === "bom" ? 1 : 0
@@ -283,15 +345,15 @@ function fecharCurva(eng: AutoDashEngine, c: CurvaTouge) {
   c.final = final
   if (final === "erro") { if (!c.treino) tg.vidaVoce = Math.max(0, tg.vidaVoce - TOUGE.dano.erro) }
   else tg.vidaRival = Math.max(0, tg.vidaRival - TOUGE.dano[final])
-  const txt = { perfeito: "CURVA PERFEITA!", otimo: "ÓTIMO", bom: "BOM", erro: c.treino ? "TREINO: TENTE DE NOVO NA PRÓXIMA" : "ERROU A CURVA" }[final]
+  const txt = { perfeito: "CURVA PERFEITA!", otimo: "ÓTIMO", bom: "BOM", erro: c.treino ? "TREINO: NA PRÓXIMA VALE" : "ERROU A CURVA" }[final]
   eng.floaters.push({ text: `${txt}  ${pts}/${max}`, color: final === "erro" ? "#ef4444" : final === "bom" ? "#facc15" : "#4ade80", y: H * 0.32, life: 1.2, big: final !== "bom" })
   tg.atual++
 }
 
 /**
  * Um quadro do duelo dentro da física (sim/update.ts, logo depois da força da
- * curva): julga o que passou da hora, faz o drift no volante, a troca do "S" e a
- * câmera lenta. Devolve a intensidade do chiado (0..1).
+ * curva): marcas que passaram, drift no volante, troca e câmera lenta.
+ * Devolve a intensidade do chiado (0..1).
  */
 export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centrif: number, steerInput = 0): number {
   const tg = eng.touge
@@ -301,11 +363,16 @@ export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centr
   const c = tg.curvas[tg.atual]
   let lento = 1
   if (c) {
-    const te = tempoAteEntrada(eng, c), ts = tempoAteSaida(eng, c), j = janelas(eng)
-    // passou da hora sem apertar
-    if (c.freio === null && te < TOUGE.freioAntesS - j.bom) { c.freio = false; marca(eng, "FREIO ✗", false) }
+    const j = janelas(eng)
+    // faixa vermelha: segurar o S dentro dela
+    if (c.freio === null) {
+      const dentro = ate(eng, c.freioZ) <= 0 && ate(eng, c.freioFimZ) > 0
+      if (dentro && freando(eng)) { c.freio = true; marca(eng, "FREIO ✓", true) }
+      else if (ate(eng, c.freioFimZ) <= 0) { c.freio = false; marca(eng, "FREIO ✗", false) }
+    }
+    const te = tempoAteEntrada(eng, c), ts = tempoAteSaida(eng, c)
     if (c.nota === null && te < -j.bom) julgarShift(eng, c, "erro")
-    // a troca do "S" é no volante: apertar o lado de fora (a próxima perna) na janela
+    // troca do "S": virar para o lado de fora ao cruzar a linha azul
     if (c.trocaZ !== null && c.troca === null && c.nota && c.nota !== "erro") {
       const tt = ate(eng, c.trocaZ)
       if (Math.abs(tt) <= j.bom && steerInput * c.dir < 0) trocar(eng, c, true)
@@ -314,10 +381,10 @@ export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centr
     }
     if (c.nitro === null && ts < -j.bom) { c.nitro = false; marca(eng, "NITRO ✗", false) }
     if (c.nota !== null && c.nitro !== null && ts < 0) fecharCurva(eng, c)
-    // câmera lenta: chegando no ponto de entrada sem ter apertado o Shift
+    // câmera lenta na linha de entrada até o Shift
     if (c.nota === null && te < (c.treino ? 0.9 : 0.5) && te > -j.bom) lento = Math.min(lento, c.treino ? TOUGE.lentoTreino : TOUGE.lento)
   }
-  // dentro de alguma curva já aberta pelo SHIFT?
+  // dentro de alguma cena já aberta pelo SHIFT?
   const k = tg.curvas.find(q => q.nota && wrapDz(eng, q.entradaZ, playerZ) <= 0 && wrapDz(eng, q.fimZ, playerZ) > 0)
   let chiado = 0
   const perdeuTroca = k && k.trocaZ !== null && k.troca === false && wrapDz(eng, k.trocaZ, playerZ) <= 0
@@ -331,19 +398,17 @@ export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centr
     eng.driftAng += (0 - eng.driftAng) * Math.min(1, dt * (k?.rodou ? 1.5 : 5))
     if (Math.abs(eng.driftAng) < 0.01) eng.driftAng = 0
   } else {
-    // DRIFT NO VOLANTE: para dentro da curva abre, para fora fecha, solto
-    // fecha devagar. O W só segura a velocidade.
+    // DRIFT NO VOLANTE: para dentro abre, para fora fecha, solto fecha devagar
     const dir = dirAgora(eng, k)
-    const volante = steerInput * dir // > 0 para dentro da curva, < 0 para fora
+    const volante = steerInput * dir
     let ang = Math.max(0, eng.driftAng * dir)
     ang += (volante > 0 ? volante * TOUGE.abre : volante < 0 ? volante * TOUGE.fecha : -TOUGE.solto) * dt
     ang += Math.abs(curva) * 0.02 * dt
     k.curvaT += dt
     if (ang > TOUGE.roda) {
-      // RODOU: perde vida e velocidade, o carro gira e o drift acaba
       k.rodou = true
-      if (!k.treino) tg.vidaVoce = Math.max(0, tg.vidaVoce - 15)
-      eng.speed *= 0.55
+      if (!k.treino) tg.vidaVoce = Math.max(0, tg.vidaVoce - 12)
+      eng.speed *= 0.6
       eng.shakeT = Math.max(eng.shakeT, 0.5)
       eng.driftAng = dir * 1.7
       eng.floaters.push({ text: "RODOU!", color: "#ef4444", y: H * 0.3, life: 1.1, big: true })
@@ -353,16 +418,13 @@ export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centr
     const z = zonaDa(k)
     const naZona = ang >= z[0] && ang <= z[1]
     if (naZona) k.zonaT += dt
-    // na faixa verde a força da curva some e o carro puxa para o meio da pista
-    // (a linha do drift); fora dela segura menos; quase reto sai de frente
     const segura = naZona ? 1 : ang < TOUGE.perde ? 0.2 : 0.6
     eng.playerX += centrif * segura * dt
     eng.playerX += (0 - eng.playerX) * Math.min(1, dt * (naZona ? 1 : 0.4))
-    const gas = eng.gasF > 0.6
-    eng.speed = Math.max(0, eng.speed + (gas ? (naZona ? 1.5 : -4) : -TOUGE.semGas) * dt)
+    eng.speed = Math.max(0, eng.speed + (naZona ? 1.5 : -6) * dt)
     eng.driftAng = dir * ang
     emitSmoke(eng, naZona ? 4 : 2, "#e5e7eb")
-    if (Math.random() < 0.5) emitSmoke(eng, 1, "#1f2937") // borracha queimada
+    if (Math.random() < 0.5) emitSmoke(eng, 1, "#1f2937")
     lento = Math.min(lento, TOUGE.lentoDrift)
     chiado = naZona ? 1 : 0.7
   }
@@ -381,45 +443,87 @@ export function anguloDrift(eng: AutoDashEngine): { ang: number; c: CurvaTouge; 
   return { ang: Math.max(0, eng.driftAng * dir), c: k, dir }
 }
 
-/** O duelo está correndo (o trânsito não nasce). */
+/** O duelo está correndo (o trânsito não nasce, o gás e o câmbio são automáticos). */
 export function emDuelo(eng: AutoDashEngine): boolean {
   return !!eng.touge && eng.touge.fase === "batalha"
 }
 
-/** Um quadro do duelo fora da física: rival, fim e saída do rival. */
+/** Em cena (de uma faixa de freio até a saída) ou num trecho livre? */
+export function emCena(eng: AutoDashEngine): boolean {
+  const tg = eng.touge
+  if (!tg || tg.fase !== "batalha") return false
+  const c = tg.curvas[tg.atual]
+  return !!c && ate(eng, c.freioZ) < 1.2
+}
+
+/** Um quadro do duelo fora da física: o rival, a distância, a ultrapassagem e o fim. */
 export function atualizarTouge(eng: AutoDashEngine, dt: number, playerZ: number) {
   const tg = eng.touge
   if (!tg) return
   const r = tg.rival
-  const gap = wrapDz(eng, r.z, playerZ)
+  const gap = wrapDz(eng, r.z, playerZ) // > 0: rival na frente
+  if (tg.avisoT > 0) tg.avisoT -= dt
   if (tg.fase === "batalha") {
-    // pista fora: perde vida devagar
     if (eng.offroadT > 0) tg.vidaVoce = Math.max(0, tg.vidaVoce - 8 * dt)
-    // o rival segue a diferença entre as barras: ganhando você encosta
-    const alvoGap = TOUGE.gapBase + (tg.vidaRival - tg.vidaVoce) * TOUGE.gapPorPonto - (100 - tg.vidaRival) * 6
-    r.speed = Math.max(0, eng.speed + Math.max(-45, Math.min(45, (alvoGap - gap) / 18)))
+    const p = tg.porta
+    const naPorta = !!p && !p.feita && wrapDz(eng, p.z, playerZ) <= 0 && wrapDz(eng, p.fim, playerZ) > 0
+    if (naPorta) {
+      // ULTRAPASSAGEM: o rival encosta de um lado e tira o pé; a seta da pista mostra o outro
+      r.targetOffset = r.offset = r.offset + (p!.lado * 0.75 - r.offset) * Math.min(1, dt * 2)
+      r.speed = Math.max(0, eng.speed - 25)
+      if (gap < -600) {
+        p!.feita = true; tg.papel = "lider"; tg.passou = true
+        tg.vidaRival = Math.max(0, tg.vidaRival - 15)
+        eng.floaters.push({ text: `PASSOU O ${tg.nome}! AGORA SEGURA ELE ATRÁS`, color: "#4ade80", y: H * 0.3, life: 2, big: true })
+        eng.trauma = Math.min(1, eng.trauma + 0.3)
+      }
+    } else {
+      if (p && !p.feita && wrapDz(eng, p.fim, playerZ) <= 0) {
+        // a porta fechou sem você passar: ele segue na frente e você perde espírito
+        p.feita = true
+        tg.vidaVoce = Math.max(0, tg.vidaVoce - 15)
+        eng.floaters.push({ text: "NÃO PASSOU: ELE FECHOU A PORTA", color: "#ef4444", y: H * 0.3, life: 1.6, big: false })
+      }
+      // o rival anda na distância do ato (à frente na caça, atrás na liderança),
+      // puxado pela diferença entre as barras; nas cenas, segue sua pilotagem
+      const alvo = tg.papel === "caca"
+        ? TOUGE.gapCaca + (tg.vidaRival - tg.vidaVoce) * TOUGE.gapPorPonto
+        : -(TOUGE.gapLider + (tg.vidaVoce - tg.vidaRival) * TOUGE.gapPorPonto)
+      // corrige devagar: o que você ganha ou perde pilotando aparece na distância
+      r.speed = Math.max(0, eng.speed + Math.max(-30, Math.min(30, (alvo - gap) / 120)))
+      // distância: colado tira de quem está na frente; longe tira de quem está atrás
+      const d = Math.abs(gap)
+      const atras = gap > 0 ? "voce" : "rival"
+      if (!emCena(eng)) {
+        if (d < TOUGE.colado) {
+          if (atras === "voce") tg.vidaRival = Math.max(0, tg.vidaRival - TOUGE.drenoS * dt)
+          else tg.vidaVoce = Math.max(0, tg.vidaVoce - TOUGE.drenoS * dt)
+        } else if (d > TOUGE.longe) {
+          if (atras === "voce") tg.vidaVoce = Math.max(0, tg.vidaVoce - TOUGE.drenoS * dt)
+          else tg.vidaRival = Math.max(0, tg.vidaRival - TOUGE.drenoS * dt)
+        }
+      }
+      if (tg.acordou && tg.papel === "caca" && gap > 1200 && gap < 9000) r.targetOffset = r.offset = r.offset + (Math.max(-0.75, Math.min(0.75, eng.playerX)) - r.offset) * Math.min(1, dt * 1.5)
+    }
     // o rival também derrapa: a traseira abre com a curva onde ele está (desenho)
     const cr = eng.segments[Math.floor(r.z / SEG_LEN) % eng.segments.length].curve
     r.ang = Math.sign(cr) * Math.min(0.6, Math.abs(cr) * 0.09)
-    // metade da vida: ACORDA (janelas mais curtas, e passa a fechar a sua linha)
     if (!tg.acordou && tg.vidaRival <= 50) {
       tg.acordou = true
       eng.floaters.push({ text: `${tg.nome} ACORDOU!`, color: tg.cor, y: H * 0.3, life: 1.8, big: true })
       eng.trauma = Math.min(1, eng.trauma + 0.4)
       eng.audio.horn()
     }
-    if (tg.acordou && gap > 250 && gap < 2200) r.targetOffset = r.offset = r.offset + (Math.max(-0.75, Math.min(0.75, eng.playerX)) - r.offset) * Math.min(1, dt * 1.5)
     const acabou = tg.vidaVoce <= 0 || tg.vidaRival <= 0 || tg.atual >= tg.curvas.length
     if (acabou || eng.crashed) encerrarTouge(eng, !eng.crashed && tg.vidaRival < tg.vidaVoce)
     return
   }
-  // fim: quem perdeu fica para trás. Ganhando, o rival abre a faixa e você passa.
+  // fim: quem perdeu fica para trás
   if (r.alerta) {
     r.targetOffset = r.offset = r.offset + ((eng.playerX > 0 ? -0.75 : 0.75) - r.offset) * Math.min(1, dt * 2)
-    if (!tg.passou && gap < -300) {
+    if (!tg.passou && gap < -1500) {
       tg.passou = true
       eng.floaters.push({ text: `PASSOU O ${tg.nome}!`, color: "#4ade80", y: H * 0.3, life: 1.8, big: true })
-      eng.trauma = Math.min(1, eng.trauma + 0.3)
     }
   }
   r.speed = Math.max(0, eng.speed + (r.alerta ? -50 : 60))
@@ -433,7 +537,7 @@ export function encerrarTouge(eng: AutoDashEngine, venceu: boolean) {
   tg.fase = "fim"
   tg.rival.ang = 0
   eng.escalaTempo = 1
-  tg.rival.alerta = venceu // perdedor liga o pisca-alerta e fica para trás
+  tg.rival.alerta = venceu
   eng.driftAng = 0
   if (venceu) {
     eng.cfg.reputacao = (eng.cfg.reputacao ?? 0) + 1

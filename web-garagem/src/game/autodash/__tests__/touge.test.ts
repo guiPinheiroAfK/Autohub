@@ -1,12 +1,13 @@
 // Playtest 16/11: "o drift ficou confuso; melhor algo mais fechado, tipo batalha
 // de chefe de PS2: aperta na hora certa e escorrega" + "o Touge!".
-// + "não só o Shift: segurar o W, frear (S), nitro (Espaço)".
+// + "não só o Shift: segurar o W, frear (S), nitro (Espaço)" + "comandos no lugar
+// certo; a luta mais luta, com momentos de correr por conta".
 // Engine real, solo: o duelo de touge abre à frente com o rival e sem trânsito;
 // quem faz a sequência na hora em cada curva derruba a barra do rival e vence;
 // quem não aperta nada erra todas, sai de frente e perde.
 import { describe, it, expect } from "vitest"
 import { runScenario } from "./harness"
-import { spawnTouge, comandoTouge, comandoAtual, anguloDrift, zonaDa, TOUGE } from "../world/touge"
+import { spawnTouge, comandoTouge, comandoAtual, anguloDrift, zonaDa } from "../world/touge"
 import { perderDrift } from "../world/drift"
 
 const LARGADA = (i: number, api: { tap(k: string): void; down(k: string): void }) => {
@@ -18,7 +19,7 @@ const LARGADA = (i: number, api: { tap(k: string): void; down(k: string): void }
 }
 
 async function duelo(apertar: boolean, girar = false) {
-  let abriu = false, venceu: boolean | null = null, perfeitos = 0, maxAng = 0, semTransito = true, zonaVista = false, rodou = false, trocas = 0, sJogados = 0
+  let abriu = false, venceu: boolean | null = null, perfeitos = 0, maxAng = 0, semTransito = true, zonaVista = false, rodou = false, trocas = 0, sJogados = 0, passou = false
   await runScenario(60 * 70, 8, LARGADA, (i, eng) => {
     if (i === 0) eng.render = () => {}
     eng.immuneT = 10; eng.combustivel = 1; eng.eventTimer = 1e9
@@ -31,7 +32,13 @@ async function duelo(apertar: boolean, girar = false) {
       // o "piloto" aperta cada comando quando o anel fecha e, de lado, segura o
       // ângulo no meio da faixa verde no pé (tira o W acima, põe abaixo)
       const at = comandoAtual(eng)
-      if (at && at.cmd !== "drift" && Math.abs(at.t) < 0.03) comandoTouge(eng, at.cmd)
+      // faixa vermelha: segura o S dentro dela; as linhas: aperta ao cruzar
+      if (at && at.cmd === "freio" && at.t <= 0) eng.keys.add("s"); else eng.keys.delete("s")
+      if (at && at.cmd !== "drift" && at.cmd !== "freio" && Math.abs(at.t) < 0.03) comandoTouge(eng, at.cmd)
+      // ultrapassagem: vai para a faixa livre
+      const p = tg.porta
+      if (p && !p.feita) eng.playerX += (-p.lado * 0.5 - eng.playerX) * 0.05
+      passou = passou || tg.papel === "lider"
       // de lado: segura o ponteiro no meio da faixa verde no volante (W sempre no fundo)
       eng.keys.delete("a"); eng.keys.delete("d")
       const dr = anguloDrift(eng)
@@ -58,20 +65,21 @@ async function duelo(apertar: boolean, girar = false) {
     perfeitos = tg.curvas.filter((c: { final: string | null }) => c.final === "perfeito").length
     if (tg.fase === "fim" && venceu === null) venceu = tg.vidaRival < tg.vidaVoce
   })
-  return { abriu, venceu, perfeitos, maxAng, semTransito, zonaVista, rodou, trocas, sJogados }
+  return { abriu, venceu, perfeitos, maxAng, semTransito, zonaVista, rodou, trocas, sJogados, passou }
 }
 
 describe("duelo de touge", () => {
-  it("S, Shift, ângulo no volante, troca nos S e Espaço: curvas PERFEITAS e você vence", async () => {
+  it("freio na faixa, Shift, volante, troca e Espaço nas cenas, e a ultrapassagem: você vence", async () => {
     const r = await duelo(true)
     expect(r.abriu).toBe(true)
-    expect(r.perfeitos).toBeGreaterThanOrEqual(Math.ceil(100 / TOUGE.dano.perfeito))
+    expect(r.perfeitos).toBeGreaterThanOrEqual(3) // a ultrapassagem e a distância também tiram espírito
     expect(r.maxAng, "o carro não escorregou").toBeGreaterThan(0.4)
     expect(r.venceu).toBe(true)
     expect(r.semTransito, "nasceu trânsito no duelo").toBe(true)
     expect(r.zonaVista).toBe(true)
     expect(r.sJogados).toBeGreaterThan(0)
     expect(r.trocas, "não trocou de lado nos S").toBe(r.sJogados)
+    expect(r.passou, "não fez a ultrapassagem").toBe(true)
   }, 120_000)
 
   it("pé no fundo e volante para dentro no drift: o carro roda", async () => {

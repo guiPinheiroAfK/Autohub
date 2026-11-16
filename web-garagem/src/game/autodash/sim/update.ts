@@ -27,6 +27,7 @@ const MURETA_ALT = 150
 export const ELEV_LADEIRA = 0.6 // fração da rampa do elevado que vira ladeira na física
 import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
 import { passoDrift, perderDrift } from "../world/drift"
+import { emDuelo } from "../world/touge"
 import { atualizarRacha } from "../modes/racha"
 import { atualizarObras } from "../world/obra"
 import { atualizarComboio } from "../world/comboio"
@@ -97,6 +98,10 @@ export function update(eng: AutoDashEngine, dt: number) {
   // desaceleração e não pode mais acelerar (bug: a física acelerava antes de
   // o bloco de chegada zerar a marcha)
   if (eng.raceFinished) throttle = 0
+  // duelo de touge (playtest 16/11: "o carro perde velocidade demais sem trocar de
+  // marcha; tinha que acelerar sozinho e ir trocando"): o gás é automático (só o
+  // freio tira) e o câmbio vira automático (sim/longitudinal.ts)
+  if (emDuelo(eng) && !braking) throttle = 1
   // pane seca (Fase 5): sem combustível o motor engasga e o pé efetivo cai
   throttle *= peDoCombustivel(eng)
 
