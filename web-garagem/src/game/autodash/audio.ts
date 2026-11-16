@@ -526,7 +526,7 @@ export class AudioBus {
   }
 
   /** Motor por pulsos: chamado a cada quadro por engine(). */
-  private motorFrame(rpm: number, gas: number, nitro: boolean, running: boolean, noCorte: boolean, boostFisico: number) {
+  private motorFrame(rpm: number, gas: number, nitro: boolean, running: boolean, noCorte: boolean, boostFisico: number, troca: boolean) {
     const m = this.motor!, ctx = this.ctx!, p = this.perfil, t = ctx.currentTime
     const dt = Math.min(0.1, Math.max(0, t - this.lastT)); this.lastT = t
     const corte = noCorte && gas > 0.5
@@ -564,11 +564,15 @@ export class AudioBus {
     // EIXO DA TURBINA: gira com a energia do escape e tem inércia própria
     // (eixoDoSom). O som do turbo (apito, sopro, blow-off, flutter) é feito no
     // worklet (sound/turbo-synth.ts) a partir do eixo, da pressão e do pé.
-    this.eixo = eixoDoSom(this.eixo, boostFisico, rpm, this.corteMotor, carga, dt, this.turbo)
+    // Na troca de marcha a borboleta fecha mesmo com o W apertado: para o turbo
+    // é um alívio (pssh, apito morrendo) e a marcha seguinte reenche. Antes o
+    // turbo via o pé no fundo e ficava cheio na troca, como antilag (playtest 15/11).
+    const cargaTurbo = troca ? 0 : carga
+    this.eixo = eixoDoSom(this.eixo, boostFisico, rpm, this.corteMotor, cargaTurbo, dt, this.turbo)
     if (turbo) {
-      // tirou o pé com pressão no coletor: alivia (turbo simples = flutter, biturbo = blow-off)
-      const alivio = this.gatilho.passo(gas, this.eixo)
-      const tb = { eixo: this.eixo, boost: this.boost, carga, rpm, ligado: true }
+      // tirou o pé (ou trocou) com pressão no coletor: alivia (turbo simples = flutter, biturbo = blow-off)
+      const alivio = this.gatilho.passo(troca ? 0 : gas, this.eixo)
+      const tb = { eixo: this.eixo, boost: this.boost, carga: cargaTurbo, rpm, ligado: true }
       m.node.port.postMessage(alivio ? { tb, alivio } : { tb })
     }
     m.soproGain.gain.setTargetAtTime(nitro ? 0.03 : 0, t, 0.06)
@@ -628,8 +632,9 @@ export class AudioBus {
   /** Chamado a cada frame: afina o ronco do motor pelo RPM. */
   // `corte`: o motor está no limitador (cada motor corta num giro, physics/motores.ts).
   // `boost`: pressão do turbo vinda da física (0..1); −1 = o áudio estima sozinho.
-  engine(rpm: number, throttle: number, nitro: boolean, running: boolean, corte = false, boost = -1) {
-    if (this.motor && this.ctx) { this.motorFrame(rpm, throttle, nitro, running, corte, boost); return }
+  // `troca`: marcha sendo trocada (borboleta fechada para o turbo).
+  engine(rpm: number, throttle: number, nitro: boolean, running: boolean, corte = false, boost = -1, troca = false) {
+    if (this.motor && this.ctx) { this.motorFrame(rpm, throttle, nitro, running, corte, boost, troca); return }
     if (!this.ctx || !this.engOsc1 || !this.engOsc2 || !this.engGain || !this.engFilter) return
     const t = this.ctx.currentTime
     if (!running) {

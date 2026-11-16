@@ -398,7 +398,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   updateFx(eng, dt)
   const noCorte = throttle > 0 && eng.rpm >= mf.corte - 60
   eng.giroSom = suavizarGiro(eng.giroSom, eng.rpm, dt)
-  eng.audio.engine(giroDoSom(mf, giroVisto(eng), throttle, noCorte, eng.somT), throttle, nitroActive, true, noCorte, eng.boost)
+  eng.audio.engine(giroDoSom(mf, giroVisto(eng), throttle, noCorte, eng.somT), throttle, nitroActive, true, noCorte, eng.boost, eng.gear >= 1 && eng.shiftT > 0)
 }
 
 // Acelerada de amostra na garagem: lenta, pé no fundo até ~6800 rpm e solta

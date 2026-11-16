@@ -265,6 +265,9 @@ export function passoEixo(m: MotorFisico, eixo: number, rpm: number, gas: number
   return eixo + (alvo - eixo) * Math.min(1, dt / tau)
 }
 
+// Na troca a válvula de alívio abre e a pressão some neste tempo.
+export const BOOST_ALIVIO_TROCA_S = 0.06
+
 /**
  * Pressão (boost) a partir do eixo: com o pé, vai na hora até o que o eixo
  * entrega (sem passar do alvo do giro); ao aliviar, a válvula esvazia em ~0,2 s.
@@ -274,6 +277,17 @@ export function boostDoEixo(m: MotorFisico, boost: number, eixo: number, rpm: nu
   const alvo = Math.min(eixo, boostAlvo(m, rpm, gas))
   if (alvo >= boost) return alvo
   return boost + (alvo - boost) * Math.min(1, dt / 0.2)
+}
+
+/**
+ * Troca de marcha: borboleta fechada, a válvula de alívio esvazia o coletor
+ * (o som faz o pssh e o apito cai). O eixo quase não perde giro numa troca
+ * curta, então a marcha seguinte devolve a pressão que ele entrega: a força
+ * depois da troca é a mesma de antes (na troca ela já é zero).
+ */
+export function aliviaNaTroca(m: MotorFisico, boost: number, dt: number): number {
+  if (!m.turbo) return 0
+  return boost * (1 - Math.min(1, dt / BOOST_ALIVIO_TROCA_S))
 }
 
 /** Fração do giro dentro da faixa do motor (0 = lenta, 1 = corte). */

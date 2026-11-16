@@ -7,7 +7,7 @@ import { ESCALA_ACEL, type CarSpec } from "../data"
 import { relacao, fatorMarcha } from "../physics/cambio"
 import { emitSmoke, emitFlame } from "../fx/particles"
 import { climaAtual } from "./clima"
-import { type MotorFisico, forcaNoCorte, faseCorte, rampaGas, passoEixo, boostDoEixo, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, giroSolto } from "../physics/motores"
+import { type MotorFisico, forcaNoCorte, faseCorte, rampaGas, passoEixo, boostDoEixo, aliviaNaTroca, giroNaFrac, faixa, rpmPorKmh, boostAlvo, passoBoost, giroDeForca, giroSolto } from "../physics/motores"
 import { clamp } from "../math"
 import { rpmFor, powerCurve } from "../physics/rpm"
 import { accelK, finalDriveOf, usoTracao } from "../physics/traction"
@@ -56,11 +56,13 @@ export function passoLongitudinal(eng: AutoDashEngine, spec: CarSpec, mf: MotorF
   }
   // turbo: enche com giro e pé, com atraso; esvazia na troca e ao aliviar.
   // É aqui que nasce o "lag": sai de curva em giro baixo e a força demora a vir.
-  // Na troca de marcha o boost se segura (troca curta, eixo ainda girando);
-  // em ponto morto quase não enche (sem carga).
+  // Na troca de marcha a borboleta fecha: a válvula alivia a pressão (pssh, o
+  // apito cai) e o eixo segue girando; a marcha seguinte devolve a pressão do
+  // eixo e o som reenche o apito. Antes a pressão ficava parada na troca, como
+  // antilag (playtest 15/11). Em ponto morto quase não enche (sem carga).
   // Engatado, o eixo do turbo tem memória (passoEixo/boostDoEixo): um alívio
   // curto não zera o boost.
-  if (eng.gear >= 1 && eng.shiftT > 0) { /* segura o boost */ }
+  if (eng.gear >= 1 && eng.shiftT > 0) eng.boost = aliviaNaTroca(mf, eng.boost, dt)
   else if (eng.gear >= 1) {
     const giroF = giroDeForca(mf, eng.rpm, eng.gear)
     eng.eixo = passoEixo(mf, eng.eixo, giroF, eng.gasF, dt)
