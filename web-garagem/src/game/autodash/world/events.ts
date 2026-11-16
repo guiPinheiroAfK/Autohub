@@ -9,6 +9,7 @@ import { spawnObra } from "./obra"
 import { spawnComboio } from "./comboio"
 import { spawnOleo } from "./oleo"
 import { avisar } from "./avisos"
+import { RAMAL_ABRE, RAMAL_COLADO } from "./ramais"
 
 export type EventoMapa = "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap" | "obra" | "comboio" | "oleo"
 
@@ -21,6 +22,14 @@ export type EventoMapa = "bridge" | "viaduct" | "obstacles" | "wrongway" | "blit
  *   respiro garantido e o nível seguinte aperta);
  * - o mesmo evento não sai duas vezes em seguida (nem um dos dois últimos).
  */
+/** Elevado do viaduto (Fase 8.6). */
+export const VIADUTO = {
+  meiaSegs: 360,  // do começo do ramal ao cruzamento (a subida cabe na parte separada)
+  alto: 4100,     // altura do platô (topo do tabuleiro do viaduto desenhado)
+  larg: 0.62,     // uma faixa e um pouco
+  afast: 0.3,     // canteiro entre a pista e o elevado
+}
+
 export const RITMO = {
   primeiroS: 12,                       // primeiro evento depois da largada
   intervaloS: [20, 30] as const,       // no nível 1
@@ -87,24 +96,53 @@ export function spawnEvent(eng: AutoDashEngine, kind: EventoMapa) {
     avisos("bridgewarn", ["PONTE 2 km", "PONTE 1 km", "PONTE"])
     avisar(eng, { icone: "🌉", titulo: "PONTE", dica: "subida e vão reto, sem curva", nivel: "info", z, fim: at(START + LEN) })
   } else if (kind === "viaduct") {
-    // viaduto grandão cruzando por cima + carros saindo dele e entrando na
-    // sua via (merge pela direita, com seta). Longe o bastante pra você ver
-    // ele crescer no horizonte em vez de nascer em cima
-    const z = at(START)
-    eng.zones.push({ type: "viaduct", z, end: at(START + 400), spawnT: 0 })
-    avisos("merge", ["ACESSO 2 km", "ACESSO 1 km", "ENTRADA"])
-    // carros descendo a alça: nascem NA faixa de aceleração (offset ~1.3) e
-    // fundem na via ao longo dela, escalonados — trânsito entrando de verdade
-    for (let i = 0; i < 4; i++) {
-      const cz = at(START + 1400 + i * 1700)
+    // Fase 8.6: TREVO. O viaduto cruza por cima e, à direita, um ELEVADO: sai da
+    // pista (faixa colada), descola, sobe até a altura do viaduto, cruza lá em
+    // cima e desce, devolvendo à pista. Carros sobem por ele (saindo da via) e
+    // descem (entrando nela). O elevado começa além do horizonte (em START).
+    const N = eng.segments.length
+    const meia = VIADUTO.meiaSegs
+    const a = Math.floor(at(START) / SEG_LEN)
+    const topo = a + meia, b = topo + meia
+    const z = topo * SEG_LEN
+    if (b >= N - 2) {
+      // não cabe antes da largada: só o viaduto, sem elevado (como era antes)
+      eng.zones.push({ type: "viaduct", z: at(START), end: at(START + 400), spawnT: 0 })
+      avisar(eng, { icone: "🛣️", titulo: "VIADUTO", dica: "cruzamento por cima", nivel: "info", z: at(START) })
+      return
+    }
+    eng.ramais.push({
+      id: `elevado-${topo}`, nome: "Elevado", a, b, lado: 1,
+      afast: VIADUTO.afast, larg: VIADUTO.larg, ganho: 1, alto: VIADUTO.alto, topo,
+    })
+    eng.zones.push({ type: "viaduct", z, end: b * SEG_LEN, spawnT: 0 })
+    avisos("merge", ["ELEVADO 2 km", "ELEVADO 1 km", "SAÍDA"])
+    // carros descendo e entrando na via: nascem no fim colado do elevado, já
+    // com seta, e fundem na faixa da direita
+    const entra = b - RAMAL_ABRE - RAMAL_COLADO + 20
+    for (let i = 0; i < 3; i++) {
+      const cz = (entra + i * 26) * SEG_LEN
       eng.traffic.push({
-        z: cz, offset: 1.32, targetOffset: 0.75,
+        z: cz, offset: 1.22, targetOffset: 1.22,
         speed: 84 + eng.rngEv() * 22, kind: "car", role: "civilian",
         color: TRAFFIC_COLORS[Math.floor(eng.rngEv() * TRAFFIC_COLORS.length)],
-        blinkT: 1.1 + i * 0.5, prevD: wrapDz(eng, cz, eng.position + PLAYER_Z),
+        blinkT: 0, prevD: wrapDz(eng, cz, eng.position + PLAYER_Z), viaduto: "entra",
       })
     }
-    avisar(eng, { icone: "🛣️", titulo: "ACESSO DE VIADUTO", dica: "carros entrando pela direita", nivel: "perigo", z: at(START + 1400) })
+    // e um ou dois já em cima do elevado
+    for (let i = 0; i < 2; i++) {
+      const cz = (topo - 60 + i * 90) * SEG_LEN
+      eng.traffic.push({
+        z: cz, offset: 1.6, targetOffset: 1.6,
+        speed: 80 + eng.rngEv() * 20, kind: "car", role: "civilian",
+        color: TRAFFIC_COLORS[Math.floor(eng.rngEv() * TRAFFIC_COLORS.length)],
+        blinkT: 0, prevD: wrapDz(eng, cz, eng.position + PLAYER_Z), viaduto: "sobe",
+      })
+    }
+    // a recompensa de subir: nitro, pontos em dobro e nitro em fila no platô
+    const centro = 0.97 + 0.14 + VIADUTO.afast + VIADUTO.larg / 2
+    ;[0, 2, 0].forEach((type, i) => eng.powerups.push({ z: (topo - 14 + i * 14) * SEG_LEN, offset: centro, type, pulse: 0 }))
+    avisar(eng, { icone: "🛣️", titulo: "VIADUTO", dica: "elevado pela direita: lá em cima tem nitro", nivel: "info", z: at(START), fim: b * SEG_LEN })
   } else if (kind === "obstacles") {
     // padrão e lado sorteados; a obra começa além do horizonte e é anunciada
     const base = START + Math.floor(eng.rngEv() * 3000)

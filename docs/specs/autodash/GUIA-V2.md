@@ -442,15 +442,15 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
 - [ ] Bioma no solo muda ao longo da partida (a cada N níveis) com transição suave,
   em vez de ser escolhido só no menu.
 
-**8.6 Viaduto de verdade** (pedido de 16/11: "mais funcional e mais bonito")
-- [ ] Hoje o viaduto é um sprite que cruza por cima mais uma alça de acesso à direita
+**8.6 Viaduto de verdade** (pedido de 16/11: "mais funcional e mais bonito") — feito em 16/11 (elevado no lugar de "subir no viaduto"; falta a viatura de tocaia e o carro parado na alça)
+- [x] Hoje o viaduto é um sprite que cruza por cima mais uma alça de acesso à direita
   com carros entrando. Passa a ser um trevo: alça de SAÍDA antes (carros saindo da
   pista com seta) e alça de ENTRADA depois, com carros usando as duas.
-- [ ] Caminho para subir: ramal (ADR 0014) que sobe a alça e cruza por cima do viaduto
+- [x] Caminho para subir: ramal (ADR 0014) que sobe a alça e cruza por cima do viaduto
   e volta à pista mais à frente (atalho ou caminho alternativo com trânsito próprio).
 - [ ] Mais eventos no viaduto: carro parado no acostamento da alça, viatura de tocaia
   embaixo (com estrelas), helicóptero perdendo você embaixo (já existe, fica visível).
-- [ ] Visual: pilares com sombra, juntas de dilatação, iluminação à noite, pichação.
+- [x] Visual: pilares com sombra, juntas de dilatação, iluminação à noite, pichação.
 
 **8.7 Túnel raro** (como a ponte: zona longa que aparece de vez em quando)
 - [ ] Zona `tunnel`: entrada com boca de concreto, teto e paredes com luzes em fila
@@ -535,4 +535,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-15 | (som: terceira sessão do simulador, este) | BMW M52 no 6 em linha aspirado (era o 2JZ), boxer 6 nosso (derivado do EJ25, ignição alternada como no 911) nos dois boxer 6 (era a gravação do 911 só até 3200 rpm; banco `boxer6` removido) e 3 em linha 1.0 nosso (derivado do Audi 5) no i3, que era só síntese. `marcas.py`: limiar 15/max(K,4) (no 3 cilindros a puxada virava "estável"). Não ouvido no jogo ainda. | não alterado (som não entra no golden) |
 | 2026-11-16 | (Fase 8.1, este) | Civil e comboio enxergam o jogador na faixa (até 12 mil u) e freiam a tempo (v² = v_jogador² + 2·75·folga), parando atrás; luz de freio nos civis abaixo do cruzeiro; preso atrás de você por 1,5 s buzina (baixa, no máximo a cada 1,2 s) e tenta passar pela faixa livre. Teste em `__tests__/civil-jogador.test.ts`. Desafiante do racha ainda não vê o jogador. | atualizado nos 3 cenários (luz de freio dos civis, inclusive no trânsito de fundo do menu, e a freada atrás do jogador); fim das partidas igual. |
 | 2026-11-16 | (Fase 8.2, este) | Posto de verdade: pátio com duas faixas de bomba e ilha no meio (guia amarela), cobertura com a marca genérica "POSTO AUTOHUB 24h", duas bombas com visor e mangueira, loja de conveniência com vitrine acesa à noite, totem de preço na entrada; 1–3 carros abastecendo na faixa de fora (estacionados, `eng.rngEv`). Bomba: passando devagar 4 L/s (era 10); parado ao lado da ilha 20 L/s; HUD com litros e dica. Som da bomba (clique, zumbido, trava). Estacionados vivem até 2×DRAW_DIST + 300 à frente (os do posto morriam ao nascer). Teste em `__tests__/posto.cenario.test.ts`. | não alterado (o posto não aparece nos replays) |
+| 2026-11-16 | (Fase 8.6, este) | Viaduto vira trevo com ELEVADO: ramal à direita (ADR 0014) que sai colado da pista, descola, sobe até 4100 u no cruzamento (platô) e desce, devolvendo à pista (`alto`/`topo` no Ramal, `elevacao`, `VIADUTO` em world/events.ts). Câmera sobe junto (`eng.elevJogador`); mureta dos dois lados no alto (raspar segura o carro); embaixo não dá para entrar nos pilares. Desenho do elevado como sprite por segmento (tabuleiro, muretas com junta, parede, pilares, fundo da laje visto de baixo, postes). Carros sobem (seta na faixa colada) e descem entrando na via; nitro, x2 e nitro no platô. Viaduto com juntas, postes acesos à noite e pichação nos pilares; a alça desenhada antiga e a faixa de aceleração saíram. Reciclagem limpa o estado de elevado do carro (ele voltava teleportado para cima). Teste em `__tests__/viaduto.cenario.test.ts`. | não alterado (o viaduto não aparece nos replays) |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

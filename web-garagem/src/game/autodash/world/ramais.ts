@@ -15,6 +15,36 @@ export interface Ramal {
   larg: number     // largura do ramal (meias-pistas; a pista inteira vale 2)
   ganho: number    // multiplicador do avanço de quem anda no miolo do ramal
   posto?: boolean  // faixa de acesso de um posto de combustível (Fase 5, world/posto.ts)
+  // Fase 8.6: ramal ELEVADO (o elevado do viaduto). Sobe depois de separar da
+  // pista até `alto` (unidades de mundo) no segmento `topo`, fica no platô e desce.
+  alto?: number
+  topo?: number
+}
+
+// rampa do elevado: segmentos de subida e meia-largura do platô
+export const ELEVADO_SOBE = 170
+export const ELEVADO_PLATO = 24
+
+/** Altura do ramal no segmento `idx` (0 fora dele ou se não for elevado). Suave nas pontas da rampa. */
+export function elevacao(r: Ramal, idx: number): number {
+  if (!r.alto || r.topo === undefined || idx < r.a || idx > r.b) return 0
+  const d = Math.abs(idx - r.topo)
+  if (d <= ELEVADO_PLATO) return r.alto
+  const t = 1 - Math.min(1, (d - ELEVADO_PLATO) / ELEVADO_SOBE)
+  return r.alto * t * t * (3 - 2 * t)
+}
+
+/** Altura do chão em `x` (meias-pistas) no segmento `idx`: a do ramal elevado se `x` está em cima dele. */
+export function elevacaoEm(ramais: Ramal[], idx: number, x: number): number {
+  for (const r of ramais) {
+    if (!r.alto) continue
+    const p = ramalPerfil(r, idx)
+    if (!p) continue
+    const b = ramalBordas(r, p)
+    const xs = x * r.lado
+    if (xs >= b.inner - 0.08 && xs <= b.outer + 0.08) return elevacao(r, idx)
+  }
+  return 0
 }
 
 // Perfil ao longo do ramal, das pontas para o miolo (em segmentos):

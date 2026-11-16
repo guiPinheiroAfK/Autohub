@@ -208,6 +208,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
         for (let k = 0; k < 4 && naFrenteDoRacha(eng, t.z, lane); k++) lane = eng.laneCenters[(eng.laneCenters.indexOf(lane) + 1) % 4]
         if (naFrenteDoRacha(eng, t.z, lane)) t.z = ((t.z - RACHA.livreNaFrente * 2) % eng.trackLen + eng.trackLen) % eng.trackLen
         t.offset = lane; t.targetOffset = lane
+        t.viaduto = undefined; t.presoT = 0 // reciclado não leva o estado de antes
         const kk = KINDS[t.kind]
         t.speed = kk.spd[0] + Math.random() * (kk.spd[1] - kk.spd[0])
         t.prevD = wrapDz(eng, t.z, playerZ)

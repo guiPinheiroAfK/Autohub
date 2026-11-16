@@ -232,6 +232,7 @@ export class AutoDashEngine {
   postoLimite = 0.45 // abaixo disso abre o próximo posto (world/posto.ts)
   abastecendo = false
   juntoDaBomba = false // no pátio do posto, ao lado da ilha (world/posto.ts)
+  elevJogador = 0      // altura do chão sob o jogador (elevado do viaduto, Fase 8.6)
   racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
   rachaT = 45 // s de solo até o próximo convite
   comboio: Comboio | null = null // comboio com fresta em andamento (world/comboio.ts)

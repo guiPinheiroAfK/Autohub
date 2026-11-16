@@ -20,7 +20,10 @@ import { updateEventSpawner } from "../world/events"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
 import { atualizarPolicia, aderenciaPolicia } from "../world/policia"
-import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro } from "../world/ramais"
+import { ramalNoSeg, sobreRamal, ganhoRamal, ramalCentro, elevacao, elevacaoEm } from "../world/ramais"
+
+// altura (unidades de mundo) a partir da qual o elevado tem mureta
+const MURETA_ALT = 150
 import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
 import { atualizarRacha } from "../modes/racha"
 import { atualizarObras } from "../world/obra"
@@ -192,6 +195,25 @@ export function update(eng: AutoDashEngine, dt: number) {
     const lim = Math.max(1.6, ramal.outer + 0.45)
     eng.playerX = ramal.r.lado > 0 ? clamp(eng.playerX, -1.6, lim) : clamp(eng.playerX, -lim, 1.6)
   } else eng.playerX = clamp(eng.playerX, -1.6, 1.6)
+
+  // elevado do viaduto (Fase 8.6): mureta dos dois lados enquanto está alto. Em
+  // cima, não cai; embaixo, não entra nos pilares. Raspar na mureta segura o carro.
+  const idxP = Math.floor(playerZ / SEG_LEN) % eng.segments.length
+  if (ramal && ramal.r.alto && elevacao(ramal.r, idxP) > MURETA_ALT) {
+    const xs = eng.playerX * ramal.r.lado
+    // em cima = já estava no tabuleiro no quadro anterior (entra pela rampa,
+    // ainda baixa, e a partir daí a mureta segura)
+    const emCima = eng.elevJogador > 0
+    const c = emCima ? clamp(xs, ramal.inner + 0.06, ramal.outer - 0.06) : Math.min(xs, ramal.inner - 0.12)
+    if (c !== xs) {
+      eng.playerX = c * ramal.r.lado
+      eng.speed = Math.max(0, eng.speed - 90 * dt)
+      eng.steerVel *= 0.3
+      eng.shakeT = Math.max(eng.shakeT, 0.12)
+      if (Math.random() < 0.5) emitSmoke(eng, 2, "#fde047")
+    }
+  }
+  eng.elevJogador = elevacaoEm(eng.ramais, idxP, eng.playerX)
 
   // ---------- motor, câmbio, força e velocidade (sim/longitudinal.ts) ----------
   const grade = (seg.y2 - seg.y1) / SEG_LEN // ~±0.13 nas ladeiras fortes

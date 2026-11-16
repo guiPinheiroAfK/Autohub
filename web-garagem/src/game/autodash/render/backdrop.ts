@@ -351,7 +351,7 @@ export function drawDeco(eng: AutoDashEngine, kind: number, dir: number, x: numb
   }
 }
 
-export function drawBridge(eng: AutoDashEngine, x: number, y: number, w: number, amb: number) {
+export function drawBridge(eng: AutoDashEngine, x: number, y: number, w: number, amb: number, comElevado = false) {
   const ctx = eng.ctx
   // paleta em camadas: topo claro, face frontal média, sombra por baixo —
   // é o que dá volume. Antes era tudo o mesmo cinza chapado.
@@ -379,6 +379,25 @@ export function drawBridge(eng: AutoDashEngine, x: number, y: number, w: number,
     ctx.fillStyle = top // capitel
     ctx.fillRect(px - pw * 0.3, y - ph - w * 0.09, pw * 1.6, w * 0.09)
   }
+  // pichação nos dois pilares de dentro (Fase 8.6): rabiscos coloridos fixos
+  if (w > 6) {
+    const tags: [number, string, string][] = [[x - w * 1.66, "#f472b6", "#22d3ee"], [x + w * 1.42, "#a3e635", "#f59e0b"]]
+    for (const [px, c1, c2] of tags) {
+      const pw = w * 0.26, by = y - w * 0.32
+      ctx.lineWidth = Math.max(1, w * 0.018)
+      ctx.strokeStyle = shade(c1, Math.max(0.55, amb))
+      ctx.beginPath()
+      ctx.moveTo(px + pw * 0.08, by)
+      ctx.bezierCurveTo(px + pw * 0.3, by - w * 0.14, px + pw * 0.45, by + w * 0.08, px + pw * 0.62, by - w * 0.1)
+      ctx.lineTo(px + pw * 0.9, by - w * 0.02)
+      ctx.stroke()
+      ctx.strokeStyle = shade(c2, Math.max(0.55, amb))
+      ctx.beginPath()
+      ctx.moveTo(px + pw * 0.12, by + w * 0.08)
+      ctx.quadraticCurveTo(px + pw * 0.5, by - w * 0.04, px + pw * 0.85, by + w * 0.1)
+      ctx.stroke()
+    }
+  }
 
   // vigas longitudinais sob o tabuleiro (a "estrutura" que segura o vão)
   ctx.fillStyle = deep
@@ -394,6 +413,9 @@ export function drawBridge(eng: AutoDashEngine, x: number, y: number, w: number,
   ctx.fillRect(L, deckY, R - L, deckH)
   ctx.fillStyle = top
   ctx.fillRect(L, deckY, R - L, deckH * 0.3)
+  // juntas de dilatação na face do tabuleiro
+  ctx.fillStyle = deep
+  for (let i = 1; i < 6; i++) ctx.fillRect(L + (R - L) * (i / 6) - Math.max(0.5, w * 0.006), deckY, Math.max(1, w * 0.012), deckH)
 
   // guarda-corpo com balaústres, em cima do tabuleiro
   const railY = deckY - w * 0.16
@@ -405,11 +427,32 @@ export function drawBridge(eng: AutoDashEngine, x: number, y: number, w: number,
       ctx.fillRect(bx - w * 0.012, railY, w * 0.024, w * 0.16)
     }
   }
+  // postes de luz no guarda-corpo; à noite, a luz lava o tabuleiro e a pista embaixo
+  const noite = amb < 0.62
+  for (let i = 0; i < 5; i++) {
+    const lx = L + (R - L) * ((i + 0.5) / 5), lh = w * 0.55
+    ctx.fillStyle = dark
+    ctx.fillRect(lx - Math.max(0.5, w * 0.01), railY - lh, Math.max(1, w * 0.02), lh)
+    ctx.fillRect(lx, railY - lh, w * 0.12, Math.max(1, w * 0.02))
+    if (noite) {
+      ctx.fillStyle = "rgba(255,226,150,0.95)"
+      ctx.fillRect(lx + w * 0.07, railY - lh, w * 0.06, Math.max(1, w * 0.025))
+      const g = ctx.createRadialGradient(lx + w * 0.1, railY - lh, 1, lx + w * 0.1, railY - lh, w * 0.5)
+      g.addColorStop(0, "rgba(255,226,150,0.35)"); g.addColorStop(1, "rgba(255,226,150,0)")
+      ctx.fillStyle = g
+      ctx.fillRect(lx - w * 0.4, railY - lh - w * 0.5, w, w)
+    }
+  }
+  if (noite) { // luz de baixo do viaduto na pista
+    ctx.fillStyle = "rgba(255,226,150,0.08)"
+    ctx.fillRect(x - w * 1.2, deckY + deckH, w * 2.4, y - deckY - deckH)
+  }
 
   // ALÇA DE DESCIDA à direita: rampa saindo do tabuleiro até o nível da via —
-  // o "motivo" do viaduto. Agora com espessura, guard-rail e faixa de borda.
+  // o "motivo" do viaduto. Com o elevado (Fase 8.6) a alça de verdade é ele.
   const rampTopY = deckY + deckH * 0.35
   const r1x = x + w * 2.25, r2x = x + w * 3.15, r3x = x + w * 4.75, r4x = x + w * 3.85
+  if (!comElevado) {
   ctx.fillStyle = face
   ctx.beginPath()
   ctx.moveTo(r1x, rampTopY); ctx.lineTo(r2x, rampTopY)
@@ -425,6 +468,7 @@ export function drawBridge(eng: AutoDashEngine, x: number, y: number, w: number,
   ctx.beginPath()
   ctx.moveTo(r1x, rampTopY - w * 0.12); ctx.lineTo(r4x, y - w * 0.12)
   ctx.stroke()
+  }
 
   // CARROS DE VERDADE em cima do viaduto e descendo a alça — mesmo desenho do
   // trânsito (carroceria, vidro, lanternas). É o que dá a sensação de trânsito
@@ -440,7 +484,7 @@ export function drawBridge(eng: AutoDashEngine, x: number, y: number, w: number,
     drawTraffic(eng, fake("#e2e8f0"), L + (R - L) * t1, deckY + deckH * 0.1, carW, amb * 0.9)
     drawTraffic(eng, fake("#64748b"), R - (R - L) * t2, deckY + deckH * 0.1, carW, amb * 0.9)
     const p = (performance.now() / 2800) % 1
-    drawTraffic(eng, 
+    if (!comElevado) drawTraffic(eng, 
         fake("#eab308"),
         r1x + (r4x - r1x) * p,
         rampTopY + (y - rampTopY) * p,

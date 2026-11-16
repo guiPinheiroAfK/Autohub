@@ -15,7 +15,8 @@ import { shade, clamp, hexToRgb, mixHex } from "../math"
 import { CLIMAS } from "../world/weather"
 import { type Traffic, KINDS } from "../traffic/types"
 import { poly } from "./primitives"
-import { drawRamalSeg } from "./ramal"
+import { drawRamalSeg, drawElevadoSeg, type ElevadoSeg } from "./ramal"
+import { elevacao, elevacaoEm, ramalBordas, ramalPerfilOuZero } from "../world/ramais"
 import { drawPosto, drawPostoLoja, drawPostoTotem } from "./eventos"
 import { postoMeio, postoLoja, postoTotem, naFaixaDoPosto } from "../world/posto"
 import { type Ramal } from "../world/ramais"
@@ -34,7 +35,8 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   const pSeg = segAt(eng, playerZ)
   const pPct = (playerZ % SEG_LEN) / SEG_LEN
   const playerY = pSeg.y1 + (pSeg.y2 - pSeg.y1) * pPct
-  const camY = playerY + CAM_HEIGHT
+  // em cima do elevado do viaduto a câmera sobe junto (Fase 8.6)
+  const camY = playerY + CAM_HEIGHT + eng.elevJogador
   const camX = eng.playerX * ROAD_WIDTH
   // FOV dinâmico (render/fov.ts): profundidade da lente e avanço da câmera que
   // mantêm o chão do jogador no mesmo ponto. Parado ou com câmera fixa, é
@@ -61,7 +63,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // "escondido por morro" — aí sim o segmento some inteiro.
   let roadStarted = false
 
-  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem"; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
+  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem" | "elevado"; el?: ElevadoSeg; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
   const sprites: SpriteDraw[] = []
   // buckets de tráfego, obstáculos, placas e powerups por segmento
   const obsBySeg = new Map<number, Obstacle[]>()
@@ -93,8 +95,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       // ALÇA: começa logo depois do cruzamento como faixa paralela cheia e
       // vai afunilando até fundir na via (a zona vermelha do teu desenho).
       // É por ela que os carros descem e entram na estrada.
-      const RAMP = 42
-      for (let i = 0; i < RAMP; i++) viaductRamp.set((a + 4 + i) % N, 1 - i / RAMP)
+      // (a alça de aceleração antiga deu lugar ao elevado, Fase 8.6)
     }
     else if (zn.type === "bridge") {
       const a = Math.floor(zn.z / SEG_LEN) % N
@@ -347,8 +348,26 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         const sw = sw1 + (sw2 - sw1) * pct
         // dz vai junto: perto demais da câmera a escala explode (s = CAM_DEPTH/dz)
         // e o veículo vira um bloco gigante — ver o fade no laço de desenho
-        sprites.push({ kind: "car", t, x: sx + sw * t.offset, y: sy, w: sw * KINDS[t.kind].w, dz: dz1 + SEG_LEN * pct })
+        // em cima do elevado: sobe junto com o tabuleiro
+        const el = t.offset > 0.95 || t.offset < -0.95 ? elevacaoEm(eng.ramais, idx, t.offset) : 0
+        const sySobe = el > 0 ? sy - el * (s1 + (s2 - s1) * pct) : sy
+        sprites.push({ kind: "car", t, x: sx + sw * t.offset, y: sySobe, w: sw * KINDS[t.kind].w, dz: dz1 + SEG_LEN * pct })
       }
+    }
+    // elevado do viaduto: um sprite por segmento, depois dos carros deste
+    // segmento (o desenho é de trás para frente: os carros ficam por cima)
+    for (const r of eng.ramais) {
+      if (!r.alto) continue
+      const h1 = elevacao(r, idx), h2 = elevacao(r, idx + 1)
+      if (h1 <= 0 && h2 <= 0) continue
+      const b1 = ramalBordas(r, ramalPerfilOuZero(r, idx)), b2 = ramalBordas(r, ramalPerfilOuZero(r, idx + 1))
+      sprites.push({ kind: "elevado", x: 0, y: 0, w: 0, el: {
+        r, idx,
+        xi1: sx1 + r.lado * sw1 * b1.inner, xo1: sx1 + r.lado * sw1 * b1.outer,
+        xi2: sx2 + r.lado * sw2 * b2.inner, xo2: sx2 + r.lado * sw2 * b2.outer,
+        yd1: sy1 - h1 * s1, yd2: sy2 - h2 * s2, yg1: sy1, yg2: sy2, s1, s2, h1, h2,
+        camAcima: camY > seg.y1 + h1, alt: Math.floor(idx / 3) % 2 === 0,
+      } })
     }
     if (idx === heliIdx && !nearField) {
       const pct = (heli!.z - z1) / SEG_LEN
@@ -373,7 +392,8 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         const sx = sx1 + (sx2 - sx1) * pct
         const sy = sy1 + (sy2 - sy1) * pct
         const sw = sw1 + (sw2 - sw1) * pct
-        sprites.push({ kind: "pu", p, x: sx + sw * p.offset, y: sy, w: sw * 0.10 })
+        const el = p.offset > 0.95 ? elevacaoEm(eng.ramais, idx, p.offset) : 0
+        sprites.push({ kind: "pu", p, x: sx + sw * p.offset, y: sy - el * (s1 + (s2 - s1) * pct), w: sw * 0.10 })
       }
     }
     // obstáculos, placas e ponte deste segmento
@@ -495,11 +515,12 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     else if (s.kind === "ghost") drawGhost(eng, s.x, s.y, s.w, amb)
     else if (s.kind === "obs") drawObstacle(eng, s.obs!, s.x, s.y, s.w, amb)
     else if (s.kind === "sign") drawRoadSign(eng, s.sign!, s.x, s.y, s.w, amb)
-    else if (s.kind === "bridge") drawBridge(eng, s.x, s.y, s.w, amb)
+    else if (s.kind === "bridge") drawBridge(eng, s.x, s.y, s.w, amb, eng.ramais.some(r => !!r.alto))
     else if (s.kind === "gate") drawTower(eng, s.x, s.y, s.w, amb)
     else if (s.kind === "posto") drawPosto(eng, s.ramal!, s.x, s.y, s.w, amb)
     else if (s.kind === "postoLoja") drawPostoLoja(eng, s.ramal!, s.x, s.y, s.w, amb)
     else if (s.kind === "postoTotem") drawPostoTotem(eng, s.ramal!, s.x, s.y, s.w, amb)
+    else if (s.kind === "elevado") drawElevadoSeg(eng, s.el!, amb, roadL, roadD, laneC)
     else drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
   }
 

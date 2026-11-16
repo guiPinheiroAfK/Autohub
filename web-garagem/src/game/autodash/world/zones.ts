@@ -4,8 +4,49 @@ import { AutoDashEngine, H } from "../engine"
 import { wrapDz } from "../traffic/spawner"
 import { DRAW_DIST, SEG_LEN } from "../data"
 import { type TrafficKind, TRAFFIC_COLORS, KINDS } from "../traffic/types"
+import { RAMAL_ABRE, RAMAL_COLADO, ramalNoSeg, ramalCentro } from "./ramais"
+
+/**
+ * Elevado do viaduto (Fase 8.6): quem está nele segue o centro do ramal; no fim
+ * colado, funde na faixa da direita. Antes dele, às vezes um civil da direita dá
+ * seta e sai da pista subindo. O elevado que ficou para trás sai da lista.
+ */
+function atualizarElevado(eng: AutoDashEngine, playerZ: number) {
+  const N = eng.segments.length
+  for (const t of eng.traffic) {
+    if (t.role !== "civilian" || t.parked) continue
+    const idx = Math.floor(t.z / SEG_LEN) % N
+    const q = ramalNoSeg(eng.ramais, idx)
+    if (!q || !q.r.alto) continue
+    if (t.viaduto) {
+      // no fim colado (depois do cruzamento): seta e funde na pista
+      if (q.p.f <= 0.01 && idx > (q.r.topo ?? 0)) {
+        if (t.offset > 0.95) { t.targetOffset = 0.75; t.blinkT = Math.max(t.blinkT, 0.4) }
+        else t.viaduto = undefined
+        continue
+      }
+      // segue o centro do ramal (ele descola da pista mais rápido que a troca de
+      // faixa); longe dele (acabou de dar seta), vai até lá pela troca normal
+      const c = ramalCentro(q)
+      if (Math.abs(t.offset - c) < 0.25) t.offset = c
+      t.targetOffset = c
+      continue
+    }
+    // na faixa colada de saída, antes de descolar: alguns da direita sobem
+    const naSaida = idx > q.r.a + RAMAL_ABRE + 8 && idx < q.r.a + RAMAL_ABRE + RAMAL_COLADO - 30
+    if (naSaida && t.offset > 0.5 && t.targetOffset === t.offset && t.blinkT <= 0 && Math.random() < 0.006) {
+      const livre = !eng.traffic.some(o => o !== t && o.offset > 0.95 && Math.abs(wrapDz(eng, o.z, t.z)) < 900)
+        && !(eng.playerX > 0.95 && Math.abs(wrapDz(eng, playerZ, t.z)) < 1500)
+      if (livre) { t.targetOffset = ramalCentro(q); t.blinkT = 0.9; t.viaduto = "sobe" }
+    }
+  }
+  // elevado que ficou para trás sai da lista de ramais
+  const atras = (r: { alto?: number; b: number }) => !!r.alto && wrapDz(eng, r.b * SEG_LEN, playerZ) < -60 * SEG_LEN
+  if (eng.ramais.some(atras)) eng.ramais = eng.ramais.filter(r => !atras(r))
+}
 
 export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
+  if (eng.ramais.length) atualizarElevado(eng, playerZ)
   // embaixo do viaduto o ronco bate no concreto e volta (eco forte no áudio)
   const sob = eng.zones.some(zn => {
     if (zn.type !== "viaduct") return false
