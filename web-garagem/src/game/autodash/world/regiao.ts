@@ -45,5 +45,6 @@ export function trocarRegiao(eng: AutoDashEngine, id?: string, comMontanha = tru
 /** Chamado na virada de nível: troca de região a cada REGIAO.cadaNiveis. */
 export function regiaoNaVirada(eng: AutoDashEngine, nivel: number) {
   if (eng.mode !== "solo" || eng.testeMotor) return
+  if (eng.montanha && !eng.montanha.praia) return // no meio da viagem da serra, a região é ela
   if (nivel > 0 && nivel % REGIAO.cadaNiveis === 0) trocarRegiao(eng)
 }

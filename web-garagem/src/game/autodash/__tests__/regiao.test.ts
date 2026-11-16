@@ -54,14 +54,20 @@ describe("biomas e regiões", () => {
   }, 60_000)
 
   it("a região só muda a cada REGIAO.cadaNiveis níveis, no solo", async () => {
-    let trocas = 0
+    let trocas = 0, travou = false
     await runScenario(60 * 4, 6, LARGADA, (i, eng) => {
       if (i === 0) eng.render = () => {}
       if (i !== 200) return
       let id = eng.bioma.id
-      for (let n = 1; n <= 9; n++) { regiaoNaVirada(eng, n); if (eng.bioma.id !== id) { trocas++; id = eng.bioma.id } }
+      for (let n = 1; n <= 9; n++) {
+        regiaoNaVirada(eng, n)
+        if (eng.bioma.id !== id) { trocas++; id = eng.bioma.id }
+        // na serra a viagem segura a região até a praia
+        if (eng.montanha) { travou = travou || (regiaoNaVirada(eng, 99 * REGIAO.cadaNiveis), eng.bioma.id === id); eng.montanha.praia = true }
+      }
     })
     expect(trocas).toBe(Math.floor(9 / REGIAO.cadaNiveis))
+    expect(travou, "a região trocou no meio da viagem da serra").toBe(true)
   }, 60_000)
 })
 
@@ -70,7 +76,8 @@ describe("transições suaves (16/11)", () => {
     let meioBioma = -1, fimBioma = -1, gripMeio = 0, chuvaMeio = -1
     await runScenario(60 * 16, 5, LARGADA, (i, eng) => {
       if (i === 0) eng.render = () => {}
-      if (i === 300) { trocarRegiao(eng, "costa"); setClima(eng, "limpo"); setClima(eng, "chuva", true) }
+      // o relógio do clima reimpõe o clima da janela a cada quadro: a chuva entra pelo clima imposto
+      if (i === 300) { trocarRegiao(eng, "costa"); setClima(eng, "limpo"); eng.climaForcado = "chuva" }
       if (i === 300 + Math.round(60 * TRANSICAO.biomaS / 2)) meioBioma = eng.biomaMix
       if (i === 300 + Math.round(60 * TRANSICAO.climaS / 2)) { const c = climaAtual(eng); gripMeio = c.grip; chuvaMeio = c.chuvaK }
       if (i === 300 + 60 * (TRANSICAO.climaS + 1)) fimBioma = eng.biomaMix

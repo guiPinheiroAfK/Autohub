@@ -28,17 +28,18 @@ describe("montanha da serra", () => {
         const N = eng.segments.length, base = Math.floor(eng.position / SEG_LEN)
         const tela = Array.from({ length: DRAW_DIST }, (_, k) => eng.segments[(base + k) % N].y1)
         ok = spawnMontanha(eng, true)
-        mexeuNaTela = tela.some((y, k) => y !== eng.segments[(base + k) % N].y1)
-        for (let k = 0; k < N; k++) {
-          const s = eng.segments[k], prox = eng.segments[(k + 1) % N]
+        const N2 = eng.segments.length // a volta cresce para caber a viagem
+        mexeuNaTela = tela.some((y, k) => y !== eng.segments[(base + k) % N2].y1)
+        for (let k = 0; k < N2; k++) {
+          const s = eng.segments[k], prox = eng.segments[(k + 1) % N2]
           degrau = Math.max(degrau, Math.abs(s.y2 - prox.y1))
         }
         const m = eng.montanha!
-        for (let k = 0; k < m.total; k++) altura = Math.max(altura, eng.segments[(m.a + k) % N].y1 - eng.segments[m.a].y1)
+        for (let k = 0; k < m.total; k++) altura = Math.max(altura, eng.segments[(m.a + k) % N2].y1 - eng.segments[m.a].y1)
         // pula para perto do mirante, a 150 km/h
         let acc = 0
         for (const [f, n] of m.fases) { if (f === "mirante") break; acc += n }
-        eng.position = ((m.a + acc) % N) * SEG_LEN - PLAYER_Z; eng.speed = 150
+        eng.position = ((m.a + acc) % N2) * SEG_LEN - PLAYER_Z; eng.speed = 150
       }
       if (i > 360 && eng.montanha) {
         const idx = Math.floor((eng.position + PLAYER_Z) / SEG_LEN) % eng.segments.length

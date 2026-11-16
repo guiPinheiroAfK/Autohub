@@ -17,7 +17,7 @@ import { skyNow, renderBackdrop } from "./render/backdrop"
 import { type BiomeDef, biomeById } from "./world/biomes"
 import { type Clock, type HoraModo, newClock } from "./world/clock"
 import { type ClimaId, type ClimaModo, CLIMAS } from "./world/weather"
-import { climaAtual } from "./sim/clima"
+import { climaAtual, type ClimaVisto } from "./sim/clima"
 import type { Touge } from "./world/touge"
 import type { Montanha } from "./world/montanha"
 import { type Ramal } from "./world/ramais"
@@ -221,12 +221,12 @@ export class AutoDashEngine {
   clima: ClimaId = "limpo"
   climaModo: ClimaModo = "sorteio"
   climaSeed = 0
-  climaAnt: ClimaId | null = null // clima de antes, durante a transição (sim/clima.ts)
+  climaAnt: ClimaVisto | null = null // como o clima estava na tela quando começou a transição (sim/clima.ts)
   climaMix = 1                    // 0..1: quanto do clima novo já entrou
   biomaAnt: BiomeDef | null = null // região de antes, durante a transição (world/regiao.ts)
   biomaMix = 1
   climaS = 0 // segundos de simulação desde a largada: as janelas de clima contam daqui
-  get raining() { return CLIMAS[this.clima].chuva || (this.climaMix < 1 && !!this.climaAnt && CLIMAS[this.climaAnt].chuva) }
+  get raining() { return CLIMAS[this.clima].chuva || (this.climaMix < 1 && !!this.climaAnt && this.climaAnt.chuvaK > 0) }
   // bioma da pista atual (ADR 0011). Definido em buildTrack, lido pelo render.
   bioma: BiomeDef = biomeById(undefined)
   // circuito fixo da corrida (ADR 0014). Vazios na pista procedural.

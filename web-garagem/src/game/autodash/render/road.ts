@@ -18,9 +18,9 @@ import { poly } from "./primitives"
 import { drawRamalSeg, drawElevadoSeg, type ElevadoSeg } from "./ramal"
 import { drawTunelSeg, drawClarao, type TunelSeg } from "./tunel"
 import { TUNEL } from "../world/tunel"
-import { drawEnfeite, drawGuardRail, drawParedao, PAREDAO, type RailSeg } from "./cenario"
+import { drawEnfeite, drawGuardRail, drawParedao, drawPortal, PAREDAO, type RailSeg } from "./cenario"
 import { enfeitesDoSegmento, ENF, tipoNoSeg, GUARD_RAIL, COM_GUARD_RAIL, COM_PAREDAO } from "../world/cenario"
-import { ladoParedao } from "../world/montanha"
+import { ladoParedao, ladoDoVale, segPortal } from "../world/montanha"
 import { elevacao, elevacaoEm, ramalBordas, ramalPerfilOuZero, ramalNoSeg, RAMAL_ABRE, RAMAL_COLADO } from "../world/ramais"
 import { drawPosto, drawPostoLoja, drawPostoTotem } from "./eventos"
 import { postoMeio, postoLoja, postoTotem, postoPatio, naFaixaDoPosto } from "../world/posto"
@@ -32,6 +32,9 @@ const PLACA_ATALHO_DIR: RoadSign = { z: 0, type: "atalho", lado: 1 }
 const PLACA_ATALHO_ESQ: RoadSign = { z: 0, type: "atalho", lado: -1 }
 
 export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
+  // fundo do vale da serra: a cor do horizonte puxada para o verde da mata
+  const corVale = shade(mixHex(fogColor, "#2f5d3c", 0.35), Math.max(0.5, amb))
+  const portalIdx = segPortal(eng)
   const ctx = eng.ctx
   const N = eng.segments.length
   const baseIdx = Math.floor(eng.position / SEG_LEN) % N
@@ -69,7 +72,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   let roadStarted = false
   let cobriuTunel = false // dentro do túnel: o primeiro segmento já cobriu a tela
 
-  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem" | "elevado" | "tunel" | "rail" | "paredao"; el?: ElevadoSeg; tn?: TunelSeg; rl?: RailSeg; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
+  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem" | "elevado" | "tunel" | "rail" | "paredao" | "portal"; el?: ElevadoSeg; tn?: TunelSeg; rl?: RailSeg; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
   const sprites: SpriteDraw[] = []
   // buckets de tráfego, obstáculos, placas e powerups por segmento
   const obsBySeg = new Map<number, Obstacle[]>()
@@ -320,6 +323,18 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
               sx2 + sw2 * (0.97 + 0.62 * vrF2), ry2, sx2 + sw2 * 0.97, ry2)
         }
       }
+      // VALE (subida pela lateral da serra): do guard-rail para fora o chão cai;
+      // no lugar da grama, o fundo do vale lá embaixo, na névoa da distância
+      const vale = eng.mode !== "race" ? ladoDoVale(eng, idx) : 0
+      if (vale) {
+        ctx.fillStyle = corVale
+        if (vale > 0) poly(ctx, sx1 + sw1 * 1.24, ry1, sx1 + sw1 * 60, ry1, sx2 + sw2 * 60, ry2, sx2 + sw2 * 1.24, ry2)
+        else poly(ctx, sx1 - sw1 * 60, ry1, sx1 - sw1 * 1.24, ry1, sx2 - sw2 * 1.24, ry2, sx2 - sw2 * 60, ry2)
+        // a borda do barranco
+        ctx.fillStyle = shade("#5b4a3a", amb)
+        if (vale > 0) poly(ctx, sx1 + sw1 * 1.18, ry1, sx1 + sw1 * 1.26, ry1, sx2 + sw2 * 1.26, ry2, sx2 + sw2 * 1.18, ry2)
+        else poly(ctx, sx1 - sw1 * 1.26, ry1, sx1 - sw1 * 1.18, ry1, sx2 - sw2 * 1.18, ry2, sx2 - sw2 * 1.26, ry2)
+      }
       // rua cruzando (dos dois lados, fora da pista): asfalto até a borda da tela
       const rua = ruaCruzando.get(idx)
       if (rua !== undefined) {
@@ -520,6 +535,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     }
     if (viaductSegs.has(idx)) sprites.push({ kind: "bridge", x: sx1, y: sy1, w: sw1 })
     if (towerSegs.has(idx)) sprites.push({ kind: "gate", x: sx1, y: sy1, w: sw1 })
+    if (idx === portalIdx) sprites.push({ kind: "portal", x: sx1, y: sy1, w: sw1 })
     // decoração de beira de estrada e placas (nada de árvore no meio da água)
     if (onBridge || tunelSpan.has(idx)) continue
     if (seg.sign) {
@@ -537,6 +553,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         // nada em cima do pátio do posto nem do ramal/elevado (os dois ficam de um lado)
         if (en.lado > 0 && noPosto) continue
         if (q && en.lado === q.r.lado && en.dist < q.outer + 0.5) continue
+        if (en.lado === ladoDoVale(eng, idx)) continue // do lado do vale não tem chão
         if (en.kind === ENF.fiacao && (q || noPosto)) continue // o fio cruzaria o elevado/a cobertura
         sprites.push({ kind: "deco", deco: en.kind, dir: en.seed, x: sx1 + sw1 * en.lado * en.dist, y: sy1, w: sw1 * en.escala })
       }
@@ -621,6 +638,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     else if (s.kind === "tunel") drawTunelSeg(eng, s.tn!, amb)
     else if (s.kind === "rail") drawGuardRail(eng, s.rl!, amb)
     else if (s.kind === "paredao") drawParedao(eng, s.rl!, amb)
+    else if (s.kind === "portal") drawPortal(eng, s.x, s.y, s.w, amb)
     else if (!drawEnfeite(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)) drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
   }
 

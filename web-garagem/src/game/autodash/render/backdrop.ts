@@ -31,7 +31,7 @@ export function renderBackdrop(eng: AutoDashEngine, amb: number) {
   // montanha: do mirante para baixo o mar aparece no fundo (o "reveal" do doc)
   if (eng.montanha) {
     const f = faseNoSeg(eng, Math.floor((eng.position + PLAYER_Z) / SEG_LEN) % eng.segments.length)
-    if (f === "mirante" || f === "serraDescida" || f === "serraBase") camadaMar(eng, amb)
+    if (f === "mirante" || f === "serraDescida" || f === "serraBase" || f === "costeira") camadaMar(eng, amb)
   }
   for (const k of c.meio) CAMADAS[k](eng, amb)
   for (const k of c.perto) CAMADAS[k](eng, amb)

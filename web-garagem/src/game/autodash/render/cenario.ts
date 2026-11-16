@@ -90,6 +90,37 @@ export function drawParedao(eng: AutoDashEngine, r: RailSeg, amb: number) {
   }
 }
 
+/**
+ * Portal da serra: dois pilares de pedra nas bordas e a viga de madeira com a
+ * placa "SERRA DO MAR" atravessando a pista. `x`/`w`: centro e meia-largura da
+ * pista na tela, `y` o chão.
+ */
+export function drawPortal(eng: AutoDashEngine, x: number, y: number, w: number, amb: number) {
+  if (w < 4) return
+  const ctx = eng.ctx
+  const luz = Math.max(0.45, amb)
+  const h = w * 1.5, pw = w * 0.22
+  for (const s of [-1, 1]) {
+    const px = x + s * w * 1.3
+    ctx.fillStyle = shade("#78716c", luz)
+    ctx.fillRect(px - pw / 2, y - h, pw, h)
+    ctx.fillStyle = shade("#57534e", luz) // pedras
+    for (let k = 0; k < 5; k++) ctx.fillRect(px - pw / 2, y - h + (k + 0.5) * h / 5, pw, Math.max(1, h * 0.02))
+    ctx.fillStyle = shade("#a8a29e", luz) // capitel
+    ctx.fillRect(px - pw * 0.65, y - h - w * 0.06, pw * 1.3, w * 0.06)
+  }
+  // viga e placa
+  ctx.fillStyle = shade("#6b4f35", luz)
+  ctx.fillRect(x - w * 1.45, y - h - w * 0.06, w * 2.9, w * 0.1)
+  ctx.fillStyle = shade("#14532d", Math.max(0.55, amb))
+  rr(ctx, x - w * 0.9, y - h - w * 0.5, w * 1.8, w * 0.4, w * 0.04)
+  if (w > 18) {
+    ctx.fillStyle = "#f8fafc"
+    ctx.font = `bold ${Math.round(w * 0.2)}px 'Space Grotesk', 'Segoe UI', sans-serif`
+    ctx.textAlign = "center"; ctx.fillText("SERRA DO MAR", x, y - h - w * 0.23); ctx.textAlign = "left"
+  }
+}
+
 /** Desenha um enfeite de beira novo. Devolve false se o `kind` não é daqui. */
 export function drawEnfeite(eng: AutoDashEngine, kind: number, seed: number, x: number, y: number, w: number, amb: number): boolean {
   if (kind < 20) return false

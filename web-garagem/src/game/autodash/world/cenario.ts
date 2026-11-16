@@ -13,7 +13,7 @@
 // magenta (letreiros verticais, lanternas de izakaya, vapor de bueiro);
 // oficinas: verde konbini + branco (galpões de tuning, pneus, máquinas de bebida).
 export type TipoTrecho = "centro" | "suburbio" | "campo" | "orla" | "mata" | "shibuya" | "shinjuku" | "oficinas" | "entrada"
-  | "serraPe" | "serraMeio" | "mirante" | "serraDescida" | "serraBase" // montanha (world/montanha.ts)
+  | "portal" | "serraPe" | "serraMeio" | "mirante" | "serraDescida" | "serraBase" | "costeira" // viagem da serra (world/montanha.ts)
 
 export interface Trecho { a: number; b: number; tipo: TipoTrecho }
 
@@ -199,7 +199,13 @@ export function enfeitesDoSegmento(trechos: Trecho[], idx: number, arvore: numbe
     if (idx % 12 === 6) add(ENF.plantacao, lado(5), 2.6, 1.4)
     if (idx % 160 === 80) add(ENF.celeiro, lado(6), 2.5, 0.7)
     if (idx % 97 === 40) add(ENF.outdoor, lado(7), 1.75, 0.55)
-  } else if (tipo === "serraPe" || tipo === "serraMeio" || tipo === "serraDescida" || tipo === "serraBase") {
+  } else if (tipo === "costeira") {
+    // rodovia beira-mar: o mar de um lado (fundo), palmeiras, quiosques e postes
+    if (idx % 5 === 0) add(ENF.palmeira, -1, 1.5 + h(1) * 0.4, 0.22)
+    if (idx % 40 === 20) add(ENF.quiosque, -1, 1.7, 0.45)
+    if (idx % 10 === 5) add(ENF.poste, 1, 1.28, 0.05)
+    if (idx % 3 === 1) add(h(2) < 0.6 ? ENF.pinheiro : arvore, 1, 1.7 + h(3) * 1.2, 0.22)
+  } else if (tipo === "portal" || tipo === "serraPe" || tipo === "serraMeio" || tipo === "serraDescida" || tipo === "serraBase") {
     // montanha (world/montanha.ts): mata fechada; o paredão de pedra e o
     // guard-rail são contínuos e saem do render da pista
     if (idx % 2 === 1) add(h(1) < 0.7 ? ENF.pinheiro : arvore, lado(2), 1.6 + h(3) * 1.2, 0.22 + h(4) * 0.08)

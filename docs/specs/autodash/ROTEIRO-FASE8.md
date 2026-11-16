@@ -125,14 +125,16 @@ Na placa "SAÍDA", entre na faixa da direita e siga o elevado.
   corte, o ponteiro do conta-giros bate e volta junto com o som.
 - **Posto:** pátio de concreto com setas, carros na loja, frentista, calibrador,
   lava-rápido e placa SAÍDA. **Viaduto:** ruas da cidade cruzando embaixo do elevado.
-- **Montanha e duelo de touge (tecla 0, ou chegando na serra pela tecla 9):** a
-  subida é longa, com comboios de caminhão, paredão com cachoeira e neblina; no
-  mirante o mar aparece e o rival se apresenta (faixas de cinema). Na descida,
-  sem trânsito, cada curva: **S** (freia antes), **Shift** na entrada (o jogo
-  fica em câmera lenta até você apertar), depois o **drift é seu**: segure o
-  ponteiro do medidor na faixa verde com o **W** (abre) e o volante (contra-
-  esterço fecha); passou do vermelho, **roda**. **Espaço** na saída. Com metade
-  da vida o rival acorda: tempo mais apertado e ele fecha a sua linha.
+- **Serra (tecla 9 até a serra; tecla 0 = versão curta):** portal "SERRA DO
+  MAR", subida longa pela lateral da montanha (paredão de um lado, vale do outro,
+  caminhões, neblina no meio), mirante com o mar, descida com o duelo, rodovia
+  beira-mar e a chegada na praia (vira a costa).
+- **Duelo de touge:** a 1ª curva é treino (dica embaixo). Em cada curva: **S**
+  antes, **Shift** na entrada (câmera lenta até apertar), e de lado o ângulo é no
+  **volante** (a seta do medidor diz: ABRE ▶ ou ◀ FECHA; o verde é o certo, o
+  vermelho roda). **W** só segura a velocidade. Nas curvas em **S**, no meio,
+  aperte o lado de fora quando o anel "TROCA" fechar. **Espaço** na saída. No
+  fim, quem perdeu fica para trás.
 
 **Feedback ladeira/viaduto:**
 

@@ -5,11 +5,20 @@
 // com a faixa verde, a vermelha (roda) e o ponteiro do seu ângulo.
 import { type AutoDashEngine, W, H } from "../engine"
 import { rr } from "./primitives"
-import { TOUGE, comandoAtual, anguloDrift } from "../world/touge"
+import { TOUGE, comandoAtual, anguloDrift, zonaDa } from "../world/touge"
 
 const FONTE = "'Space Grotesk', 'Segoe UI', sans-serif"
-const TECLA = { freio: "S", shift: "SHIFT", drift: "", nitro: "ESPAÇO" }
-const DICA = { freio: "FREIA", shift: "FREIO DE MÃO", drift: "", nitro: "NITRO" }
+const TECLA = { freio: "S", shift: "SHIFT", drift: "", troca: "", nitro: "ESPAÇO" }
+const DICA = { freio: "FREIA", shift: "FREIO DE MÃO", drift: "", troca: "TROCA DE LADO", nitro: "NITRO" }
+const SETA = (d: number) => (d > 0 ? "▶" : "◀")
+
+/** Faixa de dica embaixo (curva de treino). */
+function dica(ctx: CanvasRenderingContext2D, txt: string) {
+  ctx.fillStyle = "rgba(15,23,42,0.85)"
+  rr(ctx, W / 2 - 260, H * 0.84, 520, 30, 8)
+  ctx.fillStyle = "#fde047"; ctx.font = `bold 14px ${FONTE}`
+  ctx.textAlign = "center"; ctx.fillText(txt, W / 2, H * 0.84 + 20); ctx.textAlign = "left"
+}
 
 function barra(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, frac: number, cor: string, nome: string, direita: boolean) {
   ctx.fillStyle = "rgba(15,23,42,0.75)"
@@ -26,26 +35,30 @@ function barra(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, f
   ctx.textAlign = "left"
 }
 
-/** Medidor de ângulo do drift: arco de 0 a 1,3 rad, faixa verde e vermelha. */
-function medidor(ctx: CanvasRenderingContext2D, ang: number) {
+/** Medidor de ângulo do drift: arco de 0 a 1,3 rad, faixa verde e vermelha, e a seta de qual lado apertar. */
+function medidor(ctx: CanvasRenderingContext2D, ang: number, zona: readonly [number, number], dir: number) {
   const cx = W / 2, cy = H * 0.62, r = 70, MAX = 1.3
   const a = (v: number) => Math.PI + (Math.min(MAX, v) / MAX) * Math.PI // 180° → 360°
   ctx.lineWidth = 12
   ctx.strokeStyle = "rgba(15,23,42,0.6)"
   ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI); ctx.stroke()
   ctx.strokeStyle = "rgba(74,222,128,0.9)"
-  ctx.beginPath(); ctx.arc(cx, cy, r, a(TOUGE.zona[0]), a(TOUGE.zona[1])); ctx.stroke()
+  ctx.beginPath(); ctx.arc(cx, cy, r, a(zona[0]), a(zona[1])); ctx.stroke()
   ctx.strokeStyle = "rgba(239,68,68,0.9)"
   ctx.beginPath(); ctx.arc(cx, cy, r, a(TOUGE.roda), 2 * Math.PI); ctx.stroke()
-  const naZona = ang >= TOUGE.zona[0] && ang <= TOUGE.zona[1]
+  const naZona = ang >= zona[0] && ang <= zona[1]
   const p = a(ang)
-  ctx.strokeStyle = naZona ? "#4ade80" : ang > TOUGE.zona[1] ? "#ef4444" : "#facc15"
+  ctx.strokeStyle = naZona ? "#4ade80" : ang > zona[1] ? "#ef4444" : "#facc15"
   ctx.lineWidth = 4
   ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(p) * (r + 8), cy + Math.sin(p) * (r + 8)); ctx.stroke()
   ctx.fillStyle = "#f8fafc"
   ctx.font = `bold 13px ${FONTE}`
   ctx.textAlign = "center"
-  ctx.fillText(naZona ? "SEGURA!" : ang > TOUGE.zona[1] ? "CONTRA-ESTERÇA!" : "MAIS GÁS (W)!", cx, cy + 18)
+  // a seta diz o que fazer: para dentro da curva abre, para fora fecha
+  const txt = naZona ? "SEGURA!" : ang > zona[1] ? `${SETA(-dir)} FECHA` : `ABRE ${SETA(dir)}`
+  ctx.font = `bold ${naZona ? 14 : 18}px ${FONTE}`
+  ctx.fillStyle = naZona ? "#4ade80" : ang > zona[1] ? "#ef4444" : "#facc15"
+  ctx.fillText(txt, cx, cy + 22)
   ctx.textAlign = "left"
 }
 
@@ -88,9 +101,16 @@ export function renderTouge(eng: AutoDashEngine) {
 
   // medidor de ângulo enquanto está de lado
   const dr = anguloDrift(eng)
-  if (dr) medidor(ctx, dr.ang)
+  if (dr) medidor(ctx, dr.ang, zonaDa(dr.c), dr.dir)
 
   const at = comandoAtual(eng)
+  // curva de treino: o que fazer, em português claro
+  if (at && at.c.treino && tg.fase === "batalha") {
+    if (at.cmd === "freio") dica(ctx, "TREINO: aperte S quando o anel encostar no círculo")
+    else if (at.cmd === "shift") dica(ctx, "TREINO: SHIFT na entrada da curva (o jogo espera em câmera lenta)")
+    else if (at.cmd === "drift") dica(ctx, `TREINO: ${SETA(at.c.dir)} abre, ${SETA(-at.c.dir)} fecha: segure o ponteiro no verde. W segura a velocidade`)
+    else if (at.cmd === "nitro") dica(ctx, "TREINO: ESPAÇO na saída da curva")
+  }
   if (!at || at.t > TOUGE.anelS || at.cmd === "drift") return
   const cx = W / 2, cy = H * 0.36, r0 = 32
   ctx.textAlign = "center"
@@ -107,7 +127,7 @@ export function renderTouge(eng: AutoDashEngine) {
   ctx.lineWidth = d <= TOUGE.bom ? 6 : 3
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke()
   ctx.fillStyle = cor
-  const tecla = TECLA[at.cmd]
+  const tecla = at.cmd === "troca" ? SETA(-at.c.dir) : TECLA[at.cmd]
   ctx.font = `bold ${tecla.length > 1 ? 13 : 24}px ${FONTE}`
   ctx.fillText(tecla, cx, cy + (tecla.length > 1 ? 5 : 9))
   ctx.font = `bold 13px ${FONTE}`
