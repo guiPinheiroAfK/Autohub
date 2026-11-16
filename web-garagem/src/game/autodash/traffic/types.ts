@@ -62,6 +62,8 @@ export interface Traffic {
   vReal?: number       // km/h que andou de fato no último quadro (o civil freando anda abaixo de `speed`)
   presoT?: number      // civil: s parado atrás do jogador (passa de CIVIL.buzinaS: buzina e tenta passar)
   viaduto?: "sobe" | "entra" // civil usando o elevado do viaduto (world/zones.ts, Fase 8.6)
+  giroflexAmbar?: boolean // batedor do comboio, guincho (Fase 8.3)
+  placa?: string       // faixa escrita na traseira (o último caminhão do comboio: "CARGA LONGA")
   top?: number         // viatura: teto de velocidade (km/h) da estrela atual (world/policia.ts)
   accel?: number       // viatura: arrancada (km/h/s) da estrela atual
 }

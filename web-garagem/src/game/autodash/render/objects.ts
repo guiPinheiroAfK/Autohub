@@ -6,6 +6,7 @@ import { drawPlayerCar, rr } from "./primitives"
 import { type Traffic, KINDS } from "../traffic/types"
 import { desenharPlacaEvento, desenharObstaculoEvento } from "./eventos"
 import { drawPregos, drawPlacaPolicia, drawViaturaAtravessada } from "./policia"
+import { drawCena } from "./cena"
 
 export function drawPickup(eng: AutoDashEngine, p: Pickup, x: number, y: number, w: number, amb: number) {
   if (w < 2.5) return
@@ -77,6 +78,7 @@ export function drawGhost(eng: AutoDashEngine, x: number, y: number, w: number, 
 
 export function drawObstacle(eng: AutoDashEngine, o: Obstacle, x: number, y: number, w: number, amb: number) {
   if (w < 2) return
+  if (drawCena(eng, o, x, y, w, amb)) return // cenografia dos eventos (render/cena.ts, Fase 8.3)
   if (desenharObstaculoEvento(eng, o, x, y, w, amb)) return // seta da obra e óleo (render/eventos.ts)
   const ctx = eng.ctx
   if (o.kind === "pregos") { drawPregos(ctx, x, y, w, amb); return }
@@ -100,6 +102,16 @@ export function drawObstacle(eng: AutoDashEngine, o: Obstacle, x: number, y: num
     for (let i = 0; i < 6; i++) {
       ctx.fillStyle = shade(i % 2 === 0 ? "#ef4444" : "#f8fafc", amb)
       ctx.fillRect(x - w / 2 + (w / 6) * i, by, w / 6 + 1, h)
+    }
+    // lâmpada piscando em cima do cavalete (Fase 8.3): lê de longe à noite
+    if (Math.floor(performance.now() / 400) % 2 === 0) {
+      const lr = Math.max(1.5, w * 0.05)
+      ctx.fillStyle = "#fbbf24"
+      ctx.beginPath(); ctx.arc(x - w * 0.4, by - lr, lr, 0, Math.PI * 2); ctx.fill()
+      if (amb < 0.75 && w > 8) {
+        ctx.fillStyle = "rgba(251,191,36,0.22)"
+        ctx.beginPath(); ctx.arc(x - w * 0.4, by - lr, lr * 4, 0, Math.PI * 2); ctx.fill()
+      }
     }
   }
 }
@@ -328,6 +340,24 @@ export function drawTraffic(eng: AutoDashEngine, t: Traffic, x: number, y: numbe
     const fh = Math.max(2, h * 0.1)
     rr(ctx, bx + w * 0.04, y - fh * 2, w * 0.26, fh, fh / 2)
     rr(ctx, bx + w * 0.70, y - fh * 2, w * 0.26, fh, fh / 2)
+  }
+  // giroflex âmbar no teto (batedor do comboio, guincho) e a faixa escrita na traseira
+  if (t.giroflexAmbar) {
+    const aceso = Math.floor(performance.now() / 180) % 2 === 0
+    ctx.fillStyle = aceso ? "#fbbf24" : "#92400e"
+    rr(ctx, x - w * 0.16, by - h * 0.1, w * 0.32, h * 0.1, h * 0.03)
+    if (aceso && amb < 0.8 && w > 6) {
+      ctx.fillStyle = "rgba(251,191,36,0.25)"
+      ctx.beginPath(); ctx.ellipse(x, by - h * 0.05, w * 0.7, h * 0.35, 0, 0, Math.PI * 2); ctx.fill()
+    }
+  }
+  if (t.placa && w > 10) {
+    const ph = h * 0.16
+    ctx.fillStyle = "#facc15"
+    ctx.fillRect(x - w * 0.42, y - h * 0.5, w * 0.84, ph)
+    ctx.fillStyle = "#0f172a"
+    ctx.font = `bold ${Math.max(6, Math.round(ph * 0.72))}px 'Space Grotesk', 'Segoe UI', sans-serif`
+    ctx.textAlign = "center"; ctx.fillText(t.placa, x, y - h * 0.5 + ph * 0.8); ctx.textAlign = "left"
   }
   // pisca-alerta: as duas setas juntas
   if (t.alerta && Math.floor(performance.now() / 250) % 2 === 0) {

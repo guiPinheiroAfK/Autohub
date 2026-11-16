@@ -86,7 +86,10 @@ export interface Seg { curve: number; y1: number; y2: number; sign?: number }
 // `oleo` = mancha de óleo (não é sólida: escorrega, world/oleo.ts). `lado` = lado
 // fechado da obra ou lado do acidente. `pisado`: o jogador já passou na mancha.
 // Fase 6: `pregos` = tapete de pregos da polícia (world/policia.ts).
-export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" | "seta" | "oleo" | "pregos"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean; lado?: number; pisado?: boolean }
+// "cena": cenografia de evento sem colisão (Fase 8.3); `visual` diz o desenho
+// (render/cena.ts). Um "barrier" com `visual` bate como cavalete e desenha outra coisa.
+export type VisualCena = "maquina" | "trabalhador" | "triangulo" | "detritos" | "guarda" | "radar"
+export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" | "seta" | "oleo" | "pregos" | "cena"; w: number; len: number; prevD?: number; dead?: boolean; fixo?: boolean; lado?: number; pisado?: boolean; visual?: VisualCena }
 // Zona de evento no traçado:
 //  bridge    — ponte suspensa (estilo Golden Gate): você dirige EM CIMA, com
 //              guarda-corpo, torres e água dos dois lados
@@ -98,7 +101,7 @@ export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" 
 //              rápido demais = perseguição (o evento da conversa original)
 //  posto     — reta com posto de combustível (Fase 5, world/posto.ts)
 //  obra      — obra com estreitamento: `lado` fecha duas faixas (world/obra.ts)
-export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto" | "obra" | "tunnel"; z: number; end: number; spawnT: number; checked?: boolean; lado?: number }
+export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto" | "obra" | "tunnel"; z: number; end: number; spawnT: number; checked?: boolean; lado?: number; somFeito?: boolean }
 export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto" | "chegada" | "acidente" | "policia" | "tunel"; label?: string; lado?: number }
 
 export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2

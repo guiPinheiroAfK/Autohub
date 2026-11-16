@@ -412,15 +412,15 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
 - [x] Teste: posto gera carros parados que nunca ficam na pista; abastecer parado é
   mais rápido que passando.
 
-**8.3 Eventos com mais detalhe** (visual + leitura)
-- [ ] Obra: máquina (retroescavadeira), cavaletes com luz piscando, trabalhador com
+**8.3 Eventos com mais detalhe** (visual + leitura) — feito em 16/11
+- [x] Obra: máquina (retroescavadeira), cavaletes com luz piscando, trabalhador com
   bandeira, placas "OBRAS 500 m".
-- [ ] Acidente/óleo: dois carros batidos no acostamento com pisca-alerta, triângulo,
+- [x] Acidente/óleo: dois carros batidos no acostamento com pisca-alerta, triângulo,
   viatura ou guincho parado; mancha com reflexo.
-- [ ] Blitz/radar: cones em funil, viatura com giroflex, guarda com colete; placa do
+- [x] Blitz/radar: cones em funil, viatura com giroflex, guarda com colete; placa do
   radar com a velocidade.
-- [ ] Comboio: batedor com giroflex âmbar na frente e placa "CARGA LONGA".
-- [ ] Cada evento com 1 som próprio curto (buzina de caminhão, sirene curta, britadeira).
+- [x] Comboio: batedor com giroflex âmbar na frente e placa "CARGA LONGA".
+- [x] Cada evento com 1 som próprio curto (buzina de caminhão, sirene curta, britadeira).
 
 **8.4 Cenário por trechos** (sistema, depois conteúdo) — feito em 16/11 (sem passarela e guard-rail contínuo)
 - [x] `world/cenario.ts`: o bioma passa a ter TRECHOS (dados): tipo, comprimento,
@@ -558,4 +558,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-16 | (Fase 8.6, este) | Viaduto vira trevo com ELEVADO: ramal à direita (ADR 0014) que sai colado da pista, descola, sobe até 4100 u no cruzamento (platô) e desce, devolvendo à pista (`alto`/`topo` no Ramal, `elevacao`, `VIADUTO` em world/events.ts). Câmera sobe junto (`eng.elevJogador`); mureta dos dois lados no alto (raspar segura o carro); embaixo não dá para entrar nos pilares. Desenho do elevado como sprite por segmento (tabuleiro, muretas com junta, parede, pilares, fundo da laje visto de baixo, postes). Carros sobem (seta na faixa colada) e descem entrando na via; nitro, x2 e nitro no platô. Viaduto com juntas, postes acesos à noite e pichação nos pilares; a alça desenhada antiga e a faixa de aceleração saíram. Reciclagem limpa o estado de elevado do carro (ele voltava teleportado para cima). Teste em `__tests__/viaduto.cenario.test.ts`. | não alterado (o viaduto não aparece nos replays) |
 | 2026-11-16 | (Fase 8.7, este) | Túnel raro (`world/tunel.ts`, `render/tunel.ts`): zona de 280 segmentos (cabe na distância de desenho: a saída aparece no fundo), relevo plano e curvas suavizadas; entra no sorteio só com 30% de chance por evento. Boca com montanha e pórtico "TÚNEL DA SERRA"; dentro, paredes com azulejo, teto, duas filas de luz, placa de emergência, asfalto escurecido, faróis acesos, sem chuva, eco (o mesmo do viaduto) e o helicóptero cego; a luz do fim do túnel e o clarão na saída. Placas "TÚNEL 2 km / 1 km / ACENDA OS FARÓIS" e cartão. Tecla 8 no solo. Teste em `__tests__/tunel.cenario.test.ts`. | atualizado no replay solo: o sorteio do túnel usa um número a mais de `eng.rngEv`, então o evento sorteado no replay muda. Fim de partida igual. |
 | 2026-11-16 | (Fase 8.4, este) | Cenário de beira por trechos (`world/cenario.ts`, `render/cenario.ts`): a pista do solo alterna trechos de 320–720 segmentos (cidade: centro, subúrbio, campo; costa: orla, subúrbio, campo), com 40 segmentos de mistura na transição; enfeites por hash do índice (sem sorteio no render), no máximo 3 por segmento. Enfeites novos: casa, muro, cerca, ponto de ônibus, árvore larga, pinheiro, plantação, celeiro, quiosque, guarda-sol, prédio médio. Nada em cima do posto nem do ramal/elevado. ~3,2 ms por quadro medido no navegador. Costa: mar, palmeiras e píer do fundo a 0,08 da curva (era 0,25, mais que as montanhas da cidade; ainda "viravam junto"). Teste em `__tests__/cenario.test.ts`. | atualizado nos 4 cenários: o solo (+20% de chamadas: o cenário novo) e a estrada de fundo do menu nos outros três. Fim das partidas igual. |
+| 2026-11-16 | (Fase 8.3 e óleo, este) | Cenografia dos eventos (`render/cena.ts`; obstáculo `cena` não bate, `barrier` com `visual` bate e desenha outra coisa): obra com retroescavadeira na faixa fechada e trabalhadores com bandeira; lâmpada piscando em todo cavalete; acidente com o segundo carro batido, guincho com giroflex âmbar, triângulo e cacos; blitz com guardas de colete e lanterna; radar com o poste e a câmera; comboio com faixa "CARGA LONGA" e batedor de giroflex âmbar no acostamento. Sons (`world/somEventos.ts`): britadeira perto da obra, buzina a ar ao encostar no comboio, sirene curta antes da blitz. Óleo (playtest: "não faz nada"): tranco lateral ao pisar, rabeada 1,1 → 3,4 por 1,2 s, roda patinando, -6% de velocidade, fumaça e câmera. Testes em `__tests__/oleo.cenario.test.ts`. | não alterado |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

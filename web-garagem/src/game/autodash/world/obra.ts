@@ -45,6 +45,11 @@ export function spawnObra(eng: AutoDashEngine, lado: 1 | -1) {
   for (let d = OBRA.cavaleteCada / 2; d < OBRA.comprimento; d += OBRA.cavaleteCada) {
     eng.obstacles.push({ z: at(ini + d), offset: lado * 0.5, kind: "barrier", w: 0.55, len: 140 })
   }
+  // cenografia (Fase 8.3): retroescavadeira no lado fechado (bate como cavalete)
+  // e trabalhadores com bandeira no acostamento
+  for (const f of [0.3, 0.72]) eng.obstacles.push({ z: at(ini + OBRA.comprimento * f), offset: lado * 0.6, kind: "barrier", visual: "maquina", w: 0.5, len: 300, lado })
+  eng.obstacles.push({ z: at(START + OBRA.funil * 0.2), offset: lado * 1.18, kind: "cena", visual: "trabalhador", w: 0.12, len: 60, lado })
+  eng.obstacles.push({ z: at(ini + OBRA.comprimento * 0.5), offset: lado * 1.18, kind: "cena", visual: "trabalhador", w: 0.12, len: 60, lado })
   avisar(eng, { icone: "🚧", titulo: "PISTA ESTREITA", dica: `fechada à ${lado > 0 ? "direita" : "esquerda"}: entre cedo`, nivel: "perigo", z: at(START), fim: at(ini + OBRA.comprimento) })
 }
 

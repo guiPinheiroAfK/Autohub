@@ -746,6 +746,16 @@ export class AudioBus {
   // no escape. Era chiado agudo (passa-alta em 2600 Hz) e somava ao "glitch".
   limiter() { this.burst(30, 0.05, 420, "lowpass") }
   horn() { this.blip(420, 350, 0.12, "square"); this.blip(530, 350, 0.12, "square") }
+  /** Britadeira da obra (Fase 8.3): rajada curta de batidas secas. `vol` 0..1 pela distância. */
+  britadeira(vol: number) {
+    for (let i = 0; i < 5; i++) setTimeout(() => this.burst(28, 0.05 * vol, 900, "bandpass"), i * 45)
+  }
+  /** Buzina a ar de caminhão (comboio): grave e longa. */
+  buzinaCaminhao() { this.blip(147, 650, 0.09, "sawtooth"); this.blip(185, 650, 0.07, "sawtooth") }
+  /** Sirene curta (blitz): dois tons, duas vezes. */
+  sireneCurta() {
+    for (let i = 0; i < 4; i++) this.blip(i % 2 === 0 ? 740 : 988, 180, 0.06, "square", i * 190)
+  }
   /** Buzina de civil atrás de você: mais baixa e curta, tom de carro comum. */
   buzinaCivil() { this.blip(392, 240, 0.06, "square"); this.blip(494, 240, 0.06, "square") }
   nearMiss() { this.burst(200, 0.3, 1600, "bandpass") }

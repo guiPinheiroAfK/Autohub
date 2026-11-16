@@ -32,6 +32,7 @@ import { atualizarAvisos } from "../world/avisos"
 import { aderenciaOleo, passoOleo } from "../world/oleo"
 import { giroDaPartida } from "./partida"
 import { aplicarVacuo, specComVacuo, forcaTeto } from "./vacuo"
+import { atualizarSomEventos } from "../world/somEventos"
 
 export function update(eng: AutoDashEngine, dt: number) {
   const spec = CARS[eng.cfg.carIdx]
@@ -385,6 +386,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   updateZones(eng, dt, playerZ)
   atualizarObras(eng, dt, playerZ)              // E4: trânsito sai do lado fechado
   atualizarComboio(eng, dt, playerZ, eng.rngEv) // E6: a fresta anda
+  atualizarSomEventos(eng, dt, playerZ)          // Fase 8.3: britadeira, buzina a ar, sirene
   updateObstacles(eng, playerZ)
   atualizarPolicia(eng, dt, playerZ)
 

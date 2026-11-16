@@ -25,6 +25,7 @@ const FAIXAS = [-0.75, -0.25, 0.25, 0.75]
 const TIPOS: TrafficKind[] = ["truck", "car", "bus", "truck"]
 
 export interface Comboio {
+  buzinou?: boolean // a buzina a ar já tocou (world/somEventos.ts)
   membros: Traffic[]
   t: number
   proxT: number
@@ -48,6 +49,15 @@ export function spawnComboio(eng: AutoDashEngine, u: () => number) {
     membros.push(t)
     eng.traffic.push(t)
   }
+  // Fase 8.3: faixa "CARGA LONGA" nos caminhões e o batedor de giroflex âmbar
+  // na frente, no acostamento (não é membro: não entra na fresta)
+  for (const m of membros) if (m.kind === "truck") m.placa = "CARGA LONGA"
+  const zb = ((z + 2600) % eng.trackLen + eng.trackLen) % eng.trackLen
+  eng.traffic.push({
+    z: zb, offset: 1.14, targetOffset: 1.14, speed: COMBOIO.velocidade,
+    kind: "car", role: "comboio", color: "#facc15", giroflexAmbar: true,
+    blinkT: 0, prevD: wrapDz(eng, zb, eng.position + PLAYER_Z),
+  })
   eng.comboio = { membros, t: 0, proxT: 2, passou: false }
   const c = eng.comboio
   avisar(eng, { icone: "🚛", titulo: "COMBOIO", dica: "a fresta muda de faixa", nivel: "perigo", z, ref: membros[0], vivo: () => eng.comboio === c && !c.passou })

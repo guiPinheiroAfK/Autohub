@@ -18,6 +18,7 @@ export function updateObstacles(eng: AutoDashEngine, playerZ: number) {
     // ponto neste frame?) é obrigatória aqui, não otimização.
     const prev = o.prevD ?? d
     o.prevD = d
+    if (o.kind === "cena") continue // cenografia: não bate (Fase 8.3)
     const swept = prev > 0 && d <= 0 && prev < 1200 && prev - d < 2000
     // óleo não é sólido: vale a mancha inteira e não depende de imunidade
     if (o.kind === "oleo") {

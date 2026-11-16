@@ -194,6 +194,9 @@ export function spawnEvent(eng: AutoDashEngine, kind: EventoMapa) {
         color: "#1d4ed8", blinkT: 0, prevD: wrapDz(eng, pz2, eng.position + PLAYER_Z),
       })
     }
+    // guardas (Fase 8.3): um no começo do funil, à esquerda, e um ao lado das viaturas
+    eng.obstacles.push({ z: at(START - 3600), offset: -1.12, kind: "cena", visual: "guarda", w: 0.12, len: 60, lado: -1 })
+    eng.obstacles.push({ z: at(START + 150), offset: -0.92, kind: "cena", visual: "guarda", w: 0.12, len: 60, lado: -1 })
     avisar(eng, { icone: "👮", titulo: "BLITZ", dica: "passe a 60 pela direita", nivel: "policia", z: at(START - 4000), fim: at(START + 2400) })
   } else {
     // radar (o evento da placa 90): polícia de tocaia no acostamento, todo o
@@ -201,6 +204,8 @@ export function spawnEvent(eng: AutoDashEngine, kind: EventoMapa) {
     const z = at(START)
     eng.zones.push({ type: "speedtrap", z, end: at(START + 3000), spawnT: 0 })
     avisos("limit90", ["RADAR 2 km", "RADAR 1 km", "LIMITE 90"])
+    // o poste do radar com a câmera sobre a faixa (Fase 8.3)
+    eng.obstacles.push({ z, offset: 1.22, kind: "cena", visual: "radar", w: 0.2, len: 60, lado: 1 })
     for (let i = 0; i < 2; i++) {
       const pz2 = at(START - 200 + i * 500)
       eng.traffic.push({
