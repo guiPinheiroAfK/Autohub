@@ -19,6 +19,7 @@ export interface TunelSeg {
 }
 
 const AZULEJO = 0.42 // fração da parede com azulejo claro (de baixo para cima)
+const LOD_PX = 40    // abaixo desta largura (px) o segmento vira um polígono só
 
 export function drawTunelSeg(eng: AutoDashEngine, t: TunelSeg, amb: number) {
   const ctx = eng.ctx
@@ -27,6 +28,18 @@ export function drawTunelSeg(eng: AutoDashEngine, t: TunelSeg, amb: number) {
   const azul = shade("#b8c0cc", luz), azulEsc = shade("#9aa3b0", luz)
   const parede = shade("#454c58", luz), teto = shade("#2c323c", luz)
   const faixa = t.idx % 2 === 0 ? azul : azulEsc
+  // nível de detalhe: lá no fundo o segmento tem poucos pixels; um contorno só
+  // (paredes e teto juntos) basta e custa uma fração (a boca vista de fora
+  // desenha o tubo inteiro, ~280 segmentos)
+  if (t.xr1 - t.xl1 < LOD_PX && !t.cobre && !t.boca && !t.saida) {
+    ctx.fillStyle = t.idx % 2 === 0 ? parede : teto
+    ctx.beginPath() // parede esquerda, teto e parede direita num caminho só (um fill)
+    ctx.moveTo(t.xl1, t.yb1); ctx.lineTo(t.xl1, t.yt1); ctx.lineTo(t.xl2, t.yt2); ctx.lineTo(t.xl2, t.yb2); ctx.closePath()
+    ctx.moveTo(t.xl1, t.yt1); ctx.lineTo(t.xr1, t.yt1); ctx.lineTo(t.xr2, t.yt2); ctx.lineTo(t.xl2, t.yt2); ctx.closePath()
+    ctx.moveTo(t.xr1, t.yb1); ctx.lineTo(t.xr1, t.yt1); ctx.lineTo(t.xr2, t.yt2); ctx.lineTo(t.xr2, t.yb2); ctx.closePath()
+    ctx.fill()
+    return
+  }
   const meio1 = t.yb1 - (t.yb1 - t.yt1) * AZULEJO, meio2 = t.yb2 - (t.yb2 - t.yt2) * AZULEJO
   // paredes: azulejo embaixo, concreto em cima
   for (const [x1, x2] of [[t.xl1, t.xl2], [t.xr1, t.xr2]]) {

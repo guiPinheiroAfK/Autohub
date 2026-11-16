@@ -356,8 +356,12 @@ export function drawTraffic(eng: AutoDashEngine, t: Traffic, x: number, y: numbe
     ctx.fillStyle = "#facc15"
     ctx.fillRect(x - w * 0.42, y - h * 0.5, w * 0.84, ph)
     ctx.fillStyle = "#0f172a"
-    ctx.font = `bold ${Math.max(6, Math.round(ph * 0.72))}px 'Space Grotesk', 'Segoe UI', sans-serif`
-    ctx.textAlign = "center"; ctx.fillText(t.placa, x, y - h * 0.5 + ph * 0.8); ctx.textAlign = "left"
+    // a letra cabe na faixa: o tamanho sai da largura do texto, não só da altura
+    let fs = Math.max(6, Math.round(ph * 0.72))
+    ctx.font = `bold ${fs}px 'Space Grotesk', 'Segoe UI', sans-serif`
+    const tw = ctx.measureText(t.placa).width
+    if (tw > w * 0.78) { fs = Math.max(5, Math.floor(fs * (w * 0.78) / tw)); ctx.font = `bold ${fs}px 'Space Grotesk', 'Segoe UI', sans-serif` }
+    ctx.textAlign = "center"; ctx.fillText(t.placa, x, y - h * 0.5 + ph * 0.5 + fs * 0.36); ctx.textAlign = "left"
   }
   // pisca-alerta: as duas setas juntas
   if (t.alerta && Math.floor(performance.now() / 250) % 2 === 0) {
