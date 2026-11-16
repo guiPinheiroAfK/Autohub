@@ -18,8 +18,19 @@ export const TUNEL = {
 
 /** Abre um túnel além do horizonte: zona, relevo plano, placas e cartão. */
 export function spawnTunel(eng: AutoDashEngine) {
-  const VIEW = DRAW_DIST * SEG_LEN, START = VIEW * 1.7
-  const at = (d: number) => ((eng.position + d) % eng.trackLen + eng.trackLen) % eng.trackLen
+  const VIEW = DRAW_DIST * SEG_LEN
+  abrirTunel(eng, ((eng.position + VIEW * 1.7) % eng.trackLen + eng.trackLen) % eng.trackLen)
+}
+
+/**
+ * Abre o túnel com a boca em `z` (precisa estar além do horizonte: as placas
+ * ficam até 0,95 × a distância de desenho antes). Usado pelo túnel raro do
+ * sorteio e pelo túnel que atravessa a montanha na subida da serra.
+ */
+export function abrirTunel(eng: AutoDashEngine, z0: number) {
+  const VIEW = DRAW_DIST * SEG_LEN
+  const at = (d: number) => ((z0 + d) % eng.trackLen + eng.trackLen) % eng.trackLen
+  const START = 0
   const z = at(START), end = at(START + TUNEL.comprimento)
   eng.zones.push({ type: "tunnel", z, end, spawnT: 0 })
   // dentro da montanha a pista é plana (rampa linear da entrada à saída) e as

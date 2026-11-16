@@ -26,6 +26,7 @@ import { hash01, gerarTrechos, tipoNoSeg, type TipoTrecho, type Trecho } from ".
 import { spawnTouge } from "./touge"
 import { spawnComboio, desfazer as desfazerComboio } from "./comboio"
 import { trocarRegiao } from "./regiao"
+import { abrirTunel, TUNEL } from "./tunel"
 import { wrapDz } from "../traffic/spawner"
 import { TRAFFIC_COLORS } from "../traffic/types"
 import { PAREDAO } from "../render/cenario"
@@ -50,13 +51,28 @@ export const MONTANHA = {
 // parado muito à frente é removido pelo spawner).
 export const MOMENTOS_SERRA = {
   // [fração da serraMeio, tipo]
-  lista: [[0.25, "barreira"], [0.45, "caminhao"], [0.7, "barreira"], [0.85, "caminhao"]] as [number, TipoMomento][],
+  // (fora do túnel e do viaduto, que ficam entre 50% e ~66%)
+  lista: [[0.22, "barreira"], [0.4, "caminhao"], [0.76, "barreira"], [0.9, "caminhao"]] as [number, TipoMomento][],
   nasceA: 1.1,            // × DRAW_DIST segmentos à frente do jogador
   placaAntes: 70,         // segmentos entre a placa e o começo do momento
   pedras: [0, 9, 19, 30], // segmentos de cada pedra desde o começo da barreira
   trianguloAntes: 2500,   // u entre o triângulo e o caminhão
   comboioFolga: 1500,     // u: comboio a menos disto de um momento na tela se desfaz
   respingoS: 1.4,         // s de respingo na tela ao passar pela cachoeira
+}
+
+/**
+ * O túnel e o viaduto da subida (pesquisa: a pista de descida da Imigrantes tem
+ * 21 km com 3 túneis, quase 40% do trajeto, e viadutos de até 70 m na neblina).
+ * Na curva de ritmo da serra: depois da tensão da subida (caminhões, barreira),
+ * o túnel é o respiro fechado, escuro, com eco; a saída é a REVELAÇÃO: um
+ * viaduto alto sobre o vale, os dois lados caindo, dentro da neblina.
+ */
+export const TUNEL_SERRA = {
+  em: 0.5,           // fração da serraMeio onde fica a boca do túnel
+  viadutoSegs: 220,  // viaduto logo na saída (segmentos)
+  nasceA: 1.9,       // × DRAW_DIST: o túnel é aberto a esta distância (as placas vêm antes)
+  pilarCada: 25,     // segmentos entre os pilares do viaduto
 }
 
 export type TipoMomento = "barreira" | "caminhao"
@@ -66,7 +82,11 @@ export interface MomentoSerra { idx: number; tipo: TipoMomento; feito: boolean }
 /** Lado da encosta (fixo por viagem): o vale com guard-rail fica do outro. */
 export function ladoParedao(eng: AutoDashEngine): -1 | 1 { return eng.montanha?.lado ?? -1 }
 
-export interface Montanha { a: number; lado: -1 | 1; fases: Fases; total: number; tougeFeito: boolean; comboioT: number; praia: boolean; clima: ClimaId; momentos: MomentoSerra[] }
+export interface Montanha {
+  a: number; lado: -1 | 1; fases: Fases; total: number; tougeFeito: boolean; comboioT: number; praia: boolean; clima: ClimaId; momentos: MomentoSerra[]
+  tunel: { a: number; b: number; aberto: boolean } | null // segmentos absolutos
+  viaduto: { a: number; b: number } | null
+}
 
 /** Início (em segmentos desde `a`) e fim de cada fase. */
 function limites(fases: Fases): Record<string, [number, number]> {
@@ -87,14 +107,15 @@ export function faseNoSeg(eng: AutoDashEngine, idx: number): TipoTrecho | null {
   return null
 }
 
-/** No miolo do meio da subida (o terço do meio): onde fica o banco de neblina. */
+/** No miolo da subida: onde fica o banco de neblina. */
 export function noMiolo(eng: AutoDashEngine, idx: number): boolean {
   const m = eng.montanha
   if (!m) return false
   const l = limites(m.fases).serraMeio
   if (!l) return false
+  // (entre 25% e 45% da subida: antes do túnel; dentro dele neblina não faz sentido)
   const d = idx - m.a, n = l[1] - l[0]
-  return d >= l[0] + n / 3 && d < l[0] + (2 * n) / 3
+  return d >= l[0] + n * 0.25 && d < l[0] + n * 0.45
 }
 
 /** O jogador está na viagem ou a até 2 distâncias de desenho antes dela? */
@@ -109,6 +130,12 @@ export function pertoDaMontanha(eng: AutoDashEngine, idx: number): boolean {
 export function ladoDoVale(eng: AutoDashEngine, idx: number): -1 | 0 | 1 {
   const f = faseNoSeg(eng, idx)
   return f === "serraMeio" || f === "serraPe" ? (-ladoParedao(eng) as -1 | 1) : 0
+}
+
+/** No viaduto da serra: o vale cai dos DOIS lados (sem paredão nem chão). */
+export function noViadutoDaSerra(eng: AutoDashEngine, idx: number): boolean {
+  const v = eng.montanha?.viaduto
+  return !!v && idx >= v.a && idx < v.b
 }
 
 /**
@@ -189,12 +216,23 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
   const momentos: MomentoSerra[] = lim.serraMeio
     ? MOMENTOS_SERRA.lista.map(([fr, tipo]) => ({ idx: a + lim.serraMeio[0] + Math.round((lim.serraMeio[1] - lim.serraMeio[0]) * fr), tipo, feito: false }))
     : []
-  eng.montanha = { a, lado, fases, total, tougeFeito: false, comboioT: 3, praia: false, clima: eng.clima, momentos }
+  // o túnel atravessa a montanha no meio da subida e sai num viaduto alto
+  let tunel: Montanha["tunel"] = null, viaduto: Montanha["viaduto"] = null
+  if (lim.serraMeio) {
+    const ta = a + lim.serraMeio[0] + Math.round((lim.serraMeio[1] - lim.serraMeio[0]) * TUNEL_SERRA.em)
+    const tb = ta + Math.floor(TUNEL.comprimento / SEG_LEN)
+    tunel = { a: ta, b: tb, aberto: false }
+    viaduto = { a: tb + 4, b: tb + 4 + TUNEL_SERRA.viadutoSegs }
+    // o viaduto é reto e de curvas suaves (viaduto de serra é obra de engenharia)
+    for (let k = viaduto.a; k < viaduto.b; k++) eng.segments[k % N].curve *= 0.35
+  }
+  eng.montanha = { a, lado, fases, total, tougeFeito: false, comboioT: 3, praia: false, clima: eng.clima, momentos, tunel, viaduto }
   const at = (k: number) => ((a + k) % N) * SEG_LEN
   eng.roadSigns.push(
     { z: at(lim.portal[0] + 30), type: "serra", label: "SERRA DO MAR" },
     { z: at(lim.serraPe[0] + 40), type: "serra", label: "SERRA: REDUZA" },
     ...(lim.serraMeio ? [{ z: at(lim.serraMeio[0] + 20), type: "serra" as const, label: "SUBIDA LONGA: CAMINHÕES" }] : []),
+    ...(viaduto ? [{ z: viaduto.a * SEG_LEN, type: "serra" as const, label: "VIADUTO: VENTO LATERAL" }] : []),
     { z: at(lim.mirante[0] - 30), type: "serra", label: "MIRANTE" },
     { z: at(iniDesc - 40), type: "serra", label: "DESCIDA: USE O FREIO MOTOR" },
     { z: at(lim.costeira[0] + 20), type: "serra", label: "RODOVIA DO MAR" },
@@ -219,7 +257,16 @@ export function atualizarMontanha(eng: AutoDashEngine, playerZ: number, dt = 0) 
   // clima fixo na viagem toda (playtest 16/11: "o clima muda sozinho"): o que
   // estava valendo na entrada da serra (passando o portal, a neblina sumia: a
   // viagem forçava céu limpo), e um banco de neblina no miolo da subida
-  eng.climaForcado = MONTANHA.neblinaNoMeio && noMiolo(eng, idx) ? "neblina" : m.clima
+  // (e no viaduto da saída do túnel: "viadutos de 70 m na neblina")
+  const v = m.viaduto
+  const naNevoaDoViaduto = !!v && idx >= v.a - 60 && idx < v.b + 40
+  eng.climaForcado = MONTANHA.neblinaNoMeio && (noMiolo(eng, idx) || naNevoaDoViaduto) ? "neblina" : m.clima
+  // o túnel abre quando chega perto (as placas ficam antes da boca)
+  const t = m.tunel
+  if (t && !t.aberto && t.a - idx < DRAW_DIST * TUNEL_SERRA.nasceA) {
+    t.aberto = true
+    if (t.a - idx > DRAW_DIST * 1.02) abrirTunel(eng, t.a * SEG_LEN)
+  }
   // os momentos da subida nascem quando chegam perto
   for (const mo of m.momentos) {
     if (mo.feito) continue

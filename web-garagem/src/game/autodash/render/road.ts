@@ -20,7 +20,7 @@ import { drawTunelSeg, drawClarao, type TunelSeg } from "./tunel"
 import { TUNEL } from "../world/tunel"
 import { drawEnfeite, drawGuardRail, drawParedao, drawPortal, PAREDAO, type RailSeg } from "./cenario"
 import { enfeitesDoSegmento, ENF, tipoNoSeg, GUARD_RAIL, COM_GUARD_RAIL, COM_PAREDAO } from "../world/cenario"
-import { ladoParedao, ladoDoVale, segPortal } from "../world/montanha"
+import { ladoParedao, ladoDoVale, segPortal, noViadutoDaSerra } from "../world/montanha"
 import { marcaNoSeg, rotuloDaMarca, type RotuloMarca } from "../world/touge"
 import { drawPainelTouge } from "./touge"
 import { elevacao, elevacaoEm, ramalBordas, ramalPerfilOuZero, ramalNoSeg, RAMAL_ABRE, RAMAL_COLADO } from "../world/ramais"
@@ -327,15 +327,19 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       }
       // VALE (subida pela lateral da serra): do guard-rail para fora o chão cai;
       // no lugar da grama, o fundo do vale lá embaixo, na névoa da distância
-      const vale = eng.mode !== "race" ? ladoDoVale(eng, idx) : 0
-      if (vale) {
+      // (no viaduto da saída do túnel o vale cai dos DOIS lados; dentro do túnel não tem vale)
+      const viad = eng.mode !== "race" && noViadutoDaSerra(eng, idx)
+      const vale = eng.mode !== "race" && !tunelSpan.has(idx) ? ladoDoVale(eng, idx) : 0
+      for (const lv of viad ? [-1, 1] : vale ? [vale] : []) {
         ctx.fillStyle = corVale
-        if (vale > 0) poly(ctx, sx1 + sw1 * 1.24, ry1, sx1 + sw1 * 60, ry1, sx2 + sw2 * 60, ry2, sx2 + sw2 * 1.24, ry2)
+        if (lv > 0) poly(ctx, sx1 + sw1 * 1.24, ry1, sx1 + sw1 * 60, ry1, sx2 + sw2 * 60, ry2, sx2 + sw2 * 1.24, ry2)
         else poly(ctx, sx1 - sw1 * 60, ry1, sx1 - sw1 * 1.24, ry1, sx2 - sw2 * 1.24, ry2, sx2 - sw2 * 60, ry2)
-        // a borda do barranco
-        ctx.fillStyle = shade("#5b4a3a", amb)
-        if (vale > 0) poly(ctx, sx1 + sw1 * 1.18, ry1, sx1 + sw1 * 1.26, ry1, sx2 + sw2 * 1.26, ry2, sx2 + sw2 * 1.18, ry2)
+        // a borda: barranco de terra na lateral; laje de concreto no viaduto
+        ctx.fillStyle = viad ? shade("#9aa3b5", amb) : shade("#5b4a3a", amb)
+        if (lv > 0) poly(ctx, sx1 + sw1 * 1.18, ry1, sx1 + sw1 * 1.26, ry1, sx2 + sw2 * 1.26, ry2, sx2 + sw2 * 1.18, ry2)
         else poly(ctx, sx1 - sw1 * 1.26, ry1, sx1 - sw1 * 1.18, ry1, sx2 - sw2 * 1.18, ry2, sx2 - sw2 * 1.26, ry2)
+        // (sem pilares: no pseudo-3D o pilar de um segmento longe era pintado por
+        // cima do asfalto mais perto, e a laje não tem como escondê-lo)
       }
       // rua cruzando (dos dois lados, fora da pista): asfalto até a borda da tela
       const rua = ruaCruzando.get(idx)
@@ -485,8 +489,9 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     // ponte e no túnel). Com paredão, o guard-rail fica só do lado do barranco.
     if (eng.mode !== "race" && !onBridge && !tunelSpan.has(idx)) {
       const tipo = tipoNoSeg(eng.cenario, idx)
-      const paredao = COM_PAREDAO.has(tipo) ? ladoParedao(eng) : 0
-      if (COM_GUARD_RAIL.has(tipo)) {
+      const viadR = noViadutoDaSerra(eng, idx) // no viaduto: guard-rail dos dois lados, sem paredão
+      const paredao = COM_PAREDAO.has(tipo) && !viadR ? ladoParedao(eng) : 0
+      if (COM_GUARD_RAIL.has(tipo) || viadR) {
         const g = GUARD_RAIL.dist
         sprites.push({ kind: "rail", x: 0, y: 0, w: 0, rl: { idx, xl1: sx1 - sw1 * g, xl2: sx2 - sw2 * g, xr1: sx1 + sw1 * g, xr2: sx2 + sw2 * g, y1: sy1, y2: sy2, s1, s2, so: paredao ? (-paredao as -1 | 1) : 0 } })
       }
@@ -577,7 +582,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         // nada em cima do pátio do posto nem do ramal/elevado (os dois ficam de um lado)
         if (en.lado > 0 && noPosto) continue
         if (q && en.lado === q.r.lado && en.dist < q.outer + 0.5) continue
-        if (en.lado === ladoDoVale(eng, idx)) continue // do lado do vale não tem chão
+        if (en.lado === ladoDoVale(eng, idx) || noViadutoDaSerra(eng, idx)) continue // do lado do vale não tem chão
         if (en.kind === ENF.fiacao && (q || noPosto)) continue // o fio cruzaria o elevado/a cobertura
         sprites.push({ kind: "deco", deco: en.kind, dir: en.seed, x: sx1 + sw1 * en.lado * en.dist, y: sy1, w: sw1 * en.escala })
       }
