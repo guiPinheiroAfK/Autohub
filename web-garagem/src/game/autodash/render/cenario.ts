@@ -242,7 +242,7 @@ export function drawEnfeite(eng: AutoDashEngine, kind: number, seed: number, x: 
           ctx.fillRect(x - bw / 2, wy + andar * 0.55, bw, Math.max(1, andar * 0.08)) // varanda
           if (w > 16) {
             for (let k = 0; k < 4; k++) {
-              const acesa = noite && ((seed + k * 7 + Math.floor(wy)) % 3 === 0)
+              const acesa = noite && ((seed + k * 7 + Math.round((y - wy) / andar)) % 3 === 0) // pelo andar: não pisca
               ctx.fillStyle = acesa ? "#fde68a" : shade(noite ? "#1e293b" : "#93c5fd", luz)
               ctx.fillRect(x - bw / 2 + bw * (0.08 + k * 0.23), wy, bw * 0.14, andar * 0.42)
             }

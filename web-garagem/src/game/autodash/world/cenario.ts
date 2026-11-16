@@ -12,7 +12,7 @@
 // shibuya: magenta + branco LED (telas, multidão, fachadas); shinjuku: ciano +
 // magenta (letreiros verticais, lanternas de izakaya, vapor de bueiro);
 // oficinas: verde konbini + branco (galpões de tuning, pneus, máquinas de bebida).
-export type TipoTrecho = "centro" | "suburbio" | "campo" | "orla" | "mata" | "shibuya" | "shinjuku" | "oficinas"
+export type TipoTrecho = "centro" | "suburbio" | "campo" | "orla" | "mata" | "shibuya" | "shinjuku" | "oficinas" | "entrada"
 
 export interface Trecho { a: number; b: number; tipo: TipoTrecho }
 
@@ -39,6 +39,7 @@ export const ENF = {
   letreiroVertical: 5, // render/backdrop.ts (drawDeco); seed é o índice da cor TOKYO
   telaLED: 36, izakaya: 37, maquinaBebida: 38, konbini: 39, fiacao: 40,
   pneus: 41, galpao: 42, multidao: 43, vapor: 44, fachadaShibuya: 45, fachadaShinjuku: 46,
+  lojinha: 47, predioJP: 48, estacionamento: 49, pedestres: 50,
 } as const
 
 /** Poste com fiação: fica sempre à esquerda nesta distância e escala; o desenho acha o par da direita por elas. */
@@ -55,6 +56,35 @@ export interface Enfeite {
   seed: number    // variação do desenho (cor, altura)
 }
 
+interface Lote { kind: number; dist: number; escala: number }
+// pesos de cada distrito: [lote, peso]. `null` é vão (terreno vazio, recuo).
+const LOTES: Record<string, [Lote | null, number][]> = {
+  shibuya: [
+    [{ kind: ENF.telaLED, dist: 2.0, escala: 0.7 }, 1.2], [{ kind: ENF.fachadaShibuya, dist: 1.75, escala: 0.55 }, 2],
+    [{ kind: ENF.predioJP, dist: 1.85, escala: 0.6 }, 2.8], [{ kind: ENF.lojinha, dist: 1.55, escala: 0.42 }, 2],
+    [{ kind: ENF.predioAlto, dist: 2.3, escala: 0.16 }, 0.8], [{ kind: ENF.estacionamento, dist: 1.7, escala: 0.6 }, 0.6], [null, 0.6],
+  ],
+  shinjuku: [
+    [{ kind: ENF.fachadaShinjuku, dist: 1.75, escala: 0.55 }, 2.6], [{ kind: ENF.predioJP, dist: 1.85, escala: 0.6 }, 2.4],
+    [{ kind: ENF.lojinha, dist: 1.55, escala: 0.42 }, 1.4], [{ kind: ENF.izakaya, dist: 1.45, escala: 0.42 }, 1.2],
+    [{ kind: ENF.predioAlto, dist: 2.3, escala: 0.16 }, 1], [{ kind: ENF.estacionamento, dist: 1.7, escala: 0.6 }, 0.5], [null, 0.5],
+  ],
+  oficinas: [
+    [{ kind: ENF.galpao, dist: 1.95, escala: 0.8 }, 2.4], [{ kind: ENF.lojinha, dist: 1.55, escala: 0.42 }, 1.4],
+    [{ kind: ENF.predioJP, dist: 2.0, escala: 0.6 }, 1.2], [{ kind: ENF.konbini, dist: 1.75, escala: 0.65 }, 0.5],
+    [{ kind: ENF.estacionamento, dist: 1.7, escala: 0.6 }, 1], [null, 1],
+  ],
+}
+
+function loteDoDistrito(tipo: string, u: number): Lote | null {
+  const lista = LOTES[tipo]
+  let total = 0
+  for (const [, p] of lista) total += p
+  let r = u * total
+  for (const [l, p] of lista) { if ((r -= p) < 0) return l }
+  return null
+}
+
 /** Hash inteiro → [0, 1). Estável: o mesmo (n, k) dá sempre o mesmo número. */
 export function hash01(n: number, k = 0): number {
   let x = (Math.imul(n | 0, 374761393) + Math.imul(k | 0, 668265263)) | 0
@@ -63,11 +93,22 @@ export function hash01(n: number, k = 0): number {
   return (x >>> 0) / 4294967296
 }
 
+/** Chegada na cidade: [tipo, segmentos] antes dos distritos. */
+export const CHEGADA_CIDADE: [TipoTrecho, number][] = [["mata", 360], ["entrada", 420]]
+
 /** Divide a pista de `N` segmentos em trechos do bioma, sem dois iguais seguidos. */
 export function gerarTrechos(N: number, seed: number, biomaId: string): Trecho[] {
   const tipos = TRECHOS_DO_BIOMA[biomaId] ?? TRECHOS_DO_BIOMA.cidade
   const out: Trecho[] = []
   let i = 0, k = 0, ultimo = -1
+  // cidade (playtest 16/11: "o começo só tem casinha escrito TUNE"): chega pelo
+  // mato, passa pela entrada com outdoors e só então entra em Shibuya
+  if (biomaId === "cidade") {
+    for (const [tipo, len] of CHEGADA_CIDADE) { if (i >= N) break; out.push({ a: i, b: Math.min(N, i + len), tipo }); i += len }
+    ultimo = -1
+    const s = tipos.indexOf("shibuya")
+    if (i < N && s >= 0) { const len = CENARIO.trechoMax; out.push({ a: i, b: Math.min(N, i + len), tipo: "shibuya" }); i += len; ultimo = s }
+  }
   while (i < N) {
     const len = CENARIO.trechoMin + Math.floor(hash01(seed, k) * (CENARIO.trechoMax - CENARIO.trechoMin))
     let t = Math.floor(hash01(seed, k + 997) * tipos.length)
@@ -111,36 +152,31 @@ export function enfeitesDoSegmento(trechos: Trecho[], idx: number, arvore: numbe
     if (idx % 10 === 5) add(ENF.poste, -1, 1.28, 0.05)
     if (idx % 90 === 45) add(ENF.ponto, 1, 1.42, 0.36)
     if (idx % 70 === 20) add(ENF.outdoor, 1, 1.75, 0.55)
-  } else if (tipo === "shibuya") {
-    // a vitrine: tela gigante, fachadas magenta/branco, multidão na calçada
+  } else if (tipo === "shibuya" || tipo === "shinjuku" || tipo === "oficinas") {
+    // QUARTEIRÃO VARIADO (playtest 16/11: "tudo do mesmo tamanho, cheio de
+    // prédio, sem personalidade"): um lote a cada 3 segmentos de cada lado,
+    // sorteado pelo peso do distrito, com largura e recuo próprios. Nem todo
+    // prédio tem neon; tem lojinha, terreno de estacionamento e vão vazio.
     if (idx % 3 === 0) {
       for (const l of [-1, 1] as const) {
-        const k = h(l < 0 ? 1 : 3)
-        if (k < 0.3) add(ENF.telaLED, l, 2.0 + h(2) * 0.3, 0.7)
-        else if (k < 0.75) add(ENF.fachadaShibuya, l, 1.75 + h(4) * 0.3, 0.55)
-        else add(ENF.predioAlto, l, 2.1, 0.16)
+        const lote = loteDoDistrito(tipo, h(l < 0 ? 1 : 3))
+        if (lote) add(lote.kind, l, lote.dist + h(l < 0 ? 2 : 4) * 0.3, lote.escala * (0.85 + h(l < 0 ? 5 : 6) * 0.3))
       }
     }
-    if (idx % 7 === 4) add(ENF.multidao, lado(8), 1.3, 0.34)
-    if (idx % 26 === 13) add(ENF.fiacao, -1, FIACAO.dist, FIACAO.escala)
-    if (idx % 41 === 20) add(ENF.maquinaBebida, lado(9), 1.32, 0.16)
-  } else if (tipo === "shinjuku") {
-    // o neon vertical: letreiros verticais empilhados, izakaya, vapor e poças
-    if (idx % 3 === 0) {
-      for (const l of [-1, 1] as const) out.push({ kind: ENF.fachadaShinjuku, lado: l, dist: 1.7 + h(l < 0 ? 2 : 4) * 0.35, escala: 0.55, seed: Math.floor(h(l < 0 ? 5 : 6) * 1e6) })
-    }
-    if (idx % 3 === 1) out.push({ kind: ENF.letreiroVertical, lado: lado(8), dist: 1.38, escala: 0.2, seed: COR_SHINJUKU[Math.floor(h(9) * 4)] + 6 * idx })
-    if (idx % 19 === 9) add(ENF.izakaya, lado(10), 1.45, 0.42)
-    if (idx % 23 === 11) add(ENF.vapor, lado(11), 1.08, 0.3)
-    if (idx % 20 === 17) add(ENF.fiacao, -1, FIACAO.dist, FIACAO.escala)
-  } else if (tipo === "oficinas") {
-    // a garagem: galpões de tuning, pneus empilhados, konbini e máquina de bebida
-    if (idx % 8 === 0) add(ENF.galpao, idx % 16 === 0 ? -1 : 1, 1.9 + h(1) * 0.2, 0.8)
-    if (idx % 8 === 4) add(ENF.pneus, lado(2), 1.32, 0.16)
-    if (idx % 70 === 35) add(ENF.konbini, lado(3), 1.75, 0.65)
-    if (idx % 29 === 7) add(ENF.maquinaBebida, lado(4), 1.32, 0.16)
-    if (idx % 18 === 9) add(ENF.fiacao, -1, FIACAO.dist, FIACAO.escala)
-    if (idx % 5 === 2 && h(5) < 0.4) add(ENF.predioMedio, lado(6), 2.4, 0.62)
+    if (tipo !== "oficinas" && idx % 6 === 4) add(ENF.pedestres, lado(8), 1.24, 0.3)
+    if (tipo === "shibuya" && idx % 23 === 11) add(ENF.multidao, lado(12), 1.3, 0.34)
+    if (tipo === "shinjuku" && idx % 3 === 1 && h(9) < 0.5) out.push({ kind: ENF.letreiroVertical, lado: lado(10), dist: 1.38, escala: 0.2, seed: COR_SHINJUKU[Math.floor(h(11) * 4)] + 6 * idx })
+    if (tipo === "shinjuku" && idx % 29 === 14) add(ENF.vapor, lado(13), 1.08, 0.3)
+    if (tipo === "oficinas" && idx % 8 === 4) add(ENF.pneus, lado(14), 1.32, 0.16)
+    if (idx % 37 === 20) add(ENF.maquinaBebida, lado(15), 1.32, 0.16)
+    if (idx % 22 === 13) add(ENF.fiacao, -1, FIACAO.dist, FIACAO.escala)
+  } else if (tipo === "entrada") {
+    // entrada da cidade: outdoors dos dois lados, postes, casas espaçadas e árvores
+    if (idx % 14 === 7) add(ENF.outdoor, idx % 28 === 7 ? -1 : 1, 1.7 + h(1) * 0.3, 0.55)
+    if (idx % 10 === 5) add(ENF.poste, -1, 1.28, 0.05)
+    if (idx % 9 === 2 && h(2) < 0.5) add(ENF.casa, lado(3), 1.9 + h(4) * 0.6, 0.5)
+    if (idx % 4 === 1) add(h(5) < 0.5 ? arvore : ENF.arvoreLarga, lado(6), 1.6 + h(7) * 0.8, 0.24)
+    if (idx % 41 === 30) add(ENF.lojinha, lado(8), 1.6, 0.42)
   } else if (tipo === "suburbio") {
     if (idx % 6 === 0) add(ENF.casa, lado(1), 1.75 + h(2) * 0.5, 0.5)
     if (idx % 6 === 3) add(ENF.muro, lado(3), 1.42, 0.45)

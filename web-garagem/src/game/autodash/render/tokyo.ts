@@ -17,6 +17,10 @@ export const TK = {
 }
 const SHIBUYA = [TK.magenta, TK.led, TK.magenta, "#ffd43b"]
 const SHINJUKU = [TK.ciano, TK.magenta, TK.ciano, TK.freio]
+// cores de fachada sem neon: concreto, bege, azulejo branco, tijolo, verde e azul claros, creme, grafite
+const FACHADAS = ["#9ca3af", "#d6c7a1", "#e5e7eb", "#9a4a3a", "#a7c4a0", "#9fb7cf", "#efe3c8", "#4b5563", "#c9a27e"]
+const TOLDOS = ["#dc2626", "#16a34a", "#2563eb", "#f59e0b", "#7c3aed"]
+const ROUPAS = ["#1f2937", "#7c2d12", "#1e3a8a", "#f8fafc", "#be185d", "#065f46", "#a16207"]
 
 const de = <T,>(lista: readonly T[], seed: number): T => lista[Math.abs(seed) % lista.length]
 const agora = () => performance.now()
@@ -281,6 +285,116 @@ export function drawTokyo(eng: AutoDashEngine, kind: number, seed: number, x: nu
         }
       }
       if (noite) reflexo(ctx, TK.magenta, x, y, w * 0.6)
+      return true
+    }
+    case ENF.lojinha: {
+      // lojinha de 1–2 andares: fachada de cor própria, toldo listrado, vitrine e plaquinha
+      const bw = w, andares = 1 + (seed % 2), h = w * (0.38 + andares * 0.2)
+      ctx.fillStyle = shade(de(FACHADAS, seed), luz)
+      ctx.fillRect(x - bw / 2, y - h, bw, h)
+      if (w < 10) return true
+      ctx.fillStyle = noite ? "#ffe8b8" : shade("#cfe6f5", luz) // vitrine
+      ctx.fillRect(x - bw * 0.4, y - h * (andares > 1 ? 0.45 : 0.62), bw * 0.8, h * (andares > 1 ? 0.38 : 0.5))
+      const toldo = de(TOLDOS, seed >> 2), ty = y - h * (andares > 1 ? 0.5 : 0.7)
+      for (let k = 0; k < 6; k++) { // toldo listrado
+        ctx.fillStyle = k % 2 ? shade("#f8fafc", luz) : shade(toldo, Math.max(0.55, amb))
+        ctx.fillRect(x - bw * 0.48 + k * bw * 0.16, ty, bw * 0.16, h * 0.1)
+      }
+      if (andares > 1 && w > 16) { // janela do andar de cima, fixa (não pisca)
+        ctx.fillStyle = noite && seed % 3 ? "#fde68a" : shade("#475569", luz)
+        ctx.fillRect(x - bw * 0.32, y - h * 0.9, bw * 0.24, h * 0.18)
+        ctx.fillRect(x + bw * 0.08, y - h * 0.9, bw * 0.24, h * 0.18)
+      }
+      // plaquinha (neon só em uma de cada três)
+      ctx.fillStyle = seed % 3 === 0 ? de([TK.magenta, TK.ciano, TK.freio, TK.konbini], seed >> 4) : shade("#f1f5f9", luz)
+      ctx.fillRect(x - bw * 0.25, ty - h * 0.14, bw * 0.5, h * 0.11)
+      return true
+    }
+    case ENF.predioJP: {
+      // prédio de 3 a 10 andares, de cor, largura e topo próprios. Janelas em FAIXA
+      // por andar (um retângulo de vidro) e as acesas escolhidas pelo índice do
+      // andar e da coluna: não piscam quando o prédio anda na tela.
+      const andares = 3 + (seed % 8), bw = w * (0.8 + ((seed >> 3) % 30) / 100)
+      const ah = bw * 0.22, h = ah * andares + bw * 0.1
+      const cor = de(FACHADAS, seed >> 1)
+      ctx.fillStyle = shade(cor, luz)
+      ctx.fillRect(x - bw / 2, y - h, bw, h)
+      if (w < 10) return true
+      const vidro = shade(noite ? "#1e293b" : "#7aa2c4", luz)
+      if (w < 18) { // LOD: meia distância, o vidro é um bloco só
+        ctx.fillStyle = vidro
+        ctx.fillRect(x - bw * 0.42, y - h + ah * 0.3, bw * 0.84, h - ah * 0.9)
+        return true
+      }
+      const cols = 3 + (seed % 2)
+      for (let a = 0; a < andares; a++) {
+        const fy = y - bw * 0.1 - (a + 1) * ah + ah * 0.25
+        ctx.fillStyle = vidro
+        ctx.fillRect(x - bw * 0.42, fy, bw * 0.84, ah * 0.5)
+        if (noite && w > 14) {
+          ctx.fillStyle = (a + seed) % 4 === 0 ? "#cfe3ff" : "#fde68a"
+          for (let c = 0; c < cols; c++) if ((a * 7 + c * 3 + seed) % 5 < 2) ctx.fillRect(x - bw * 0.42 + c * bw * 0.84 / cols + bw * 0.02, fy + ah * 0.06, bw * 0.84 / cols - bw * 0.04, ah * 0.38)
+        }
+        if (seed % 2 && w > 20) { ctx.fillStyle = shade("#64748b", luz); ctx.fillRect(x - bw / 2, fy + ah * 0.55, bw, Math.max(1, ah * 0.08)) } // varanda
+      }
+      ctx.fillStyle = noite ? "#fff1d6" : shade("#e2e8f0", luz) // térreo
+      ctx.fillRect(x - bw * 0.4, y - bw * 0.1 - ah * 0.6, bw * 0.8, ah * 0.5)
+      // topo: caixa d'água, outdoor no teto ou nada
+      const topo = (seed >> 5) % 3
+      if (topo === 0) { ctx.fillStyle = shade("#94a3b8", luz); ctx.fillRect(x + bw * 0.1, y - h - bw * 0.14, bw * 0.2, bw * 0.14) }
+      else if (topo === 1 && w > 14) {
+        ctx.fillStyle = shade("#334155", luz); ctx.fillRect(x - bw * 0.36, y - h - bw * 0.06, bw * 0.03, bw * 0.06); ctx.fillRect(x + bw * 0.33, y - h - bw * 0.06, bw * 0.03, bw * 0.06)
+        ctx.fillStyle = de([TK.magenta, TK.ciano, "#ffd43b", TK.led], seed >> 7)
+        ctx.fillRect(x - bw * 0.4, y - h - bw * 0.28, bw * 0.8, bw * 0.22)
+      }
+      // letreiro vertical na quina (um em cada três)
+      if (seed % 3 === 0 && w > 12) {
+        ctx.fillStyle = de([TK.magenta, TK.ciano, TK.freio], seed >> 9)
+        ctx.fillRect(x + bw * 0.5, y - h * 0.85, bw * 0.1, h * 0.5)
+      }
+      return true
+    }
+    case ENF.estacionamento: {
+      // terreno de estacionamento: chão, cerquinha, dois carros e o poste com a placa P
+      ctx.fillStyle = shade("#3f3f46", luz)
+      ctx.fillRect(x - w / 2, y - w * 0.04, w, w * 0.04)
+      if (w < 10) return true
+      ctx.fillStyle = shade("#a1a1aa", luz)
+      ctx.fillRect(x - w / 2, y - w * 0.09, w, Math.max(1, w * 0.012))
+      for (let k = 0; k < 2; k++) {
+        const cx = x - w * 0.22 + k * w * 0.42
+        ctx.fillStyle = shade(de(["#e11d48", "#f8fafc", "#1f2937", "#0ea5e9", "#facc15"], seed + k * 3), Math.max(0.5, amb))
+        rr(ctx, cx - w * 0.14, y - w * 0.13, w * 0.28, w * 0.09, w * 0.02)
+        ctx.fillStyle = shade("#0f172a", luz); ctx.fillRect(cx - w * 0.09, y - w * 0.17, w * 0.18, w * 0.05)
+      }
+      ctx.fillStyle = shade("#475569", luz); ctx.fillRect(x + w * 0.44, y - w * 0.45, Math.max(1, w * 0.02), w * 0.45)
+      ctx.fillStyle = "#2563eb"; ctx.fillRect(x + w * 0.39, y - w * 0.5, w * 0.12, w * 0.1)
+      if (w > 24) { ctx.fillStyle = "#f8fafc"; ctx.font = `bold ${Math.round(w * 0.08)}px 'Space Grotesk', sans-serif`; ctx.textAlign = "center"; ctx.fillText("P", x + w * 0.45, y - w * 0.42); ctx.textAlign = "left" }
+      return true
+    }
+    case ENF.pedestres: {
+      // gente andando na calçada: pernas em passo, bolsa ou guarda-chuva, cada um
+      // no seu ritmo; o grupo desliza devagar para um lado (o sentido vem do seed)
+      if (w < 6) return true // longe: gente de 1 px não vale o custo
+      const n = 1 + (seed % 3), sentido = seed % 2 ? 1 : -1
+      const t = agora() / 1000
+      for (let k = 0; k < n; k++) {
+        const ph = t * (2.2 + k * 0.3) + k * 1.9
+        const px = x + ((((t * 0.06 * sentido + k * 0.37 + (seed % 97) / 97) % 1) + 1) % 1 - 0.5) * w
+        const ph2 = Math.sin(ph * Math.PI)
+        const ht = w * (0.62 + ((seed >> k) % 4) * 0.04)
+        const roupa = shade(de(ROUPAS, seed + k * 5), Math.max(0.5, amb))
+        ctx.strokeStyle = shade("#1f2937", luz); ctx.lineWidth = Math.max(1, w * 0.035)
+        ctx.beginPath() // pernas em tesoura
+        ctx.moveTo(px, y - ht * 0.42); ctx.lineTo(px + ph2 * w * 0.06, y)
+        ctx.moveTo(px, y - ht * 0.42); ctx.lineTo(px - ph2 * w * 0.06, y)
+        ctx.stroke()
+        ctx.fillStyle = roupa
+        rr(ctx, px - w * 0.05, y - ht * 0.85, w * 0.1, ht * 0.45, w * 0.02)
+        ctx.fillStyle = shade("#d6a77a", luz)
+        ctx.beginPath(); ctx.arc(px, y - ht * 0.93, w * 0.04, 0, Math.PI * 2); ctx.fill()
+        if ((seed + k) % 4 === 0) { ctx.fillStyle = "rgba(244,247,255,0.35)"; ctx.beginPath(); ctx.arc(px, y - ht * 1.04, w * 0.11, Math.PI, 0); ctx.fill() }
+      }
       return true
     }
     case ENF.vapor: {

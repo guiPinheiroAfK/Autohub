@@ -298,14 +298,19 @@ export function drawDeco(eng: AutoDashEngine, kind: number, dir: number, x: numb
     ctx.fillStyle = shade(seed % 2 === 0 ? "#0b0f1a" : "#11101f", Math.max(0.4, amb))
     ctx.fillRect(x - bw / 2, y - h, bw, h)
 
-    // janelas só de perto: no horizonte viram sub-pixel e custam à toa
-    if (lit && w > 6) {
-      for (let wy = y - h + bw * 0.12; wy < y - bw * 0.12; wy += Math.max(3, bw * 0.16)) {
-        for (let wx = x - bw / 2 + bw * 0.08; wx < x + bw / 2 - bw * 0.05; wx += Math.max(3, bw * 0.22)) {
-          if (Math.floor(seed + wx * 3 + wy * 7) % 5 === 0) {
-            ctx.fillStyle = (wx + wy) % 4 === 0 ? "rgba(255,214,153,0.5)" : "rgba(226,240,255,0.5)"
-            ctx.fillRect(wx, wy, Math.max(1, bw * 0.05), Math.max(1, bw * 0.06))
-          }
+    // janelas por ANDAR e COLUNA (playtest 16/11: "otimizar os vidros"): antes o
+    // padrão vinha da posição na tela (wx, wy) e as janelas piscavam com o prédio
+    // andando. Agora: uma faixa de vidro por andar e as acesas pelo índice.
+    if (w > 6) {
+      const andares = Math.max(3, Math.floor(h / Math.max(3, bw * 0.16)))
+      const ah = (h - bw * 0.24) / andares
+      ctx.fillStyle = lit ? "rgba(30,41,59,0.9)" : shade("#5b7a99", Math.max(0.4, amb))
+      for (let a = 0; a < andares; a += 1) ctx.fillRect(x - bw * 0.42, y - h + bw * 0.12 + a * ah, bw * 0.84, ah * 0.55)
+      if (lit && w > 10) {
+        for (let a = 0; a < andares; a++) for (let c = 0; c < 4; c++) {
+          if ((a * 7 + c * 3 + seed) % 5 !== 0) continue
+          ctx.fillStyle = (a + c) % 3 === 0 ? "rgba(255,214,153,0.75)" : "rgba(226,240,255,0.7)"
+          ctx.fillRect(x - bw * 0.42 + c * bw * 0.21 + bw * 0.01, y - h + bw * 0.12 + a * ah, bw * 0.19, ah * 0.55)
         }
       }
     }

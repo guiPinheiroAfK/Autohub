@@ -1,6 +1,6 @@
 // Fase 8.4: cenário de beira por trechos (world/cenario.ts).
 import { describe, it, expect } from "vitest"
-import { gerarTrechos, tipoNoSeg, enfeitesDoSegmento, CENARIO, TRECHOS_DO_BIOMA, hash01, ENF, FIACAO } from "../world/cenario"
+import { gerarTrechos, tipoNoSeg, enfeitesDoSegmento, CENARIO, TRECHOS_DO_BIOMA, hash01, ENF, FIACAO, CHEGADA_CIDADE } from "../world/cenario"
 
 describe("cenário por trechos", () => {
   it("os trechos cobrem a pista inteira, sem buraco e sem dois iguais seguidos", () => {
@@ -15,7 +15,8 @@ describe("cenário por trechos", () => {
           expect(t[i].tipo).not.toBe(t[i - 1].tipo)
         }
         for (const x of t.slice(0, -1)) expect(x.b - x.a).toBeGreaterThanOrEqual(CENARIO.trechoMin)
-        for (const x of t) expect(TRECHOS_DO_BIOMA[bioma]).toContain(x.tipo)
+        const chegada = bioma === "cidade" ? CHEGADA_CIDADE.map(c => c[0]) : []
+        for (const x of t) expect([...TRECHOS_DO_BIOMA[bioma], ...chegada]).toContain(x.tipo)
       }
     }
   })
@@ -49,6 +50,23 @@ describe("cenário por trechos", () => {
 })
 
 describe("cidade Tokyo (16/11)", () => {
+  it("chega pelo mato, passa pelos outdoors da entrada e entra em Shibuya", () => {
+    const t = gerarTrechos(6000, 4, "cidade")
+    expect(t.slice(0, 3).map(x => x.tipo)).toEqual(["mata", "entrada", "shibuya"])
+    let outdoors = 0
+    for (let idx = t[1].a + CENARIO.transicao; idx < t[1].b; idx++) outdoors += enfeitesDoSegmento(t, idx, 0).filter(e => e.kind === ENF.outdoor).length
+    expect(outdoors).toBeGreaterThan(10)
+  })
+
+  it("o quarteirão varia: vários tipos e larguras de lote no mesmo distrito", () => {
+    const t = gerarTrechos(6000, 4, "cidade")
+    const sh = t.find(x => x.tipo === "shibuya")!
+    const kinds = new Set<number>(), escalas = new Set<number>()
+    for (let idx = sh.a + CENARIO.transicao; idx < sh.b; idx++) for (const e of enfeitesDoSegmento(t, idx, 0)) { kinds.add(e.kind); escalas.add(Math.round(e.escala * 100)) }
+    for (const k of [ENF.predioJP, ENF.lojinha, ENF.fachadaShibuya, ENF.pedestres]) expect(kinds).toContain(k)
+    expect(escalas.size).toBeGreaterThan(15)
+  })
+
   it("a cidade alterna os distritos e cada um tem os seus enfeites", () => {
     const t = gerarTrechos(6000, 3, "cidade")
     const tipos = new Set(t.map(x => x.tipo))
