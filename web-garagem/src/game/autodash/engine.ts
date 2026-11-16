@@ -97,8 +97,8 @@ export interface Obstacle { z: number; offset: number; kind: "cone" | "barrier" 
 //              rápido demais = perseguição (o evento da conversa original)
 //  posto     — reta com posto de combustível (Fase 5, world/posto.ts)
 //  obra      — obra com estreitamento: `lado` fecha duas faixas (world/obra.ts)
-export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto" | "obra"; z: number; end: number; spawnT: number; checked?: boolean; lado?: number }
-export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto" | "chegada" | "acidente" | "policia"; label?: string; lado?: number }
+export interface Zone { type: "bridge" | "viaduct" | "wrongway" | "blitz" | "speedtrap" | "posto" | "obra" | "tunnel"; z: number; end: number; spawnT: number; checked?: boolean; lado?: number }
+export interface RoadSign { z: number; type: "limit90" | "limit60" | "wrongway" | "bridgewarn" | "works" | "merge" | "atalho" | "posto" | "chegada" | "acidente" | "policia" | "tunel"; label?: string; lado?: number }
 
 export const PU_NITRO = 0, PU_SHIELD = 1, PU_X2 = 2
 export interface Pickup { z: number; offset: number; type: number; pulse: number; taken?: boolean }
@@ -233,6 +233,8 @@ export class AutoDashEngine {
   abastecendo = false
   juntoDaBomba = false // no pátio do posto, ao lado da ilha (world/posto.ts)
   elevJogador = 0      // altura do chão sob o jogador (elevado do viaduto, Fase 8.6)
+  dentroTunel = false  // dentro do túnel (world/tunel.ts, Fase 8.7)
+  claraoT = 0          // s restantes do clarão ao sair do túnel
   racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
   rachaT = 45 // s de solo até o próximo convite
   comboio: Comboio | null = null // comboio com fresta em andamento (world/comboio.ts)
@@ -433,7 +435,7 @@ export class AutoDashEngine {
     renderRearThreat(this)
     renderParticles(this)
 
-    if (this.raining) {
+    if (this.raining && !this.dentroTunel) {
       ctx.strokeStyle = "rgba(190,215,240,0.35)"
       ctx.lineWidth = 1.5
       ctx.beginPath()

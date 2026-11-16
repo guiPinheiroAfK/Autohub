@@ -12,6 +12,7 @@ import { combustivelAtivo, postoAFrente, postoMeio, postoPatio } from "../world/
 import { wrapDz } from "../traffic/spawner"
 import { RACHA } from "../world/racha"
 import { vantagemM } from "../modes/racha"
+import { drawPlacaTunel } from "./tunel"
 
 export const PERIGO = { ambar: "#FF9F1C", branco: "#FFF4E0", preto: "#14110F", pisca: "#FFC23D" }
 
@@ -185,6 +186,7 @@ export function desenharPlacaEvento(eng: AutoDashEngine, sign: RoadSign, x: numb
     }
     return true
   }
+  if (sign.type === "tunel") { drawPlacaTunel(ctx, x, cy, r, amb); return true }
   if (sign.type === "acidente") {
     // aviso de acidente: triângulo âmbar com "!" (paleta de perigo)
     ctx.fillStyle = shade(PERIGO.ambar, Math.max(0.6, amb))

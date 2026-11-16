@@ -59,7 +59,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   iniciarTempo(eng, hora, clima, seed ?? seedDoTracado(eng))
   // eventos da Fase 5: sorteio próprio (não mexe na sequência do Math.random) e tanque cheio
   eng.rngEv = mulberry32((eng.climaSeed ^ 0x5f3759df) >>> 0)
-  eng.combustivel = 1; eng.postoLimite = COMBUSTIVEL.chamaPosto; eng.abastecendo = false; eng.juntoDaBomba = false; eng.elevJogador = 0; eng.audio.bomba(false)
+  eng.combustivel = 1; eng.postoLimite = COMBUSTIVEL.chamaPosto; eng.abastecendo = false; eng.juntoDaBomba = false; eng.elevJogador = 0; eng.dentroTunel = false; eng.claraoT = 0; eng.audio.bomba(false)
   eng.racha = null; eng.rachaT = RACHA.primeiroConviteS
   eng.comboio = null; eng.oleoT = 0
   eng.vacuo = 0; eng.vacuoS = 0; eng.estilingueT = 0

@@ -222,7 +222,7 @@ Checklist:
 - [x] **E4 obra com estreitamento:** evento novo no sorteio. Duas faixas de um lado fecham por ~3 s a 200 km/h, com seta luminosa piscando (paleta de perigo da pesquisa 1.8), cones na divisa e cavaletes no trecho fechado. O trânsito migra para o lado livre.
 - [x] **E6 comboio com fresta:** três veículos lado a lado no mesmo ritmo, uma faixa livre. A fresta anda: o vizinho dá seta 1,2 s e fecha, abrindo outra. Passar pela fresta vale bônus ×3 de quase-batida. Depois de ~16 s o comboio se desfaz.
 - [x] **E15 óleo após acidente:** carro batido no acostamento com pisca-alerta e mancha de óleo na faixa ao lado. Em cima da mancha a aderência cai para 35% por 0,7 s (escorrega, sem morte).
-- [x] Teclas de debug de playtest (só no solo, correndo): **1** posto, **2** convite de racha, **3** obra, **4** comboio, **5** óleo, **6** tanque na reserva, **7** viaduto com elevado (Fase 8.6).
+- [x] Teclas de debug de playtest (só no solo, correndo): **1** posto, **2** convite de racha, **3** obra, **4** comboio, **5** óleo, **6** tanque na reserva, **7** viaduto com elevado (Fase 8.6), **8** túnel (Fase 8.7).
 - [x] Testes unitários das funções puras (consumo, abastecimento, vácuo).
 
 Critério de aceite: build, lint e testes verdes. Golden muda só em commits próprios (HUD do combustível; caminhão e vácuo mudam o trânsito e a corrida). No navegador: o posto aparece e abastece; a pane seca não encerra a rodada; o convite de racha aparece, aceita com [F] e termina com resultado; obra, comboio e óleo aparecem e se leem a tempo; vácuo aparece no HUD atrás de um carro.
@@ -452,12 +452,12 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
   embaixo (com estrelas), helicóptero perdendo você embaixo (já existe, fica visível).
 - [x] Visual: pilares com sombra, juntas de dilatação, iluminação à noite, pichação.
 
-**8.7 Túnel raro** (como a ponte: zona longa que aparece de vez em quando)
-- [ ] Zona `tunnel`: entrada com boca de concreto, teto e paredes com luzes em fila
+**8.7 Túnel raro** (como a ponte: zona longa que aparece de vez em quando) — feito em 16/11
+- [x] Zona `tunnel`: entrada com boca de concreto, teto e paredes com luzes em fila
   passando, escuro com faróis, saída com o clarão. Rara no sorteio (peso baixo).
-- [ ] Som: eco forte do motor (reaproveita o eco do viaduto, mais longo) e o ronco
-  de ventilação. Helicóptero e radar te perdem lá dentro.
-- [ ] Cartão de aviso "TÚNEL" e placa de faróis; chuva para lá dentro.
+- [x] Som: eco forte do motor (reaproveita o eco do viaduto). Helicóptero te perde lá dentro.
+  Falta: o ronco de ventilação e o radar.
+- [x] Cartão de aviso "TÚNEL" e placa de faróis; chuva para lá dentro.
 
 Pendências que ficaram da rodada de som (15/11), fora desta fase: V6 biturbo ainda no
 VQ35 aproximado; W16 e rotativo só síntese; puxada de pé leve (E) não gravada.
@@ -536,4 +536,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-16 | (Fase 8.1, este) | Civil e comboio enxergam o jogador na faixa (até 12 mil u) e freiam a tempo (v² = v_jogador² + 2·75·folga), parando atrás; luz de freio nos civis abaixo do cruzeiro; preso atrás de você por 1,5 s buzina (baixa, no máximo a cada 1,2 s) e tenta passar pela faixa livre. Teste em `__tests__/civil-jogador.test.ts`. Desafiante do racha ainda não vê o jogador. | atualizado nos 3 cenários (luz de freio dos civis, inclusive no trânsito de fundo do menu, e a freada atrás do jogador); fim das partidas igual. |
 | 2026-11-16 | (Fase 8.2, este) | Posto de verdade: pátio com duas faixas de bomba e ilha no meio (guia amarela), cobertura com a marca genérica "POSTO AUTOHUB 24h", duas bombas com visor e mangueira, loja de conveniência com vitrine acesa à noite, totem de preço na entrada; 1–3 carros abastecendo na faixa de fora (estacionados, `eng.rngEv`). Bomba: passando devagar 4 L/s (era 10); parado ao lado da ilha 20 L/s; HUD com litros e dica. Som da bomba (clique, zumbido, trava). Estacionados vivem até 2×DRAW_DIST + 300 à frente (os do posto morriam ao nascer). Teste em `__tests__/posto.cenario.test.ts`. | não alterado (o posto não aparece nos replays) |
 | 2026-11-16 | (Fase 8.6, este) | Viaduto vira trevo com ELEVADO: ramal à direita (ADR 0014) que sai colado da pista, descola, sobe até 4100 u no cruzamento (platô) e desce, devolvendo à pista (`alto`/`topo` no Ramal, `elevacao`, `VIADUTO` em world/events.ts). Câmera sobe junto (`eng.elevJogador`); mureta dos dois lados no alto (raspar segura o carro); embaixo não dá para entrar nos pilares. Desenho do elevado como sprite por segmento (tabuleiro, muretas com junta, parede, pilares, fundo da laje visto de baixo, postes). Carros sobem (seta na faixa colada) e descem entrando na via; nitro, x2 e nitro no platô. Viaduto com juntas, postes acesos à noite e pichação nos pilares; a alça desenhada antiga e a faixa de aceleração saíram. Reciclagem limpa o estado de elevado do carro (ele voltava teleportado para cima). Teste em `__tests__/viaduto.cenario.test.ts`. | não alterado (o viaduto não aparece nos replays) |
+| 2026-11-16 | (Fase 8.7, este) | Túnel raro (`world/tunel.ts`, `render/tunel.ts`): zona de 280 segmentos (cabe na distância de desenho: a saída aparece no fundo), relevo plano e curvas suavizadas; entra no sorteio só com 30% de chance por evento. Boca com montanha e pórtico "TÚNEL DA SERRA"; dentro, paredes com azulejo, teto, duas filas de luz, placa de emergência, asfalto escurecido, faróis acesos, sem chuva, eco (o mesmo do viaduto) e o helicóptero cego; a luz do fim do túnel e o clarão na saída. Placas "TÚNEL 2 km / 1 km / ACENDA OS FARÓIS" e cartão. Tecla 8 no solo. Teste em `__tests__/tunel.cenario.test.ts`. | atualizado no replay solo: o sorteio do túnel usa um número a mais de `eng.rngEv`, então o evento sorteado no replay muda. Fim de partida igual. |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |

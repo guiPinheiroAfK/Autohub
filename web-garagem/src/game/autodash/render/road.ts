@@ -16,6 +16,8 @@ import { CLIMAS } from "../world/weather"
 import { type Traffic, KINDS } from "../traffic/types"
 import { poly } from "./primitives"
 import { drawRamalSeg, drawElevadoSeg, type ElevadoSeg } from "./ramal"
+import { drawTunelSeg, drawClarao, type TunelSeg } from "./tunel"
+import { TUNEL } from "../world/tunel"
 import { elevacao, elevacaoEm, ramalBordas, ramalPerfilOuZero } from "../world/ramais"
 import { drawPosto, drawPostoLoja, drawPostoTotem } from "./eventos"
 import { postoMeio, postoLoja, postoTotem, naFaixaDoPosto } from "../world/posto"
@@ -62,8 +64,9 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // Depois do primeiro segmento pintado, sy2 >= maxY passa a significar
   // "escondido por morro" — aí sim o segmento some inteiro.
   let roadStarted = false
+  let cobriuTunel = false // dentro do túnel: o primeiro segmento já cobriu a tela
 
-  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem" | "elevado"; el?: ElevadoSeg; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
+  interface SpriteDraw { kind: "car" | "pu" | "deco" | "ghost" | "obs" | "sign" | "bridge" | "gate" | "posto" | "postoLoja" | "postoTotem" | "elevado" | "tunel"; el?: ElevadoSeg; tn?: TunelSeg; t?: Traffic; p?: Pickup; deco?: number; dir?: number; obs?: Obstacle; sign?: RoadSign; ramal?: Ramal; x: number; y: number; w: number; dz?: number }
   const sprites: SpriteDraw[] = []
   // buckets de tráfego, obstáculos, placas e powerups por segmento
   const obsBySeg = new Map<number, Obstacle[]>()
@@ -84,6 +87,9 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   const bridgeSpan = new Set<number>()
   const towerSegs = new Set<number>()
   const wrongwaySpan = new Set<number>()
+  // túnel (Fase 8.7): trecho com paredes e teto, e o segmento da boca
+  const tunelSpan = new Set<number>()
+  const tunelBoca = new Set<number>()
   const wrongwayRamp = new Map<number, number>()
   // alça de acesso do viaduto: por segmento, a largura do braço extra à
   // direita (1 = faixa paralela cheia, 0 = já fundiu na via)
@@ -103,6 +109,11 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
       for (let i = 0; i <= len; i++) bridgeSpan.add((a + i) % N)
       towerSegs.add((a + Math.floor(len * 0.22)) % N)
       towerSegs.add((a + Math.floor(len * 0.78)) % N)
+    } else if (zn.type === "tunnel") {
+      const a = Math.floor(zn.z / SEG_LEN) % N
+      const len = ((Math.floor(zn.end / SEG_LEN) - Math.floor(zn.z / SEG_LEN)) % N + N) % N
+      for (let i = 0; i < len; i++) tunelSpan.add((a + i) % N)
+      tunelBoca.add(a)
     } else if (zn.type === "wrongway") {
       const a = Math.floor(zn.z / SEG_LEN) % N
       const len = ((Math.floor(zn.end / SEG_LEN) - Math.floor(zn.z / SEG_LEN)) % N + N) % N
@@ -327,6 +338,11 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         poly(ctx, sx1 - sw1 * 0.042, ry1, sx1 - sw1 * 0.014, ry1, sx2 - sw2 * 0.014, ry2, sx2 - sw2 * 0.042, ry2)
         poly(ctx, sx1 + sw1 * 0.014, ry1, sx1 + sw1 * 0.042, ry1, sx2 + sw2 * 0.042, ry2, sx2 + sw2 * 0.014, ry2)
       }
+      // dentro do túnel o asfalto fica no escuro (só as luzes do teto)
+      if (tunelSpan.has(idx)) {
+        ctx.fillStyle = "rgba(6,9,16,0.45)"
+        poly(ctx, sx1 - sw1 * 1.2, ry1, sx1 + sw1 * 1.2, ry1, sx2 + sw2 * 1.2, ry2, sx2 - sw2 * 1.2, ry2)
+      }
       edgeL.push(sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2)
       edgeR.push(sx1 + sw1 * 1.11, ry1, sx2 + sw2 * 1.11, ry2)
       maxY = sy2
@@ -353,6 +369,19 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
         const sySobe = el > 0 ? sy - el * (s1 + (s2 - s1) * pct) : sy
         sprites.push({ kind: "car", t, x: sx + sw * t.offset, y: sySobe, w: sw * KINDS[t.kind].w, dz: dz1 + SEG_LEN * pct })
       }
+    }
+    // túnel: paredes e teto deste segmento (também no campo próximo: é o teto
+    // em cima da câmera). O primeiro visto de dentro cobre a tela fora do tubo.
+    if (tunelSpan.has(idx)) {
+      const tY = TUNEL.altura, P = TUNEL.parede
+      sprites.push({ kind: "tunel", x: 0, y: 0, w: 0, tn: {
+        idx, xl1: sx1 - sw1 * P, xr1: sx1 + sw1 * P, xl2: sx2 - sw2 * P, xr2: sx2 + sw2 * P,
+        yb1: sy1, yb2: sy2, yt1: sy1 - tY * s1, yt2: sy2 - tY * s2,
+        boca: tunelBoca.has(idx) && !eng.dentroTunel,
+        cobre: eng.dentroTunel && !cobriuTunel,
+        saida: !tunelSpan.has((idx + 1) % N),
+      } })
+      if (eng.dentroTunel) cobriuTunel = true
     }
     // elevado do viaduto: um sprite por segmento, depois dos carros deste
     // segmento (o desenho é de trás para frente: os carros ficam por cima)
@@ -429,7 +458,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     if (viaductSegs.has(idx)) sprites.push({ kind: "bridge", x: sx1, y: sy1, w: sw1 })
     if (towerSegs.has(idx)) sprites.push({ kind: "gate", x: sx1, y: sy1, w: sw1 })
     // decoração de beira de estrada e placas (nada de árvore no meio da água)
-    if (onBridge) continue
+    if (onBridge || tunelSpan.has(idx)) continue
     if (seg.sign) {
       sprites.push({ kind: "deco", deco: 3, dir: seg.sign, x: sx1 - sw1 * 1.35 * seg.sign, y: sy1, w: sw1 * 0.16 })
     } else if (eng.mode === "race") {
@@ -486,7 +515,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   }
 
   // farol à noite
-  if (amb < 0.62 && (eng.state === "racing" || eng.state === "countdown" || eng.state === "paused")) {
+  if ((amb < 0.62 || eng.dentroTunel) && (eng.state === "racing" || eng.state === "countdown" || eng.state === "paused")) {
     const lg = ctx.createRadialGradient(W / 2, H * 0.72, 20, W / 2, H * 0.72, 330)
     lg.addColorStop(0, `rgba(255,240,180,${(0.62 - amb) * 0.5})`)
     lg.addColorStop(1, "rgba(255,240,180,0)")
@@ -521,6 +550,7 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     else if (s.kind === "postoLoja") drawPostoLoja(eng, s.ramal!, s.x, s.y, s.w, amb)
     else if (s.kind === "postoTotem") drawPostoTotem(eng, s.ramal!, s.x, s.y, s.w, amb)
     else if (s.kind === "elevado") drawElevadoSeg(eng, s.el!, amb, roadL, roadD, laneC)
+    else if (s.kind === "tunel") drawTunelSeg(eng, s.tn!, amb)
     else drawDeco(eng, s.deco!, s.dir ?? 0, s.x, s.y, s.w, amb)
   }
 
@@ -551,4 +581,6 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
 
   // helicóptero por cima de tudo (até da neblina: é luz no céu)
   if (heli) drawHelicoptero(eng, luz)
+  // saindo do túnel: o clarão
+  drawClarao(eng, eng.claraoT, TUNEL.claraoS)
 }

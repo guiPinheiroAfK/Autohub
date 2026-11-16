@@ -43,4 +43,8 @@ export function teclaDebugEvento(eng: AutoDashEngine, k: string) {
     if (eng.zones.some(z => z.end > eng.position)) aviso("evento à frente: tente depois")
     else spawnEvent(eng, "viaduct")
   }
+  if (k === "8") { // túnel raro (Fase 8.7)
+    if (eng.zones.some(z => z.end > eng.position)) aviso("evento à frente: tente depois")
+    else spawnEvent(eng, "tunnel")
+  }
 }
