@@ -7,7 +7,7 @@
 // índice: sem sorteio no render, a mesma pista desenha sempre o mesmo cenário.
 // Desenho dos enfeites novos em render/cenario.ts.
 
-export type TipoTrecho = "centro" | "suburbio" | "campo" | "orla"
+export type TipoTrecho = "centro" | "suburbio" | "campo" | "orla" | "mata"
 
 export interface Trecho { a: number; b: number; tipo: TipoTrecho }
 
@@ -20,6 +20,8 @@ export const CENARIO = {
 export const TRECHOS_DO_BIOMA: Record<string, TipoTrecho[]> = {
   cidade: ["centro", "suburbio", "campo"],
   costa: ["orla", "suburbio", "campo"],
+  serra: ["mata", "campo", "suburbio"],   // Fase 8.5
+  rodovia: ["campo", "suburbio", "campo", "mata"], // campo repetido: aparece mais
 }
 
 /** Tipos de enfeite (os números são os `kind` do drawDeco; 20+ moram em render/cenario.ts). */
@@ -27,6 +29,7 @@ export const ENF = {
   arvore: 0, poste: 1, outdoor: 2, predioAlto: 6, palmeira: 7,
   casa: 20, muro: 21, ponto: 22, arvoreLarga: 23, pinheiro: 24, plantacao: 25,
   celeiro: 26, quiosque: 27, guardaSol: 28, predioMedio: 29, cerca: 30,
+  guardRail: 31, rocha: 32,
 } as const
 
 export interface Enfeite {
@@ -53,7 +56,8 @@ export function gerarTrechos(N: number, seed: number, biomaId: string): Trecho[]
   while (i < N) {
     const len = CENARIO.trechoMin + Math.floor(hash01(seed, k) * (CENARIO.trechoMax - CENARIO.trechoMin))
     let t = Math.floor(hash01(seed, k + 997) * tipos.length)
-    if (t === ultimo) t = (t + 1) % tipos.length
+    // nunca o mesmo TIPO seguido (a lista pode repetir um tipo para pesar mais)
+    for (let tent = 0; tent < tipos.length && ultimo >= 0 && tipos[t] === tipos[ultimo]; tent++) t = (t + 1) % tipos.length
     out.push({ a: i, b: Math.min(N, i + len), tipo: tipos[t] })
     ultimo = t; i += len; k++
   }
@@ -103,6 +107,12 @@ export function enfeitesDoSegmento(trechos: Trecho[], idx: number, arvore: numbe
     if (idx % 12 === 6) add(ENF.plantacao, lado(5), 2.6, 1.4)
     if (idx % 160 === 80) add(ENF.celeiro, lado(6), 2.5, 0.7)
     if (idx % 97 === 40) add(ENF.outdoor, lado(7), 1.75, 0.55)
+  } else if (tipo === "mata") {
+    // mata de serra: guard-rail dos dois lados, pinheiros fechados e pedras
+    add(ENF.guardRail, idx % 2 === 0 ? -1 : 1, 1.16, 0.42)
+    if (idx % 2 === 1) add(h(1) < 0.75 ? ENF.pinheiro : arvore, lado(2), 1.5 + h(3) * 1.4, 0.22 + h(4) * 0.08)
+    if (idx % 3 === 0 && h(5) < 0.5) add(ENF.pinheiro, lado(6), 2.2 + h(7) * 1.2, 0.24)
+    if (idx % 37 === 9) add(ENF.rocha, lado(8), 1.45, 0.3)
   } else { // orla
     if (idx % 4 === 0) add(ENF.palmeira, -1, 1.55 + h(1) * 0.3, 0.22)
     if (idx % 30 === 15) add(ENF.quiosque, -1, 1.65, 0.45)

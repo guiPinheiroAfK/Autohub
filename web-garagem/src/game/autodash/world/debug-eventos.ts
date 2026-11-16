@@ -7,6 +7,7 @@ import { startRace } from "../modes/race"
 import { spawnPosto } from "./posto"
 import { convidarRacha } from "../modes/racha"
 import { spawnEvent } from "./events"
+import { trocarRegiao } from "./regiao"
 
 /**
  * Atalho de teste da Fase 5 (garagem → J), como o [Z] do teste de motor: largada
@@ -43,6 +44,7 @@ export function teclaDebugEvento(eng: AutoDashEngine, k: string) {
     if (eng.zones.some(z => z.end > eng.position)) aviso("evento à frente: tente depois")
     else spawnEvent(eng, "viaduct")
   }
+  if (k === "9") trocarRegiao(eng) // próxima região (Fase 8.5)
   if (k === "8") { // túnel raro (Fase 8.7)
     if (eng.zones.some(z => z.end > eng.position)) aviso("evento à frente: tente depois")
     else spawnEvent(eng, "tunnel")

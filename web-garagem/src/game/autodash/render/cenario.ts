@@ -158,6 +158,28 @@ export function drawEnfeite(eng: AutoDashEngine, kind: number, seed: number, x: 
       ctx.fillRect(x + w * 0.15, y - w * 0.18, w * 0.35, Math.max(1, w * 0.05))
       return true
     }
+    case ENF.guardRail: {
+      // guard-rail metálico: postes e a lâmina com o reflexo
+      const bh = w * 0.16
+      ctx.fillStyle = shade("#64748b", luz)
+      for (let i = 0; i <= 2; i++) ctx.fillRect(x - w / 2 + (w / 2) * i - Math.max(0.5, w * 0.01), y - bh, Math.max(1, w * 0.02), bh)
+      ctx.fillStyle = shade("#cbd5e1", luz)
+      ctx.fillRect(x - w / 2, y - bh * 0.95, w, Math.max(1, bh * 0.35))
+      ctx.fillStyle = shade("#94a3b8", luz)
+      ctx.fillRect(x - w / 2, y - bh * 0.62, w, Math.max(1, bh * 0.1))
+      return true
+    }
+    case ENF.rocha: {
+      // pedra grande de barranco
+      ctx.fillStyle = shade(seed % 2 ? "#78716c" : "#6b7280", luz)
+      ctx.beginPath()
+      ctx.moveTo(x - w * 0.5, y); ctx.lineTo(x - w * 0.42, y - w * 0.35); ctx.lineTo(x - w * 0.1, y - w * 0.52)
+      ctx.lineTo(x + w * 0.3, y - w * 0.44); ctx.lineTo(x + w * 0.5, y - w * 0.1); ctx.lineTo(x + w * 0.46, y)
+      ctx.closePath(); ctx.fill()
+      ctx.fillStyle = shade("#a8a29e", luz)
+      ctx.beginPath(); ctx.moveTo(x - w * 0.1, y - w * 0.52); ctx.lineTo(x + w * 0.3, y - w * 0.44); ctx.lineTo(x + w * 0.05, y - w * 0.3); ctx.closePath(); ctx.fill()
+      return true
+    }
     case ENF.predioMedio: {
       // prédio residencial: varandas em faixas, janelas acesas à noite
       const bw = w, bh = w * (1.5 + (seed % 100) / 90)

@@ -19,6 +19,8 @@ const CAMADAS: Record<LayerKind, (eng: AutoDashEngine, amb: number) => void> = {
   mar: camadaMar,
   palmeiras: camadaPalmeiras,
   pier: camadaPier,
+  pinheiral: camadaPinheiral,
+  colinas: camadaColinas,
 }
 
 export function renderBackdrop(eng: AutoDashEngine, amb: number) {
@@ -79,6 +81,39 @@ function camadaMontanhas(eng: AutoDashEngine, amb: number) {
   }
   ridge(shade("#2b3c56", amb), 72, hz + 2, eng.bgShift * 0.18, 16)
   ridge(shade("#1e2c40", amb), 46, hz + 3, eng.bgShift * 0.42, 12)
+}
+
+// serra (Fase 8.5): encosta de pinheiros escuros na frente das montanhas.
+// Parallax baixo (0,12): é fundo, não pode "virar junto" na curva.
+function camadaPinheiral(eng: AutoDashEngine, amb: number) {
+  const ctx = eng.ctx
+  const hz = H * 0.5
+  const wrap = W + 60
+  ctx.fillStyle = shade("#13261d", Math.max(0.35, amb))
+  ctx.fillRect(-10, hz - 10, W + 20, 14)
+  for (let i = 0; i < 60; i++) {
+    const x = (((i * 23 - eng.bgShift * 0.12) % wrap) + wrap) % wrap - 30
+    const h = 16 + ((i * 41) % 22), lw = 5 + ((i * 7) % 5)
+    ctx.fillStyle = shade(i % 3 === 0 ? "#0f2219" : "#163024", Math.max(0.35, amb))
+    ctx.beginPath(); ctx.moveTo(x, hz - 6 - h); ctx.lineTo(x + lw, hz + 2); ctx.lineTo(x - lw, hz + 2); ctx.closePath(); ctx.fill()
+  }
+}
+
+// rodovia (Fase 8.5): colinas suaves e verdes até o horizonte
+function camadaColinas(eng: AutoDashEngine, amb: number) {
+  const ctx = eng.ctx
+  const hz = H * 0.5
+  const faixa = (col: string, amp: number, shift: number, freq: number) => {
+    ctx.fillStyle = col
+    ctx.beginPath(); ctx.moveTo(-20, hz + 4)
+    for (let x = -20; x <= W + 20; x += 14) {
+      const k = x + shift
+      ctx.lineTo(x, hz - (Math.sin(k * freq) * 0.5 + 0.5) * amp - 4)
+    }
+    ctx.lineTo(W + 20, hz + 4); ctx.closePath(); ctx.fill()
+  }
+  faixa(shade("#5b7c3a", amb * 0.85), 30, eng.bgShift * 0.08, 0.008)
+  faixa(shade("#4d6b2f", amb * 0.9), 18, eng.bgShift * 0.14, 0.013)
 }
 
 // skyline com janelas acesas à noite

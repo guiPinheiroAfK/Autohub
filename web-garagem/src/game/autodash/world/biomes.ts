@@ -7,7 +7,14 @@ export interface SkyKey { t: number; top: string; bot: string; amb: number }
 export interface SkyState { top: string; bot: string; amb: number }
 
 // Tipos de camada conhecidos pelo render (registro CAMADAS em render/backdrop.ts).
-export type LayerKind = "ceu-sol" | "montanhas" | "skyline" | "brilho-urbano" | "mar" | "palmeiras" | "pier"
+export type LayerKind = "ceu-sol" | "montanhas" | "skyline" | "brilho-urbano" | "mar" | "palmeiras" | "pier" | "pinheiral" | "colinas"
+
+/**
+ * Traçado do bioma (Fase 8.5): multiplica a curva e o morro de cada trecho da
+ * pista procedural e o comprimento das retas. Sem `tracado` (cidade) a pista é
+ * exatamente a de antes.
+ */
+export interface Tracado { curva: number; morro: number; reta: number }
 
 export interface BiomeDef {
   id: string
@@ -20,8 +27,10 @@ export interface BiomeDef {
   camadas: { longe: LayerKind[]; meio: LayerKind[]; perto: LayerKind[] }
   // kind da decoração de beira que faz o papel de árvore (0 = árvore padrão)
   arvore: number
-  // climas que este bioma aceita (usado pelo sorteio de clima na Fase 4)
+  // climas que este bioma aceita (usado pelo sorteio de clima na Fase 4).
+  // Repetir um clima dobra o peso dele (a serra tem neblina duas vezes).
   climas: string[]
+  tracado?: Tracado
 }
 
 // paleta do ciclo de dia do solo (cidade). Movida de engine.ts para cá.
@@ -56,6 +65,39 @@ export const BIOMES: Record<string, BiomeDef> = {
     camadas: { longe: ["ceu-sol", "mar"], meio: ["palmeiras"], perto: ["pier"] },
     arvore: 7, // palmeira de beira (drawDeco, kind 7)
     climas: ["limpo", "nublado", "chuva", "neblina"],
+    tracado: { curva: 0.8, morro: 0.5, reta: 1.2 }, // orla: curvas longas e abertas
+  },
+  // serra (Fase 8.5): curvas fechadas e morros, pinheiral no fundo, neblina frequente
+  serra: {
+    id: "serra",
+    nome: "Serra",
+    ceu: [
+      { t: 0.125, top: "#5b8fc7", bot: "#d7e6ef", amb: 0.95 },
+      { t: 0.375, top: "#4b3b62", bot: "#e7a56b", amb: 0.78 },
+      { t: 0.625, top: "#060b16", bot: "#1b2a3a", amb: 0.4 },
+      { t: 0.875, top: "#3c5a78", bot: "#efd3a6", amb: 0.76 },
+    ],
+    ceuCorrida: { top: "#070d18", bot: "#1d2c3c", amb: 0.42, ambChuva: 0.33 },
+    camadas: { longe: ["ceu-sol", "montanhas"], meio: ["pinheiral"], perto: [] },
+    arvore: 24, // pinheiro (render/cenario.ts)
+    climas: ["limpo", "nublado", "neblina", "neblina", "chuva"],
+    tracado: { curva: 1.2, morro: 1.8, reta: 0.6 }, // 1,2: as fechadas da cidade (6) viram 7,2
+  },
+  // rodovia (Fase 8.5): retas longas no campo, colinas, pôr do sol largo
+  rodovia: {
+    id: "rodovia",
+    nome: "Rodovia",
+    ceu: [
+      { t: 0.125, top: "#3a9be0", bot: "#f3e8c8", amb: 1.0 },
+      { t: 0.375, top: "#5b2b52", bot: "#ff9a4d", amb: 0.82 },
+      { t: 0.625, top: "#070a18", bot: "#20203a", amb: 0.42 },
+      { t: 0.875, top: "#4a5f8c", bot: "#ffd29a", amb: 0.8 },
+    ],
+    ceuCorrida: { top: "#0b0a1a", bot: "#2b1c36", amb: 0.44, ambChuva: 0.34 },
+    camadas: { longe: ["ceu-sol"], meio: ["colinas"], perto: [] },
+    arvore: 23, // árvore larga (render/cenario.ts)
+    climas: ["limpo", "limpo", "nublado", "chuva"],
+    tracado: { curva: 0.55, morro: 0.6, reta: 1.8 },
   },
 }
 

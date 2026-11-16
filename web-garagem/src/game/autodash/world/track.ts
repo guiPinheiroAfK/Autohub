@@ -15,7 +15,15 @@ export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() 
   let lastY = 0
   const seg = (curve: number, y: number) => { eng.segments.push({ curve, y1: lastY, y2: y }); lastY = y }
   const easeIO = (a: number, b: number, p: number) => a + (b - a) * (-Math.cos(p * Math.PI) / 2 + 0.5)
+  // traçado do bioma (Fase 8.5): só no corpo da pista procedural do solo, nunca na
+  // reta de largada nem no fechamento do loop. Sem `tracado`, nada muda.
+  const tr = corrida ? undefined : eng.bioma.tracado
+  let comTracado = false
   const addRoad = (enter: number, hold: number, leave: number, curve: number, dy: number) => {
+    if (comTracado && tr) {
+      curve *= tr.curva; dy *= tr.morro
+      if (curve === 0) hold = Math.round(hold * tr.reta)
+    }
     const y0 = lastY, total = enter + hold + leave
     let i = 0
     for (let n = 0; n < enter; n++, i++) seg(curve * (n / enter), easeIO(y0, y0 + dy, i / total))
@@ -30,6 +38,7 @@ export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() 
   // e o jogador nem percebia que tinha fechado uma — parecia que a corrida
   // acabava sozinha.
   const alvoSegs = corrida ? 3200 : 4000
+  comTracado = true
   while (eng.segments.length < alvoSegs) {
     const roll = rnd()
     const hill = r(-1, 1) * r(600, 2600)
@@ -61,10 +70,12 @@ export function buildTrack(eng: AutoDashEngine, seed = Math.floor(Math.random() 
       addRoad(25, 40, 25, -c, -hill * 0.4)
     } else addRoad(ri(15, 25), ri(20, 40), ri(15, 25), (rnd() < 0.5 ? -1 : 1) * r(4.5, 6), 0)
   }
+  comTracado = false
   addRoad(40, 40, 40, 0, -lastY) // fecha o loop plano
   eng.trackLen = eng.segments.length * SEG_LEN
   // cenário de beira por trechos (Fase 8.4): hash da seed, não mexe no sorteio da pista
   eng.cenario = gerarTrechos(eng.segments.length, seed, eng.bioma.id)
+  eng.pistaSeed = seed
 
   sinalizarCurvas(eng, corrida)
   if (corrida) conesDeCurva(eng)

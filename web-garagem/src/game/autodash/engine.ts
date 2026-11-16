@@ -228,6 +228,7 @@ export class AutoDashEngine {
   ramais: Ramal[] = []
   trechos: TrechoInfo[] = []
   cenario: Trecho[] = [] // trechos de cenário de beira (world/cenario.ts, Fase 8.4)
+  pistaSeed = 0          // seed da pista procedural (a troca de região refaz o cenário com ela)
   demoT = 0
   revAmostraT = 0 // acelerada de amostra na garagem ao trocar o motor
 

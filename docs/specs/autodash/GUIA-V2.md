@@ -222,7 +222,7 @@ Checklist:
 - [x] **E4 obra com estreitamento:** evento novo no sorteio. Duas faixas de um lado fecham por ~3 s a 200 km/h, com seta luminosa piscando (paleta de perigo da pesquisa 1.8), cones na divisa e cavaletes no trecho fechado. O trânsito migra para o lado livre.
 - [x] **E6 comboio com fresta:** três veículos lado a lado no mesmo ritmo, uma faixa livre. A fresta anda: o vizinho dá seta 1,2 s e fecha, abrindo outra. Passar pela fresta vale bônus ×3 de quase-batida. Depois de ~16 s o comboio se desfaz.
 - [x] **E15 óleo após acidente:** carro batido no acostamento com pisca-alerta e mancha de óleo na faixa ao lado. Em cima da mancha a aderência cai para 35% por 0,7 s (escorrega, sem morte).
-- [x] Teclas de debug de playtest (só no solo, correndo): **1** posto, **2** convite de racha, **3** obra, **4** comboio, **5** óleo, **6** tanque na reserva, **7** viaduto com elevado (Fase 8.6), **8** túnel (Fase 8.7).
+- [x] Teclas de debug de playtest (só no solo, correndo): **1** posto, **2** convite de racha, **3** obra, **4** comboio, **5** óleo, **6** tanque na reserva, **7** viaduto com elevado (Fase 8.6), **8** túnel (Fase 8.7), **9** próxima região (Fase 8.5).
 - [x] Testes unitários das funções puras (consumo, abastecimento, vácuo).
 
 Critério de aceite: build, lint e testes verdes. Golden muda só em commits próprios (HUD do combustível; caminhão e vácuo mudam o trânsito e a corrida). No navegador: o posto aparece e abastece; a pane seca não encerra a rodada; o convite de racha aparece, aceita com [F] e termina com resultado; obra, comboio e óleo aparecem e se leem a tempo; vácuo aparece no HUD atrás de um carro.
@@ -432,14 +432,14 @@ Checklist (cada item é um commit verificável; golden muda só em commit própr
 - [x] Orçamento de desempenho: teto de enfeites por quadro e o corte de distância que
   a corrida já usa (o desenho de beira era 70% do quadro na corrida).
 
-**8.5 Biomas novos e pista por bioma**
-- [ ] Traçado por bioma (perfil de curvas e morros como dados): cidade (curvas médias),
+**8.5 Biomas novos e pista por bioma** — feito em 16/11 (sem túnel próprio da serra; o túnel raro serve a todos)
+- [x] Traçado por bioma (perfil de curvas e morros como dados): cidade (curvas médias),
   costa (orla com curvas longas e abertas), serra (curvas fechadas e subidas).
-- [ ] Bioma **serra**: montanhas perto, pinheiros, neblina frequente, guard-rail,
+- [x] Bioma **serra**: montanhas perto, pinheiros, neblina frequente, guard-rail,
   túnel curto (reaproveita o eco do viaduto no som).
-- [ ] Bioma **rodovia/interior**: retas longas, campo, caminhões mais frequentes,
+- [x] Bioma **rodovia/interior**: retas longas, campo, caminhões mais frequentes,
   pôr do sol largo, postos mais espaçados (o combustível passa a importar).
-- [ ] Bioma no solo muda ao longo da partida (a cada N níveis) com transição suave,
+- [x] Bioma no solo muda ao longo da partida (a cada N níveis) com transição suave,
   em vez de ser escolhido só no menu.
 
 **8.6 Viaduto de verdade** (pedido de 16/11: "mais funcional e mais bonito") — feito em 16/11 (elevado no lugar de "subir no viaduto"; falta a viatura de tocaia e o carro parado na alça)
@@ -559,4 +559,5 @@ Itens 1, 2, 5 e 10 cabem nas fases 3 e 5. Drift (7 e 8) depende de definir pontu
 | 2026-11-16 | (Fase 8.7, este) | Túnel raro (`world/tunel.ts`, `render/tunel.ts`): zona de 280 segmentos (cabe na distância de desenho: a saída aparece no fundo), relevo plano e curvas suavizadas; entra no sorteio só com 30% de chance por evento. Boca com montanha e pórtico "TÚNEL DA SERRA"; dentro, paredes com azulejo, teto, duas filas de luz, placa de emergência, asfalto escurecido, faróis acesos, sem chuva, eco (o mesmo do viaduto) e o helicóptero cego; a luz do fim do túnel e o clarão na saída. Placas "TÚNEL 2 km / 1 km / ACENDA OS FARÓIS" e cartão. Tecla 8 no solo. Teste em `__tests__/tunel.cenario.test.ts`. | atualizado no replay solo: o sorteio do túnel usa um número a mais de `eng.rngEv`, então o evento sorteado no replay muda. Fim de partida igual. |
 | 2026-11-16 | (Fase 8.4, este) | Cenário de beira por trechos (`world/cenario.ts`, `render/cenario.ts`): a pista do solo alterna trechos de 320–720 segmentos (cidade: centro, subúrbio, campo; costa: orla, subúrbio, campo), com 40 segmentos de mistura na transição; enfeites por hash do índice (sem sorteio no render), no máximo 3 por segmento. Enfeites novos: casa, muro, cerca, ponto de ônibus, árvore larga, pinheiro, plantação, celeiro, quiosque, guarda-sol, prédio médio. Nada em cima do posto nem do ramal/elevado. ~3,2 ms por quadro medido no navegador. Costa: mar, palmeiras e píer do fundo a 0,08 da curva (era 0,25, mais que as montanhas da cidade; ainda "viravam junto"). Teste em `__tests__/cenario.test.ts`. | atualizado nos 4 cenários: o solo (+20% de chamadas: o cenário novo) e a estrada de fundo do menu nos outros três. Fim das partidas igual. |
 | 2026-11-16 | (Fase 8.3 e óleo, este) | Cenografia dos eventos (`render/cena.ts`; obstáculo `cena` não bate, `barrier` com `visual` bate e desenha outra coisa): obra com retroescavadeira na faixa fechada e trabalhadores com bandeira; lâmpada piscando em todo cavalete; acidente com o segundo carro batido, guincho com giroflex âmbar, triângulo e cacos; blitz com guardas de colete e lanterna; radar com o poste e a câmera; comboio com faixa "CARGA LONGA" e batedor de giroflex âmbar no acostamento. Sons (`world/somEventos.ts`): britadeira perto da obra, buzina a ar ao encostar no comboio, sirene curta antes da blitz. Óleo (playtest: "não faz nada"): tranco lateral ao pisar, rabeada 1,1 → 3,4 por 1,2 s, roda patinando, -6% de velocidade, fumaça e câmera. Testes em `__tests__/oleo.cenario.test.ts`. | não alterado |
+| 2026-11-16 | (Fase 8.5, este) | Biomas com traçado próprio (`tracado` no bioma: curva, morro, reta; só no corpo da pista procedural do solo, a cidade fica igual). Serra (curva ×1,2, morro ×1,8, retas ×0,6; pinheiral no fundo, árvore pinheiro, neblina com peso dobrado, trecho "mata" com guard-rail, pinheiros e pedras) e rodovia (curva ×0,55, morro ×0,6, retas ×1,8; colinas no fundo, árvore larga, campo mais frequente). Costa com curva ×0,8 e morro ×0,5. Região muda a cada 3 níveis no solo (`world/regiao.ts`): bioma, fundo, árvore, trechos e climas; as curvas fora da tela são reescaladas pelo traçado novo (os morros ficam). Tecla 9 troca na hora. Teste em `__tests__/regiao.test.ts`. | não alterado |
 | 2026-11-13 | (Fase 0) | Fase 0: spec `v2-mostwanted.md`, ADRs 0011–0013 (propostos), 10 ideias de rodadas e drift. Guia trazido de `docs/autodash-v2-spec` para o branch `feat/autodash-v2-mostwanted`. | não alterado |
