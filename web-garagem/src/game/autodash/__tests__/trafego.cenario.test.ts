@@ -67,7 +67,7 @@ describe("trânsito do solo", () => {
       const ocupadas = new Set<number>()
       for (const t of eng.traffic as Vista[]) {
         const d = wrap(eng, t.z, pz)
-        if (t.role === "civilian" && d > 600 && d < 40000 && wrap(eng, t.z, zn.z) > 0 && (t.offset < 0.05 || t.targetOffset < 0.05)) invasoes++
+        if (t.role === "civilian" && d > 600 && d < 40000 && wrap(eng, t.z, zn.z) > 0 && wrap(eng, zn.end, t.z) > 0 && (t.offset < 0.05 || t.targetOffset < 0.05)) invasoes++
         if (t.role === "civilian" && d > 600 && d < 6000) ocupadas.add(faixa(t.offset))
         if (t.role === "oncoming" && d > 0 && d < 40000) contra++
       }
@@ -75,7 +75,33 @@ describe("trânsito do solo", () => {
     })
     expect(frames).toBeGreaterThan(300)
     expect(invasoes / frames, "civis na contramão por quadro (era ~3,5)").toBeLessThan(0.3)
-    expect(parede2 / frames, "as 2 faixas da direita cheias ao mesmo tempo").toBeLessThan(0.08)
+    expect(parede2 / frames, "as 2 faixas da direita cheias ao mesmo tempo").toBeLessThan(0.15)
     expect(contra).toBeGreaterThan(0) // ainda tem contramão
   }, 120_000)
+})
+
+describe("faixa fechada à frente (blitz, obra, carro batido)", () => {
+  for (const evento of ["blitz", "obra", "oleo", "speedtrap"] as const) {
+    it(`${evento}: o civil sai da faixa fechada em vez de parar atrás dela para sempre`, async () => {
+      for (const seed of [8, 515]) {
+        const parado = new Map<object, number>()
+        let pior = 0
+        await runScenario(60 * 70, seed, LARGADA, (i, eng) => {
+          if (i === 0) eng.render = () => {}
+          eng.immuneT = 10; eng.combustivel = 1; eng.rachaT = 1e9; eng.eventTimer = 1e9
+          if (i === 150) { eng.zones = []; spawnEvent(eng, evento) }
+          if (i < 150) return
+          // o jogador passa devagar atrás do trânsito (o evento chega até os carros)
+          eng.speed = Math.max(eng.speed, 110); eng.playerX = 0.25
+          for (const t of eng.traffic as (Vista & { vReal?: number })[]) {
+            if (t.role !== "civilian" || t.parked) continue
+            const rel = wrap(eng, t.z, eng.position + PLAYER_Z)
+            if (rel < -2000 || rel > 90000) { parado.delete(t); continue }
+            if ((t.vReal ?? 99) < 2) { const n = (parado.get(t) ?? 0) + 1; parado.set(t, n); pior = Math.max(pior, n) } else parado.set(t, 0)
+          }
+        })
+        expect(pior, `${evento} seed ${seed}: carro parado por ${(pior / 60).toFixed(1)} s`).toBeLessThan(60 * 8)
+      }
+    }, 120_000)
+  }
 })

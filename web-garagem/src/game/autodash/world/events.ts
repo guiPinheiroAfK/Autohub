@@ -14,6 +14,7 @@ import { spawnTouge } from "./touge"
 import { pertoDaMontanha } from "./montanha"
 import { viaturaDeTocaia } from "./policia"
 import { RAMAL_ABRE, RAMAL_COLADO } from "./ramais"
+import { limparEsquerdaInvisivel } from "../traffic/faixas"
 
 export type EventoMapa = "bridge" | "viaduct" | "obstacles" | "wrongway" | "blitz" | "speedtrap" | "obra" | "comboio" | "oleo" | "tunnel" | "touge"
 
@@ -180,6 +181,7 @@ export function spawnEvent(eng: AutoDashEngine, kind: EventoMapa) {
     const LEN = 260000
     const z = at(START)
     eng.zones.push({ type: "wrongway", z, end: at(START + LEN), spawnT: 0 })
+    limparEsquerdaInvisivel(eng, { z, end: at(START + LEN) }, VIEW) // quem está lá longe já sai da esquerda
     // contagem regressiva de aproximação, como em rodovia de verdade...
     avisos("wrongway", ["MÃO DUPLA 2 km", "MÃO DUPLA 1 km", "MÃO DUPLA"])
     // ...e placas repetidas por todo o trecho, pra você não esquecer

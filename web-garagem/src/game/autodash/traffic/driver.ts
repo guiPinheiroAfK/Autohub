@@ -32,6 +32,15 @@ export const CIVIL = {
   luzFreio: 8,        // km/h abaixo do cruzeiro: acende a luz de freio
 }
 
+// Faixa fechada à frente (blitz, obra, carro batido, pedras da serra). Playtest 17/11:
+// "os carros vão em linha reta e do nada param na blitz": o civil só via o carro da
+// frente e parava atrás da viatura parada para sempre. Agora ele enxerga o
+// bloqueio de longe, sai da faixa cedo e, sem vaga, freia a tempo e espera.
+export const BLOQUEIO = {
+  olha: 40000,   // u: até onde enxerga um bloqueio na faixa (~3 s a 100 km/h, com a troca de faixa)
+  margem: 0.02,  // folga lateral além dos corpos
+}
+
 function clamp(v: number, lo: number, hi: number) { return v < lo ? lo : v > hi ? hi : v }
 
 export abstract class Driver {
@@ -95,7 +104,7 @@ export abstract class Driver {
       const lane = self.offset + side
       if (lane < -0.9 || lane > 0.9) continue
       // mão dupla: a esquerda é contramão, civil nenhum entra lá
-      if (lane < 0 && self.role === "civilian" && world.maoDupla?.(self.z)) continue
+      if (lane < 0 && lane < self.offset && self.role === "civilian" && world.maoDupla?.(self.z)) continue
       if (!this.laneFree(self, world, lane, clearZ)) continue
       // nunca entrar na última faixa livre: o trânsito não vira parede
       if (this.fechariaTudo(self, world, lane)) continue
@@ -110,6 +119,36 @@ export abstract class Driver {
       return true
     }
     return false
+  }
+
+  /**
+   * Bloqueio parado mais perto à frente na faixa `lane`: veículo estacionado ou
+   * obstáculo sólido (cone, cavalete, pedra) que o corpo do carro encostaria.
+   */
+  protected bloqueio(self: Traffic, world: WorldView, lane: number, olha = BLOQUEIO.olha): { d: number; len: number } | null {
+    const w = KINDS[self.kind].w
+    let best: { d: number; len: number } | null = null
+    const ve = (z: number, offset: number, ow: number, len: number) => {
+      const d = world.wrapDz(z, self.z)
+      if (d <= 0 || d > olha || (best && d >= best.d)) return
+      if (Math.abs(offset - lane) < (w + ow) / 2 + BLOQUEIO.margem) best = { d, len }
+    }
+    for (const o of world.traffic) if (o !== self && o.parked && o.role !== "oncoming") ve(o.z, o.offset, KINDS[o.kind].w, KINDS[o.kind].len)
+    for (const o of world.obstaculos ?? []) if (!o.dead && (o.kind === "cone" || o.kind === "barrier")) ve(o.z, o.offset, o.w, o.len)
+    return best
+  }
+
+  /** Lado (±0,5) da faixa livre mais perto de `self`, ou 0 se não há (ou se já está numa). */
+  protected rumoFaixaLivre(self: Traffic, world: WorldView): number {
+    let melhor = Infinity, rumo = 0
+    for (const lane of [-0.75, -0.25, 0.25, 0.75]) {
+      if (lane < 0 && world.maoDupla?.(self.z)) continue
+      if (this.bloqueio(self, world, lane)) continue
+      const dist = Math.abs(lane - self.offset)
+      if (dist < 0.05 || dist >= melhor) continue
+      melhor = dist; rumo = Math.sign(lane - self.offset) * 0.5
+    }
+    return rumo
   }
 
   /**
@@ -194,11 +233,28 @@ export class CivilianDriver extends Driver {
       }
     }
 
+    // mão dupla: quem ainda está nas faixas da esquerda vai para a direita, uma faixa por
+    // vez, com seta (nada de teleporte nem de sair correndo no último segundo). Sem vaga,
+    // segura a velocidade e tenta de novo no quadro seguinte.
+    let seguraMaoDupla = false
+    if (world.maoDupla?.(self.z) && self.targetOffset < 0.05) {
+      seguraMaoDupla = true
+      if (self.blinkT <= 0 && self.targetOffset === self.offset) this.tryLaneChange(self, world, [0.5], 1100, 0.6, true, 2200)
+    }
+
+    // faixa fechada à frente (blitz, obra, carro batido, pedras): sai dela cedo, uma
+    // faixa por vez, e sem vaga freia a tempo (mais abaixo) e espera abrir
+    const bloq = this.bloqueio(self, world, self.targetOffset)
+    if (bloq && self.blinkT <= 0 && self.targetOffset === self.offset) {
+      const rumo = this.rumoFaixaLivre(self, world)
+      if (rumo) this.tryLaneChange(self, world, [rumo], 700, 0.7, true, 2500)
+    }
+
     // carro imediatamente à frente (freia) e quem vem colado atrás mais rápido (sai da frente)
     let ahead: Traffic | null = null
     let beside: Traffic | null = null
     for (const o of world.traffic) {
-      if (o === self) continue
+      if (o === self || o.parked) continue // estacionado é bloqueio (acima), não carro andando
       const d = world.wrapDz(o.z, self.z)
       if (d > 0 && d < 1500 && Math.abs(o.offset - self.offset) < 0.32) {
         if (!ahead || d < world.wrapDz(ahead.z, self.z)) ahead = o
@@ -242,6 +298,17 @@ export class CivilianDriver extends Driver {
       this.tryLaneChange(self, world, sides, 900, 0.6, true, 2500)
     }
 
+    if (seguraMaoDupla) {
+      // ainda na esquerda e a mão dupla vem aí: para antes do começo dela (nunca entra na contramão)
+      const ini = world.inicioMaoDupla?.(self.z)
+      if (ini != null) spd = Math.min(spd, Math.sqrt(2 * CIVIL.freio * Math.max(0, ini - KINDS[self.kind].len / 2 - CIVIL.folga) / KMH2UPS))
+      else spd = Math.min(spd, Math.max(40, self.speed * 0.7))
+    }
+    if (bloq) {
+      const folga = bloq.d - (KINDS[self.kind].len + bloq.len) / 2 - CIVIL.folga
+      spd = Math.min(spd, Math.sqrt(2 * CIVIL.freio * Math.max(0, folga) / KMH2UPS))
+    }
+
     // o jogador na faixa, à frente: freia a tempo (v² = v_jogador² + 2·a·folga) e
     // para atrás dele. Preso atrás de você: buzina e tenta passar pela faixa livre.
     const eu = this.jogadorNaFrente(self, world, CIVIL.olhaJogador)
@@ -270,7 +337,9 @@ export class CivilianDriver extends Driver {
         const d = world.wrapDz(o.z, self.z)
         if (d > 0 && d < 3000) { atras = true; lento = Math.min(lento, o.vReal ?? o.speed) }
       }
-      if (atras && lento < Infinity) spd = Math.min(spd, lento - 12)
+      // (no máximo 40% mais devagar: antes, com um carro parado à frente, o `lento - 12` zerava
+      // e até virava marcha a ré, e o trânsito inteiro "parava do nada")
+      if (atras && lento < Infinity) spd = Math.min(spd, Math.max(lento - 12, self.speed * 0.6))
     }
     // trânsito pesado: freada brusca de vez em quando, com luz de freio. Nunca
     // colado na sua frente (dá para ler e desviar).

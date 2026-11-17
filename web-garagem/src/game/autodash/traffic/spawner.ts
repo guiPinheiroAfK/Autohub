@@ -11,7 +11,7 @@ import { infracao } from "../world/policia"
 import { perderDrift } from "../world/drift"
 import { emDuelo } from "../world/touge"
 import { intensidade, carrosAlvo, chanceOnda, tipoPorIntensidade, estagio, INTENSIDADE } from "./intensidade"
-import { FECHA_Z, faixasDoCivil, indiceFaixa, naMaoDupla } from "./faixas"
+import { FECHA_Z, faixasDoCivil, indiceFaixa, inicioMaoDupla, naMaoDupla } from "./faixas"
 
 export function seedTraffic(eng: AutoDashEngine, count: number) {
   eng.traffic = []
@@ -142,6 +142,8 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
     demo,
     wrapDz: (a, b) => wrapDz(eng, a, b),
     maoDupla: z => naMaoDupla(eng, z),
+    inicioMaoDupla: z => inicioMaoDupla(eng, z),
+    obstaculos: eng.obstacles,
     curvaEm: z => segAt(eng, z).curve,
     intensidade: ki,
     // civil preso atrás de você: uma buzina por vez, no máximo a cada 1,2 s
