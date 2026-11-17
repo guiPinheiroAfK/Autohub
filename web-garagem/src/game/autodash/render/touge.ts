@@ -35,6 +35,36 @@ export function drawPainelTouge(eng: AutoDashEngine, x: number, y: number, w: nu
   ctx.globalAlpha = 1
 }
 
+/**
+ * O botão da cena, grande e no meio (17/11: "poderia ter os botões mais claros"): a tecla SHIFT
+ * e um anel que fecha até a linha amarela. Quando o anel encosta na tecla, é a hora.
+ */
+function botaoShift(ctx: CanvasRenderingContext2D, t: number, treino: boolean) {
+  const cx = W / 2, cy = H * 0.5
+  const k = Math.max(0, Math.min(1, t / 1.2)) // 1: longe, 0: na linha
+  const quase = t < 0.25
+  // anel que fecha
+  ctx.lineWidth = 5
+  ctx.strokeStyle = quase ? "#4ade80" : "#facc15"
+  ctx.globalAlpha = 0.95
+  ctx.beginPath(); ctx.arc(cx, cy, 44 + 110 * k, 0, Math.PI * 2); ctx.stroke()
+  // a tecla
+  const w = 150, h = 56
+  ctx.fillStyle = quase ? "#4ade80" : "rgba(15,23,42,0.92)"
+  rr(ctx, cx - w / 2, cy - h / 2, w, h, 12)
+  ctx.strokeStyle = quase ? "#bbf7d0" : "#facc15"; ctx.lineWidth = 3
+  ctx.strokeRect(cx - w / 2, cy - h / 2, w, h)
+  ctx.fillStyle = quase ? "#052e16" : "#facc15"
+  ctx.font = `bold 28px ${FONTE}`
+  ctx.textAlign = "center"
+  ctx.fillText("SHIFT", cx, cy + 10)
+  ctx.font = `bold 13px ${FONTE}`
+  ctx.fillStyle = "#f8fafc"
+  ctx.fillText(quase ? "AGORA!" : treino ? "aperte quando o anel fechar" : "freio de mão", cx, cy + h / 2 + 22)
+  ctx.textAlign = "left"
+  ctx.globalAlpha = 1
+}
+
 /** Faixa de dica embaixo (cena de treino e atos). */
 function dica(ctx: CanvasRenderingContext2D, txt: string, cor = "#fde047") {
   ctx.fillStyle = "rgba(15,23,42,0.85)"
@@ -70,6 +100,7 @@ export function renderTouge(eng: AutoDashEngine) {
   if (tg.fase !== "batalha") return
 
   const at = comandoAtual(eng)
+  if (at && at.cmd === "shift" && at.t < 1.2 && at.t > -0.4) botaoShift(ctx, at.t, at.c.treino)
   if (at && at.c.treino) {
     dica(ctx, "TREINO: o carro pilota a curva. SHIFT ao cruzar a linha AMARELA (câmera lenta até apertar)")
     return

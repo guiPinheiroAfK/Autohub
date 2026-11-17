@@ -687,23 +687,19 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // (dentro do túnel a névoa de fora não entra)
   const fogK = (1 - climaAtual(eng).visib) * (eng.dentroTunel ? 0.25 : 1) // misturado na troca de clima
   if (fogK > 0.01) {
+    // Névoa por DISTÂNCIA (17/11: "a neblina está bugando", branca demais e a pista sumia): o
+    // horizonte é o mais denso, o céu tinge um pouco menos e perto do carro quase não pega,
+    // então a tela toda fica na névoa e o asfalto de perto continua legível.
     const fc = hexToRgb(mixHex(fogColor, amb > 0.6 ? "#d5dae2" : "#545d70", 0.6))
-    const top = maxY - 60, alto = 90 + 560 * fogK
-    const peak = Math.min(0.92, 1.6 * fogK)
-    const g = ctx.createLinearGradient(0, top, 0, top + alto)
-    g.addColorStop(0, `rgba(${fc[0]},${fc[1]},${fc[2]},${peak * 0.7})`)
-    g.addColorStop(0.3, `rgba(${fc[0]},${fc[1]},${fc[2]},${peak})`)
-    g.addColorStop(1, `rgba(${fc[0]},${fc[1]},${fc[2]},0)`)
+    const pico = Math.min(0.8, 1.4 * fogK)
+    const hz = Math.min(H * 0.8, Math.max(H * 0.2, maxY))
+    const c = (a: number) => `rgba(${fc[0]},${fc[1]},${fc[2]},${a.toFixed(3)})`
+    const g = ctx.createLinearGradient(0, 0, 0, H)
+    g.addColorStop(0, c(pico * 0.55))
+    g.addColorStop(hz / H, c(pico))
+    g.addColorStop(Math.min(0.98, (hz + (H - hz) * 0.5) / H), c(pico * 0.4))
+    g.addColorStop(1, c(fogK * 0.2))
     ctx.fillStyle = g
-    ctx.fillRect(0, top, W, alto)
-    // véu na tela toda (17/11: "a neblina não cobre a tela toda"): céu, fundo e pista, mais
-    // forte no horizonte e mais leve perto do carro
-    const veu = Math.min(0.62, 0.95 * fogK)
-    const vg = ctx.createLinearGradient(0, 0, 0, H)
-    vg.addColorStop(0, `rgba(${fc[0]},${fc[1]},${fc[2]},${veu * 0.85})`)
-    vg.addColorStop(Math.min(0.9, Math.max(0.1, maxY / H)), `rgba(${fc[0]},${fc[1]},${fc[2]},${veu})`)
-    vg.addColorStop(1, `rgba(${fc[0]},${fc[1]},${fc[2]},${veu * 0.45})`)
-    ctx.fillStyle = vg
     ctx.fillRect(0, 0, W, H)
   }
 

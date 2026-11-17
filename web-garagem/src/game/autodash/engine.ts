@@ -250,6 +250,7 @@ export class AutoDashEngine {
   postoLimite = 0.45 // abaixo disso abre o próximo posto (world/posto.ts)
   abastecendo = false
   juntoDaBomba = false // no pátio do posto, ao lado da ilha (world/posto.ts)
+  naBorda = false      // encostado no guard-rail ou no paredão (world/bordas.ts)
   elevJogador = 0      // altura do chão sob o jogador (elevado do viaduto, Fase 8.6)
   dentroTunel = false  // dentro do túnel (world/tunel.ts, Fase 8.7)
   claraoT = 0          // s restantes do clarão ao sair do túnel

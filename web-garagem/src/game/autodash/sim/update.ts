@@ -38,6 +38,7 @@ import { giroDaPartida } from "./partida"
 import { aplicarVacuo, specComVacuo, forcaTeto } from "./vacuo"
 import { atualizarSomEventos } from "../world/somEventos"
 import { regiaoPorDistancia } from "../world/regiao"
+import { colidirComBordas } from "../world/bordas"
 
 export function update(eng: AutoDashEngine, dt: number) {
   // câmera lenta do duelo de touge (world/touge.ts): o mundo inteiro anda mais devagar
@@ -195,6 +196,9 @@ export function update(eng: AutoDashEngine, dt: number) {
   // transferência de peso: sobe o bico na freada, agacha no gás
   const pitchTarget = braking && eng.speed > 20 ? -4 : throttle ? 1.5 : 0
   eng.pitchY += (pitchTarget - eng.pitchY) * Math.min(1, dt * 8)
+
+  // guard-rail, paredão e paredes do túnel seguram o carro (world/bordas.ts)
+  colidirComBordas(eng, dt, Math.floor(playerZ / SEG_LEN) % eng.segments.length, !!ramal)
 
   // fora da pista
   if (Math.abs(eng.playerX) > 1.05 && !(ramal && sobreRamal(ramal, eng.playerX))) {

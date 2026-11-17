@@ -36,7 +36,8 @@ type Bloco = "livre" | "grampo" | "s" | "rapida" | "porta"
 
 export const TOUGE = {
   // a descida: trechos livres, cenas e a ultrapassagem no meio
-  roteiro: ["livre", "grampo", "livre", "s", "porta", "livre", "grampo", "livre", "s", "grampo"] as Bloco[],
+  // (17/11: "falta durar mais"): 9 cenas e a ultrapassagem no meio, ~2.750 segmentos
+  roteiro: ["livre", "grampo", "livre", "s", "livre", "rapida", "porta", "livre", "grampo", "s", "livre", "rapida", "grampo", "livre", "s", "grampo"] as Bloco[],
   aproxSegs: 70,      // reta antes do primeiro bloco
   livreSegs: 230,     // trecho livre: curvas abertas, você pilota
   livreCurva: 3.2,
@@ -55,9 +56,10 @@ export const TOUGE = {
   roda: 1.15,
   perde: 0.18,
   abre: 0.9, fecha: 1.3, solto: 0.15, // rad/s: volante para dentro, para fora, sem volante
-  lento: 0.4,         // escala do tempo na linha de entrada (câmera lenta)
+  lento: 0.35,        // escala do tempo na linha de entrada (câmera lenta)
+  lentoAntesS: 0.9,   // a câmera lenta começa este tanto de segundos antes da linha (treino: 1,3)
   lentoTreino: 0.28,  // na cena de treino, mais lento ainda
-  lentoDrift: 0.8,    // escala do tempo durante o drift
+  lentoDrift: 0.6,    // escala do tempo durante o drift (17/11: "cenas em câmera lenta")
   introS: 2.6,        // s da apresentação do rival
   fase2: { perfeito: 0.09, bom: 0.22 }, // janelas com o rival acordado
   nitroSaida: 18,     // km/h de empurrão do nitro de saída (automático para quem entrou bem)
@@ -374,7 +376,7 @@ export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centr
     }
     if (c.nota !== null && c.nitro !== null && ts < 0) fecharCurva(eng, c)
     // câmera lenta na linha de entrada até o Shift
-    if (c.nota === null && te < (c.treino ? 0.9 : 0.5) && te > -j.bom) lento = Math.min(lento, c.treino ? TOUGE.lentoTreino : TOUGE.lento)
+    if (c.nota === null && te < (c.treino ? TOUGE.lentoAntesS + 0.4 : TOUGE.lentoAntesS) && te > -j.bom) lento = Math.min(lento, c.treino ? TOUGE.lentoTreino : TOUGE.lento)
   }
   // dentro de alguma cena já aberta pelo SHIFT?
   const k = tg.curvas.find(q => q.nota && wrapDz(eng, q.entradaZ, playerZ) <= 0 && wrapDz(eng, q.fimZ, playerZ) > 0)

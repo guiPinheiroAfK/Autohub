@@ -34,9 +34,9 @@ import { PAREDAO } from "../render/cenario"
 type Fases = [TipoTrecho, number][]
 export const MONTANHA = {
   // [fase, segmentos] (~79 segmentos por segundo a 120 km/h)
-  completa: [["portal", 200], ["serraPe", 400], ["serraMeio", 2800], ["mirante", 400], ["serraDescida", 1900], ["serraBase", 300], ["costeira", 1200]] as Fases,
+  completa: [["portal", 200], ["serraPe", 400], ["serraMeio", 2800], ["mirante", 400], ["serraDescida", 3100], ["serraBase", 300], ["costeira", 1200]] as Fases,
   // tecla 0: subida curta e direto para o mirante e a descida do touge
-  curta: [["portal", 120], ["serraPe", 300], ["mirante", 300], ["serraDescida", 1900], ["serraBase", 300], ["costeira", 600]] as Fases,
+  curta: [["portal", 120], ["serraPe", 300], ["mirante", 300], ["serraDescida", 3100], ["serraBase", 300], ["costeira", 600]] as Fases,
   altura: 44000,     // u no alto (a curta fica com um terço). Playtest 16/11: "a serra precisava subir mais" (era 26 mil)
   ondas: { alt: 700, cada: 300, taper: 60 }, // cristas na subida (17/11: "faltou a sensação de subir"): a pista sobe em lances, com a estrada levantando na tela
   religa: 300,       // segmentos para voltar ao relevo do começo da volta

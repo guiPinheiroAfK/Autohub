@@ -490,10 +490,10 @@ export function renderTougeTela(eng: AutoDashEngine) {
   // câmera lenta: 0 no tempo normal, 1 na mais lenta (treino)
   const k = tg.fase === "batalha" ? clamp01((1 - eng.escalaTempo) / (1 - TOUGE.lentoTreino)) : 0
   if (k > 0.02) {
-    ctx.fillStyle = `rgba(100,128,170,${(0.22 * k).toFixed(3)})` // acinzenta e esfria (barato: um retângulo)
+    ctx.fillStyle = `rgba(110,135,175,${(0.1 * k).toFixed(3)})` // esfria de leve (barato: um retângulo); 17/11: escurecia a serra
     ctx.fillRect(0, 0, W, H)
-    ctx.globalAlpha = 0.9 * k
-    ctx.drawImage(vinhetaTex("10,22,48"), 0, 0, W, H)
+    ctx.globalAlpha = 0.45 * k // (era 0,9 em azul-marinho escuro: "olha a escuridão da serra")
+    ctx.drawImage(vinhetaTex("40,58,92"), 0, 0, W, H)
     linhasRadiais(ctx, 18, 3, st.tj * 0.12, W * 0.08, "#e0f2fe", 0.3 * k, 1.5)
   }
   // erro: vinheta vermelha rápida

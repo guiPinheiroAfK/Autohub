@@ -10,7 +10,7 @@ import { MOMENTOS_SERRA } from "../world/montanha"
 import { climaAtual } from "../sim/clima"
 
 const GOTAS = 22
-const GOTAS_NEVOA = 26
+const GOTAS_NEVOA = 14
 
 /**
  * Gotinhas de névoa no "para-brisa" enquanto a neblina enche (qualquer região, não só a
@@ -27,7 +27,7 @@ export function drawGotasDeNevoa(eng: AutoDashEngine) {
   ctx.save()
   for (let i = 0; i < n; i++) {
     const x = hash01(i, 81) * W
-    const r = 3 + hash01(i, 82) * 9
+    const r = 2 + hash01(i, 82) * 4.5
     // escorre devagar e volta ao topo (cada gota com a sua fase)
     const y = ((hash01(i, 83) * H * 0.9 + eng.camT * (4 + hash01(i, 84) * 7)) % (H * 0.92)) + 4
     ctx.fillStyle = `rgba(215,232,248,${0.2 * a})`
