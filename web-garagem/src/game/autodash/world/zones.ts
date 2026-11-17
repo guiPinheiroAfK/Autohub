@@ -61,7 +61,11 @@ export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
   atualizarTouge(eng, dt, playerZ)
   atualizarMontanha(eng, playerZ, dt)
   const fechado = sob || eng.dentroTunel
-  if (fechado !== eng.sobViaduto) { eng.sobViaduto = fechado; eng.audio.ambiente(fechado ? "fechado" : "aberto") }
+  // (o túnel tem o reverb longo próprio; embaixo do viaduto é o eco curto)
+  if (fechado !== eng.sobViaduto || eng.dentroTunel !== eng.tunelSom) {
+    eng.sobViaduto = fechado; eng.tunelSom = eng.dentroTunel
+    eng.audio.ambiente(eng.dentroTunel ? "tunel" : fechado ? "fechado" : "aberto")
+  }
   for (const zn of eng.zones) {
     const toStart = wrapDz(eng, zn.z, playerZ) // >0: início à frente
     const toEnd = wrapDz(eng, zn.end, playerZ)

@@ -48,8 +48,34 @@ export function toMenu(eng: AutoDashEngine) {
   eng.state = "menu"
 }
 
-export function flashBeam(eng: AutoDashEngine) {
-  if (eng.state !== "racing" || eng.beamCdT > 0) return
+/**
+ * [F] liga e desliga o farol alto (17/11: "um botão de liga e desliga, não só o que pisca").
+ * Ao ligar ainda dá o clarão que pede passagem (e que aceita o convite de racha), com o
+ * mesmo intervalo de antes; ligado, abre caminho aos poucos (pulsoFarolAlto) e clareia a pista.
+ */
+export function alternarFarolAlto(eng: AutoDashEngine) {
+  if (eng.state !== "racing") return
+  eng.farolAlto = !eng.farolAlto
+  eng.farolPulsoT = 0
+  if (eng.farolAlto) flashBeam(eng, true)
+  else { eng.beamT = Math.max(eng.beamT, 0.55); eng.audio.flash() } // desligar também "pisca" (aceita o racha como antes)
+}
+
+/** Farol alto ligado: de tempos em tempos quem está na sua faixa, à frente, cede (mais leve que o clarão). */
+export function pulsoFarolAlto(eng: AutoDashEngine, dt: number) {
+  if (!eng.farolAlto) return
+  eng.farolPulsoT -= dt
+  if (eng.farolPulsoT > 0) return
+  eng.farolPulsoT = 1.4
+  const playerZ = eng.position + PLAYER_Z
+  for (const t of eng.traffic) {
+    const d = wrapDz(eng, t.z, playerZ)
+    if (d > 300 && d < 5000 && Math.abs(t.offset - eng.playerX) < 0.35 && !t.parked && t.role === "civilian") t.yieldT = Math.max(t.yieldT ?? 0, 0.9)
+  }
+}
+
+export function flashBeam(eng: AutoDashEngine, ignorarPause = false) {
+  if ((eng.state !== "racing" && !ignorarPause) || eng.beamCdT > 0) return
   eng.beamCdT = 2.2
   eng.beamT = 0.55
   eng.audio.flash()

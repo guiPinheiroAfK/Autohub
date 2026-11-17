@@ -19,7 +19,7 @@ import { drawRamalSeg, drawElevadoSeg, type ElevadoSeg } from "./ramal"
 import { drawTunelSeg, drawClarao, type TunelSeg } from "./tunel"
 import { TUNEL } from "../world/tunel"
 import { drawEnfeite, drawGuardRail, drawParedao, drawPortal, PAREDAO, type RailSeg } from "./cenario"
-import { enfeitesDoSegmento, ENF, tipoNoSeg, GUARD_RAIL, COM_GUARD_RAIL, COM_PAREDAO } from "../world/cenario"
+import { enfeitesDoSegmento, ENF, tipoNoSeg, GUARD_RAIL, COM_GUARD_RAIL, COM_PAREDAO, TRECHO_URBANO } from "../world/cenario"
 import { ladoParedao, ladoDoVale, segPortal, noViadutoDaSerra } from "../world/montanha"
 import { marcaNoSeg, rotuloDaMarca, type RotuloMarca } from "../world/touge"
 import { drawPainelTouge } from "./touge"
@@ -283,9 +283,23 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
           }
         }
       } else {
+        // trecho urbano: concreto e calçada no lugar da grama (o gradiente verde de base fica por baixo)
+        if (eng.mode !== "race" && TRECHO_URBANO.has(tipoNoSeg(eng.cenario, idx))) {
+          ctx.fillStyle = shade(alt ? "#2c3340" : "#2a303c", amb)
+          ctx.fillRect(-10, ry2, W + 20, ry1 - ry2 + 1)
+          // calçada junto à pista, mais clara
+          ctx.fillStyle = shade(alt ? "#4a5262" : "#454d5c", amb)
+          poly(ctx, sx1 - sw1 * 1.9, ry1, sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2, sx2 - sw2 * 1.9, ry2)
+          poly(ctx, sx1 + sw1 * 1.11, ry1, sx1 + sw1 * 1.9, ry1, sx2 + sw2 * 1.9, ry2, sx2 + sw2 * 1.11, ry2)
+          // meio-fio escuro entre a calçada e o asfalto
+          ctx.fillStyle = shade("#1f2430", amb)
+          poly(ctx, sx1 - sw1 * 1.14, ry1, sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2, sx2 - sw2 * 1.14, ry2)
+          poly(ctx, sx1 + sw1 * 1.11, ry1, sx1 + sw1 * 1.14, ry1, sx2 + sw2 * 1.14, ry2, sx2 + sw2 * 1.11, ry2)
+        } else {
         // grama: listras sutis por cima do gradiente de base
         ctx.fillStyle = alt ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)"
         ctx.fillRect(-10, ry2, W + 20, ry1 - ry2 + 1)
+        }
         // zebra só nas laterais — nunca embaixo do asfalto (era daí que vazava o vermelho)
         ctx.fillStyle = alt ? rumbA : rumbB
         poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 0.97, ry1, sx2 - sw2 * 0.97, ry2, sx2 - sw2 * 1.11, ry2)
@@ -590,8 +604,8 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   }
 
   // farol alto: clarão pedindo passagem
-  if (eng.beamT > 0) {
-    const a = Math.min(1, eng.beamT / 0.55)
+  if (eng.beamT > 0 || eng.farolAlto) {
+    const a = Math.max(eng.beamT > 0 ? Math.min(1, eng.beamT / 0.55) : 0, eng.farolAlto ? 0.65 : 0) // ligado: clareia a pista, sem ofuscar
     const beam = ctx.createRadialGradient(W / 2, H * 0.62, 30, W / 2, H * 0.62, 420)
     beam.addColorStop(0, `rgba(255,250,215,${0.38 * a})`)
     beam.addColorStop(1, "rgba(255,250,215,0)")
@@ -627,7 +641,8 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // farol à noite
   if ((amb < 0.62 || eng.dentroTunel) && (eng.state === "racing" || eng.state === "countdown" || eng.state === "paused")) {
     const lg = ctx.createRadialGradient(W / 2, H * 0.72, 20, W / 2, H * 0.72, 330)
-    lg.addColorStop(0, `rgba(255,240,180,${(0.62 - amb) * 0.5})`)
+    const alto = eng.farolAlto ? 1.9 : 1 // farol alto: feixe mais forte e mais longe
+    lg.addColorStop(0, `rgba(255,240,180,${Math.min(0.5, (0.62 - amb) * 0.5 * alto)})`)
     lg.addColorStop(1, "rgba(255,240,180,0)")
     ctx.fillStyle = lg
     ctx.beginPath()

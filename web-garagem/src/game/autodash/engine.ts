@@ -180,7 +180,8 @@ export class AutoDashEngine {
   traffic: Traffic[] = []
   obstacles: Obstacle[] = []
   zones: Zone[] = []
-  sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto
+  sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto (ou no túnel)
+  tunelSom = false     // som: reverb longo do túnel ligado
   testeMotor = false   // pista vazia para ouvir os motores (garagem → Z)
   testeFase5 = false   // atalho de teste da Fase 5: racha e posto logo de cara (garagem → J)
   testePolicia = false // perseguição direta, estrelas nas teclas 0–5 (garagem → L)
@@ -300,6 +301,8 @@ export class AutoDashEngine {
   fadeT = 0
   newRecord = false
   beamT = 0
+  farolAlto = false // farol alto ligado (liga e desliga no [F]; flow.ts)
+  farolPulsoT = 0   // s até o próximo "abre caminho" do farol alto ligado
   beamCdT = 0
   pitchY = 0
 

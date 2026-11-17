@@ -49,7 +49,7 @@ export function renderMenu(eng: AutoDashEngine) {
   ctx.fillStyle = "rgba(248,250,252,0.6)"
   ctx.font = "14px 'Space Grotesk', 'Segoe UI', sans-serif"
   ctx.fillText("🖱 esq acelera · dir freia · scroll troca marcha · botão do meio = neutro", W / 2, 440)
-  ctx.fillText("⌨ A/D ou ←→ dirigem · W/S gás/freio · Q/E marchas · ESPAÇO nitro · F farol alto", W / 2, 464)
+  ctx.fillText("⌨ A/D ou ←→ dirigem · W/S gás/freio · Q/E marchas · ESPAÇO nitro · F liga/desliga o farol alto", W / 2, 464)
   if (eng.cfg.pilotName) {
     ctx.fillStyle = "rgba(148,197,255,0.85)"
     ctx.fillText(`fala, ${eng.cfg.pilotName}! bora?`, W / 2, 496)

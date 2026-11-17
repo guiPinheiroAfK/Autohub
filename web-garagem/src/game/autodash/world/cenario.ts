@@ -47,6 +47,9 @@ export const ENF = {
 /** Guard-rail contínuo dos trechos de mata: distância da borda (meias-pistas). */
 export const GUARD_RAIL = { dist: 1.16 }
 
+/** Trechos de cidade de verdade: o chão ao lado da pista é concreto e calçada, não grama (17/11: "tem prédios e o chão é grama"). */
+export const TRECHO_URBANO = new Set<TipoTrecho>(["shibuya", "shinjuku", "oficinas", "centro", "entrada"])
+
 /** Tipos de trecho com guard-rail contínuo; os de paredão só têm do lado do barranco. */
 export const COM_GUARD_RAIL = new Set<TipoTrecho>(["mata", "serraPe", "serraMeio", "serraDescida", "serraBase"])
 export const COM_PAREDAO = new Set<TipoTrecho>(["serraMeio", "serraDescida"])

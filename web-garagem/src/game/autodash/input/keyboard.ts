@@ -6,7 +6,7 @@ import { infracao, definirEstrelas } from "../world/policia"
 import { enterFromMenu } from "../flow"
 import { confirmName } from "../flow"
 import { toMenu } from "../flow"
-import { flashBeam } from "../flow"
+import { alternarFarolAlto } from "../flow"
 import { ensureAudio, trocarMotor, trocarMotorTeste, limparTestes } from "../flow"
 import { startRace } from "../modes/race"
 import { abrirRaceLobby, reconhecerPista, sairReconhecimento } from "../modes/race"
@@ -169,7 +169,7 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (k === "q") tryShift(eng, -1)
       if (k === "e") tryShift(eng, 1)
       if (k === "n") toNeutral(eng)
-      if (k === "f") flashBeam(eng)
+      if (k === "f") alternarFarolAlto(eng)
       if (eng.testeMotor && (k === "]" || k === ".")) trocarMotorTeste(eng, 1)
       if (eng.testeMotor && (k === "[" || k === ",")) trocarMotorTeste(eng, -1)
       // 1–6: eventos da Fase 5 (world/debug-eventos.ts); no teste de polícia os

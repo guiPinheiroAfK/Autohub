@@ -38,6 +38,7 @@ import { giroDaPartida } from "./partida"
 import { aplicarVacuo, specComVacuo, forcaTeto } from "./vacuo"
 import { atualizarSomEventos } from "../world/somEventos"
 import { regiaoPorDistancia } from "../world/regiao"
+import { pulsoFarolAlto } from "../flow"
 import { colidirComBordas } from "../world/bordas"
 
 export function update(eng: AutoDashEngine, dt: number) {
@@ -265,6 +266,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   if (eng.goFlashT > 0) eng.goFlashT -= dt
   if (eng.mult2T > 0) eng.mult2T -= dt
   if (eng.beamT > 0) eng.beamT -= dt
+  pulsoFarolAlto(eng, dt)
   if (eng.beamCdT > 0) eng.beamCdT -= dt
 
   // pontuação e combo
