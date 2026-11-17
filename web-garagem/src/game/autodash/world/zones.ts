@@ -5,6 +5,7 @@ import { wrapDz } from "../traffic/spawner"
 import { DRAW_DIST, SEG_LEN } from "../data"
 import { type TrafficKind, TRAFFIC_COLORS, KINDS } from "../traffic/types"
 import { RAMAL_ABRE, RAMAL_COLADO, ramalNoSeg, ramalCentro } from "./ramais"
+import { MARGEM_MAO_DUPLA } from "../traffic/faixas"
 import { atualizarTunel } from "./tunel"
 import { atualizarTouge } from "./touge"
 import { atualizarMontanha } from "./montanha"
@@ -71,12 +72,15 @@ export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
       if (toStart < 9000 && toEnd > 0) {
         zn.spawnT -= dt
         if (zn.spawnT <= 0) {
-          zn.spawnT = 0.5 + Math.random() * 0.7
+          // contramão rala (17/11: vinham 4 fileiras seguidas): 1 carro a cada 2 a 3,5 s
+          zn.spawnT = 2 + Math.random() * 1.5
           // nasce no horizonte visível — clampado pra DENTRO da zona (o
           // horizonte pode estar além do fim dela, e aí nada nascia)
           let z = ((playerZ + DRAW_DIST * SEG_LEN * 0.85) % eng.trackLen + eng.trackLen) % eng.trackLen
           if (wrapDz(eng, zn.end, z) < 0) z = ((zn.end - 400) % eng.trackLen + eng.trackLen) % eng.trackLen
-          if (wrapDz(eng, z, zn.z) > 0 && wrapDz(eng, zn.end, z) > 0) {
+          // nunca dois contramão perto um do outro (nem lado a lado): sem "fileira"
+          const colado = eng.traffic.some(o => o.role === "oncoming" && Math.abs(wrapDz(eng, o.z, z)) < 14000)
+          if (!colado && wrapDz(eng, z, zn.z) > 0 && wrapDz(eng, zn.end, z) > 0) {
             const kind: TrafficKind = Math.random() < 0.72 ? "car" : "truck"
             const lane = Math.random() < 0.5 ? -0.75 : -0.25 // mão dupla: DUAS faixas contra
             eng.traffic.push({
@@ -95,7 +99,7 @@ export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
         for (const t of eng.traffic) {
           if (t.role !== "civilian" || t.parked) continue
           const d = wrapDz(eng, t.z, zn.z)
-          if (d > -6000 && wrapDz(eng, zn.end, t.z) > 0 && t.targetOffset < 0.1) {
+          if (d > -MARGEM_MAO_DUPLA && wrapDz(eng, zn.end, t.z) > 0 && t.targetOffset < 0.1) {
             let moved = false
             for (const lane of [0.25, 0.75]) {
               let clear = true

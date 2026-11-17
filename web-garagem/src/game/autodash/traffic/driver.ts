@@ -11,6 +11,7 @@ import { KMH2UPS, DRAW_DIST, SEG_LEN } from "../data"
 import { KINDS, type Traffic, type TrafficRole, type WorldView } from "./types"
 import { RACHA } from "../world/racha"
 import { fatorTroca, INTENSIDADE } from "./intensidade"
+import { FECHA_Z, faixasDoCivil, indiceFaixa } from "./faixas"
 
 // E1 — caminhão trocando de faixa (Fase 5)
 export const CAMINHAO = {
@@ -62,13 +63,13 @@ export abstract class Driver {
    * a faixa atual e a de destino dos outros). Usado para não fechar a pista.
    */
   protected fechariaTudo(self: Traffic, world: WorldView, lane: number): boolean {
-    const ocupadas = new Set<number>([Math.round((lane + 0.75) / 0.5)])
+    const ocupadas = new Set<number>([indiceFaixa(lane)])
     for (const o of world.traffic) {
-      if (o === self || o.parked || o.role === "police" || Math.abs(world.wrapDz(o.z, self.z)) > 900) continue
-      ocupadas.add(Math.round((o.offset + 0.75) / 0.5))
-      ocupadas.add(Math.round((o.targetOffset + 0.75) / 0.5))
+      if (o === self || o.parked || o.role === "police" || Math.abs(world.wrapDz(o.z, self.z)) > FECHA_Z) continue
+      ocupadas.add(indiceFaixa(o.offset))
+      ocupadas.add(indiceFaixa(o.targetOffset))
     }
-    return [0, 1, 2, 3].every(f => ocupadas.has(f))
+    return faixasDoCivil(!!world.maoDupla?.(self.z)).every(f => ocupadas.has(f))
   }
 
   /** Verdadeiro se `lane` está livre num raio Z de `clearZ` (olha faixa atual E destino dos outros). */
@@ -93,6 +94,8 @@ export abstract class Driver {
     for (const side of sides) {
       const lane = self.offset + side
       if (lane < -0.9 || lane > 0.9) continue
+      // mão dupla: a esquerda é contramão, civil nenhum entra lá
+      if (lane < 0 && self.role === "civilian" && world.maoDupla?.(self.z)) continue
       if (!this.laneFree(self, world, lane, clearZ)) continue
       // nunca entrar na última faixa livre: o trânsito não vira parede
       if (this.fechariaTudo(self, world, lane)) continue
@@ -265,7 +268,7 @@ export class CivilianDriver extends Driver {
       for (const o of world.traffic) {
         if (o === self || o.parked) continue
         const d = world.wrapDz(o.z, self.z)
-        if (d > 0 && d < 900) { atras = true; lento = Math.min(lento, o.vReal ?? o.speed) }
+        if (d > 0 && d < 3000) { atras = true; lento = Math.min(lento, o.vReal ?? o.speed) }
       }
       if (atras && lento < Infinity) spd = Math.min(spd, lento - 12)
     }

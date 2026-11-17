@@ -11,6 +11,7 @@ import { infracao } from "../world/policia"
 import { perderDrift } from "../world/drift"
 import { emDuelo } from "../world/touge"
 import { intensidade, carrosAlvo, chanceOnda, tipoPorIntensidade, estagio, INTENSIDADE } from "./intensidade"
+import { FECHA_Z, faixasDoCivil, indiceFaixa, naMaoDupla } from "./faixas"
 
 export function seedTraffic(eng: AutoDashEngine, count: number) {
   eng.traffic = []
@@ -40,8 +41,8 @@ export function spawnTraffic(eng: AutoDashEngine, relAhead: number) {
     ? (Math.random() < 0.7 ? "car" : "truck")
     : tipoPorIntensidade(ki, Math.random())
   const k = KINDS[kind]
-  const lane = eng.laneCenters[Math.floor(Math.random() * 4)]
   const z = ((eng.position + relAhead) % eng.trackLen + eng.trackLen) % eng.trackLen
+  const lane = sortearFaixa(eng, z)
   // não nasce em cima de outro nem na cara do desafiante do racha
   if (naFrenteDoRacha(eng, z, lane) || fechariaTudo(eng, z, lane)) return
   for (const t of eng.traffic) {
@@ -63,15 +64,20 @@ export function spawnTraffic(eng: AutoDashEngine, relAhead: number) {
  * Nascer em `lane` no ponto `z` fecharia as 4 faixas? (as outras 3 já têm alguém
  * a menos de FECHA_Z): o trânsito bravo nunca vira parede, sempre sobra uma.
  */
-const FECHA_Z = 900
 function fechariaTudo(eng: AutoDashEngine, z: number, lane: number): boolean {
-  const ocupadas = new Set<number>([Math.round(lane * 4)])
+  const ocupadas = new Set<number>([indiceFaixa(lane)])
   for (const t of eng.traffic) {
     if (t.parked || Math.abs(wrapDz(eng, t.z, z)) > FECHA_Z) continue
-    ocupadas.add(Math.round(t.offset * 4))
-    ocupadas.add(Math.round(t.targetOffset * 4))
+    ocupadas.add(indiceFaixa(t.offset))
+    ocupadas.add(indiceFaixa(t.targetOffset))
   }
-  return [-3, -1, 1, 3].every(f => ocupadas.has(f))
+  return faixasDoCivil(naMaoDupla(eng, z)).every(f => ocupadas.has(f))
+}
+
+/** Sorteia uma faixa onde o civil pode nascer em `z` (na mão dupla, só as da direita). */
+function sortearFaixa(eng: AutoDashEngine, z: number): number {
+  const ok = faixasDoCivil(naMaoDupla(eng, z))
+  return eng.laneCenters[ok[Math.floor(Math.random() * ok.length)]]
 }
 
 /** Onda (bíblia de cenários 1.5): um pelotão lado a lado no mesmo ritmo, com uma faixa livre. */
@@ -85,6 +91,7 @@ function spawnOnda(eng: AutoDashEngine, relAhead: number, ki: number) {
     const lane = eng.laneCenters[f]
     const kind = tipoPorIntensidade(ki, Math.random())
     const z = ((z0 + Math.random() * 500) % eng.trackLen + eng.trackLen) % eng.trackLen
+    if (!faixasDoCivil(naMaoDupla(eng, z)).includes(f)) continue // a esquerda da mão dupla é contramão
     if (naFrenteDoRacha(eng, z, lane) || fechariaTudo(eng, z, lane)) continue
     if (eng.traffic.some(t => Math.abs(t.offset - lane) < 0.3 && Math.abs(wrapDz(eng, t.z, z)) < KINDS[kind].len + KINDS[t.kind].len)) continue
     eng.traffic.push({
@@ -134,6 +141,7 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
     trackLen: eng.trackLen,
     demo,
     wrapDz: (a, b) => wrapDz(eng, a, b),
+    maoDupla: z => naMaoDupla(eng, z),
     curvaEm: z => segAt(eng, z).curve,
     intensidade: ki,
     // civil preso atrás de você: uma buzina por vez, no máximo a cada 1,2 s
@@ -253,11 +261,17 @@ export function updateTraffic(eng: AutoDashEngine, dt: number, playerZ: number, 
       // da blitz e do radar morriam no quadro em que nasciam. +300: os carros do
       // posto ficam no meio dele, ~250 segmentos depois do começo (Fase 8.2)
       if (rel < -40 * SEG_LEN || rel > (DRAW_DIST * 2 + 300) * SEG_LEN) t.dead = true
+    } else if (t.role === "civilian" && !t.viaduto && !t.posto && !t.saindoPosto) {
+      // civil que ficou longe: sai de cena e o spawnTraffic repõe, com as regras
+      // de nascimento (sem nascer em cima de outro, sem fechar as 4 faixas, sem
+      // cair na contramão). Antes ele era teleportado numa faixa sorteada às cegas.
+      const rel = wrapDz(eng, t.z, eng.position)
+      if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 80) * SEG_LEN) t.dead = true
     } else if (t.role !== "police" && t.role !== "racha") {
       const rel = wrapDz(eng, t.z, eng.position)
       if (rel < -40 * SEG_LEN || rel > (DRAW_DIST + 80) * SEG_LEN) {
         t.z = ((eng.position + (DRAW_DIST * 0.55 + Math.random() * DRAW_DIST * 0.4) * SEG_LEN) % eng.trackLen + eng.trackLen) % eng.trackLen
-        let lane = eng.laneCenters[Math.floor(Math.random() * 4)]
+        let lane = sortearFaixa(eng, t.z)
         // na cara do desafiante: outra faixa (só sorteia de novo se houver racha)
         for (let k = 0; k < 4 && naFrenteDoRacha(eng, t.z, lane); k++) lane = eng.laneCenters[(eng.laneCenters.indexOf(lane) + 1) % 4]
         if (naFrenteDoRacha(eng, t.z, lane)) t.z = ((t.z - RACHA.livreNaFrente * 2) % eng.trackLen + eng.trackLen) % eng.trackLen

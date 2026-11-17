@@ -84,6 +84,7 @@ export interface WorldView {
   demo: boolean        // tela de atração (menu): ignora o jogador
   // menor distância com sinal entre dois pontos Z (trata o loop da pista)
   wrapDz(a: number, b: number): number
+  maoDupla?(z: number): boolean // z está numa mão dupla (ou logo antes): a esquerda é contramão
   curvaEm?(z: number): number // curvatura da pista em z (o desafiante do racha alivia nas fechadas)
   buzinar?(self: Traffic): void // civil preso atrás do jogador (o engine limita a frequência)
   intensidade?: number // 0..1: como o trânsito está bravo (traffic/intensidade.ts)
