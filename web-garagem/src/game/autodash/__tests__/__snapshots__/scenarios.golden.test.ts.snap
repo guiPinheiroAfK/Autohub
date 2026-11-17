@@ -22,10 +22,10 @@ exports[`AutoDash — cenários golden (corrida e duelo) > corrida por CLIQUE re
 
 exports[`AutoDash — cenários golden (corrida e duelo) > tela de duelo sem rede: menu -> lobby do duelo -> voltar 1`] = `
 {
-  "calls": 7607685,
+  "calls": 7565909,
   "finalMode": "solo",
   "finalState": "menu",
   "frames": 300,
-  "hash": "42eee18d7e625a9b11480f3b9085c630cfe068c351182ff53d0705e730ec9e31",
+  "hash": "1f3bd423f0b2216d6156da6d194015f765f5408bb0ec101d363f4be5c7422ba4",
 }
 `;

@@ -283,18 +283,18 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
           }
         }
       } else {
-        // trecho urbano: concreto e calçada no lugar da grama (o gradiente verde de base fica por baixo)
+        // trecho urbano: concreto e calçada no lugar da grama. SÓ nas laterais, em polígonos que
+        // acabam na borda do asfalto: um fillRect de largura total (com o +1 de altura) empilhava
+        // por cima da pista perto do horizonte e custava um retângulo gigante por segmento.
         if (eng.mode !== "race" && TRECHO_URBANO.has(tipoNoSeg(eng.cenario, idx))) {
           ctx.fillStyle = shade(alt ? "#2c3340" : "#2a303c", amb)
-          ctx.fillRect(-10, ry2, W + 20, ry1 - ry2 + 1)
-          // calçada junto à pista, mais clara
-          ctx.fillStyle = shade(alt ? "#4a5262" : "#454d5c", amb)
-          poly(ctx, sx1 - sw1 * 1.9, ry1, sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2, sx2 - sw2 * 1.9, ry2)
-          poly(ctx, sx1 + sw1 * 1.11, ry1, sx1 + sw1 * 1.9, ry1, sx2 + sw2 * 1.9, ry2, sx2 + sw2 * 1.11, ry2)
-          // meio-fio escuro entre a calçada e o asfalto
-          ctx.fillStyle = shade("#1f2430", amb)
-          poly(ctx, sx1 - sw1 * 1.14, ry1, sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2, sx2 - sw2 * 1.14, ry2)
-          poly(ctx, sx1 + sw1 * 1.11, ry1, sx1 + sw1 * 1.14, ry1, sx2 + sw2 * 1.14, ry2, sx2 + sw2 * 1.11, ry2)
+          poly(ctx, -10, ry1, sx1 - sw1 * 0.99, ry1, sx2 - sw2 * 0.99, ry2, -10, ry2)
+          poly(ctx, sx1 + sw1 * 0.99, ry1, W + 10, ry1, W + 10, ry2, sx2 + sw2 * 0.99, ry2)
+          if (sw1 > 7) { // calçada e meio-fio só de perto (de longe seria subpixel)
+            ctx.fillStyle = shade(alt ? "#4a5262" : "#454d5c", amb)
+            poly(ctx, sx1 - sw1 * 1.9, ry1, sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2, sx2 - sw2 * 1.9, ry2)
+            poly(ctx, sx1 + sw1 * 1.11, ry1, sx1 + sw1 * 1.9, ry1, sx2 + sw2 * 1.9, ry2, sx2 + sw2 * 1.11, ry2)
+          }
         } else {
         // grama: listras sutis por cima do gradiente de base
         ctx.fillStyle = alt ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)"
