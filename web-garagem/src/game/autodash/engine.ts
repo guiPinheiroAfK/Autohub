@@ -12,6 +12,7 @@ import { type Racha } from "./modes/racha"
 import { type Comboio } from "./world/comboio"
 import { type Aviso } from "./world/avisos"
 import { type EventoMapa } from "./world/events"
+import { type RoteiroTeste } from "./world/roteiro-teste"
 import { update } from "./sim/update"
 import { skyNow, renderBackdrop } from "./render/backdrop"
 import { type BiomeDef, biomeById } from "./world/biomes"
@@ -183,6 +184,7 @@ export class AutoDashEngine {
   testeMotor = false   // pista vazia para ouvir os motores (garagem → Z)
   testeFase5 = false   // atalho de teste da Fase 5: racha e posto logo de cara (garagem → J)
   testePolicia = false // perseguição direta, estrelas nas teclas 0–5 (garagem → L)
+  roteiro: RoteiroTeste | null = null // roteiro de playtest em andamento ([P] [3]; world/roteiro-teste.ts)
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6

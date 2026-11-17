@@ -17,6 +17,7 @@ import { steerK, tyreOf } from "../physics/traction"
 import { passoLongitudinal } from "./longitudinal"
 import { passoCamera } from "../render/camera"
 import { updateEventSpawner } from "../world/events"
+import { atualizarRoteiro } from "../world/roteiro-teste"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
 import { atualizarPolicia, aderenciaPolicia } from "../world/policia"
@@ -365,6 +366,7 @@ export function update(eng: AutoDashEngine, dt: number) {
     }
   }
 
+  atualizarRoteiro(eng, dt, playerZ) // roteiro de playtest [P] [3] (world/roteiro-teste.ts)
   updateEventSpawner(eng, dt, playerZ)
   atualizarAvisos(eng, dt, playerZ)
   atualizarRacha(eng, dt) // convite de racha (Fase 5, só no solo)

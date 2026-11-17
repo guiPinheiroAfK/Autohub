@@ -37,6 +37,7 @@ export function limparTestes(eng: AutoDashEngine) {
   eng.testeMotor = false
   eng.testeFase5 = false
   eng.testePolicia = false
+  eng.roteiro = null
 }
 
 export function toMenu(eng: AutoDashEngine) {

@@ -19,6 +19,7 @@ import { AutoDashEngine, H } from "../engine"
 import { saveConfig, CARS, PAINTS, STRIPES, NEONS, WHEELS, WINGS } from "../data"
 import { shiftUp, shiftDown } from "../physics/gearbox"
 import { teclaDebugEvento, iniciarTesteFase5 } from "../world/debug-eventos"
+import { alternarRoteiro, pularPasso } from "../world/roteiro-teste"
 import { teclaEstetica } from "../render/menus/estetica"
 import { apertouShift, comandoTouge } from "../world/touge"
 
@@ -173,7 +174,8 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       if (eng.testeMotor && (k === "[" || k === ",")) trocarMotorTeste(eng, -1)
       // 1–6: eventos da Fase 5 (world/debug-eventos.ts); no teste de polícia os
       // dígitos 0–5 são as estrelas, então os eventos ficam desligados ali
-      if (!eng.testePolicia) teclaDebugEvento(eng, k)
+      if (eng.roteiro && k === "]") pularPasso(eng)
+      else if (!eng.testePolicia) teclaDebugEvento(eng, k)
       // (as teclas de debug de playtest — L nível, B/V/J/K/I/U eventos — foram
       // removidas: tudo isso agora é sorteado pelo próprio jogo em
       // updateEventSpawner). O voltou na Fase 6: sobe uma estrela de procurado.
@@ -182,6 +184,8 @@ export function onKeyDown(eng: AutoDashEngine, e: KeyboardEvent) {
       break
     case "paused":
       if (k === "escape" || k === "p" || k === "enter") eng.state = "racing"
+      // [P] e depois [3]: roteiro de playtest (eventos, regiões, serra, túnel, duelo)
+      if (k === "3" && eng.mode === "solo") { alternarRoteiro(eng); eng.state = "racing" }
       if (k === "r") startRace(eng)
       if (k === "m") eng.state = "menu"
       break

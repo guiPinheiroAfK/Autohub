@@ -21,6 +21,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   // curvas, e zerar depois apagaria justamente eles
   eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = corrida ? 1e9 : RITMO.primeiroS
   eng.ultimosEventos = []
+  eng.roteiro = null
   if (eng.sobViaduto) { eng.sobViaduto = false; eng.audio.ambiente("aberto") }
   // a pista da corrida vem da seed: circuito fixo ou procedural (ADR 0014)
   const circuito = corrida && seed !== undefined ? circuitoDaSeed(seed) : null
