@@ -11,15 +11,15 @@
 // e boas práticas de QTE: o comando aparece NO CENÁRIO, com os controles normais
 // do jogo, poucas vezes, e errar pune de leve):
 //
-// ATO 1 — CAÇA: você atrás do rival. Nos TRECHOS LIVRES você pilota (o gás e o
-//   câmbio são automáticos no duelo): colado nele, ele perde espírito; ficando
-//   para trás, você perde.
-// CENAS: nas curvas-chave a pista mostra o que fazer, no lugar certo:
-//   faixa VERMELHA de frenagem → segure S dentro dela
-//   linha AMARELA de entrada   → SHIFT ao cruzar (câmera lenta até apertar)
-//   de lado, o ângulo é no VOLANTE (medidor: ABRE / FECHA; o vermelho roda)
-//   linha AZUL de troca ("S")  → vire para o lado de fora ao cruzar
-//   linha VERDE de saída       → ESPAÇO ao cruzar (nitro)
+// 17/11: "agora tudo controlamos, ficou só confuso". A divisão ficou assim:
+//   TRECHO LIVRE → o volante é SEU (gás e câmbio automáticos).
+//   CENA (curva-chave) → o CARRO PILOTA: freia, faz o drift, troca de lado e dá o
+//   nitro sozinho, e o volante fica travado. Você só faz UMA coisa: SHIFT na linha
+//   amarela (câmera lenta até apertar). A qualidade do SHIFT é a nota da cena.
+//
+// ATO 1 — CAÇA: você atrás do rival. Nos TRECHOS LIVRES você pilota: colado nele,
+//   ele perde espírito; ficando para trás, você perde.
+// CENAS: a linha AMARELA de entrada mostra quando apertar SHIFT (o resto é do carro).
 // ULTRAPASSAGEM: no meio do duelo o rival abre a porta numa reta: passe por ele.
 // ATO 2 — LIDERANÇA: você na frente; agora é ele que cola. Longe dele, ele perde.
 // Fim: a barra de alguém zerou, ou acabaram as cenas.
@@ -60,7 +60,9 @@ export const TOUGE = {
   lentoDrift: 0.8,    // escala do tempo durante o drift
   introS: 2.6,        // s da apresentação do rival
   fase2: { perfeito: 0.09, bom: 0.22 }, // janelas com o rival acordado
-  nitroSaida: 18,     // km/h de empurrão do nitro na hora certa
+  nitroSaida: 18,     // km/h de empurrão do nitro de saída (automático para quem entrou bem)
+  vCena: 135,         // km/h: até onde o carro freia sozinho antes de entrar na cena
+  freioAuto: 55,      // km/h por s: a freada automática
   // espírito (barras): cenas e distância
   dano: { perfeito: 22, otimo: 15, bom: 8, erro: 18 },
   // distâncias (u; ~475 u por metro: 1 km/h = 132 u/s)
@@ -134,7 +136,6 @@ export interface Touge {
 const janelas = (eng: AutoDashEngine) => eng.touge?.acordou ? TOUGE.fase2 : { perfeito: TOUGE.perfeito, bom: TOUGE.bom }
 const vUps = (eng: AutoDashEngine) => Math.max(20, eng.speed) * KMH2UPS
 const ate = (eng: AutoDashEngine, z: number) => wrapDz(eng, z, eng.position + PLAYER_Z) / vUps(eng)
-const freando = (eng: AutoDashEngine) => eng.mouseBrake || eng.touchBrake || eng.keys.has("s") || eng.keys.has("arrowdown")
 
 /** Segundos até a linha de entrada da cena (negativo: já passou). */
 export function tempoAteEntrada(eng: AutoDashEngine, c: CurvaTouge): number { return ate(eng, c.entradaZ) }
@@ -156,12 +157,8 @@ export function comandoAtual(eng: AutoDashEngine): { cmd: Comando; t: number; c:
   if (!tg || tg.fase !== "batalha") return null
   const c = tg.curvas[tg.atual]
   if (!c) return null
-  if (c.freio === null) return { cmd: "freio", t: ate(eng, c.freioZ), c }
+  // o carro faz o resto sozinho: o único comando do jogador é o SHIFT da entrada
   if (c.nota === null) return { cmd: "shift", t: tempoAteEntrada(eng, c), c }
-  if (c.trocaZ !== null && c.troca === null && c.nota !== "erro") return { cmd: "troca", t: ate(eng, c.trocaZ), c }
-  const ts = tempoAteSaida(eng, c)
-  if (ts > 0.6 && tempoAteEntrada(eng, c) <= 0) return { cmd: "drift", t: ts, c }
-  if (c.nitro === null) return { cmd: "nitro", t: ts, c }
   return null
 }
 
@@ -238,7 +235,7 @@ export function spawnTouge(eng: AutoDashEngine): boolean {
       for (let k = 0; k < g.perna; k++) poe(dir * g.curva)
       const meio = i + Math.floor(g.troca / 2)
       for (let k = 0; k < g.troca; k++) poe(dir * g.curva * (1 - 2 * (k + 1) / g.troca))
-      trocaZ = zDe(meio); marcas.set(segIdx(meio), "troca")
+      trocaZ = zDe(meio)
       for (let k = 0; k < g.perna; k++) poe(-dir * g.curva)
       for (let k = 0; k < g.sai; k++) poe(-dir * g.curva * (1 - (k + 1) / g.sai))
     } else {
@@ -250,9 +247,7 @@ export function spawnTouge(eng: AutoDashEngine): boolean {
     const fim = i
     for (let k = 0; k < T.retaCena; k++) poe(0)
     const fa = entra - T.freioAntes
-    for (let k = fa; k < fa + T.freioSegs; k++) marcas.set(segIdx(k), "freio")
-    marcas.set(segIdx(entra), "entrada")
-    marcas.set(segIdx(fim), "saida")
+    marcas.set(segIdx(entra), "entrada") // só a linha do SHIFT é pintada: o resto o carro faz sozinho
     curvas.push({
       tipo: b, freioZ: zDe(fa), freioFimZ: zDe(fa + T.freioSegs), entradaZ: zDe(entra), fimZ: zDe(fim), dir, trocaZ,
       treino: nCena === 0, nota: null, freio: null, troca: null, zonaT: 0, curvaT: 0, rodou: false, nitro: null, final: null,
@@ -285,41 +280,18 @@ export function spawnTouge(eng: AutoDashEngine): boolean {
 
 /** Um comando do teclado no duelo. `false` se não era hora dele (aperto à toa não pune). */
 export function comandoTouge(eng: AutoDashEngine, cmd: "freio" | "shift" | "troca" | "nitro"): boolean {
+  if (cmd !== "shift") return false // freio, troca e nitro são do carro (passoTouge)
   const atual = comandoAtual(eng)
-  if (!atual || atual.t > 1.3) return false
+  if (!atual || atual.cmd !== "shift" || atual.t > 1.3) return false
   const { c } = atual
   const j = janelas(eng)
-  if (cmd === "freio") { // (o freio é segurar o S na faixa; isto é para o teste)
-    if (atual.cmd !== "freio" || atual.t > 0 || ate(eng, c.freioFimZ) < 0) return false
-    c.freio = true; marca(eng, "FREIO ✓", true)
-    return true
-  }
-  if (cmd === "shift") {
-    if (atual.cmd === "freio") { c.freio = false; marca(eng, "FREIO ✗", false) } // pulou o freio
-    if (atual.cmd !== "shift" && atual.cmd !== "freio") return false
-    const d = Math.abs(tempoAteEntrada(eng, c))
-    julgarShift(eng, c, d <= j.perfeito ? "perfeito" : d <= j.bom ? "bom" : "erro")
-    return true
-  }
-  if (cmd === "troca") {
-    if (atual.cmd !== "troca") return false
-    trocar(eng, c, Math.abs(atual.t) <= j.bom)
-    return true
-  }
-  if (atual.cmd !== "nitro" && atual.cmd !== "drift") return false
-  const ts = tempoAteSaida(eng, c)
-  c.nitro = Math.abs(ts) <= j.bom
-  if (c.nitro) eng.speed += TOUGE.nitroSaida
-  marca(eng, c.nitro ? "NITRO ✓" : "NITRO ✗", c.nitro)
+  const d = Math.abs(tempoAteEntrada(eng, c))
+  julgarShift(eng, c, d <= j.perfeito ? "perfeito" : d <= j.bom ? "bom" : "erro")
   return true
 }
 
 /** Shift (teclado). */
 export function apertouShift(eng: AutoDashEngine) { comandoTouge(eng, "shift") }
-
-function marca(eng: AutoDashEngine, txt: string, ok: boolean) {
-  eng.floaters.push({ text: txt, color: ok ? "#4ade80" : "#ef4444", y: H * 0.5, life: 0.7, big: false })
-}
 
 /** Pede um efeito ao render (fila curta: sem render, como nos testes, ela não cresce). */
 function efeito(eng: AutoDashEngine, e: EfeitoTouge) {
@@ -331,7 +303,6 @@ function efeito(eng: AutoDashEngine, e: EfeitoTouge) {
 
 function julgarShift(eng: AutoDashEngine, c: CurvaTouge, nota: Nota) {
   c.nota = nota
-  if (c.freio === null) c.freio = false
   const z = zonaDa(c)
   if (nota !== "erro") eng.driftAng = c.dir * (nota === "perfeito" ? (z[0] + z[1]) / 2 : z[0] - 0.03)
   // o texto agora é estilizado no render (render/tougeFx.ts), com impact frame no perfeito
@@ -349,30 +320,20 @@ function trocar(eng: AutoDashEngine, c: CurvaTouge, ok: boolean) {
     eng.trauma = Math.min(1, eng.trauma + 0.25)
     efeito(eng, { tipo: "impacto", txt: "TROCA!", cor: "#38bdf8" })
     emitSmokeRodas(eng, 10, "#e5e7eb")
-  } else {
-    eng.driftAng *= 0.3
-    marca(eng, "PERDEU A TROCA", false)
-  }
+  } else eng.driftAng *= 0.3
 }
 
-/** Fecha a cena: soma o que foi feito e aplica no espírito. */
+/** Fecha a cena: a nota é a qualidade do SHIFT (o resto o carro fez sozinho) e vai para o espírito. */
 function fecharCurva(eng: AutoDashEngine, c: CurvaTouge) {
   const tg = eng.touge!
-  const shift = c.nota === "perfeito" ? 2 : c.nota === "bom" ? 1 : 0
-  const fz = c.curvaT > 0 ? c.zonaT / c.curvaT : 0
-  const drift = c.rodou ? 0 : fz >= 0.6 ? 2 : fz >= 0.3 ? 1 : 0
-  const troca = c.trocaZ !== null ? (c.troca ? 1 : 0) : 0
-  const max = c.trocaZ !== null ? 7 : 6
-  const pts = (c.freio ? 1 : 0) + shift + drift + troca + (c.nitro ? 1 : 0)
-  const falta = max - pts
-  const final: NotaCurva = c.nota === "erro" || c.rodou || falta >= 3 ? "erro" : falta === 0 ? "perfeito" : falta === 1 ? "otimo" : "bom"
+  const final: NotaCurva = c.nota === "perfeito" ? "perfeito" : c.nota === "bom" ? "otimo" : "erro"
   c.final = final
   if (final === "erro") { if (!c.treino) tg.vidaVoce = Math.max(0, tg.vidaVoce - TOUGE.dano.erro) }
   else tg.vidaRival = Math.max(0, tg.vidaRival - TOUGE.dano[final])
-  const txt = { perfeito: "CURVA PERFEITA!", otimo: "ÓTIMO", bom: "BOM", erro: c.treino ? "TREINO: NA PRÓXIMA VALE" : "ERROU A CURVA" }[final]
-  const cor = final === "erro" ? "#ef4444" : final === "bom" ? "#facc15" : "#4ade80"
+  const txt = { perfeito: "CURVA PERFEITA!", otimo: "BOA CURVA", bom: "BOM", erro: c.treino ? "TREINO: NA PRÓXIMA VALE" : "ERROU A CURVA" }[final]
+  const cor = final === "erro" ? "#ef4444" : final === "otimo" ? "#facc15" : "#4ade80"
   const tipo: EfeitoTouge["tipo"] = final === "perfeito" ? "impacto" : final === "erro" && !c.treino ? "erro" : "texto"
-  efeito(eng, { tipo, txt, cor, sub: `${pts}/${max}` })
+  efeito(eng, { tipo, txt, cor })
   if (tipo === "erro") eng.trauma = Math.min(1, eng.trauma + 0.35)
   tg.atual++
 }
@@ -382,31 +343,33 @@ function fecharCurva(eng: AutoDashEngine, c: CurvaTouge) {
  * curva): marcas que passaram, drift no volante, troca e câmera lenta.
  * Devolve a intensidade do chiado (0..1).
  */
-export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centrif: number, steerInput = 0): number {
+export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centrif: number): number {
   const tg = eng.touge
   if (!tg || tg.fase !== "batalha") { eng.escalaTempo += (1 - eng.escalaTempo) * Math.min(1, dt * 4); return 0 }
   if (tg.introT > 0) tg.introT = Math.max(0, tg.introT - dt)
   const playerZ = eng.position + PLAYER_Z
   const c = tg.curvas[tg.atual]
   let lento = 1
+  const cena = emCena(eng)
+  // CENA: o carro pilota. O volante fica travado (sim/update.ts) e ele puxa para o
+  // meio da pista e alivia na faixa de frenagem; o jogador só aperta SHIFT.
+  if (cena) eng.playerX += (0 - eng.playerX) * Math.min(1, dt * 1.4)
   if (c) {
     const j = janelas(eng)
-    // faixa vermelha: segurar o S dentro dela
-    if (c.freio === null) {
-      const dentro = ate(eng, c.freioZ) <= 0 && ate(eng, c.freioFimZ) > 0
-      if (dentro && freando(eng)) { c.freio = true; marca(eng, "FREIO ✓", true) }
-      else if (ate(eng, c.freioFimZ) <= 0) { c.freio = false; marca(eng, "FREIO ✗", false) }
-    }
     const te = tempoAteEntrada(eng, c), ts = tempoAteSaida(eng, c)
+    // frenagem automática antes da entrada (a faixa vermelha não é mais comando)
+    if (c.nota === null && ate(eng, c.freioZ) <= 0 && te > 0) eng.speed = Math.max(TOUGE.vCena, eng.speed - TOUGE.freioAuto * dt)
+    if (c.freio === null && ate(eng, c.freioFimZ) <= 0) c.freio = true
     if (c.nota === null && te < -j.bom) julgarShift(eng, c, "erro")
-    // troca do "S": virar para o lado de fora ao cruzar a linha azul
+    // troca do "S": o carro troca de lado sozinho na linha, se a entrada foi boa
     if (c.trocaZ !== null && c.troca === null && c.nota && c.nota !== "erro") {
-      const tt = ate(eng, c.trocaZ)
-      if (Math.abs(tt) <= j.bom && steerInput * c.dir < 0) trocar(eng, c, true)
-      else if (tt < -j.bom) trocar(eng, c, false)
-      else if (tt < 0.4 && tt > -j.bom) lento = Math.min(lento, TOUGE.lento)
+      if (ate(eng, c.trocaZ) <= 0) trocar(eng, c, true)
     }
-    if (c.nitro === null && ts < -j.bom) { c.nitro = false; marca(eng, "NITRO ✗", false) }
+    // nitro de saída: automático para quem entrou bem
+    if (c.nitro === null && ts <= 0 && c.nota !== null) {
+      c.nitro = c.nota !== "erro"
+      if (c.nitro) { eng.speed += TOUGE.nitroSaida; efeito(eng, { tipo: "texto", txt: "NITRO!", cor: "#4ade80" }) }
+    }
     if (c.nota !== null && c.nitro !== null && ts < 0) fecharCurva(eng, c)
     // câmera lenta na linha de entrada até o Shift
     if (c.nota === null && te < (c.treino ? 0.9 : 0.5) && te > -j.bom) lento = Math.min(lento, c.treino ? TOUGE.lentoTreino : TOUGE.lento)
@@ -414,47 +377,34 @@ export function passoTouge(eng: AutoDashEngine, dt: number, curva: number, centr
   // dentro de alguma cena já aberta pelo SHIFT?
   const k = tg.curvas.find(q => q.nota && wrapDz(eng, q.entradaZ, playerZ) <= 0 && wrapDz(eng, q.fimZ, playerZ) > 0)
   let chiado = 0
-  const perdeuTroca = k && k.trocaZ !== null && k.troca === false && wrapDz(eng, k.trocaZ, playerZ) <= 0
-  if (!k || k.nota === "erro" || k.rodou || perdeuTroca) {
-    if (k) { // saiu de frente (ou rodou): a curva joga para fora e a velocidade cai
+  if (!k || k.nota === "erro") {
+    if (k) { // saiu de frente (errou o SHIFT): a curva joga para fora e a velocidade cai
       k.curvaT += dt
       eng.playerX -= centrif * 0.5 * dt
       eng.speed = Math.max(0, eng.speed - 22 * dt)
       chiado = 0.4
     }
-    eng.driftAng += (0 - eng.driftAng) * Math.min(1, dt * (k?.rodou ? 1.5 : 5))
+    eng.driftAng += (0 - eng.driftAng) * Math.min(1, dt * 5)
     if (Math.abs(eng.driftAng) < 0.01) eng.driftAng = 0
   } else {
-    // DRIFT NO VOLANTE: para dentro abre, para fora fecha, solto fecha devagar
+    // DRIFT AUTOMÁTICO: o carro segura o ângulo na faixa verde (no meio se o SHIFT foi
+    // perfeito, na beirada se foi só bom). Ninguém mexe no volante aqui.
     const dir = dirAgora(eng, k)
-    const volante = steerInput * dir
-    let ang = Math.max(0, eng.driftAng * dir)
-    ang += (volante > 0 ? volante * TOUGE.abre : volante < 0 ? volante * TOUGE.fecha : -TOUGE.solto) * dt
-    ang += Math.abs(curva) * 0.02 * dt
-    k.curvaT += dt
-    if (ang > TOUGE.roda) {
-      k.rodou = true
-      if (!k.treino) tg.vidaVoce = Math.max(0, tg.vidaVoce - 12)
-      eng.speed *= 0.6
-      eng.shakeT = Math.max(eng.shakeT, 0.5)
-      eng.driftAng = dir * 1.7
-      efeito(eng, { tipo: "erro", txt: "RODOU!", cor: "#ef4444", forte: true })
-      eng.audio.crash()
-      return 1
-    }
     const z = zonaDa(k)
-    const naZona = ang >= z[0] && ang <= z[1]
-    if (naZona) k.zonaT += dt
-    const segura = naZona ? 1 : ang < TOUGE.perde ? 0.2 : 0.6
-    eng.playerX += centrif * segura * dt
-    eng.playerX += (0 - eng.playerX) * Math.min(1, dt * (naZona ? 1 : 0.4))
-    eng.speed = Math.max(0, eng.speed + (naZona ? 1.5 : -6) * dt)
-    eng.driftAng = dir * ang
+    const alvo = k.nota === "perfeito" ? (z[0] + z[1]) / 2 : z[0] + 0.04
+    const ang = Math.max(0, eng.driftAng * dir)
+    const novo = ang + (alvo - ang) * Math.min(1, dt * 4) + Math.abs(curva) * 0.02 * dt
+    k.curvaT += dt
+    k.zonaT += dt
+    eng.playerX += centrif * dt
+    eng.playerX += (0 - eng.playerX) * Math.min(1, dt * 1.2)
+    eng.speed = Math.max(0, eng.speed + 1.5 * dt)
+    eng.driftAng = dir * novo
     // fumaça das rodas traseiras (o rastro longo e a borracha ficam em render/tougeFx.ts)
-    emitSmokeRodas(eng, naZona ? 4 : 2, "#e5e7eb")
+    emitSmokeRodas(eng, 4, "#e5e7eb")
     if (Math.random() < 0.5) emitSmokeRodas(eng, 1, "#1f2937")
     lento = Math.min(lento, TOUGE.lentoDrift)
-    chiado = naZona ? 1 : 0.7
+    chiado = 1
   }
   eng.escalaTempo += (lento - eng.escalaTempo) * Math.min(1, dt * 6)
   return chiado

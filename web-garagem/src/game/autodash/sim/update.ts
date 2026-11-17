@@ -28,7 +28,7 @@ const MURETA_ALT = 150
 export const ELEV_LADEIRA = 0.6 // fração da rampa do elevado que vira ladeira na física
 import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
 import { passoDrift, perderDrift } from "../world/drift"
-import { emDuelo } from "../world/touge"
+import { emDuelo, emCena } from "../world/touge"
 import { atualizarRacha } from "../modes/racha"
 import { atualizarObras } from "../world/obra"
 import { atualizarComboio } from "../world/comboio"
@@ -169,6 +169,7 @@ export function update(eng: AutoDashEngine, dt: number) {
     if (eng.keys.has("a") || eng.keys.has("arrowleft") || eng.touchSteerLeft) steerInput -= 1
     if (eng.keys.has("d") || eng.keys.has("arrowright") || eng.touchSteerRight) steerInput += 1
   }
+  if (emCena(eng)) steerInput = 0 // curva-chave do touge: o carro pilota, o volante fica travado
   const speedF = Math.min(1, eng.speed / 240)
   // tração na direção: dianteira com torque abre a curva no gás e fecha ao aliviar
   // (ADR 0012). Usa o giro do quadro anterior; RWD devolve 1 e nada muda.
