@@ -21,7 +21,8 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   // curvas, e zerar depois apagaria justamente eles
   eng.obstacles = []; eng.zones = []; eng.roadSigns = []; eng.eventTimer = corrida ? 1e9 : RITMO.primeiroS
   eng.ultimosEventos = []
-  if (eng.sobViaduto) { eng.sobViaduto = false; eng.audio.ambiente("aberto") }
+  eng.roteiro = null
+  if (eng.sobViaduto || eng.tunelSom) { eng.sobViaduto = false; eng.tunelSom = false; eng.audio.ambiente("aberto") }
   // a pista da corrida vem da seed: circuito fixo ou procedural (ADR 0014)
   const circuito = corrida && seed !== undefined ? circuitoDaSeed(seed) : null
   if (circuito) buildCircuit(eng, circuito)
@@ -46,7 +47,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.level = 0; eng.levelUpT = 0
   eng.powerups = []; eng.puTimer = eng.testeMotor ? 1e9 : 6
   eng.curveWarn = 0; eng.collWarn = null
-  eng.newRecord = false; eng.beamT = 0; eng.beamCdT = 0; eng.pitchY = 0
+  eng.newRecord = false; eng.beamT = 0; eng.beamCdT = 0; eng.farolAlto = false; eng.pitchY = 0
   eng.shiftT = 0; eng.wheelspinT = 0; eng.bogT = 0
   eng.crashed = false; eng.crashByPolice = false; eng.noRamal = false
   eng.raceFinished = false; eng.raceSpectT = 0
@@ -63,7 +64,7 @@ export function startRace(eng: AutoDashEngine, seed?: number) {
   eng.combustivel = 1; eng.postoLimite = COMBUSTIVEL.chamaPosto; eng.abastecendo = false; eng.juntoDaBomba = false; eng.elevJogador = 0; eng.dentroTunel = false; eng.claraoT = 0; eng.audio.ventilacao(false); eng.audio.bomba(false)
   eng.racha = null; eng.rachaT = RACHA.primeiroConviteS
   eng.touge = null
-  eng.montanha = null; eng.climaForcado = null; eng.kmRegiao = 0; eng.estagioTransito = 0
+  eng.montanha = null; eng.serraPassada = null; eng.climaForcado = null; eng.kmRegiao = 0; eng.estagioTransito = 0
   if (eng.mode === "solo" && eng.bioma.id === "serra") spawnMontanha(eng)
   eng.comboio = null; eng.oleoT = 0
   eng.vacuo = 0; eng.vacuoS = 0; eng.estilingueT = 0
@@ -103,7 +104,7 @@ export function reconhecerPista(eng: AutoDashEngine) {
   eng.mode = "race" // a pista é desenhada como a da corrida (zebra roxa, linha de largada)
   eng.race = null
   eng.obstacles = []; eng.zones = []; eng.roadSigns = []
-  if (eng.sobViaduto) { eng.sobViaduto = false; eng.audio.ambiente("aberto") }
+  if (eng.sobViaduto || eng.tunelSom) { eng.sobViaduto = false; eng.tunelSom = false; eng.audio.ambiente("aberto") }
   buildCircuit(eng, def)
   eng.traffic = []
   eng.position = 0

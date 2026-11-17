@@ -10,7 +10,7 @@ import { initRain } from "../fx/particles"
  * O clima novo entra misturado ao anterior em `climaS` (luz, névoa, aderência,
  * freio e a chuva aparecendo/sumindo); a região nova, em `biomaS` (céu e fundo).
  */
-export const TRANSICAO = { climaS: 8, biomaS: 5 }
+export const TRANSICAO = { climaS: 8, biomaS: 5, climaForcadoS: 2.5 } // forçado pelo lugar (neblina da serra): entra rápido, senão a 150 km/h nem chega a encher
 
 export interface ClimaVisto extends ClimaDef { chuvaK: number } // chuvaK: 0..1, intensidade da chuva
 
@@ -62,7 +62,7 @@ export function iniciarTempo(eng: AutoDashEngine, hora: HoraModo, clima: ClimaMo
 export function tickTempo(eng: AutoDashEngine, dt: number) {
   advanceClock(eng.clock, dt)
   eng.climaS += dt
-  if (eng.climaMix < 1) eng.climaMix = Math.min(1, eng.climaMix + dt / TRANSICAO.climaS)
+  if (eng.climaMix < 1) eng.climaMix = Math.min(1, eng.climaMix + dt / (eng.climaForcado ? TRANSICAO.climaForcadoS : TRANSICAO.climaS))
   if (eng.biomaMix < 1) eng.biomaMix = Math.min(1, eng.biomaMix + dt / TRANSICAO.biomaS)
   setClima(eng, eng.climaForcado ?? climaNoTick(eng.climaModo, eng.bioma.climas, eng.climaSeed, Math.floor(eng.climaS / TICK_S)), true)
 }

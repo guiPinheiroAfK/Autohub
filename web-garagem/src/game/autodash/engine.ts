@@ -12,6 +12,7 @@ import { type Racha } from "./modes/racha"
 import { type Comboio } from "./world/comboio"
 import { type Aviso } from "./world/avisos"
 import { type EventoMapa } from "./world/events"
+import { type RoteiroTeste } from "./world/roteiro-teste"
 import { update } from "./sim/update"
 import { skyNow, renderBackdrop } from "./render/backdrop"
 import { type BiomeDef, biomeById } from "./world/biomes"
@@ -20,7 +21,7 @@ import { type ClimaId, type ClimaModo, CLIMAS } from "./world/weather"
 import { climaAtual, type ClimaVisto } from "./sim/clima"
 import type { Touge } from "./world/touge"
 import type { Montanha } from "./world/montanha"
-import { drawRespingos } from "./render/serra"
+import { drawRespingos, drawGotasDeNevoa } from "./render/serra"
 import { type Ramal } from "./world/ramais"
 import { type TrechoInfo } from "./world/circuits"
 import { renderRoad } from "./render/road"
@@ -179,10 +180,12 @@ export class AutoDashEngine {
   traffic: Traffic[] = []
   obstacles: Obstacle[] = []
   zones: Zone[] = []
-  sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto
+  sobViaduto = false   // som: eco forte enquanto passa embaixo do viaduto (ou no túnel)
+  tunelSom = false     // som: reverb longo do túnel ligado
   testeMotor = false   // pista vazia para ouvir os motores (garagem → Z)
   testeFase5 = false   // atalho de teste da Fase 5: racha e posto logo de cara (garagem → J)
   testePolicia = false // perseguição direta, estrelas nas teclas 0–5 (garagem → L)
+  roteiro: RoteiroTeste | null = null // roteiro de playtest em andamento ([P] [3]; world/roteiro-teste.ts)
   roadSigns: RoadSign[] = []
   powerups: Pickup[] = []
   puTimer = 6
@@ -248,6 +251,7 @@ export class AutoDashEngine {
   postoLimite = 0.45 // abaixo disso abre o próximo posto (world/posto.ts)
   abastecendo = false
   juntoDaBomba = false // no pátio do posto, ao lado da ilha (world/posto.ts)
+  naBorda = false      // encostado no guard-rail ou no paredão (world/bordas.ts)
   elevJogador = 0      // altura do chão sob o jogador (elevado do viaduto, Fase 8.6)
   dentroTunel = false  // dentro do túnel (world/tunel.ts, Fase 8.7)
   claraoT = 0          // s restantes do clarão ao sair do túnel
@@ -258,6 +262,7 @@ export class AutoDashEngine {
   touge: Touge | null = null // duelo de touge em andamento (world/touge.ts)
   escalaTempo = 1 // câmera lenta do duelo (1 = normal)
   montanha: Montanha | null = null // a montanha da serra na pista (world/montanha.ts)
+  serraPassada: { a: number; total: number } | null = null // serra que acabou: o relevo dela é aplanado quando o jogador sai (world/montanha.ts)
   climaForcado: ClimaId | null = null // clima imposto pelo lugar (neblina no meio da serra)
   racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
   rachaT = 45 // s de solo até o próximo convite
@@ -296,6 +301,8 @@ export class AutoDashEngine {
   fadeT = 0
   newRecord = false
   beamT = 0
+  farolAlto = false // farol alto ligado (liga e desliga no [F]; flow.ts)
+  farolPulsoT = 0   // s até o próximo "abre caminho" do farol alto ligado
   beamCdT = 0
   pitchY = 0
 
@@ -474,6 +481,7 @@ export class AutoDashEngine {
 
     // vinheta — dá peso à imagem (sprite cacheado)
     ctx.drawImage(vignetteTex(this), 0, 0)
+    drawGotasDeNevoa(this) // gotinhas da neblina na tela (render/serra.ts)
     drawRespingos(this) // respingo da cachoeira da serra na tela (render/serra.ts)
 
     switch (this.state) {

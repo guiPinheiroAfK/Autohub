@@ -584,6 +584,9 @@ export function drawTower(eng: AutoDashEngine, x: number, y: number, w: number, 
   ctx.stroke()
 }
 
+/** Luz mínima das regiões de dia (acima do limiar de noite, 0,62, do render). */
+export const AMB_MIN_DIA = 0.66
+
 export function skyNow(eng: AutoDashEngine) : { top: string; bot: string; amb: number } {
   const novo = ceuDoBioma(eng, eng.bioma)
   const ant = eng.biomaAnt
@@ -617,6 +620,11 @@ function ceuDoBioma(eng: AutoDashEngine, bio: AutoDashEngine["bioma"]) : { top: 
     }
     top = mix(a.top, b.top, p); bot = mix(a.bot, b.bot, p)
     amb = (a.amb + (b.amb - a.amb) * p) * cl.amb
+    // 17/11: "a serra continua ficando noite". A chuva multiplica a luz por 0,8 e a
+    // serra, a costa e a rodovia têm chaves de 0,74 a 0,8: o produto passava de
+    // 0,6 e o jogo acendia estrelas, janelas e farol, como se fosse noite. Região
+    // de dia nunca cruza o limiar da noite por causa do clima (a cidade é a noite).
+    if (bio.id !== "cidade") amb = Math.max(amb, AMB_MIN_DIA)
   }
   // nublado e neblina puxam o céu pro cinza (claro de dia, chumbo à noite)
   if (cl.cinza > 0) {

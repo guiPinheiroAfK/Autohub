@@ -14,7 +14,7 @@ import { type AutoDashEngine, H } from "../engine"
 import { DRAW_DIST, SEG_LEN } from "../data"
 import { biomeById } from "./biomes"
 import { gerarTrechos, tipoNoSeg } from "./cenario"
-import { spawnMontanha } from "./montanha"
+import { spawnMontanha, esquecerMontanha, aplanarSerraPassada } from "./montanha"
 
 export const REGIAO = {
   km: 9,           // km rodados em cada região (a ~180 km/h, uns 3 minutos)
@@ -48,7 +48,7 @@ export function trocarRegiao(eng: AutoDashEngine, id?: string, comMontanha = tru
   const fim = Math.min(N, base + DRAW_DIST + REGIAO.manterSegs)
   if (base < fim) eng.cenario.unshift({ a: base, b: fim, tipo: tipoAqui })
   // a montanha é da serra: saindo dela, acaba a neblina imposta; chegando, ela abre à frente
-  eng.montanha = null
+  esquecerMontanha(eng)
   eng.climaForcado = null
   if (nova.id === "serra" && comMontanha) spawnMontanha(eng)
   eng.floaters.push({ text: `NOVA REGIÃO: ${nova.nome.toUpperCase()}`, color: "#38bdf8", y: H * 0.26, life: 2.4, big: true })
@@ -62,6 +62,7 @@ export function trocarRegiao(eng: AutoDashEngine, id?: string, comMontanha = tru
  */
 export function regiaoPorDistancia(eng: AutoDashEngine, dt: number) {
   if (eng.mode !== "solo" || eng.testeMotor || eng.state !== "racing") return
+  aplanarSerraPassada(eng) // o relevo da serra que já passou não volta na próxima volta
   eng.kmRegiao += eng.speed * dt / 3600
   if (eng.bioma.id === "serra") {
     if (!eng.montanha) spawnMontanha(eng)

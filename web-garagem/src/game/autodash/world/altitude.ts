@@ -9,7 +9,7 @@ import type { Montanha } from "./montanha"
 export const ALTITUDE = {
   baseM: 40,     // metros no pé da serra (o altímetro é de mentira: a escala do jogo não é métrica)
   topoM: 1100,   // metros no alto (a Serra do Mar passa de mil)
-  afunda: 0.09,  // fração da altura da tela que o fundo desce no alto
+  afunda: 0.14,  // fração da altura da tela que o fundo desce no alto (17/11: faltava a sensação de subir; era 0,09)
 }
 
 // altura máxima de cada viagem (calculada uma vez por montanha)

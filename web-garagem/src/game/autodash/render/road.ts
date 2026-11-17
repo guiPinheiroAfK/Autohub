@@ -19,7 +19,7 @@ import { drawRamalSeg, drawElevadoSeg, type ElevadoSeg } from "./ramal"
 import { drawTunelSeg, drawClarao, type TunelSeg } from "./tunel"
 import { TUNEL } from "../world/tunel"
 import { drawEnfeite, drawGuardRail, drawParedao, drawPortal, PAREDAO, type RailSeg } from "./cenario"
-import { enfeitesDoSegmento, ENF, tipoNoSeg, GUARD_RAIL, COM_GUARD_RAIL, COM_PAREDAO } from "../world/cenario"
+import { enfeitesDoSegmento, ENF, tipoNoSeg, GUARD_RAIL, COM_GUARD_RAIL, COM_PAREDAO, TRECHO_URBANO } from "../world/cenario"
 import { ladoParedao, ladoDoVale, segPortal, noViadutoDaSerra } from "../world/montanha"
 import { marcaNoSeg, rotuloDaMarca, type RotuloMarca } from "../world/touge"
 import { drawPainelTouge } from "./touge"
@@ -283,9 +283,23 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
           }
         }
       } else {
+        // trecho urbano: concreto e calçada no lugar da grama. SÓ nas laterais, em polígonos que
+        // acabam na borda do asfalto: um fillRect de largura total (com o +1 de altura) empilhava
+        // por cima da pista perto do horizonte e custava um retângulo gigante por segmento.
+        if (eng.mode !== "race" && TRECHO_URBANO.has(tipoNoSeg(eng.cenario, idx))) {
+          ctx.fillStyle = shade(alt ? "#2c3340" : "#2a303c", amb)
+          poly(ctx, -10, ry1, sx1 - sw1 * 0.99, ry1, sx2 - sw2 * 0.99, ry2, -10, ry2)
+          poly(ctx, sx1 + sw1 * 0.99, ry1, W + 10, ry1, W + 10, ry2, sx2 + sw2 * 0.99, ry2)
+          if (sw1 > 7) { // calçada e meio-fio só de perto (de longe seria subpixel)
+            ctx.fillStyle = shade(alt ? "#4a5262" : "#454d5c", amb)
+            poly(ctx, sx1 - sw1 * 1.9, ry1, sx1 - sw1 * 1.11, ry1, sx2 - sw2 * 1.11, ry2, sx2 - sw2 * 1.9, ry2)
+            poly(ctx, sx1 + sw1 * 1.11, ry1, sx1 + sw1 * 1.9, ry1, sx2 + sw2 * 1.9, ry2, sx2 + sw2 * 1.11, ry2)
+          }
+        } else {
         // grama: listras sutis por cima do gradiente de base
         ctx.fillStyle = alt ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)"
         ctx.fillRect(-10, ry2, W + 20, ry1 - ry2 + 1)
+        }
         // zebra só nas laterais — nunca embaixo do asfalto (era daí que vazava o vermelho)
         ctx.fillStyle = alt ? rumbA : rumbB
         poly(ctx, sx1 - sw1 * 1.11, ry1, sx1 - sw1 * 0.97, ry1, sx2 - sw2 * 0.97, ry2, sx2 - sw2 * 1.11, ry2)
@@ -590,8 +604,8 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   }
 
   // farol alto: clarão pedindo passagem
-  if (eng.beamT > 0) {
-    const a = Math.min(1, eng.beamT / 0.55)
+  if (eng.beamT > 0 || eng.farolAlto) {
+    const a = Math.max(eng.beamT > 0 ? Math.min(1, eng.beamT / 0.55) : 0, eng.farolAlto ? 0.65 : 0) // ligado: clareia a pista, sem ofuscar
     const beam = ctx.createRadialGradient(W / 2, H * 0.62, 30, W / 2, H * 0.62, 420)
     beam.addColorStop(0, `rgba(255,250,215,${0.38 * a})`)
     beam.addColorStop(1, "rgba(255,250,215,0)")
@@ -627,7 +641,8 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // farol à noite
   if ((amb < 0.62 || eng.dentroTunel) && (eng.state === "racing" || eng.state === "countdown" || eng.state === "paused")) {
     const lg = ctx.createRadialGradient(W / 2, H * 0.72, 20, W / 2, H * 0.72, 330)
-    lg.addColorStop(0, `rgba(255,240,180,${(0.62 - amb) * 0.5})`)
+    const alto = eng.farolAlto ? 1.9 : 1 // farol alto: feixe mais forte e mais longe
+    lg.addColorStop(0, `rgba(255,240,180,${Math.min(0.5, (0.62 - amb) * 0.5 * alto)})`)
     lg.addColorStop(1, "rgba(255,240,180,0)")
     ctx.fillStyle = lg
     ctx.beginPath()
@@ -684,17 +699,23 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // visibilidade do clima (ADR 0013): neblina e chuva engolem o fundo da pista.
   // Desenhado DEPOIS dos sprites de propósito: carro e obstáculo distantes só
   // aparecem quando chegam mais perto — é o efeito de jogo, não só o visual.
-  const fogK = 1 - climaAtual(eng).visib // misturado na troca de clima
+  // (dentro do túnel a névoa de fora não entra)
+  const fogK = (1 - climaAtual(eng).visib) * (eng.dentroTunel ? 0.25 : 1) // misturado na troca de clima
   if (fogK > 0.01) {
+    // Névoa por DISTÂNCIA (17/11: "a neblina está bugando", branca demais e a pista sumia): o
+    // horizonte é o mais denso, o céu tinge um pouco menos e perto do carro quase não pega,
+    // então a tela toda fica na névoa e o asfalto de perto continua legível.
     const fc = hexToRgb(mixHex(fogColor, amb > 0.6 ? "#d5dae2" : "#545d70", 0.6))
-    const top = maxY - 60, alto = 90 + 560 * fogK
-    const peak = Math.min(0.92, 1.6 * fogK)
-    const g = ctx.createLinearGradient(0, top, 0, top + alto)
-    g.addColorStop(0, `rgba(${fc[0]},${fc[1]},${fc[2]},${peak * 0.7})`)
-    g.addColorStop(0.3, `rgba(${fc[0]},${fc[1]},${fc[2]},${peak})`)
-    g.addColorStop(1, `rgba(${fc[0]},${fc[1]},${fc[2]},0)`)
+    const pico = Math.min(0.8, 1.4 * fogK)
+    const hz = Math.min(H * 0.8, Math.max(H * 0.2, maxY))
+    const c = (a: number) => `rgba(${fc[0]},${fc[1]},${fc[2]},${a.toFixed(3)})`
+    const g = ctx.createLinearGradient(0, 0, 0, H)
+    g.addColorStop(0, c(pico * 0.55))
+    g.addColorStop(hz / H, c(pico))
+    g.addColorStop(Math.min(0.98, (hz + (H - hz) * 0.5) / H), c(pico * 0.4))
+    g.addColorStop(1, c(fogK * 0.2))
     ctx.fillStyle = g
-    ctx.fillRect(0, top, W, alto)
+    ctx.fillRect(0, 0, W, H)
   }
 
   // helicóptero por cima de tudo (até da neblina: é luz no céu)

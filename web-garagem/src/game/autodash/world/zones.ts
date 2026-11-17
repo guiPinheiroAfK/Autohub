@@ -61,7 +61,11 @@ export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
   atualizarTouge(eng, dt, playerZ)
   atualizarMontanha(eng, playerZ, dt)
   const fechado = sob || eng.dentroTunel
-  if (fechado !== eng.sobViaduto) { eng.sobViaduto = fechado; eng.audio.ambiente(fechado ? "fechado" : "aberto") }
+  // (o túnel tem o reverb longo próprio; embaixo do viaduto é o eco curto)
+  if (fechado !== eng.sobViaduto || eng.dentroTunel !== eng.tunelSom) {
+    eng.sobViaduto = fechado; eng.tunelSom = eng.dentroTunel
+    eng.audio.ambiente(eng.dentroTunel ? "tunel" : fechado ? "fechado" : "aberto")
+  }
   for (const zn of eng.zones) {
     const toStart = wrapDz(eng, zn.z, playerZ) // >0: início à frente
     const toEnd = wrapDz(eng, zn.end, playerZ)
@@ -71,12 +75,15 @@ export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
       if (toStart < 9000 && toEnd > 0) {
         zn.spawnT -= dt
         if (zn.spawnT <= 0) {
-          zn.spawnT = 0.5 + Math.random() * 0.7
-          // nasce no horizonte visível — clampado pra DENTRO da zona (o
+          // contramão rala (17/11: vinham 4 fileiras seguidas): 1 carro a cada 2 a 3,5 s
+          zn.spawnT = 2 + Math.random() * 1.5
+          // nasce na borda do horizonte (sai da névoa, sem pipocar) — clampado pra DENTRO da zona (o
           // horizonte pode estar além do fim dela, e aí nada nascia)
-          let z = ((playerZ + DRAW_DIST * SEG_LEN * 0.85) % eng.trackLen + eng.trackLen) % eng.trackLen
+          let z = ((playerZ + DRAW_DIST * SEG_LEN * 1.0) % eng.trackLen + eng.trackLen) % eng.trackLen
           if (wrapDz(eng, zn.end, z) < 0) z = ((zn.end - 400) % eng.trackLen + eng.trackLen) % eng.trackLen
-          if (wrapDz(eng, z, zn.z) > 0 && wrapDz(eng, zn.end, z) > 0) {
+          // nunca dois contramão perto um do outro (nem lado a lado): sem "fileira"
+          const colado = eng.traffic.some(o => o.role === "oncoming" && Math.abs(wrapDz(eng, o.z, z)) < 14000)
+          if (!colado && wrapDz(eng, z, zn.z) > 0 && wrapDz(eng, zn.end, z) > 0) {
             const kind: TrafficKind = Math.random() < 0.72 ? "car" : "truck"
             const lane = Math.random() < 0.5 ? -0.75 : -0.25 // mão dupla: DUAS faixas contra
             eng.traffic.push({
@@ -88,27 +95,9 @@ export function updateZones(eng: AutoDashEngine, dt: number, playerZ: number) {
             })
           }
         }
-        // o trânsito do SEU sentido se adapta: quem está na esquerda dentro
-        // da zona migra pra uma faixa da direita LIVRE (checando os outros e
-        // o jogador — mandar às cegas fazia eles se jogarem em cima de tudo).
-        // Sem vaga? Freia e espera abrir.
-        for (const t of eng.traffic) {
-          if (t.role !== "civilian" || t.parked) continue
-          const d = wrapDz(eng, t.z, zn.z)
-          if (d > -6000 && wrapDz(eng, zn.end, t.z) > 0 && t.targetOffset < 0.1) {
-            let moved = false
-            for (const lane of [0.25, 0.75]) {
-              let clear = true
-              for (const o of eng.traffic) {
-                if (o === t) continue
-                if (Math.abs(wrapDz(eng, o.z, t.z)) < 1100 && (Math.abs(o.offset - lane) < 0.3 || Math.abs(o.targetOffset - lane) < 0.3)) { clear = false; break }
-              }
-              if (clear && Math.abs(wrapDz(eng, playerZ, t.z)) < 2200 && Math.abs(eng.playerX - lane) < 0.3) clear = false
-              if (clear) { t.targetOffset = lane; t.blinkT = Math.max(t.blinkT, 0.5); moved = true; break }
-            }
-            if (!moved) t.speed = Math.max(55, t.speed - 50 * dt)
-          }
-        }
+        // (o trânsito do seu sentido vai para as 2 faixas da direita sozinho: CivilianDriver
+        // sai da esquerda, uma faixa por vez; os que estavam além do horizonte já foram
+        // arrumados no nascimento da mão dupla, em limparEsquerdaInvisivel)
       }
     } else if (zn.type === "blitz" || zn.type === "speedtrap") {
       const lim = zn.type === "blitz" ? 60 : 90

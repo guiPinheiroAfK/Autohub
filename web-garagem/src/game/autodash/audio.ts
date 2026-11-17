@@ -21,6 +21,7 @@ interface Motor {
   admGain: GainNode
   out: GainNode
   ambGain: GainNode       // eco do ambiente (aberto x viaduto/túnel)
+  tunGain: GainNode       // reverb longo do túnel (só soa lá dentro)
   synthGain: GainNode     // modelo físico (guias de onda)
   gravHp: BiquadFilterNode // gravação real: banda cheia (motor gravado) ou só agudos (textura)
   gravEq: BiquadFilterNode // corpo do escape (pico em 80–250 Hz), por gravação
@@ -304,6 +305,12 @@ export class AudioBus {
     amb.buffer = this.respostaAmbiente()
     ambGain.gain.value = 0.18
     out.connect(amb); amb.connect(ambGain); ambGain.connect(this.master)
+    // túnel: reverb LONGO (cauda de ~2,3 s), o "sonzão" do V10 no concreto. Só entra lá dentro
+    const tun = ctx.createConvolver(), tunGain = ctx.createGain()
+    tun.normalize = false
+    tun.buffer = this.respostaTunel()
+    tunGain.gain.value = 0
+    out.connect(tun); tun.connect(tunGain); tunGain.connect(this.master)
     // efeitos de alívio passam pela mesma saturação (soam "do escape")
     const fx = ctx.createGain()
     fx.connect(pre)
@@ -332,7 +339,7 @@ export class AudioBus {
       for (let i = 0; i < len; i++) d[i] = d[i] / pk * 0.6
       return b
     })
-    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, synthGain, gravHp, gravEq, gravLp, gravGain, fx, soproGain, whine, whineGain, pops, bancos: new Set(), carregando: new Set(), faixas: new Map() }
+    this.motor = { node, boom, coletor, lp, admBp, admGain, out, ambGain, tunGain, synthGain, gravHp, gravEq, gravLp, gravGain, fx, soproGain, whine, whineGain, pops, bancos: new Set(), carregando: new Set(), faixas: new Map() }
     this.aplicarPerfil()
     void this.carregarPartida()
     // o motor antigo sai de cena
@@ -366,11 +373,39 @@ export class AudioBus {
     return b
   }
 
-  /** Ambiente acústico: "aberto" (estrada) ou "fechado" (viaduto, túnel: eco forte). */
-  ambiente(tipo: "aberto" | "fechado") {
+  /**
+   * Resposta ao impulso do túnel (17/11: "senti falta do eco no túnel"): reflexos
+   * densos das paredes de concreto (a cada 6 a 40 ms, de lado a lado) e uma cauda
+   * longa e escura, de ~2,3 s. Gerada uma vez.
+   */
+  private respostaTunel(): AudioBuffer {
+    const ctx = this.ctx!, sr = ctx.sampleRate, len = Math.floor(sr * 2.4)
+    const b = ctx.createBuffer(2, len, sr)
+    let seed = 0x7a11
+    const rnd = () => { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 4294967296 }
+    for (let c = 0; c < 2; c++) {
+      const d = b.getChannelData(c)
+      // reflexos das paredes: pulsos esparsos que vão ficando mais densos e mais fracos
+      for (let e = 0; e < 70; e++) {
+        const t = 0.006 + Math.pow(rnd(), 1.6) * 0.45, i = Math.floor(t * sr)
+        d[i] += (rnd() < 0.5 ? -1 : 1) * 0.5 * Math.exp(-t / 0.22)
+      }
+      // cauda difusa e escura (passa-baixa), decaindo devagar
+      let lp = 0
+      for (let i = Math.floor(sr * 0.03); i < len; i++) {
+        lp += ((rnd() * 2 - 1) - lp) * 0.18
+        d[i] += lp * 0.2 * Math.exp(-(i / sr - 0.03) / 0.75)
+      }
+    }
+    return b
+  }
+
+  /** Ambiente acústico: "aberto" (estrada), "fechado" (embaixo do viaduto: eco curto forte) ou "tunel" (reverb longo). */
+  ambiente(tipo: "aberto" | "fechado" | "tunel") {
     const m = this.motor, ctx = this.ctx
     if (!m || !ctx) return
-    m.ambGain.gain.setTargetAtTime(tipo === "fechado" ? 0.75 : 0.18, ctx.currentTime, 0.25)
+    m.ambGain.gain.setTargetAtTime(tipo === "aberto" ? 0.18 : tipo === "fechado" ? 0.75 : 0.5, ctx.currentTime, 0.2)
+    m.tunGain.gain.setTargetAtTime(tipo === "tunel" ? 0.9 : tipo === "fechado" ? 0.12 : 0, ctx.currentTime, 0.12)
   }
 
   /** Turbina do motor atual (physics/motores.ts) e o corte, que escala a energia do escape. */

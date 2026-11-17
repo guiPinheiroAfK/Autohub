@@ -34,10 +34,11 @@ import { PAREDAO } from "../render/cenario"
 type Fases = [TipoTrecho, number][]
 export const MONTANHA = {
   // [fase, segmentos] (~79 segmentos por segundo a 120 km/h)
-  completa: [["portal", 200], ["serraPe", 400], ["serraMeio", 2800], ["mirante", 400], ["serraDescida", 1900], ["serraBase", 300], ["costeira", 1200]] as Fases,
+  completa: [["portal", 200], ["serraPe", 400], ["serraMeio", 2800], ["mirante", 400], ["serraDescida", 3100], ["serraBase", 300], ["costeira", 1200]] as Fases,
   // tecla 0: subida curta e direto para o mirante e a descida do touge
-  curta: [["portal", 120], ["serraPe", 300], ["mirante", 300], ["serraDescida", 1900], ["serraBase", 300], ["costeira", 600]] as Fases,
+  curta: [["portal", 120], ["serraPe", 300], ["mirante", 300], ["serraDescida", 3100], ["serraBase", 300], ["costeira", 600]] as Fases,
   altura: 44000,     // u no alto (a curta fica com um terço). Playtest 16/11: "a serra precisava subir mais" (era 26 mil)
+  ondas: { alt: 700, cada: 300, taper: 60 }, // cristas na subida (17/11: "faltou a sensação de subir"): a pista sobe em lances, com a estrada levantando na tela
   religa: 300,       // segmentos para voltar ao relevo do começo da volta
   comboioCadaS: 9,   // s entre comboios de caminhão na subida
   lateral: 2.6,      // curva das curvas longas da subida pela lateral
@@ -113,9 +114,10 @@ export function noMiolo(eng: AutoDashEngine, idx: number): boolean {
   if (!m) return false
   const l = limites(m.fases).serraMeio
   if (!l) return false
-  // (entre 25% e 45% da subida: antes do túnel; dentro dele neblina não faz sentido)
+  // 17/11: o banco era curto demais (3 s a 150 km/h) e a névoa nem chegava a encher. Agora
+  // é a subida quase toda, com o túnel e o viaduto dentro (o render alivia a névoa no túnel).
   const d = idx - m.a, n = l[1] - l[0]
-  return d >= l[0] + n * 0.25 && d < l[0] + n * 0.45
+  return d >= l[0] + n * 0.1 && d < l[0] + n * 0.98
 }
 
 /** O jogador está na viagem ou a até 2 distâncias de desenho antes dela? */
@@ -160,9 +162,16 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
   const fimDesc = lim.costeira[0] + Math.floor((lim.costeira[1] - lim.costeira[0]) / 2)
   const suave = (t: number) => t * t * (3 - 2 * t)
   // relevo da viagem, somado ao nível em que a pista estava no começo dela
+  // (na subida longa, cristas por cima da rampa: a inclinação varia de ~2% a ~17%, sempre subindo)
+  const meio = lim.serraMeio
+  const onda = (k: number) => {
+    if (!meio || k < meio[0] || k >= meio[1]) return 0
+    const borda = Math.min(1, (k - meio[0]) / MONTANHA.ondas.taper, (meio[1] - k) / MONTANHA.ondas.taper)
+    return MONTANHA.ondas.alt * borda * Math.sin(2 * Math.PI * (k - meio[0]) / MONTANHA.ondas.cada)
+  }
   const P = (k: number) => {
     if (k <= lim.portal[0]) return 0
-    if (k < fimSubida) return altura * suave((k - lim.portal[0]) / (fimSubida - lim.portal[0]))
+    if (k < fimSubida) return altura * suave((k - lim.portal[0]) / (fimSubida - lim.portal[0])) + onda(k)
     if (k < iniDesc) return altura
     if (k < fimDesc) return altura * (1 - suave((k - iniDesc) / (fimDesc - iniDesc)))
     return 0
@@ -239,6 +248,48 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
   )
   avisar(eng, { icone: "⛰️", titulo: "SERRA DO MAR", dica: "subida longa pela montanha", nivel: "info", z: at(0), fim: at(lim.mirante[0]) })
   return true
+}
+
+/**
+ * A serra acabou (praia, troca de região ou nova serra): guarda onde ela ficou na
+ * volta para aplanar depois. A viagem fica DENTRO da volta (segmentos `a` a
+ * `a + total`), então sem isto a próxima passada pelo mesmo trecho subia a montanha
+ * de novo, com o cenário da praia ou da cidade flutuando no morro e sem paredão
+ * (playtest 17/11: "depois de sair da serra o terreno fica todo bugado").
+ */
+export function esquecerMontanha(eng: AutoDashEngine) {
+  if (eng.montanha) eng.serraPassada = { a: eng.montanha.a, total: eng.montanha.total }
+  eng.montanha = null
+}
+
+/**
+ * Aplana o relevo e as curvas da serra que já passou, assim que o jogador está
+ * fora dela e ela não aparece na tela (nem à frente: depois da volta, longe). Tira
+ * também o que ficou na pista (pedras, placas, nitros).
+ */
+export function aplanarSerraPassada(eng: AutoDashEngine) {
+  const v = eng.serraPassada
+  if (!v) return
+  const N = eng.segments.length
+  if (v.a < 1 || v.a + v.total > N) { eng.serraPassada = null; return } // a volta mudou: não é mais esse trecho
+  const idx = Math.floor((eng.position + PLAYER_Z) / SEG_LEN) % N
+  if (idx >= v.a && idx < v.a + v.total) return // ainda dentro
+  const ate = v.a - idx // segmentos até a entrada, à frente do jogador
+  if (ate > 0 && ate < DRAW_DIST + 30) return // a entrada está quase na tela
+  const y0 = eng.segments[v.a].y1
+  for (let k = 0; k < v.total; k++) {
+    const s = eng.segments[v.a + k]
+    const borda = Math.min(1, k / 40, (v.total - k) / 40)
+    s.y1 = y0; s.y2 = y0
+    s.curve = Math.sin(k / 150) * 1.4 * borda // curvas abertas, como a costeira
+    s.sign = undefined
+  }
+  const z0 = v.a * SEG_LEN, z1 = (v.a + v.total) * SEG_LEN
+  const dentro = (z: number) => z >= z0 && z < z1
+  eng.obstacles = eng.obstacles.filter(o => !dentro(o.z))
+  eng.roadSigns = eng.roadSigns.filter(s => !dentro(s.z))
+  eng.powerups = eng.powerups.filter(p => !dentro(p.z))
+  eng.serraPassada = null
 }
 
 /** Segmento do portal da serra (arco de pedra sobre a pista), ou -1. */

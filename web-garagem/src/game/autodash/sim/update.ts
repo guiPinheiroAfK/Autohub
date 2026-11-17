@@ -17,6 +17,7 @@ import { steerK, tyreOf } from "../physics/traction"
 import { passoLongitudinal } from "./longitudinal"
 import { passoCamera } from "../render/camera"
 import { updateEventSpawner } from "../world/events"
+import { atualizarRoteiro } from "../world/roteiro-teste"
 import { updateZones } from "../world/zones"
 import { updateObstacles } from "../world/obstacles"
 import { atualizarPolicia, aderenciaPolicia } from "../world/policia"
@@ -27,7 +28,7 @@ const MURETA_ALT = 150
 export const ELEV_LADEIRA = 0.6 // fração da rampa do elevado que vira ladeira na física
 import { atualizarCombustivel, peDoCombustivel } from "../world/posto"
 import { passoDrift, perderDrift } from "../world/drift"
-import { emDuelo } from "../world/touge"
+import { emDuelo, emCena } from "../world/touge"
 import { atualizarRacha } from "../modes/racha"
 import { atualizarObras } from "../world/obra"
 import { atualizarComboio } from "../world/comboio"
@@ -37,6 +38,8 @@ import { giroDaPartida } from "./partida"
 import { aplicarVacuo, specComVacuo, forcaTeto } from "./vacuo"
 import { atualizarSomEventos } from "../world/somEventos"
 import { regiaoPorDistancia } from "../world/regiao"
+import { pulsoFarolAlto } from "../flow"
+import { colidirComBordas } from "../world/bordas"
 
 export function update(eng: AutoDashEngine, dt: number) {
   // câmera lenta do duelo de touge (world/touge.ts): o mundo inteiro anda mais devagar
@@ -168,6 +171,7 @@ export function update(eng: AutoDashEngine, dt: number) {
     if (eng.keys.has("a") || eng.keys.has("arrowleft") || eng.touchSteerLeft) steerInput -= 1
     if (eng.keys.has("d") || eng.keys.has("arrowright") || eng.touchSteerRight) steerInput += 1
   }
+  if (emCena(eng)) steerInput = 0 // curva-chave do touge: o carro pilota, o volante fica travado
   const speedF = Math.min(1, eng.speed / 240)
   // tração na direção: dianteira com torque abre a curva no gás e fecha ao aliviar
   // (ADR 0012). Usa o giro do quadro anterior; RWD devolve 1 e nada muda.
@@ -193,6 +197,9 @@ export function update(eng: AutoDashEngine, dt: number) {
   // transferência de peso: sobe o bico na freada, agacha no gás
   const pitchTarget = braking && eng.speed > 20 ? -4 : throttle ? 1.5 : 0
   eng.pitchY += (pitchTarget - eng.pitchY) * Math.min(1, dt * 8)
+
+  // guard-rail, paredão e paredes do túnel seguram o carro (world/bordas.ts)
+  colidirComBordas(eng, dt, Math.floor(playerZ / SEG_LEN) % eng.segments.length, !!ramal)
 
   // fora da pista
   if (Math.abs(eng.playerX) > 1.05 && !(ramal && sobreRamal(ramal, eng.playerX))) {
@@ -259,6 +266,7 @@ export function update(eng: AutoDashEngine, dt: number) {
   if (eng.goFlashT > 0) eng.goFlashT -= dt
   if (eng.mult2T > 0) eng.mult2T -= dt
   if (eng.beamT > 0) eng.beamT -= dt
+  pulsoFarolAlto(eng, dt)
   if (eng.beamCdT > 0) eng.beamCdT -= dt
 
   // pontuação e combo
@@ -365,6 +373,7 @@ export function update(eng: AutoDashEngine, dt: number) {
     }
   }
 
+  atualizarRoteiro(eng, dt, playerZ) // roteiro de playtest [P] [3] (world/roteiro-teste.ts)
   updateEventSpawner(eng, dt, playerZ)
   atualizarAvisos(eng, dt, playerZ)
   atualizarRacha(eng, dt) // convite de racha (Fase 5, só no solo)

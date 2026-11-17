@@ -7,12 +7,11 @@
 // câmera lenta, dano nas barras, a apresentação) moram em render/tougeFx.ts.
 import { type AutoDashEngine, W, H, PLAYER_Z } from "../engine"
 import { rr } from "./primitives"
-import { TOUGE, comandoAtual, anguloDrift, zonaDa, emCena, type RotuloMarca } from "../world/touge"
+import { TOUGE, comandoAtual, emCena, type RotuloMarca } from "../world/touge"
 import { wrapDz } from "../traffic/spawner"
 import { renderTougeTela, renderTougeTextos, renderIntroTouge, barraTouge } from "./tougeFx"
 
 const FONTE = "'Space Grotesk', 'Segoe UI', sans-serif"
-const SETA = (d: number) => (d > 0 ? "▶" : "◀")
 
 /** Painel em cima de uma marca da pista: a tecla e o que ela faz; acende na hora. */
 export function drawPainelTouge(eng: AutoDashEngine, x: number, y: number, w: number, r: RotuloMarca) {
@@ -36,36 +35,42 @@ export function drawPainelTouge(eng: AutoDashEngine, x: number, y: number, w: nu
   ctx.globalAlpha = 1
 }
 
+/**
+ * O botão da cena, grande e no meio (17/11: "poderia ter os botões mais claros"): a tecla SHIFT
+ * e um anel que fecha até a linha amarela. Quando o anel encosta na tecla, é a hora.
+ */
+function botaoShift(ctx: CanvasRenderingContext2D, t: number, treino: boolean) {
+  const cx = W / 2, cy = H * 0.5
+  const k = Math.max(0, Math.min(1, t / 1.2)) // 1: longe, 0: na linha
+  const quase = t < 0.25
+  // anel que fecha
+  ctx.lineWidth = 5
+  ctx.strokeStyle = quase ? "#4ade80" : "#facc15"
+  ctx.globalAlpha = 0.95
+  ctx.beginPath(); ctx.arc(cx, cy, 44 + 110 * k, 0, Math.PI * 2); ctx.stroke()
+  // a tecla
+  const w = 150, h = 56
+  ctx.fillStyle = quase ? "#4ade80" : "rgba(15,23,42,0.92)"
+  rr(ctx, cx - w / 2, cy - h / 2, w, h, 12)
+  ctx.strokeStyle = quase ? "#bbf7d0" : "#facc15"; ctx.lineWidth = 3
+  ctx.strokeRect(cx - w / 2, cy - h / 2, w, h)
+  ctx.fillStyle = quase ? "#052e16" : "#facc15"
+  ctx.font = `bold 28px ${FONTE}`
+  ctx.textAlign = "center"
+  ctx.fillText("SHIFT", cx, cy + 10)
+  ctx.font = `bold 13px ${FONTE}`
+  ctx.fillStyle = "#f8fafc"
+  ctx.fillText(quase ? "AGORA!" : treino ? "aperte quando o anel fechar" : "freio de mão", cx, cy + h / 2 + 22)
+  ctx.textAlign = "left"
+  ctx.globalAlpha = 1
+}
+
 /** Faixa de dica embaixo (cena de treino e atos). */
 function dica(ctx: CanvasRenderingContext2D, txt: string, cor = "#fde047") {
   ctx.fillStyle = "rgba(15,23,42,0.85)"
   rr(ctx, W / 2 - 280, H * 0.84, 560, 30, 8)
   ctx.fillStyle = cor; ctx.font = `bold 14px ${FONTE}`
   ctx.textAlign = "center"; ctx.fillText(txt, W / 2, H * 0.84 + 20); ctx.textAlign = "left"
-}
-
-/** Medidor de ângulo do drift: arco de 0 a 1,3 rad, faixa verde e vermelha, e a seta de qual lado apertar. */
-function medidor(ctx: CanvasRenderingContext2D, ang: number, zona: readonly [number, number], dir: number) {
-  const cx = W / 2, cy = H * 0.62, r = 70, MAX = 1.3
-  const a = (v: number) => Math.PI + (Math.min(MAX, v) / MAX) * Math.PI
-  ctx.lineWidth = 12
-  ctx.strokeStyle = "rgba(15,23,42,0.6)"
-  ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI); ctx.stroke()
-  ctx.strokeStyle = "rgba(74,222,128,0.9)"
-  ctx.beginPath(); ctx.arc(cx, cy, r, a(zona[0]), a(zona[1])); ctx.stroke()
-  ctx.strokeStyle = "rgba(239,68,68,0.9)"
-  ctx.beginPath(); ctx.arc(cx, cy, r, a(TOUGE.roda), 2 * Math.PI); ctx.stroke()
-  const naZona = ang >= zona[0] && ang <= zona[1]
-  const p = a(ang)
-  ctx.strokeStyle = naZona ? "#4ade80" : ang > zona[1] ? "#ef4444" : "#facc15"
-  ctx.lineWidth = 4
-  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(p) * (r + 8), cy + Math.sin(p) * (r + 8)); ctx.stroke()
-  ctx.textAlign = "center"
-  const txt = naZona ? "SEGURA!" : ang > zona[1] ? `${SETA(-dir)} FECHA` : `ABRE ${SETA(dir)}`
-  ctx.font = `bold ${naZona ? 14 : 18}px ${FONTE}`
-  ctx.fillStyle = naZona ? "#4ade80" : ang > zona[1] ? "#ef4444" : "#facc15"
-  ctx.fillText(txt, cx, cy + 22)
-  ctx.textAlign = "left"
 }
 
 export function renderTouge(eng: AutoDashEngine) {
@@ -89,22 +94,18 @@ export function renderTouge(eng: AutoDashEngine) {
   const m = Math.round(Math.abs(gap) / 475) // metros (1 km/h = 132 u/s ⇒ ~475 u por metro)
   ctx.textAlign = "center"
   ctx.fillStyle = "#f8fafc"; ctx.font = `bold 15px ${FONTE}`
-  const ato = tg.fase !== "batalha" ? "FIM" : tg.papel === "caca" ? "CAÇA" : "LIDERANÇA"
+  const ato = tg.fase !== "batalha" ? "FIM" : tg.decisivo ? "DECISÃO" : tg.papel === "caca" ? "CAÇA" : "LIDERANÇA"
   ctx.fillText(`${ato} · ${m} m`, W / 2, y + 12)
   ctx.textAlign = "left"
   if (tg.fase !== "batalha") return
 
-  const dr = anguloDrift(eng)
-  if (dr) medidor(ctx, dr.ang, zonaDa(dr.c), dr.dir)
-
   const at = comandoAtual(eng)
+  if (at && at.cmd === "shift" && at.t < 1.2 && at.t > -0.4) botaoShift(ctx, at.t, at.c.treino)
   if (at && at.c.treino) {
-    if (at.cmd === "freio") dica(ctx, "TREINO: na faixa VERMELHA da pista, segure S")
-    else if (at.cmd === "shift") dica(ctx, "TREINO: SHIFT ao cruzar a linha AMARELA (o jogo espera em câmera lenta)")
-    else if (at.cmd === "drift") dica(ctx, `TREINO: ${SETA(at.c.dir)} abre, ${SETA(-at.c.dir)} fecha: segure o ponteiro no verde`)
-    else if (at.cmd === "nitro") dica(ctx, "TREINO: ESPAÇO ao cruzar a linha VERDE")
+    dica(ctx, "TREINO: o carro pilota a curva. SHIFT ao cruzar a linha AMARELA (câmera lenta até apertar)")
     return
   }
+  if (at && emCena(eng)) { dica(ctx, "CURVA: o carro pilota. Aperte SHIFT na linha AMARELA", "#facc15"); return }
   if (!emCena(eng)) {
     // trecho livre: o que conta é a distância
     const d = Math.abs(gap)

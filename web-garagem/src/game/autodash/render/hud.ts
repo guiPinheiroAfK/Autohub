@@ -77,6 +77,7 @@ export function renderHud(eng: AutoDashEngine) {
     ctx.fillText(`⛰ ${alt.toLocaleString("pt-BR")} m`, W - 20, by); by += 22
     ctx.font = "bold 13px 'Space Grotesk', 'Segoe UI', sans-serif"
   }
+  if (eng.farolAlto) { ctx.fillStyle = "#93c5fd"; ctx.fillText("💡 FAROL ALTO [F]", W - 20, by); by += 20 }
   if (eng.shield) { ctx.fillStyle = "#60a5fa"; ctx.fillText("● ESCUDO", W - 20, by); by += 20 }
   if (eng.mult2T > 0) { ctx.fillStyle = "#fde047"; ctx.fillText(`● 2X ${Math.ceil(eng.mult2T)}s`, W - 20, by); by += 20 }
   ctx.textAlign = "left"
