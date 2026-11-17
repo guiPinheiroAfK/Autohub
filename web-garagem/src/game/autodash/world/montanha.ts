@@ -38,6 +38,7 @@ export const MONTANHA = {
   // tecla 0: subida curta e direto para o mirante e a descida do touge
   curta: [["portal", 120], ["serraPe", 300], ["mirante", 300], ["serraDescida", 1900], ["serraBase", 300], ["costeira", 600]] as Fases,
   altura: 44000,     // u no alto (a curta fica com um terço). Playtest 16/11: "a serra precisava subir mais" (era 26 mil)
+  ondas: { alt: 700, cada: 300, taper: 60 }, // cristas na subida (17/11: "faltou a sensação de subir"): a pista sobe em lances, com a estrada levantando na tela
   religa: 300,       // segmentos para voltar ao relevo do começo da volta
   comboioCadaS: 9,   // s entre comboios de caminhão na subida
   lateral: 2.6,      // curva das curvas longas da subida pela lateral
@@ -160,9 +161,16 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
   const fimDesc = lim.costeira[0] + Math.floor((lim.costeira[1] - lim.costeira[0]) / 2)
   const suave = (t: number) => t * t * (3 - 2 * t)
   // relevo da viagem, somado ao nível em que a pista estava no começo dela
+  // (na subida longa, cristas por cima da rampa: a inclinação varia de ~2% a ~17%, sempre subindo)
+  const meio = lim.serraMeio
+  const onda = (k: number) => {
+    if (!meio || k < meio[0] || k >= meio[1]) return 0
+    const borda = Math.min(1, (k - meio[0]) / MONTANHA.ondas.taper, (meio[1] - k) / MONTANHA.ondas.taper)
+    return MONTANHA.ondas.alt * borda * Math.sin(2 * Math.PI * (k - meio[0]) / MONTANHA.ondas.cada)
+  }
   const P = (k: number) => {
     if (k <= lim.portal[0]) return 0
-    if (k < fimSubida) return altura * suave((k - lim.portal[0]) / (fimSubida - lim.portal[0]))
+    if (k < fimSubida) return altura * suave((k - lim.portal[0]) / (fimSubida - lim.portal[0])) + onda(k)
     if (k < iniDesc) return altura
     if (k < fimDesc) return altura * (1 - suave((k - iniDesc) / (fimDesc - iniDesc)))
     return 0
