@@ -11,7 +11,7 @@ import { spawnEvent, type EventoMapa } from "./events"
 import { spawnPosto } from "./posto"
 import { convidarRacha } from "../modes/racha"
 import { trocarRegiao } from "./regiao"
-import { spawnMontanha } from "./montanha"
+import { spawnMontanha, esquecerMontanha } from "./montanha"
 
 interface Passo {
   nome: string
@@ -64,7 +64,7 @@ function montarPassos(): Passo[] {
       nome: "SERRA CURTA + DUELO",
       inicia: eng => {
         trocarRegiao(eng, "serra", false)
-        eng.montanha = null
+        esquecerMontanha(eng)
         return spawnMontanha(eng, true)
       },
       minS: 5, maxS: 240, fim: naPraia,

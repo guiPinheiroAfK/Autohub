@@ -241,6 +241,48 @@ export function spawnMontanha(eng: AutoDashEngine, curta = false): boolean {
   return true
 }
 
+/**
+ * A serra acabou (praia, troca de região ou nova serra): guarda onde ela ficou na
+ * volta para aplanar depois. A viagem fica DENTRO da volta (segmentos `a` a
+ * `a + total`), então sem isto a próxima passada pelo mesmo trecho subia a montanha
+ * de novo, com o cenário da praia ou da cidade flutuando no morro e sem paredão
+ * (playtest 17/11: "depois de sair da serra o terreno fica todo bugado").
+ */
+export function esquecerMontanha(eng: AutoDashEngine) {
+  if (eng.montanha) eng.serraPassada = { a: eng.montanha.a, total: eng.montanha.total }
+  eng.montanha = null
+}
+
+/**
+ * Aplana o relevo e as curvas da serra que já passou, assim que o jogador está
+ * fora dela e ela não aparece na tela (nem à frente: depois da volta, longe). Tira
+ * também o que ficou na pista (pedras, placas, nitros).
+ */
+export function aplanarSerraPassada(eng: AutoDashEngine) {
+  const v = eng.serraPassada
+  if (!v) return
+  const N = eng.segments.length
+  if (v.a < 1 || v.a + v.total > N) { eng.serraPassada = null; return } // a volta mudou: não é mais esse trecho
+  const idx = Math.floor((eng.position + PLAYER_Z) / SEG_LEN) % N
+  if (idx >= v.a && idx < v.a + v.total) return // ainda dentro
+  const ate = v.a - idx // segmentos até a entrada, à frente do jogador
+  if (ate > 0 && ate < DRAW_DIST + 30) return // a entrada está quase na tela
+  const y0 = eng.segments[v.a].y1
+  for (let k = 0; k < v.total; k++) {
+    const s = eng.segments[v.a + k]
+    const borda = Math.min(1, k / 40, (v.total - k) / 40)
+    s.y1 = y0; s.y2 = y0
+    s.curve = Math.sin(k / 150) * 1.4 * borda // curvas abertas, como a costeira
+    s.sign = undefined
+  }
+  const z0 = v.a * SEG_LEN, z1 = (v.a + v.total) * SEG_LEN
+  const dentro = (z: number) => z >= z0 && z < z1
+  eng.obstacles = eng.obstacles.filter(o => !dentro(o.z))
+  eng.roadSigns = eng.roadSigns.filter(s => !dentro(s.z))
+  eng.powerups = eng.powerups.filter(p => !dentro(p.z))
+  eng.serraPassada = null
+}
+
 /** Segmento do portal da serra (arco de pedra sobre a pista), ou -1. */
 export function segPortal(eng: AutoDashEngine): number {
   const m = eng.montanha

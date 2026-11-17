@@ -8,7 +8,7 @@ import { spawnPosto } from "./posto"
 import { convidarRacha } from "../modes/racha"
 import { spawnEvent } from "./events"
 import { trocarRegiao } from "./regiao"
-import { spawnMontanha } from "./montanha"
+import { spawnMontanha, esquecerMontanha } from "./montanha"
 
 /**
  * Atalho de teste da Fase 5 (garagem → J), como o [Z] do teste de motor: largada
@@ -49,7 +49,7 @@ export function teclaDebugEvento(eng: AutoDashEngine, k: string) {
     if (eng.touge) aviso("já tem um duelo")
     else {
       if (eng.bioma.id !== "serra") trocarRegiao(eng, "serra", false)
-      eng.montanha = null
+      esquecerMontanha(eng)
       if (!spawnMontanha(eng, true)) aviso("a serra não coube agora")
     }
   }

@@ -260,6 +260,7 @@ export class AutoDashEngine {
   touge: Touge | null = null // duelo de touge em andamento (world/touge.ts)
   escalaTempo = 1 // câmera lenta do duelo (1 = normal)
   montanha: Montanha | null = null // a montanha da serra na pista (world/montanha.ts)
+  serraPassada: { a: number; total: number } | null = null // serra que acabou: o relevo dela é aplanado quando o jogador sai (world/montanha.ts)
   climaForcado: ClimaId | null = null // clima imposto pelo lugar (neblina no meio da serra)
   racha: Racha | null = null // convite ou disputa de racha (modes/racha.ts)
   rachaT = 45 // s de solo até o próximo convite
