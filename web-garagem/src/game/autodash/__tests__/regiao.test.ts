@@ -88,7 +88,7 @@ describe("transições suaves (16/11)", () => {
       if (i === 300) { trocarRegiao(eng, "costa"); setClima(eng, "limpo"); eng.climaForcado = "chuva" }
       if (i === 300 + Math.round(60 * TRANSICAO.biomaS / 2)) meioBioma = eng.biomaMix
       if (i === 300 + Math.round(60 * TRANSICAO.climaForcadoS / 2)) { const c = climaAtual(eng); gripMeio = c.grip; chuvaMeio = c.chuvaK }
-      if (i === 300 + 60 * (TRANSICAO.climaForcadoS + 1)) fimBioma = eng.biomaMix
+      if (i === 300 + 60 * (TRANSICAO.biomaS + 1)) fimBioma = eng.biomaMix
     })
     expect(meioBioma).toBeGreaterThan(0.3); expect(meioBioma).toBeLessThan(0.7)
     expect(fimBioma).toBe(1)
