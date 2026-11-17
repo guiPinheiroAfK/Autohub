@@ -41,6 +41,9 @@ export const BLOQUEIO = {
   margem: 0.02,  // folga lateral além dos corpos
 }
 
+// Mão dupla: o civil que ficou na esquerda espera vaga, mas não para de vez.
+export const MD = { esperaMaxS: 2.5, sumirLonge: 15000 }
+
 function clamp(v: number, lo: number, hi: number) { return v < lo ? lo : v > hi ? hi : v }
 
 export abstract class Driver {
@@ -98,7 +101,7 @@ export abstract class Driver {
    */
   protected tryLaneChange(
     self: Traffic, world: WorldView, sides: number[],
-    clearZ: number, blink: number, checkPlayer: boolean, playerClearZ = 0,
+    clearZ: number, blink: number, checkPlayer: boolean, playerClearZ = 0, forcado = false,
   ): boolean {
     for (const side of sides) {
       const lane = self.offset + side
@@ -107,7 +110,8 @@ export abstract class Driver {
       if (lane < 0 && lane < self.offset && self.role === "civilian" && world.maoDupla?.(self.z)) continue
       if (!this.laneFree(self, world, lane, clearZ)) continue
       // nunca entrar na última faixa livre: o trânsito não vira parede
-      if (this.fechariaTudo(self, world, lane)) continue
+      // (sair da esquerda da mão dupla é obrigatório: não vale a regra da última faixa)
+      if (!forcado && this.fechariaTudo(self, world, lane)) continue
       // não entrar na faixa do jogador se isso significa cortar na frente dele
       // (janela grande à frente = playerClearZ) ou raspar logo atrás (curta)
       if (checkPlayer && !world.demo && Math.abs(world.playerX - lane) < 0.3) {
@@ -239,8 +243,11 @@ export class CivilianDriver extends Driver {
     let seguraMaoDupla = false
     if (world.maoDupla?.(self.z) && self.targetOffset < 0.05) {
       seguraMaoDupla = true
-      if (self.blinkT <= 0 && self.targetOffset === self.offset) this.tryLaneChange(self, world, [0.5], 1100, 0.6, true, 2200)
-    }
+      if (self.blinkT <= 0 && self.targetOffset === self.offset) this.tryLaneChange(self, world, [0.5], 900, 0.6, true, 2200, true)
+      // sem vaga por muito tempo: não fica parado na cara de todo mundo; longe do jogador sai de cena
+      self.esperaMD = (self.esperaMD ?? 0) + dt
+      if (self.esperaMD > MD.esperaMaxS && Math.abs(world.wrapDz(self.z, world.playerZ)) > MD.sumirLonge) self.dead = true
+    } else self.esperaMD = 0
 
     // faixa fechada à frente (blitz, obra, carro batido, pedras): sai dela cedo, uma
     // faixa por vez, e sem vaga freia a tempo (mais abaixo) e espera abrir

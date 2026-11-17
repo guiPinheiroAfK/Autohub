@@ -50,11 +50,12 @@ describe("trânsito do solo", () => {
     }
   }, 120_000)
 
-  it("mão dupla: civil não entra na contramão e a pista da direita não vira parede", async () => {
-    let invasoes = 0, parede2 = 0, frames = 0, contra = 0
+  for (const [rotulo, pontos] of [["calmo", 0], ["caótico", 80000]] as const) it(`mão dupla (${rotulo}): civil não entra na contramão e a pista da direita não vira parede`, async () => {
+    let invasoes = 0, parede2 = 0, frames = 0, contra = 0, paradosEsq = 0, esquerdaVista = 0
     await runScenario(60 * 70, 41, LARGADA, (i, eng) => {
       if (i === 0) eng.render = () => {}
       eng.immuneT = 10; eng.combustivel = 1; eng.rachaT = 1e9; eng.eventTimer = 1e9
+      if (i < 120) eng.score = pontos
       if (i === 120) { eng.zones = []; spawnEvent(eng, "wrongway") }
       if (i < 120) return
       eng.speed = Math.max(eng.speed, 180); eng.playerX = 0.5
@@ -70,10 +71,14 @@ describe("trânsito do solo", () => {
         if (t.role === "civilian" && d > 600 && d < 40000 && wrap(eng, t.z, zn.z) > 0 && wrap(eng, zn.end, t.z) > 0 && (t.offset < 0.05 || t.targetOffset < 0.05)) invasoes++
         if (t.role === "civilian" && d > 600 && d < 6000) ocupadas.add(faixa(t.offset))
         if (t.role === "oncoming" && d > 0 && d < 40000) contra++
+        if (t.role === "civilian" && !t.parked && d > -2000 && d < 60000 && t.offset < -0.05 && wrap(eng, zn.end, t.z) > 0) { esquerdaVista++; if (((t as unknown as { vReal?: number }).vReal ?? 99) < 25) paradosEsq++ }
       }
       if (ocupadas.has(2) && ocupadas.has(3)) parede2++
     })
+    console.log("MD2", rotulo, { frames, invasoes, esquerdaVista, paradosEsq, parede2, contra })
     expect(frames).toBeGreaterThan(300)
+    expect(paradosEsq / frames, "civis parados na esquerda da mão dupla").toBeLessThan(0.1)
+    expect(esquerdaVista / frames, "civis na esquerda da mão dupla (por quadro)").toBeLessThan(0.5)
     expect(invasoes / frames, "civis na contramão por quadro (era ~3,5)").toBeLessThan(0.3)
     expect(parede2 / frames, "as 2 faixas da direita cheias ao mesmo tempo").toBeLessThan(0.15)
     expect(contra).toBeGreaterThan(0) // ainda tem contramão
