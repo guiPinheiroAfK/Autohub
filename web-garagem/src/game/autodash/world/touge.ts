@@ -71,6 +71,7 @@ export const TOUGE = {
   drenoS: 6,          // espírito por segundo pela distância
   gapCaca: 4800,      // ~10 m: o rival anda a esta distância na sua frente (na caça)
   gapLider: 4500,     // e atrás de você (na liderança)
+  decisivoPorS: 22,   // espírito por segundo que cai de quem está pior na decisão (nocaute garantido)
   gapPorPonto: 40,    // u de distância por ponto de diferença entre as barras
   pontosVitoria: 3000,
   rivais: [
@@ -130,6 +131,7 @@ export interface Touge {
   introT: number         // s restantes da apresentação
   passou: boolean        // você passou pelo rival
   avisoT: number         // s até poder repetir um aviso de distância
+  decisivo: boolean      // acabaram as cenas e os dois seguem vivos: a barra mais baixa cai até o nocaute
   fx: EfeitoTouge[]      // efeitos visuais ainda não desenhados (render/tougeFx.ts)
 }
 
@@ -270,7 +272,7 @@ export function spawnTouge(eng: AutoDashEngine): boolean {
   eng.traffic.push(rival)
   eng.touge = {
     fase: "batalha", papel: "caca", curvas, atual: 0, porta, marcas, vidaVoce: 100, vidaRival: 100, rival,
-    nome: def.nome, cor: def.cor, z: z0, end, acordou: false, introT: TOUGE.introS, passou: false, avisoT: 0, fx: [],
+    nome: def.nome, cor: def.cor, z: z0, end, acordou: false, introT: TOUGE.introS, passou: false, avisoT: 0, decisivo: false, fx: [],
   }
   eng.roadSigns.push({ z: at(START - VIEW * 0.6), type: "drift", label: `TOUGE: ${def.nome}` })
   avisar(eng, { icone: "⛰️", titulo: `TOUGE · ${def.nome}`, dica: "cole nele; nas curvas, siga as marcas da pista", nivel: "info", z: z0, fim: end })
@@ -499,7 +501,21 @@ export function atualizarTouge(eng: AutoDashEngine, dt: number, playerZ: number)
       eng.trauma = Math.min(1, eng.trauma + 0.4)
       eng.audio.horn()
     }
-    const acabou = tg.vidaVoce <= 0 || tg.vidaRival <= 0 || tg.atual >= tg.curvas.length
+    // 17/11: "o bichinho ficou com pouca vida e a luta acabou do nada". Acabaram as cenas e
+    // ninguém caiu: vem a DECISÃO, em que quem está com menos espírito perde o resto dele
+    // em poucos segundos, com o nocaute na tela. A luta só termina quando uma barra zera.
+    if (!tg.decisivo && tg.atual >= tg.curvas.length && tg.vidaVoce > 0 && tg.vidaRival > 0) {
+      tg.decisivo = true
+      efeito(eng, { tipo: "acordou", txt: "DECISÃO!", cor: "#f8fafc", sub: tg.vidaVoce < tg.vidaRival ? "VOCÊ ESTÁ ATRÁS: ACELERE!" : "VOCÊ ESTÁ NA FRENTE: SEGURE!" })
+      eng.audio.horn()
+    }
+    if (tg.decisivo) {
+      const pior = tg.vidaVoce < tg.vidaRival ? "voce" : "rival"
+      if (pior === "voce") tg.vidaVoce = Math.max(0, tg.vidaVoce - TOUGE.decisivoPorS * dt)
+      else tg.vidaRival = Math.max(0, tg.vidaRival - TOUGE.decisivoPorS * dt)
+    }
+    const acabou = tg.vidaVoce <= 0 || tg.vidaRival <= 0
+    if (acabou && !eng.crashed) efeito(eng, { tipo: "impacto", txt: "NOCAUTE!", cor: tg.vidaRival <= 0 ? "#4ade80" : "#ef4444", sub: tg.vidaRival <= 0 ? `${tg.nome} CAIU` : "VOCÊ CAIU" })
     if (acabou || eng.crashed) encerrarTouge(eng, !eng.crashed && tg.vidaRival < tg.vidaVoce)
     return
   }

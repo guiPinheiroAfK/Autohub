@@ -114,9 +114,10 @@ export function noMiolo(eng: AutoDashEngine, idx: number): boolean {
   if (!m) return false
   const l = limites(m.fases).serraMeio
   if (!l) return false
-  // (entre 25% e 45% da subida: antes do túnel; dentro dele neblina não faz sentido)
+  // 17/11: o banco era curto demais (3 s a 150 km/h) e a névoa nem chegava a encher. Agora
+  // é a subida quase toda, com o túnel e o viaduto dentro (o render alivia a névoa no túnel).
   const d = idx - m.a, n = l[1] - l[0]
-  return d >= l[0] + n * 0.25 && d < l[0] + n * 0.45
+  return d >= l[0] + n * 0.1 && d < l[0] + n * 0.98
 }
 
 /** O jogador está na viagem ou a até 2 distâncias de desenho antes dela? */

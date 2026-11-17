@@ -64,7 +64,7 @@ export function renderTouge(eng: AutoDashEngine) {
   const m = Math.round(Math.abs(gap) / 475) // metros (1 km/h = 132 u/s ⇒ ~475 u por metro)
   ctx.textAlign = "center"
   ctx.fillStyle = "#f8fafc"; ctx.font = `bold 15px ${FONTE}`
-  const ato = tg.fase !== "batalha" ? "FIM" : tg.papel === "caca" ? "CAÇA" : "LIDERANÇA"
+  const ato = tg.fase !== "batalha" ? "FIM" : tg.decisivo ? "DECISÃO" : tg.papel === "caca" ? "CAÇA" : "LIDERANÇA"
   ctx.fillText(`${ato} · ${m} m`, W / 2, y + 12)
   ctx.textAlign = "left"
   if (tg.fase !== "batalha") return

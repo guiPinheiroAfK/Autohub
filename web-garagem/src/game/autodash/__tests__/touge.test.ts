@@ -92,6 +92,30 @@ describe("duelo de touge", () => {
   }, 120_000)
 })
 
+describe("fim do duelo", () => {
+  it("acabaram as cenas e os dois vivos: a decisão zera a barra de quem está pior (sem acabar do nada)", async () => {
+    let decidiu = false, vidaNoFim = [100, 100], fimPor = "", viuDecisivo = false
+    await runScenario(60 * 70, 8, LARGADA, (i, eng) => {
+      if (i === 0) eng.render = () => {}
+      eng.immuneT = 10; eng.combustivel = 1; eng.eventTimer = 1e9
+      if (i === 360) { eng.zones = []; eng.obstacles = []; spawnTouge(eng) }
+      const tg = eng.touge
+      if (!tg) return
+      eng.playerX = Math.max(-0.9, Math.min(0.9, eng.playerX))
+      if (tg.fase === "batalha" && !decidiu) {
+        // as cenas já passaram e a vida está empatada em 60 x 55: só a decisão resolve
+        if (tg.atual >= tg.curvas.length && !tg.decisivo) { tg.vidaVoce = 60; tg.vidaRival = 55 }
+        if (tg.atual < tg.curvas.length) { tg.atual = tg.curvas.length; for (const c of tg.curvas) { c.nota = "bom"; c.nitro = true; c.final = "otimo" } }
+        if (tg.decisivo) viuDecisivo = true
+      }
+      if (tg.fase === "fim" && !decidiu) { decidiu = true; vidaNoFim = [tg.vidaVoce, tg.vidaRival]; fimPor = tg.vidaVoce <= 0 || tg.vidaRival <= 0 ? "nocaute" : "outro" }
+    })
+    expect(viuDecisivo, "não entrou na decisão").toBe(true)
+    expect(decidiu, "o duelo não terminou").toBe(true)
+    expect(fimPor, `terminou sem nocaute (${vidaNoFim})`).toBe("nocaute")
+  }, 120_000)
+})
+
 describe("drift livre com freio de mão", () => {
   it("bater no meio do drift perde os pontos", async () => {
     let perdeu = false

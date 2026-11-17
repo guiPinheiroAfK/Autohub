@@ -684,7 +684,8 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
   // visibilidade do clima (ADR 0013): neblina e chuva engolem o fundo da pista.
   // Desenhado DEPOIS dos sprites de propósito: carro e obstáculo distantes só
   // aparecem quando chegam mais perto — é o efeito de jogo, não só o visual.
-  const fogK = 1 - climaAtual(eng).visib // misturado na troca de clima
+  // (dentro do túnel a névoa de fora não entra)
+  const fogK = (1 - climaAtual(eng).visib) * (eng.dentroTunel ? 0.25 : 1) // misturado na troca de clima
   if (fogK > 0.01) {
     const fc = hexToRgb(mixHex(fogColor, amb > 0.6 ? "#d5dae2" : "#545d70", 0.6))
     const top = maxY - 60, alto = 90 + 560 * fogK
@@ -695,6 +696,15 @@ export function renderRoad(eng: AutoDashEngine, amb: number, fogColor: string) {
     g.addColorStop(1, `rgba(${fc[0]},${fc[1]},${fc[2]},0)`)
     ctx.fillStyle = g
     ctx.fillRect(0, top, W, alto)
+    // véu na tela toda (17/11: "a neblina não cobre a tela toda"): céu, fundo e pista, mais
+    // forte no horizonte e mais leve perto do carro
+    const veu = Math.min(0.62, 0.95 * fogK)
+    const vg = ctx.createLinearGradient(0, 0, 0, H)
+    vg.addColorStop(0, `rgba(${fc[0]},${fc[1]},${fc[2]},${veu * 0.85})`)
+    vg.addColorStop(Math.min(0.9, Math.max(0.1, maxY / H)), `rgba(${fc[0]},${fc[1]},${fc[2]},${veu})`)
+    vg.addColorStop(1, `rgba(${fc[0]},${fc[1]},${fc[2]},${veu * 0.45})`)
+    ctx.fillStyle = vg
+    ctx.fillRect(0, 0, W, H)
   }
 
   // helicóptero por cima de tudo (até da neblina: é luz no céu)

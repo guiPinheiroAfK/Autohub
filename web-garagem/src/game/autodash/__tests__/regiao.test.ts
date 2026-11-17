@@ -84,11 +84,11 @@ describe("transições suaves (16/11)", () => {
     let meioBioma = -1, fimBioma = -1, gripMeio = 0, chuvaMeio = -1
     await runScenario(60 * 16, 5, LARGADA, (i, eng) => {
       if (i === 0) eng.render = () => {}
-      // o relógio do clima reimpõe o clima da janela a cada quadro: a chuva entra pelo clima imposto
+      // o relógio do clima reimpõe o clima da janela a cada quadro: a chuva entra pelo clima imposto (que entra em climaForcadoS)
       if (i === 300) { trocarRegiao(eng, "costa"); setClima(eng, "limpo"); eng.climaForcado = "chuva" }
       if (i === 300 + Math.round(60 * TRANSICAO.biomaS / 2)) meioBioma = eng.biomaMix
-      if (i === 300 + Math.round(60 * TRANSICAO.climaS / 2)) { const c = climaAtual(eng); gripMeio = c.grip; chuvaMeio = c.chuvaK }
-      if (i === 300 + 60 * (TRANSICAO.climaS + 1)) fimBioma = eng.biomaMix
+      if (i === 300 + Math.round(60 * TRANSICAO.climaForcadoS / 2)) { const c = climaAtual(eng); gripMeio = c.grip; chuvaMeio = c.chuvaK }
+      if (i === 300 + 60 * (TRANSICAO.climaForcadoS + 1)) fimBioma = eng.biomaMix
     })
     expect(meioBioma).toBeGreaterThan(0.3); expect(meioBioma).toBeLessThan(0.7)
     expect(fimBioma).toBe(1)
